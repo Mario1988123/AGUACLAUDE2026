@@ -20,21 +20,48 @@
 
 ## 2. Mapa de tablas globales vs tenant
 
-> Pendiente de validar tras Capa 1.
+> Cerrado para Capa 1. Capa 2 ampliará con tablas de negocio.
 
 ### Globales (sin `company_id` — propiedad superadmin)
 - `auth.users` (Supabase managed)
 - `companies`
-- `roles_catalog` (catálogo de roles base — ¿editables por empresa? duda #11)
-- `permissions_catalog`
-- `modules_catalog` (lista de módulos disponibles)
-- `product_categories_global` (catálogo del superadmin que las empresas pueden precargar)
+- `superadmins` (lista de user_ids con rol superadmin global)
+- `roles_catalog` (8 roles fijos predefinidos — duda #11 ✅ resuelta)
+- `permissions_catalog` (catálogo `(module, action, scope)`)
+- `role_permissions` (M:N rol ↔ permiso, con `field_restrictions jsonb`)
+- `modules_catalog` (lista cerrada de módulos)
+- `product_categories_global` (catálogo del superadmin precargable por empresas)
 - `product_attributes_global`
-- `financing_partners_global` (si financieras globales — duda #15)
-- `system_logs` (auditoría de superadmin)
+- `financing_partners_global` (pendiente confirmación duda #15)
 
-### Tenant (con `company_id` obligatorio)
-> Pendiente diseño Capa 2.
+### Tenant (con `company_id` obligatorio) — Capa 1
+- `company_settings` (config empresa)
+- `company_modules` (módulos activos por empresa, los enciende/apaga superadmin)
+- `user_profiles` (perfil dentro de empresa, FK a `auth.users`)
+- `user_roles` (asignación rol ↔ user en empresa)
+- `team_assignments` (jerarquía director ↔ operativo)
+- `permission_overrides` (excepciones puntuales — opcional)
+
+### Tenant (con `company_id` obligatorio) — Capa 2 prevista
+- `addresses` (única, polimórfica con `owner_type` + `owner_id`)
+- `events` (timeline única — duda #8 ✅ resuelta)
+- `notifications`
+- `documents` (única, polimórfica)
+- `agenda_events` (única, tipo discriminado)
+- `leads`, `customers`, `customer_bank_accounts`, `customer_contacts`
+- `products`, `product_categories` (locales empresa), `product_attributes` (locales), `product_attribute_values`, `product_images`, `product_compatibilities`
+- `proposals`, `proposal_items`, `proposal_payment_options`
+- `contracts`, `contract_items`, `contract_payments`, `contract_signatures`
+- `free_trials`, `free_trial_items` (entidad independiente — duda #17 ✅ resuelta)
+- `installations`, `installation_steps`, `installation_photos`, `installation_signatures`
+- `maintenance_jobs`, `maintenance_items_replaced`
+- `incidents`
+- `warehouses`, `warehouse_locations`, `warehouse_stock`, `stock_movements`, `loading_requests`
+- `wallet_entries`
+- `sales_records`
+- `lost_sales`
+- `price_approvals`
+- `customer_equipment` (incluye equipos no nuestros para mantenimientos)
 
 ## 3. Tablas existentes
 
@@ -60,7 +87,9 @@
 - **Tareas / Agenda:** una sola tabla `agenda_events` que recoja visita, instalación, llamada, mantenimiento, incidencia, recordatorio, manual. Tipo discriminado.
 - **Documentos:** una sola tabla `documents` con `kind` + `subject_type` + `subject_id` y URL a Storage. NO `contract_documents`, `installation_documents`, etc.
 - **Notificaciones:** una sola tabla `notifications` con `kind` + `subject_type/id` + `target_user_id` + `read_at`. Aplicable a campana, push, email log.
-- **Eventos / Timeline:** decisión pendiente (duda #8). Si tabla única → `timeline_events(subject_type, subject_id, kind, payload jsonb, occurred_at, actor_id)`.
+- **Eventos / Timeline:** ✅ Decidido (duda #8): tabla única `events(id, company_id, subject_type, subject_id, kind, payload jsonb, occurred_at, actor_user_id)`. `subject_type` validado por `CHECK` enum. Trigger valida existencia de `subject_id` antes de insert.
+- **Pruebas gratuitas:** ✅ Decidido (duda #17): tabla independiente `free_trials` (no es tipo de `contracts`). Si el cliente acepta → genera nuevo `contract` vinculado por `source_free_trial_id`.
+- **Versionado propuestas:** ✅ Decidido (duda #2): editar = nueva fila, anterior `status='superseded'`. Trazabilidad por `parent_proposal_id` autoreferencial.
 
 ## 6. Vistas y funciones SQL
 

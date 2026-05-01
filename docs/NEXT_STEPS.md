@@ -8,16 +8,16 @@
 
 ## 🎯 Acción inmediata
 
-**Owner debe responder a las dudas críticas para desbloquear Capa 1.** Ver `PROJECT_MEMORY.md` § 8.
+**Owner debe responder a las 13 preguntas Capa 1** (`PROJECT_MEMORY.md § 11`) para cerrar la matriz de permisos y poder pasar a Capa 2 (modelo BD completo).
 
-Mínimo necesario para avanzar:
-- **#1** Offline-first (sí/no)
-- **#2** Versionado propuestas/contratos (versionado/sobreescribe)
-- **#5** Numeración fiscal (TicketBAI / Verifactu / no aplica todavía)
-- **#7** i18n desde inicio (sí/no — solo español por ahora)
-- **#8** Polimorfismo timeline (tabla única `events` / tabla por subject)
-- **#11** Permisos: roles fijos / admin define a la carta
-- **#17** Pruebas gratuitas: contrato en pruebas / entidad separada
+**Bloqueantes mínimos para arrancar Capa 2:**
+- **1.1** Multi-empresa por usuario (sí/no)
+- **1.2** Multi-departamento por usuario (sí/no)
+- **1.7** Qué ve exactamente el instalador del cliente
+- **1.12** ¿Varios admins por empresa o uno solo?
+- **1.13** ¿Departamentos fijos o configurables?
+
+El resto (1.3-1.6, 1.8-1.11) se pueden ir resolviendo en paralelo durante Capa 2.
 
 ---
 
@@ -30,8 +30,17 @@ Mínimo necesario para avanzar:
 - Proyecto Supabase creado: `AGUACLAUDE2026` (`pkgvzwunazzkstlfubnq`) en org OSMOFILTER SL, región `eu-west-3`.
 - API keys + DB password guardadas en `.env.local` (gitignored).
 - `.env.example` plantilla creada (commiteable).
-- Análisis Capa 0 completado (este doc + 3 más).
+- Análisis **Capa 0** completado.
 - 4 archivos memoria creados: `PROJECT_MEMORY.md`, `DATABASE_MEMORY.md`, `MODULES_MEMORY.md`, `NEXT_STEPS.md`.
+- **Capa 0 cerrada** con 7/7 dudas críticas respondidas por owner.
+- **Capa 1 — diseño** documentado en `docs/decisions/0001_capa1_arquitectura_permisos.md`:
+  - Modelo de actores con superadmin + tenants + 8 roles fijos.
+  - Tablas core globales y tenant para multi-tenancy y permisos.
+  - Estructura `permissions_catalog` (module × action × scope + field_restrictions).
+  - Matriz de permisos completa por rol/módulo.
+  - RLS pattern definitivo con `auth.company_id()` y `auth.can()`.
+  - Custom JWT claims previstos.
+  - 13 preguntas Capa 1 abiertas para cerrar zonas grises de la matriz.
 
 ---
 
