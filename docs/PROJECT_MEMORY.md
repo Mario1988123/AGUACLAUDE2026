@@ -81,6 +81,13 @@
 | 2026-05-01 | **Objetivos mensuales en cascada** (D) | Sin objetivos | Nivel 1 pone meta por dpto → nivel 2 distribuye entre los nivel 3 a su mando. Tabla `monthly_objectives`. |
 | 2026-05-01 | **UUID v7 (time-ordered)** vía `gen_random_uuid()` con extensión `pg_uuidv7` si Postgres 17+ lo soporta | UUID v4 random | Mejor performance índice en tablas grandes (events, wallet_entries, stock_movements). |
 | 2026-05-01 | **`timestamptz` UTC en BD + conversión a `Europe/Madrid` en frontend** | `timestamp` sin tz | Estándar. Para fechas de negocio puras (firma contrato, fecha instalación) usar `date`. |
+| 2026-05-01 | **`addresses` con FK directa a customer/lead** (no polimórfica genérica) | Polimórfica owner_type+owner_id | Owner aclaró: dirección creada en lead → migrada a customer al convertir → instalación referencia una de las direcciones del customer. FK duras posibles. |
+| 2026-05-01 | **Categorías de producto: globales + locales en tablas separadas** | Tabla única con company_id nullable | Owner: superadmin solo da categorías/atributos predefinidos para acelerar setup; al cargarlas la empresa las clona y puede editarlas. Trazabilidad con `cloned_from_global_id`. |
+| 2026-05-01 | **Soft-delete en críticas (customers, contracts, proposals, products, wallet, invoices), hard en efímeras (notifications viejas, eventos antiguos)** | Soft en todas | Más simple, recuperación legal asegurada. |
+| 2026-05-01 | **Storage: bucket único `documents` con carpetas por company_id** | Bucket por empresa | Más simple, RLS por path. |
+| 2026-05-01 | **Validaciones DNI/CIF/IBAN en aplicación (zod) + CHECK simples en BD** | Funciones PL/pgSQL pesadas | Más rápido, testeable, fácil iterar. |
+| 2026-05-01 | **`audit_log` solo para escrituras en tablas sensibles (contracts, wallet, prices)** | Audit completo de lecturas | MVP: lectura no se audita por performance. |
+| 2026-05-01 | **Confirmado: solo España, sin country_code en addresses** | Multi-país | Owner ratifica solo España. Si crece → migración futura. |
 
 ## 5. Reglas de negocio invariantes
 
