@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { markProposalAccepted, markProposalRejected, markProposalSent } from "./actions";
+import { createContractFromProposal } from "@/modules/contracts/actions";
 import type { ProposalStatus } from "./schemas";
 
 interface Props {
@@ -49,11 +50,28 @@ export function ProposalActions({ proposalId, status }: Props) {
     });
   }
 
+  function generateContract() {
+    startTransition(async () => {
+      try {
+        await createContractFromProposal(proposalId);
+      } catch (err) {
+        if (err && typeof err === "object" && "digest" in err) {
+          const d = String((err as { digest?: unknown }).digest);
+          if (d.startsWith("NEXT_REDIRECT")) throw err;
+        }
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
   if (status === "accepted") {
     return (
-      <p className="text-sm text-success">
-        Aceptada. El siguiente paso es generar el contrato.
-      </p>
+      <div className="space-y-2">
+        <p className="text-sm text-success">Aceptada por el cliente.</p>
+        <Button onClick={generateContract} disabled={pending} className="w-full">
+          Generar contrato
+        </Button>
+      </div>
     );
   }
   if (status === "rejected" || status === "superseded" || status === "expired") {
