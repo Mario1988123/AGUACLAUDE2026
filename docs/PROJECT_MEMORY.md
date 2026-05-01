@@ -75,6 +75,8 @@
 | 2026-05-01 | **Telemarketer ve resultado venta del lead que entregó** | Ocultar importes | Necesario para calcular comisión. |
 | 2026-05-01 | **Director comercial valida liquidaciones Wallet de SU equipo** | Solo admin | Puede haber varios directores; cada uno valida lo suyo. Admin valida todo. |
 | 2026-05-01 | **Límite de usuarios por empresa lo fija superadmin** | Sin límite | Campo `max_users` en `companies`, validado al crear users. |
+| 2026-05-01 | **UI moderna basada en shadcn/ui blocks + shadcn charts (Recharts)** | Tabler/TailAdmin/templates pago | Free, calidad alta, alineado al stack ya elegido. Ver § 12 |
+| 2026-05-01 | **Tremor opcional para bloques avanzados de dashboard** | Solo Recharts | Tremor da KPI cards y composiciones premium ya hechas (open source MIT) |
 
 ## 5. Reglas de negocio invariantes
 
@@ -171,7 +173,9 @@ Tres dimensiones: `module × action × scope`, con overrides por **campo sensibl
 
 ## 10. Cosas que NO debemos hacer
 
-- ❌ Copiar código del ZIP de referencia (solo UX/visual).
+- ❌ Copiar código, tablas, esquemas o nombres del ZIP `water_crm` (proyecto abandonado por mala arquitectura).
+- ❌ **Inspirarnos en su UX** (era mala según owner). Solo consulta puntual cuando Claude tenga dudas concretas, p.ej. calculadora de ahorro.
+- ❌ **Añadir features que aparecen en el ZIP y no están en el prompt maestro** sin preguntar al owner primero.
 - ❌ Crear tablas duplicadas para cada módulo (ej. `lead_addresses` + `customer_addresses` — usar `addresses` única).
 - ❌ Mezclar datos entre empresas tenant.
 - ❌ Dejar tablas sensibles sin RLS.
@@ -179,6 +183,15 @@ Tres dimensiones: `module × action × scope`, con overrides por **campo sensibl
 - ❌ Generar instalación libre que no sea reubicación.
 - ❌ Commitear `.env.local` o cualquier secreto.
 - ❌ Avanzar de capa sin actualizar este archivo.
+
+## 10.b Reglas explícitas sobre `legacy_reference/water_crm`
+
+Owner aclaró el 2026-05-01:
+- El ZIP es un **proyecto abandonado** por problemas de BD y UX.
+- **NO analizar la UX completa** — se rehace desde cero.
+- **Uso permitido:** consulta puntual cuando Claude tenga dudas sobre lógica de negocio que no quedó clara en el prompt maestro (especialmente **calculadora de ahorro**).
+- Si Claude detecta features en el ZIP que no están en el prompt maestro → **PREGUNTAR al owner** si quiere añadirlas, no asumir.
+- **Lo único rescatable según owner: algunos elementos UI** — pero ahora se va a hacer **más moderno** con plantillas externas.
 
 ---
 
@@ -201,6 +214,37 @@ Surgidas al diseñar la matriz de permisos y la arquitectura tenant. **Bloquean 
 | 1.11 | Configuración empresa solo admin | ✅ Confirmado. |
 | 1.12 | Una empresa = UN admin | ✅ **NO multi-admin.** Más estricto que mi propuesta. |
 | 1.13 | Departamentos fijos | ✅ Los 3 existen siempre. Si no usas uno, no creas usuarios. Total usuarios limitado por `max_users` que fija superadmin. |
+
+---
+
+## 12. Recursos UI/UX confirmados
+
+> Todos open source, todos compatibles con Next.js + Tailwind + TypeScript ya elegido.
+
+### Componentes y bloques
+- **shadcn/ui** — base. https://ui.shadcn.com
+- **shadcn/ui blocks** — bloques pre-construidos: dashboard, sidebar, login, settings, etc. https://ui.shadcn.com/blocks
+- **Tremor** — bloques específicos de dashboard SaaS (KPI cards, comparativas, tablas con sparklines). MIT. https://tremor.so/components
+- **Origin UI** — extensión gratis de shadcn con más variantes (selectores avanzados, inputs ricos). https://originui.com
+- **Aceternity UI** — animaciones modernas para landing/onboarding (no para CRM operativo). https://ui.aceternity.com
+
+### Gráficas (decisión: Recharts)
+- **shadcn/ui charts** = Recharts envuelto con tokens shadcn. Lo usaremos como base. https://ui.shadcn.com/charts
+- Tipos previstos para Dashboard CRM:
+  - Comparativas mes vs mes vs año pasado (Bar/Line combo)
+  - Funnel comercial (Lead → Cliente → Contrato → Instalación)
+  - Stock (Donut por categoría, Bar por almacén)
+  - Wallet liquidaciones (Stacked bar por método de pago)
+  - KPIs por usuario (Horizontal bar ranking)
+  - Tendencia temporal (Area chart con sparklines)
+
+### Iconos
+- **Lucide** (default shadcn). Ligero, completo, consistente.
+
+### Plantillas admin completas para inspirar (NO copiar)
+- TailAdmin Next.js — https://tailadmin.com
+- Tremor Dashboard — https://tremor.so/blocks
+- Catalyst by Tailwind Labs (pago, $299) — calidad referencia, mirar capturas
 
 ---
 
