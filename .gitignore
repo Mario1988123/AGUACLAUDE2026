@@ -46,3 +46,8 @@ Thumbs.db
 
 # Proyecto abandonado (referencia visual/UX únicamente — NO commitear)
 legacy_reference/
+
+.vercel
+
+# Carpeta temporal local (logs dev, bundles SQL, etc.)
+tmp/

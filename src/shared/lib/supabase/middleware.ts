@@ -4,6 +4,19 @@ import { publicEnv } from "@/shared/lib/env";
 import type { Database } from "@/shared/types/database.types";
 
 export async function updateSession(request: NextRequest) {
+  // Bypass de auth en local dev (ver .env.local NEXT_PUBLIC_LOCAL_AUTOLOGIN)
+  if (
+    process.env.NODE_ENV === "development" &&
+    process.env.NEXT_PUBLIC_LOCAL_AUTOLOGIN === "true"
+  ) {
+    const url = request.nextUrl.clone();
+    if (url.pathname === "/login" || url.pathname === "/") {
+      url.pathname = "/superadmin";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(

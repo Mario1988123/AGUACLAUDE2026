@@ -11,11 +11,30 @@ export interface SessionClaims {
   full_name: string | null;
 }
 
+const DEV_AUTOLOGIN =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_LOCAL_AUTOLOGIN === "true";
+
+const DEV_FAKE_SESSION: SessionClaims = {
+  user_id: "00000000-0000-0000-0000-000000000001",
+  email: "dev@local",
+  is_superadmin: true,
+  company_id: null,
+  roles: ["superadmin"],
+  departments: [],
+  full_name: "Dev Superadmin (LOCAL)",
+};
+
 /**
  * Lee el usuario actual y devuelve los claims tipados.
  * Si no hay sesión, redirige a /login.
+ *
+ * En desarrollo con NEXT_PUBLIC_LOCAL_AUTOLOGIN=true devuelve un superadmin
+ * falso para entrar directo sin BD ni Auth Hook configurados.
  */
 export async function requireSession(): Promise<SessionClaims> {
+  if (DEV_AUTOLOGIN) return DEV_FAKE_SESSION;
+
   const supabase = await createClient();
   const {
     data: { user },
