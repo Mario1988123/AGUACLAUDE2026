@@ -1,18 +1,35 @@
 // =============================================================================
 // database.types.ts
-// AUTOGENERADO por `supabase gen types typescript --local`.
-// Hasta ejecutar la generación, este placeholder permite que el proyecto
-// compile. Tras `npm run supabase:gen-types` será reemplazado.
+// PLACEHOLDER hasta el deploy. Tras `supabase gen types typescript --local`
+// (o `--project-id pkgvzwunazzkstlfubnq`) se reemplaza este archivo por la
+// definición tipada real generada del esquema.
+//
+// Mientras tanto, definimos tipos suficientemente permisivos para que el
+// código compile sin perder seguridad en validación (zod en aplicación).
 // =============================================================================
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRow = any;
+
 export interface Database {
   public: {
-    Tables: Record<string, never>;
-    Views: Record<string, never>;
-    Functions: Record<string, never>;
-    Enums: Record<string, never>;
-    CompositeTypes: Record<string, never>;
+    Tables: {
+      [table: string]: {
+        Row: AnyRow;
+        Insert: AnyRow;
+        Update: AnyRow;
+        Relationships: [];
+      };
+    };
+    Views: {
+      [view: string]: { Row: AnyRow; Relationships: [] };
+    };
+    Functions: {
+      [fn: string]: { Args: AnyRow; Returns: AnyRow };
+    };
+    Enums: { [name: string]: string };
+    CompositeTypes: { [name: string]: AnyRow };
   };
 }

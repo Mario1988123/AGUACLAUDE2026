@@ -13,10 +13,7 @@ export default async function SuperadminLayout({ children }: { children: React.R
           AGUACLAUDE · Admin
         </div>
         <nav className="flex-1 space-y-1 p-2">
-          <Link
-            href="/superadmin"
-            className="block rounded px-3 py-2 text-sm hover:bg-muted"
-          >
+          <Link href="/superadmin" className="block rounded px-3 py-2 text-sm hover:bg-muted">
             Empresas
           </Link>
           <Link
@@ -28,7 +25,7 @@ export default async function SuperadminLayout({ children }: { children: React.R
         </nav>
         <div className="border-t p-3">
           <Link href="/logout" className="text-sm text-muted-foreground hover:underline">
-            Salir
+            Salir ({session.email})
           </Link>
         </div>
       </aside>
