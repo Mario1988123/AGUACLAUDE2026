@@ -10,21 +10,10 @@
 
 **Modo de trabajo confirmado:** Claude trabaja en autónomo escribiendo TODO en el repo (migraciones + scaffold + módulos), capa a capa, parando solo para dudas. Owner audita al final y aplica deploy + SQL.
 
-**Capa 2 cerrada.** 16 migraciones SQL escritas, ~70 tablas, RLS completa, seeds.
-**Próximo: Capa 3 — Scaffold Next.js + auth + sidebar + PWA + utilidades ES.**
+**Capa 3 cerrada.** Scaffold Next.js completo y compilando.
+**Próximo: Capa 4 — Superadmin (CRUD empresas + módulos) y Capa 5 — Tenant base (gestión usuarios).**
 
-Tareas pendientes Capa 3:
-- package.json con stack final (Next 15, React 19, TS, Tailwind 4, shadcn, Supabase SSR).
-- Config: tsconfig, next.config, tailwind.
-- Estructura `src/app`, `src/modules`, `src/shared`.
-- Supabase clients (browser, server, middleware) con `@supabase/ssr`.
-- middleware.ts: auth + multi-tenant guard + redirección por rol.
-- Layout AppShell + Sidebar dinámico + Header con notificaciones.
-- Login + recuperación contraseña + cambio obligatorio.
-- Sistema toast (verde/rojo/naranja).
-- Validaciones ES: DNI, CIF, IBAN, CP, teléfono.
-- PWA: manifest.webmanifest + service worker con Serwist.
-- Pantalla error/no-permisos.
+Después se irá módulo por módulo implementando UI real (leads, customers, productos, propuestas, contratos, instalaciones, etc.).
 
 ---
 
