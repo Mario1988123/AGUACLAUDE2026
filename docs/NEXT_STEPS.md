@@ -8,16 +8,13 @@
 
 ## 🎯 Acción inmediata
 
-**Owner debe responder a las 13 preguntas Capa 1** (`PROJECT_MEMORY.md § 11`) para cerrar la matriz de permisos y poder pasar a Capa 2 (modelo BD completo).
+**Capa 1 cerrada.** Próximo paso: **Capa 2 — modelo BD completo + primera migración SQL**.
 
-**Bloqueantes mínimos para arrancar Capa 2:**
-- **1.1** Multi-empresa por usuario (sí/no)
-- **1.2** Multi-departamento por usuario (sí/no)
-- **1.7** Qué ve exactamente el instalador del cliente
-- **1.12** ¿Varios admins por empresa o uno solo?
-- **1.13** ¿Departamentos fijos o configurables?
-
-El resto (1.3-1.6, 1.8-1.11) se pueden ir resolviendo en paralelo durante Capa 2.
+Acción de Claude:
+1. Diseñar las migraciones de Capa 1 (tablas core + RLS base + seeds roles/módulos/permisos).
+2. Diseñar las migraciones de Capa 2 (todas las tablas de negocio).
+3. Numerar y entregarlas al owner para ejecutar en SQL Editor de Supabase.
+4. Tras owner ejecute → cerrar Capa 2 y entrar en Capa 3 (scaffold Next.js).
 
 ---
 
@@ -53,9 +50,9 @@ El resto (1.3-1.6, 1.8-1.11) se pueden ir resolviendo en paralelo durante Capa 2
 - [ ] **Rotar token GitHub** (`ghp_...`) cuando termine la sesión — quedó pegado en historial chat.
 - [ ] **Rotar token Supabase Management** (`sbp_...`) cuando terminemos el setup inicial.
 
-### Pendiente Claude (cuando owner desbloquee)
-- [ ] Capa 1: diseñar arquitectura multi-tenancy + permisos. Salida = diagrama + tablas core (companies, users, roles, permissions, modules, company_modules).
-- [ ] Capa 2: modelo BD completo. Salida = migraciones SQL numeradas en `supabase/migrations/`.
+### Pendiente Claude
+- [x] Capa 1: arquitectura multi-tenancy + permisos. ✅ ADR 0001 aprobado.
+- [ ] **Capa 2 (ahora):** crear `supabase/migrations/` con SQL numerado: tipos, tablas globales, tablas tenant Capa 1, tablas negocio Capa 2, RLS, seeds, vistas, funciones helpers (`auth.company_id`, `auth.can`).
 - [ ] Capa 3: scaffold Next.js + auth + sidebar dinámico + PWA + validaciones ES + sistema toast.
 - [ ] `vercel link` + inyectar env vars Supabase en Vercel (production + preview).
 - [ ] Configurar GitHub Actions: typecheck + lint + build en cada push a `main`.

@@ -1,7 +1,7 @@
 # ADR 0001 — Capa 1: Arquitectura multi-tenancy y permisos
 
 - **Fecha:** 2026-05-01
-- **Estado:** Propuesta (esperando respuestas a dudas § 11 de PROJECT_MEMORY.md)
+- **Estado:** ✅ APROBADA — 13/13 preguntas Capa 1 cerradas por owner el 2026-05-01
 - **Autor:** Claude (Opus 4.7) bajo dirección de Mario Ortigueira
 
 ---
@@ -189,30 +189,46 @@ Al hacer login, un Auth Hook añade al JWT:
   "sub": "<auth.user_id>",
   "company_id": "<uuid>",
   "is_superadmin": false,
-  "role": "sales_rep",
-  "department": "sales",
-  "team_lead_id": "<uuid director>"
+  "roles": ["commercial_director", "sales_rep"],
+  "departments": ["sales"],
+  "team_lead_ids": ["<uuid director_si_aplica>"]
 }
 ```
 
+- **`roles[]`** porque el owner confirmó multi-rol (1.2). Un usuario puede ser director comercial Y comercial a la vez, o instalador Y comercial.
+- **`departments[]`** derivado de los roles:
+  - `installer`, `technical_director` → `tech`
+  - `sales_rep`, `commercial_director` → `sales`
+  - `telemarketer`, `telemarketing_director` → `tmk`
+- Cuando un user tiene `commercial_director` + `installer`, sus departamentos son `["sales", "tech"]`.
+- `auth.can(module, action, scope)` evalúa **cualquier rol del usuario**: si cualquiera de sus roles tiene el permiso, lo concede.
 - Generado por Auth Hook (Postgres function `public.custom_access_token_hook(event jsonb)`).
 - Permite que las RLS no necesiten joins extra → rendimiento alto.
-- Cuando admin cambia rol/empresa → forzamos refresh de sesión.
+- Cuando admin cambia roles → forzamos refresh de sesión (sign-out + sign-in o refresh token).
 
 ## 7. Departamentos
 
-Tres departamentos fijos por empresa:
+Tres departamentos fijos por empresa, **derivados de los roles del usuario** (no campo independiente):
 
 ```sql
 create type department_kind as enum ('tech', 'sales', 'tmk');
 ```
 
-Roles asignados por departamento:
+Mapeo rol → departamento:
 - `tech` → `technical_director`, `installer`
 - `sales` → `commercial_director`, `sales_rep`
 - `tmk` → `telemarketing_director`, `telemarketer`
 
 `company_admin` y `superadmin` no tienen departamento.
+
+**Multi-departamento (decisión 1.2):** un usuario con varios roles pertenece a todos los departamentos correspondientes. Ejemplo: usuario con roles `commercial_director` + `installer` → departamentos `["sales", "tech"]`. Ve la agenda completa de ambos departamentos cuando aplica scope `department`.
+
+**Una empresa = UN admin (decisión 1.12):** la tabla `user_roles` tiene un constraint único parcial:
+```sql
+create unique index uniq_company_admin_per_company
+  on user_roles (company_id)
+  where role_key = 'company_admin';
+```
 
 ## 8. Equipos / asignaciones
 
@@ -246,6 +262,39 @@ Notificación a director departamento + admin. Cualquiera puede aprobar.
 5. **Edge Functions** que usen `service_role` deben validar `company_id` manualmente antes de cualquier query.
 6. **Test de RLS**: tests automáticos con dos usuarios de empresas distintas verificando que ninguno ve datos del otro.
 
-## 11. Preguntas pendientes para cerrar Capa 1
+## 11. Preguntas Capa 1 — RESUELTAS
 
-Ver `PROJECT_MEMORY.md § 11`. 13 preguntas concretas. Las celdas ⚠️ de la matriz § 4 dependen de estas respuestas.
+✅ Las 13 preguntas (`PROJECT_MEMORY.md § 11`) están cerradas a 2026-05-01. Las celdas ⚠️ de la matriz § 4 quedan así:
+
+- **customers / installer**: `assigned` durante instalación activa → ve **todo** (nombre, teléfono, dirección, email, importes). Al completar instalación, pierde el `assigned` → solo queda `installation.installer_user_id` como autoría histórica. No ve más datos.
+- **customers / telemarketer**: ve teléfono+dirección+estado del lead. Al venderse, **sí ve** que se vendió (para comisión) pero solo nombre cliente y monto comisionable, no detalle del contrato.
+- **wallet / commercial_director**: valida liquidaciones de su equipo (no de otros directores comerciales si los hay).
+- **lost_sales / sales_rep**: ve solo las propias.
+
+## 12. Tablas core finales (Capa 1)
+
+Listo para Capa 2. Resumen:
+
+```sql
+-- GLOBALES
+companies (id, name, status, max_users, max_storage_mb, monthly_cost_cents,
+           billing_email, fiscal_data jsonb, created_at, updated_at)
+superadmins (user_id PK, granted_at, granted_by)
+modules_catalog (key PK, label_es, description_es, default_active boolean)
+roles_catalog (key PK, label_es, level smallint, default_department department_kind)
+permissions_catalog (id, module text, action text, scope text)
+role_permissions (role_key, permission_id, field_restrictions jsonb)
+
+-- TENANT (con company_id)
+company_settings (company_id PK, ...)
+company_modules (company_id, module_key, is_active, settings jsonb)
+user_profiles (user_id PK, company_id, full_name, avatar_url, phone, status,
+               created_at, updated_at)
+user_roles (id, user_id, company_id, role_key, assigned_at, assigned_by)
+  -- M:N porque multi-rol permitido (1.2)
+  -- Constraint único parcial: 1 admin máx por empresa (1.12)
+team_assignments (id, company_id, manager_user_id, member_user_id,
+                  for_role_key, created_at)
+permission_overrides (id, company_id, user_id, permission_id, granted boolean,
+                      reason, created_at, expires_at)
+```

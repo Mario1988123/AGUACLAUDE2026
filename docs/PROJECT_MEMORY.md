@@ -68,6 +68,13 @@
 | 2026-05-01 | **Roles fijos predefinidos (8)** | Builder de roles a la carta | Owner pide simplicidad. Roles: superadmin, company_admin, technical_director, commercial_director, telemarketing_director, installer, sales_rep, telemarketer. |
 | 2026-05-01 | **`free_trials` entidad independiente** | Variante de `contracts` | No es contrato; es albarán de entrega con condiciones de prueba. Aceptación → genera `contract` nuevo. |
 | 2026-05-01 | **Facturación = última capa, régimen común** | TicketBAI desde inicio | Empresa no en País Vasco. BD se diseña al final. |
+| 2026-05-01 | **Multi-rol por usuario PERMITIDO** | Un user = un rol | Casos reales: director comercial que también vende, instalador que también es comercial. `user_roles` M:N, JWT lleva `roles[]`. |
+| 2026-05-01 | **Departamentos derivados de roles** | Departamento campo independiente | Si tienes rol `installer` → estás en `tech`. Si tienes `installer` + `sales_rep` → estás en `tech` + `sales`. |
+| 2026-05-01 | **Una empresa = UN admin** | Varios admins | Owner pide estricto. Si hace falta delegar, se promueve un director. |
+| 2026-05-01 | **Instalador pierde acceso al cliente al completar instalación** | Acceso permanente histórico | Tras completar, queda solo en `installation.installer_user_id` como autoría. Deja de aparecer en su lista activa. |
+| 2026-05-01 | **Telemarketer ve resultado venta del lead que entregó** | Ocultar importes | Necesario para calcular comisión. |
+| 2026-05-01 | **Director comercial valida liquidaciones Wallet de SU equipo** | Solo admin | Puede haber varios directores; cada uno valida lo suyo. Admin valida todo. |
+| 2026-05-01 | **Límite de usuarios por empresa lo fija superadmin** | Sin límite | Campo `max_users` en `companies`, validado al crear users. |
 
 ## 5. Reglas de negocio invariantes
 
@@ -108,7 +115,7 @@ Tres dimensiones: `module × action × scope`, con overrides por **campo sensibl
 | Capa | Estado | Notas |
 |---|---|---|
 | 0 — Análisis | ✅ Hecho (2026-05-01) | Documentado aquí + 4 archivos memoria |
-| 1 — Arquitectura permisos + multi-tenancy | 🚧 En curso (2026-05-01) | Diseñado modelo; esperando respuestas a dudas Capa 1 (§ 11) |
+| 1 — Arquitectura permisos + multi-tenancy | ✅ Cerrada (2026-05-01) | 13/13 preguntas Capa 1 respondidas. Ver ADR 0001 |
 | 2 — Modelo de datos | ⏳ Pendiente | |
 | 3 — Scaffold Next.js | ⏳ Pendiente | |
 | 4 — Superadmin | ⏳ Pendiente | |
@@ -179,21 +186,21 @@ Tres dimensiones: `module × action × scope`, con overrides por **campo sensibl
 
 Surgidas al diseñar la matriz de permisos y la arquitectura tenant. **Bloquean cierre de Capa 1.**
 
-| # | Pregunta | Mi recomendación |
+| # | Pregunta | Resolución |
 |---|---|---|
-| 1.1 | **Multi-empresa por usuario.** ¿Un mismo email puede pertenecer a varias empresas tenant (caso franquicias o consultoras)? Si sí, el JWT necesita un `active_company_id` que se cambia con un selector. | NO en MVP. Email = 1 empresa. Más simple. |
-| 1.2 | **Departamentos.** ¿Un nivel 3 puede pertenecer a más de un departamento (ej. comercial que también hace TMK)? ¿Un director puede dirigir más de un departamento? | NO. Un usuario = un rol = un departamento. |
-| 1.3 | **Director comercial vs leads asignados a comercial.** Cuando el comercial mueve un lead a "convertido a cliente", ¿el director comercial sigue viendo el cliente como "suyo" (y los datos comerciales asociados) o ya pasa al `all_company`? | El director comercial **sí ve** todos los clientes generados por sus comerciales (alcance `department=sales`). |
-| 1.4 | **Director TMK y leads ya entregados.** Cuando TMK crea un lead y lo asigna a un comercial, ¿el director TMK sigue viéndolo después o solo lo ven el comercial y el director comercial? | Director TMK **sí ve** el lead (y su evolución) pero solo lectura — no edita. |
-| 1.5 | **Aprobaciones de precio.** Si un comercial pide aprobar precio < mínimo, ¿basta con cualquier nivel 2 (commercial_director) o también puede aprobar el `company_admin` directamente? ¿Y si no hay director, sube automático a admin? | Cualquier nivel 2 del departamento O el admin pueden aprobar. Si no hay director, sube a admin. |
-| 1.6 | **Precios visibles a comerciales.** ¿`sales_rep` ve `price_min`? ¿O solo PVP y mínimo autorizado para él (oculto el "mínimo absoluto" que requiere aprobación nivel 1)? | Ve PVP + "mínimo sin aprobación". El "mínimo absoluto" lo ven solo nivel 1 y 2. |
-| 1.7 | **Instalador y datos cliente.** ¿El instalador ve teléfono y dirección del cliente (sí, los necesita) pero NO ve email? ¿Ve precio del contrato? ¿Importes a cobrar (sí, los cobra)? | Ve nombre, teléfono, dirección, importes a cobrar. NO ve precio total contrato, NO ve email/datos bancarios. |
-| 1.8 | **Telemarketer y datos sensibles.** ¿Ve teléfono y dirección del lead (obvio sí)? ¿Ve resultado de la propuesta del comercial al que entregó el lead? | Ve teléfono, dirección, estado del lead. NO ve importe de propuesta. |
-| 1.9 | **Wallet entre comerciales.** Cuando hay varios comerciales en una empresa, ¿cada uno solo ve su Wallet, o el director comercial ve la Wallet de todo su equipo agregada? | Cada comercial ve solo lo suyo. Director comercial ve agregada de su equipo. Admin ve todo. |
-| 1.10 | **Cambio de asignación.** ¿Quién puede reasignar un lead/cliente/instalación a otro usuario? | Director del departamento + admin. Nivel 3 NO reasigna. |
-| 1.11 | **Configuración de empresa.** ¿Solo admin? ¿O directores pueden configurar SU módulo (ej. director técnico configura `/configuracion/almacenes`)? | Solo admin. Más seguro. Si pides cambiar después, fácil. |
-| 1.12 | **Dirección de empresa.** ¿La empresa tenant tiene UN admin o puede tener varios? | **Sí varios.** En empresas grandes hace falta delegar. |
-| 1.13 | **Departamentos custom.** ¿Toda empresa tiene los 3 departamentos fijos (tech/sales/tmk) o el admin puede activar/desactivar (ej. una empresa sin telemarketing)? | Los 3 existen siempre. Si una empresa no tiene TMK, simplemente no crea usuarios `telemarketing_director` ni `telemarketer`. |
+| 1.1 | Multi-empresa por usuario | ✅ **NO.** Cada empresa tiene su email. |
+| 1.2 | Multi-rol por usuario | ✅ **SÍ.** Puede ser nivel 2 y 3 a la vez (director comercial + comercial), o dos niveles 3 (técnico + comercial). `user_roles` M:N. |
+| 1.3 | Director comercial ve clientes generados por sus comerciales | ✅ **SÍ.** |
+| 1.4 | Director TMK ve leads ya entregados al comercial | ✅ **SÍ pero solo lectura.** |
+| 1.5 | Aprobaciones precio: cualquier director del dpto + admin | ✅ Confirmado. Si no hay director, sube a admin. |
+| 1.6 | sales_rep solo ve "mínimo sin aprobación", no el absoluto | ✅ Confirmado. |
+| 1.7 | Instalador ve TODO durante asignación; al completar pierde acceso | ✅ Quedará solo `installation.installer_user_id` como autoría. La instalación deja de aparecer en su lista activa. Ya no ve más datos del cliente. |
+| 1.8 | Telemarketer ve resultado venta del lead que entregó | ✅ **SÍ.** Necesario para comisión. |
+| 1.9 | Director comercial valida Wallet de SU equipo | ✅ Confirmado. Admin ve todo. Pueden coexistir varios directores comerciales (cada uno con su equipo). |
+| 1.10 | Reasignación solo director dpto + admin | ✅ Confirmado. |
+| 1.11 | Configuración empresa solo admin | ✅ Confirmado. |
+| 1.12 | Una empresa = UN admin | ✅ **NO multi-admin.** Más estricto que mi propuesta. |
+| 1.13 | Departamentos fijos | ✅ Los 3 existen siempre. Si no usas uno, no creas usuarios. Total usuarios limitado por `max_users` que fija superadmin. |
 
 ---
 
