@@ -132,11 +132,11 @@ Tres dimensiones: `module × action × scope`, con overrides por **campo sensibl
 | 2 — Modelo de datos | ✅ Cerrado (2026-05-01) | 16 migraciones SQL escritas. Pendiente validación CLI local + aplicar en deploy final |
 | 3 — Scaffold Next.js | ✅ Cerrado (2026-05-01) | Next 15 + TS estricto + Tailwind 4 + Supabase SSR + middleware auth + sidebar dinámico + 17 rutas placeholder + login/recovery/restablecer + PWA + ES validations. Build pasa. |
 | 4 — Superadmin | ✅ Cerrado (2026-05-01) | CRUD empresas (lista + alta + edición), toggle módulos por empresa con bloqueo de core, panel usuarios, service_role client para ops admin (creación + reset password). Build OK. |
-| 5 — Tenant base | ⏳ Pendiente | |
-| 6 — Configuración por módulo | ⏳ Pendiente | |
-| 7 — Productos | ⏳ Pendiente | |
-| 8 — Leads | ⏳ Pendiente | |
-| 9 — Clientes | ⏳ Pendiente | |
+| 5 — Tenant base (usuarios) | ✅ Cerrado (2026-05-01) | Inv. usuarios, multi-rol, validaciones |
+| 6 — Configuración productos | ✅ MVP (2026-05-01) | Categorías locales + precarga catálogo global |
+| 7 — Productos | ✅ MVP (2026-05-01) | CRUD productos, alta con plan precio cash, dimensiones, costes admin-only |
+| 8 — Leads | ✅ MVP (2026-05-01) | CRUD + filtros + ficha + status flow |
+| 9 — Clientes | ✅ MVP (2026-05-01) | CRUD básico, conversión desde lead con migración de direcciones |
 | 10 — Propuestas | ⏳ Pendiente | |
 | 11 — Contratos + Wallet | ⏳ Pendiente | |
 | 12 — Almacenes + carga | ⏳ Pendiente | |
