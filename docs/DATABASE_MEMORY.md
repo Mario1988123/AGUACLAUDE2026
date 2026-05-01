@@ -65,17 +65,39 @@
 
 ## 3. Tablas existentes
 
-| Tabla | Propósito | Migración | Notas |
+> Estado: SQL escrito, **no aplicado todavía** (owner aplica al final tras auditoría completa).
+
+### Globales
+| Tabla | Propósito | Migración |
+|---|---|---|
+| `companies` | Empresas tenant (clientes del SaaS) | 20260501120100 |
+| `superadmins` | user_ids con rol superadmin global | 20260501120100 |
+| `modules_catalog` | Catálogo cerrado de módulos | 20260501120100 |
+| `roles_catalog` | Catálogo cerrado de los 8 roles | 20260501120100 |
+| `permissions_catalog` | Catálogo (module, action, scope) | 20260501120100 |
+| `role_permissions` | M:N rol↔permiso + field_restrictions | 20260501120100 |
+
+### Tenant Capa 1
+| Tabla | Propósito | Migración |
+|---|---|---|
+| `company_settings` | Config empresa (1 fila/empresa) | 20260501120200 |
+| `company_modules` | Módulos activos por empresa | 20260501120200 |
+| `user_profiles` | Perfil user dentro de empresa | 20260501120200 |
+| `user_roles` | M:N user↔role (multi-rol decisión 1.2) + único parcial admin | 20260501120200 |
+| `team_assignments` | Jerarquía director↔operativo | 20260501120200 |
+| `permission_overrides` | Excepciones puntuales | 20260501120200 |
+
+## 4. Migraciones escritas
+
+| # | Archivo | Resumen | Estado |
 |---|---|---|---|
-| _(ninguna todavía)_ | | | Capa 2 aún no ejecutada |
-
-## 4. Migraciones aplicadas
-
-> Numeración: `00000_descripcion.sql` en `supabase/migrations/`. Una migración = un cambio atómico.
-
-| # | Archivo | Aplicada en | Resumen |
-|---|---|---|---|
-| – | – | – | Ninguna ejecutada todavía |
+| 1 | `20260501120000_init_extensions_and_types.sql` | pgcrypto, pg_trgm, unaccent. Schema `app`. Enums (department_kind, user_status, company_status, permission_action, permission_scope). `app.set_updated_at()` trigger. | ✅ Escrita |
+| 2 | `20260501120100_global_tables.sql` | 6 tablas globales | ✅ Escrita |
+| 3 | `20260501120200_tenant_core_tables.sql` | 6 tablas tenant Capa 1 | ✅ Escrita |
+| 4 | `20260501120300_helper_functions.sql` | `app.current_company_id()`, `app.is_superadmin()`, `app.current_user_roles()`, `app.current_user_departments()`, `app.has_role()`, `app.in_department()`, `app.is_team_member_of()`, `app.team_member_ids()`, `app.can()` | ✅ Escrita |
+| 5 | `20260501120400_auth_hook.sql` | `public.custom_access_token_hook(event jsonb)` — añade company_id, is_superadmin, roles[], departments[] al JWT | ✅ Escrita |
+| 6 | `20260501120500_rls_policies.sql` | RLS habilitada en todas. Policies superadmin_all + tenant_isolation + admin_manage. | ✅ Escrita |
+| 7 | `20260501120600_seeds_modules_roles_permissions.sql` | 19 módulos + 8 roles + permissions_catalog poblada + role_permissions según ADR 0001 § 4 | ✅ Escrita |
 
 ## 5. Reglas anti-duplicación
 
@@ -93,13 +115,24 @@
 
 ## 6. Vistas y funciones SQL
 
-> Vacío todavía.
+### Funciones existentes (`app` schema)
+- `app.set_updated_at()` — trigger BEFORE UPDATE para `updated_at`.
+- `app.current_company_id()` — uuid del JWT.
+- `app.is_superadmin()` — boolean del JWT.
+- `app.current_user_roles()` — text[] de roles del JWT.
+- `app.current_user_departments()` — text[] derivado.
+- `app.has_role(role_key)` — boolean.
+- `app.in_department(dept)` — boolean.
+- `app.is_team_member_of(manager_user_id, role_key default null)` — boolean.
+- `app.team_member_ids()` — uuid[] miembros del equipo del manager actual.
+- `app.can(module, action, scope)` — comprueba permiso vía roles + overrides.
 
-Patrones previstos:
-- `view_products_safe` → productos sin `cost`/`margin` (para roles sin permiso de campo).
-- `fn_company_id()` → función SECURITY DEFINER que devuelve el `company_id` del usuario actual desde JWT.
-- Trigger `set_updated_at()` reusable.
-- Trigger `audit_log()` reusable (si decidimos auditoría).
+### Funciones existentes (`public` schema)
+- `public.custom_access_token_hook(event jsonb)` — Auth Hook custom claims.
+
+### Vistas previstas (Capa 2 negocio)
+- `view_products_safe` — productos sin `cost`/`margin` para roles sin permiso.
+- Otras vistas pre-filtradas por departamento si optimización lo pide.
 
 ## 7. RLS — patrón base previsto
 

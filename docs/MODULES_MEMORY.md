@@ -22,7 +22,7 @@
 | 11 | Instalaciones | ⏳ Planeado | `/instalaciones` | – | Contratos, Almacenes | 13 |
 | 12 | Mantenimientos | ⏳ Planeado | `/mantenimientos` | – | Instalaciones | 14 |
 | 13 | Incidencias | ⏳ Planeado | `/incidencias` | – | Múltiples | 15 |
-| 14 | Ventas | ⏳ Planeado | `/ventas` | – | Contratos | 18 |
+| 14 | Ventas + Objetivos mensuales | ⏳ Planeado | `/ventas` | `/configuracion/objetivos` | Contratos | 18 |
 | 15 | Wallet | ⏳ Planeado | `/wallet` | – | Contratos, Instalaciones | 11 |
 | 16 | Programa de puntos | 🅿️ Aparcado (BD prep) | `/puntos` | `/configuracion/puntos` | Ventas | – |
 | 17 | Fichajes | 🅿️ Aparcado (BD prep) | `/fichajes` | `/configuracion/fichajes` | Usuarios | – |
@@ -118,10 +118,15 @@ Estados: ⏳ planeado · 🚧 en curso · ✅ listo · 🅿️ aparcado · 🔒 
 - Orígenes múltiples: instalación fuera plazo, instalador, avería, geo fuera rango, cambio modelo, falta stock.
 - Asignación, prioridad, agenda, carga recambio.
 
-### 14 — Ventas
+### 14 — Ventas + Objetivos mensuales
 - Acumula por contratos y equipos (10 contratos × 2 equipos = 20 ventas).
 - Cálculo: contado, alquiler total, renting (lo que paga la financiera).
 - Por usuario / departamento / mes / año.
+- **Objetivos mensuales (decisión D):** cascada en 2 niveles
+  - Nivel 1 (`company_admin`) define objetivo mensual por departamento (tech/sales/tmk).
+  - Nivel 2 (director del dpto) distribuye ese objetivo entre los nivel 3 a su mando.
+  - Tabla `monthly_objectives (id, company_id, period_year, period_month, scope_type [department|user], scope_ref [department_kind|user_id], parent_objective_id, target_amount_cents, target_units, set_by_user_id, created_at)`.
+  - Dashboard muestra cumplimiento % en tiempo real.
 
 ### 15 — Wallet
 - Cobros nivel 3 → liquidación con nivel 1/2.
@@ -138,10 +143,17 @@ Estados: ⏳ planeado · 🚧 en curso · ✅ listo · 🅿️ aparcado · 🔒 
 
 ### 18 — Calculadora ahorro (aparcado)
 - BD prevista. Configuración en `/configuracion/calculadora-ahorro`.
+- ⚠️ **TODO al llegar a este módulo:** revisar `legacy_reference/water_crm/WATER_CRM_PERFECTO-main/` (buscar componentes con "ahorro" / "saving" / "calculator") para comparar lógica del ZIP con prompt maestro. Owner pidió expresamente que se preguntara antes de implementar. Plugin para integrar en web cliente queda para fase final junto al plugin WordPress.
 
 ### 19 — Albaranes y facturas (aparcado)
 - Normativa española (Verifactu / TicketBAI según comunidad — duda #5).
 - Numeración por empresa, series, IVA, datos fiscales.
+
+### Recordar al 100% (Fase 2 después del prompt maestro)
+- **Chat interno entre usuarios** (decisión A) — owner quiere añadir cuando todo lo demás funcione.
+- **Campañas de email masivas** (decisión B).
+- **Notas de voz adjuntas a eventos** (decisión G) — quizás dentro del módulo de comunicaciones.
+- **Plugin WordPress + plugin calculadora de ahorro embebida** (decisión I) — para que las empresas integren en sus webs.
 
 ### Configuración
 - Replica del sidebar pero con vistas de configuración por módulo.

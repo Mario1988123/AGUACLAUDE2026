@@ -8,36 +8,40 @@
 
 ## 🎯 Acción inmediata
 
-**Capa 1 cerrada.** Próximo paso: **Capa 2 — modelo BD completo + primera migración SQL**.
+**Modo de trabajo confirmado:** Claude trabaja en autónomo escribiendo TODO en el repo (migraciones + scaffold + módulos), capa a capa, parando solo para dudas. Owner audita al final y aplica deploy + SQL.
 
-Acción de Claude:
-1. Diseñar las migraciones de Capa 1 (tablas core + RLS base + seeds roles/módulos/permisos).
-2. Diseñar las migraciones de Capa 2 (todas las tablas de negocio).
-3. Numerar y entregarlas al owner para ejecutar en SQL Editor de Supabase.
-4. Tras owner ejecute → cerrar Capa 2 y entrar en Capa 3 (scaffold Next.js).
+**Capa 2 en marcha** — paso a paso:
+- Paso 2.1: estructura `supabase/` + extensiones + tipos + funciones helper.
+- Paso 2.2: tablas globales (companies, modules_catalog, roles_catalog, permissions_catalog, role_permissions, superadmins).
+- Paso 2.3: tablas tenant Capa 1 (company_settings, company_modules, user_profiles, user_roles, team_assignments, permission_overrides).
+- Paso 2.4: Auth Hook (custom_access_token_hook) + función `auth.can()`.
+- Paso 2.5: RLS + policies para todo lo anterior.
+- Paso 2.6: seeds (módulos, roles, permisos).
+- Paso 2.7+: tablas de negocio (módulo a módulo).
+- Paso 2.final: validar todas las migraciones contra Postgres local con Supabase CLI.
 
 ---
 
 ## ✅ Hecho hoy (2026-05-01)
 
 - Repo GitHub privado `Mario1988123/AGUACLAUDE2026` creado.
-- `.gitignore` con blindaje de secretos commiteado y pusheado a `main`.
-- Vercel CLI logueado en local (no enlazado al repo todavía).
-- Token Supabase Management válido (usuario `mario.ortigueira@osmofilter.com`).
-- Proyecto Supabase creado: `AGUACLAUDE2026` (`pkgvzwunazzkstlfubnq`) en org OSMOFILTER SL, región `eu-west-3`.
-- API keys + DB password guardadas en `.env.local` (gitignored).
-- `.env.example` plantilla creada (commiteable).
-- Análisis **Capa 0** completado.
-- 4 archivos memoria creados: `PROJECT_MEMORY.md`, `DATABASE_MEMORY.md`, `MODULES_MEMORY.md`, `NEXT_STEPS.md`.
-- **Capa 0 cerrada** con 7/7 dudas críticas respondidas por owner.
-- **Capa 1 — diseño** documentado en `docs/decisions/0001_capa1_arquitectura_permisos.md`:
-  - Modelo de actores con superadmin + tenants + 8 roles fijos.
-  - Tablas core globales y tenant para multi-tenancy y permisos.
-  - Estructura `permissions_catalog` (module × action × scope + field_restrictions).
-  - Matriz de permisos completa por rol/módulo.
-  - RLS pattern definitivo con `auth.company_id()` y `auth.can()`.
-  - Custom JWT claims previstos.
-  - 13 preguntas Capa 1 abiertas para cerrar zonas grises de la matriz.
+- `.gitignore` con blindaje de secretos.
+- Vercel CLI logueado.
+- Proyecto Supabase `AGUACLAUDE2026` creado (`pkgvzwunazzkstlfubnq`, eu-west-3).
+- API keys + DB password en `.env.local` (gitignored).
+- `.env.example` plantilla.
+- **Capa 0** ✅ Análisis completo + 4 archivos memoria + 7/7 dudas críticas resueltas.
+- **Capa 1** ✅ Cerrada. 13/13 preguntas resueltas. ADR 0001.
+- **Capa 2 base** ✅ 7 migraciones SQL escritas:
+  - Extensiones, schema `app`, enums, trigger updated_at.
+  - 6 tablas globales (companies, superadmins, catálogos).
+  - 6 tablas tenant Capa 1 (settings, modules, profiles, roles, teams, overrides).
+  - 9 funciones helper en `app` para RLS.
+  - Auth Hook `custom_access_token_hook`.
+  - RLS habilitada y policies en TODAS las 12 tablas.
+  - Seeds: 19 módulos + 8 roles + permissions_catalog completo + role_permissions según ADR 0001.
+- `supabase/config.toml` para Supabase CLI local.
+- Decisiones: paso a paso, todo en código primero, deploy + auditoría al final.
 
 ---
 

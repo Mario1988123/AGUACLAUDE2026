@@ -77,6 +77,10 @@
 | 2026-05-01 | **Límite de usuarios por empresa lo fija superadmin** | Sin límite | Campo `max_users` en `companies`, validado al crear users. |
 | 2026-05-01 | **UI moderna basada en shadcn/ui blocks + shadcn charts (Recharts)** | Tabler/TailAdmin/templates pago | Free, calidad alta, alineado al stack ya elegido. Ver § 12 |
 | 2026-05-01 | **Tremor opcional para bloques avanzados de dashboard** | Solo Recharts | Tremor da KPI cards y composiciones premium ya hechas (open source MIT) |
+| 2026-05-01 | **Modo trabajo: todo en código primero, deploy + SQL al final con auditoría** | Aplicar migraciones incrementalmente | Owner prefiere ver el sistema completo antes de tocar BD productiva. Claude valida SQL contra Postgres local con Supabase CLI. |
+| 2026-05-01 | **Objetivos mensuales en cascada** (D) | Sin objetivos | Nivel 1 pone meta por dpto → nivel 2 distribuye entre los nivel 3 a su mando. Tabla `monthly_objectives`. |
+| 2026-05-01 | **UUID v7 (time-ordered)** vía `gen_random_uuid()` con extensión `pg_uuidv7` si Postgres 17+ lo soporta | UUID v4 random | Mejor performance índice en tablas grandes (events, wallet_entries, stock_movements). |
+| 2026-05-01 | **`timestamptz` UTC en BD + conversión a `Europe/Madrid` en frontend** | `timestamp` sin tz | Estándar. Para fechas de negocio puras (firma contrato, fecha instalación) usar `date`. |
 
 ## 5. Reglas de negocio invariantes
 
