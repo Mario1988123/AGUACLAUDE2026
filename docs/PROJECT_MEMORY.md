@@ -129,8 +129,8 @@ Tres dimensiones: `module × action × scope`, con overrides por **campo sensibl
 |---|---|---|
 | 0 — Análisis | ✅ Hecho (2026-05-01) | Documentado aquí + 4 archivos memoria |
 | 1 — Arquitectura permisos + multi-tenancy | ✅ Cerrada (2026-05-01) | 13/13 preguntas Capa 1 respondidas. Ver ADR 0001 |
-| 2 — Modelo de datos | ⏳ Pendiente | |
-| 3 — Scaffold Next.js | ⏳ Pendiente | |
+| 2 — Modelo de datos | ✅ Cerrado (2026-05-01) | 16 migraciones SQL escritas. Pendiente validación CLI local + aplicar en deploy final |
+| 3 — Scaffold Next.js | 🚧 En curso (2026-05-01) | |
 | 4 — Superadmin | ⏳ Pendiente | |
 | 5 — Tenant base | ⏳ Pendiente | |
 | 6 — Configuración por módulo | ⏳ Pendiente | |

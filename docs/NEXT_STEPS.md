@@ -10,15 +10,21 @@
 
 **Modo de trabajo confirmado:** Claude trabaja en autónomo escribiendo TODO en el repo (migraciones + scaffold + módulos), capa a capa, parando solo para dudas. Owner audita al final y aplica deploy + SQL.
 
-**Capa 2 en marcha** — paso a paso:
-- Paso 2.1: estructura `supabase/` + extensiones + tipos + funciones helper.
-- Paso 2.2: tablas globales (companies, modules_catalog, roles_catalog, permissions_catalog, role_permissions, superadmins).
-- Paso 2.3: tablas tenant Capa 1 (company_settings, company_modules, user_profiles, user_roles, team_assignments, permission_overrides).
-- Paso 2.4: Auth Hook (custom_access_token_hook) + función `auth.can()`.
-- Paso 2.5: RLS + policies para todo lo anterior.
-- Paso 2.6: seeds (módulos, roles, permisos).
-- Paso 2.7+: tablas de negocio (módulo a módulo).
-- Paso 2.final: validar todas las migraciones contra Postgres local con Supabase CLI.
+**Capa 2 cerrada.** 16 migraciones SQL escritas, ~70 tablas, RLS completa, seeds.
+**Próximo: Capa 3 — Scaffold Next.js + auth + sidebar + PWA + utilidades ES.**
+
+Tareas pendientes Capa 3:
+- package.json con stack final (Next 15, React 19, TS, Tailwind 4, shadcn, Supabase SSR).
+- Config: tsconfig, next.config, tailwind.
+- Estructura `src/app`, `src/modules`, `src/shared`.
+- Supabase clients (browser, server, middleware) con `@supabase/ssr`.
+- middleware.ts: auth + multi-tenant guard + redirección por rol.
+- Layout AppShell + Sidebar dinámico + Header con notificaciones.
+- Login + recuperación contraseña + cambio obligatorio.
+- Sistema toast (verde/rojo/naranja).
+- Validaciones ES: DNI, CIF, IBAN, CP, teléfono.
+- PWA: manifest.webmanifest + service worker con Serwist.
+- Pantalla error/no-permisos.
 
 ---
 
