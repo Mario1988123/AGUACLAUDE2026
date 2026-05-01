@@ -41,3 +41,6 @@ Thumbs.db
 
 # Claude local
 .claude/settings.local.json
+
+# Proyecto abandonado (referencia visual/UX únicamente — NO commitear)
+legacy_reference/
