@@ -6,23 +6,25 @@ import { Badge } from "@/shared/ui/badge";
 import { CompanyEditForm } from "@/modules/superadmin/companies/edit-form";
 import { CompanyModulesPanel } from "@/modules/superadmin/companies/modules-panel";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const statusLabel = {
+const statusLabel: Record<string, string> = {
   trial: "Prueba",
   active: "Activa",
   suspended: "Suspendida",
   cancelled: "Cancelada",
-} as const;
+};
 
-const statusVariant = {
+const statusVariant: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
   trial: "warning",
   active: "success",
   suspended: "destructive",
   cancelled: "secondary",
-} as const;
+};
 
 export default async function EmpresaDetallePage({ params }: PageProps) {
   const { id } = await params;
@@ -33,7 +35,21 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
     notFound();
   }
 
-  const supabase = await createClient();
+  // Filtramos a campos serializables/ usados por el cliente
+  const safeCompany = {
+    id: company.id,
+    name: company.name ?? "",
+    slug: company.slug ?? "",
+    status: company.status ?? "trial",
+    max_users: company.max_users ?? 5,
+    max_storage_mb: company.max_storage_mb ?? 1024,
+    monthly_cost_cents: company.monthly_cost_cents ?? 0,
+    billing_email: company.billing_email ?? null,
+    primary_color: company.primary_color ?? "#2563eb",
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   const [modulesRes, companyModulesRes, usersRes] = await Promise.all([
     supabase
       .from("modules_catalog")
@@ -66,7 +82,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
     created_at: string;
   }[];
 
-  const status = company.status as keyof typeof statusLabel;
+  const status = safeCompany.status;
   const activeMap = new Map(companyModules.map((m) => [m.module_key, m.is_active]));
 
   return (
@@ -74,10 +90,12 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{company.name}</h1>
-            <Badge variant={statusVariant[status]}>{statusLabel[status]}</Badge>
+            <h1 className="text-2xl font-bold">{safeCompany.name}</h1>
+            <Badge variant={statusVariant[status] ?? "secondary"}>
+              {statusLabel[status] ?? status}
+            </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">slug: {company.slug}</p>
+          <p className="text-sm text-muted-foreground">slug: {safeCompany.slug}</p>
         </div>
       </div>
 
@@ -87,7 +105,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
             <CardTitle>Datos y límites</CardTitle>
           </CardHeader>
           <CardContent>
-            <CompanyEditForm company={company} />
+            <CompanyEditForm company={safeCompany} />
           </CardContent>
         </Card>
 

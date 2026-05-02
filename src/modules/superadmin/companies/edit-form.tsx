@@ -11,13 +11,13 @@ import type { CompanyStatus } from "./types";
 interface CompanyEditFormProps {
   company: {
     id: string;
-    name: string;
-    status: string;
-    max_users: number;
-    max_storage_mb: number;
-    monthly_cost_cents: number;
-    billing_email: string | null;
-    primary_color: string | null;
+    name?: string | null;
+    status?: string | null;
+    max_users?: number | null;
+    max_storage_mb?: number | null;
+    monthly_cost_cents?: number | null;
+    billing_email?: string | null;
+    primary_color?: string | null;
   };
 }
 
@@ -32,11 +32,11 @@ export function CompanyEditForm({ company }: CompanyEditFormProps) {
     billing_email: string;
     primary_color: string;
   }>({
-    name: company.name,
-    status: company.status as CompanyStatus,
-    max_users: company.max_users,
-    max_storage_mb: company.max_storage_mb,
-    monthly_cost_cents: company.monthly_cost_cents,
+    name: company.name ?? "",
+    status: (company.status as CompanyStatus) || "trial",
+    max_users: company.max_users ?? 5,
+    max_storage_mb: company.max_storage_mb ?? 1024,
+    monthly_cost_cents: company.monthly_cost_cents ?? 0,
     billing_email: company.billing_email ?? "",
     primary_color: company.primary_color ?? "#2563eb",
   });
