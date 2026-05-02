@@ -155,6 +155,56 @@ export async function createContractFromProposal(proposalId: string) {
 
   const has_provisional_data = !cust.tax_id;
 
+  // Pending fields: comprobamos campos críticos del cliente para watermark PDF
+  const pending: string[] = [];
+  if (!cust.tax_id) pending.push("dni");
+  // IBAN
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supaAny = supabase as any;
+  const { data: hasBank } = await supaAny
+    .from("customer_bank_accounts")
+    .select("id")
+    .eq("customer_id", p.customer_id)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  if (!hasBank) pending.push("iban");
+  // Dirección
+  const { data: hasAddr } = await supaAny
+    .from("addresses")
+    .select("id")
+    .eq("customer_id", p.customer_id)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  if (!hasAddr) pending.push("address");
+
+  // Snapshot cláusulas: copia los templates activos del plan al contrato.
+  // Si no hay templates aún (empresa nueva), siembra los defaults via RPC.
+  let { data: tpls } = await supaAny
+    .from("contract_clause_templates")
+    .select("title, body, display_order")
+    .eq("company_id", session.company_id)
+    .eq("plan_type", "cash")
+    .eq("is_active", true)
+    .order("display_order");
+  if (!tpls || (tpls as Array<unknown>).length === 0) {
+    await supaAny.rpc("seed_default_clauses", { p_company_id: session.company_id });
+    const r = await supaAny
+      .from("contract_clause_templates")
+      .select("title, body, display_order")
+      .eq("company_id", session.company_id)
+      .eq("plan_type", "cash")
+      .eq("is_active", true)
+      .order("display_order");
+    tpls = r.data;
+  }
+  const clausesSnapshot = ((tpls ?? []) as Array<{
+    title: string;
+    body: string;
+    display_order: number;
+  }>).map((t) => ({ title: t.title, body: t.body, display_order: t.display_order }));
+
   // Crear contract
   const { data: created, error: cErr } = await supabase
     .from("contracts")
@@ -168,6 +218,8 @@ export async function createContractFromProposal(proposalId: string) {
       status: has_provisional_data ? "pending_data" : "pending_signature",
       has_provisional_data,
       customer_snapshot: cust,
+      clauses_snapshot: clausesSnapshot,
+      pending_fields: pending,
       created_by: session.user_id,
     } as never)
     .select("id")

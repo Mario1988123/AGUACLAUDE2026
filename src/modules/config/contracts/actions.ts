@@ -3,25 +3,26 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+
+export type ClausePlanType = "cash" | "rental" | "renting";
 
 export interface ClauseTemplate {
   id: string;
-  key: string;
+  plan_type: ClausePlanType;
   title: string;
-  body_template: string;
+  body: string;
   display_order: number;
-  is_required: boolean;
   is_active: boolean;
 }
 
 const clauseUpsertSchema = z.object({
   id: z.string().uuid().optional(),
-  key: z.string().min(2),
+  plan_type: z.enum(["cash", "rental", "renting"]),
   title: z.string().min(2),
-  body_template: z.string().min(5),
+  body: z.string().min(5),
   display_order: z.coerce.number().int().min(0).default(0),
-  is_required: z.boolean().default(false),
 });
 
 async function ensureAdmin() {
@@ -31,15 +32,32 @@ async function ensureAdmin() {
   return session;
 }
 
+/**
+ * Lista cláusulas activas. Si la empresa no tiene ninguna, llama al RPC seed
+ * para sembrar los defaults (cash + rental + renting) y vuelve a leer.
+ */
 export async function listClauseTemplates(): Promise<ClauseTemplate[]> {
-  await ensureAdmin();
+  const session = await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data } = await supabase
+  let { data } = await supabase
     .from("contract_clause_templates")
-    .select("id, key, title, body_template, display_order, is_required, is_active")
-    .eq("is_active", true)
+    .select("id, plan_type, title, body, display_order, is_active")
+    .eq("company_id", session.company_id)
+    .order("plan_type")
     .order("display_order");
+  if (!data || (data as Array<unknown>).length === 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    await admin.rpc("seed_default_clauses", { p_company_id: session.company_id });
+    const r = await supabase
+      .from("contract_clause_templates")
+      .select("id, plan_type, title, body, display_order, is_active")
+      .eq("company_id", session.company_id)
+      .order("plan_type")
+      .order("display_order");
+    data = r.data;
+  }
   return (data ?? []) as ClauseTemplate[];
 }
 
@@ -50,11 +68,10 @@ export async function upsertClauseTemplateAction(input: unknown) {
   const supabase = (await createClient()) as any;
   const payload = {
     company_id: session.company_id,
-    key: parsed.key,
+    plan_type: parsed.plan_type,
     title: parsed.title,
-    body_template: parsed.body_template,
+    body: parsed.body,
     display_order: parsed.display_order,
-    is_required: parsed.is_required,
     is_active: true,
   };
   if (parsed.id) {
@@ -75,5 +92,16 @@ export async function deleteClauseTemplateAction(id: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   await supabase.from("contract_clause_templates").update({ is_active: false }).eq("id", id);
+  revalidatePath("/configuracion/contratos");
+}
+
+export async function toggleClauseActiveAction(id: string, isActive: boolean) {
+  await ensureAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("contract_clause_templates")
+    .update({ is_active: isActive })
+    .eq("id", id);
   revalidatePath("/configuracion/contratos");
 }

@@ -3,18 +3,32 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
-  newDoc,
-  drawHeader,
-  drawSection,
-  drawKeyValue,
-  drawTable,
-  drawText,
-  drawHr,
+  newDashDoc,
+  drawDashHeader,
+  drawTwoPartyCards,
+  drawTiles,
+  drawCalloutBlock,
+  drawSectionTitle,
+  drawItemsTable,
+  drawDashFooter,
+  drawParagraph,
   fmtEur,
-  fmtDate,
-  COLORS,
-} from "@/shared/lib/pdf/primitives";
+  fmtDateLong,
+  fmtDateShort,
+  watermarkFromProposalStatus,
+} from "@/shared/lib/pdf/dashstack";
 import { getProposal, getProposalItems } from "./actions";
+
+function partyName(p: {
+  party_kind?: "individual" | "company" | null;
+  legal_name?: string | null;
+  trade_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}): string {
+  if (p.party_kind === "company") return p.trade_name || p.legal_name || "—";
+  return `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "—";
+}
 
 export async function generateProposalPdf(proposalId: string): Promise<Uint8Array> {
   const session = await requireSession();
@@ -27,82 +41,174 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: company } = await supabase
-    .from("companies")
-    .select("legal_name, trade_name, tax_id")
-    .eq("id", session.company_id)
-    .single();
-  const c = (company ?? {}) as {
+  const [{ data: company }, { data: companySettings }] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("legal_name, trade_name, tax_id")
+      .eq("id", session.company_id)
+      .single(),
+    supabase
+      .from("company_settings")
+      .select("contact_email, contact_phone, fiscal_address, fiscal_postal_code, fiscal_city")
+      .eq("company_id", session.company_id)
+      .maybeSingle(),
+  ]);
+  const co = (company ?? {}) as {
     legal_name?: string | null;
     trade_name?: string | null;
     tax_id?: string | null;
   };
-  const companyName = c.trade_name || c.legal_name || "Empresa";
+  const cs = (companySettings ?? {}) as {
+    contact_email?: string | null;
+    contact_phone?: string | null;
+    fiscal_address?: string | null;
+    fiscal_postal_code?: string | null;
+    fiscal_city?: string | null;
+  };
 
-  const doc = await newDoc();
-  drawHeader(
-    doc,
-    `Propuesta ${proposal.reference_code ?? ""}`.trim(),
-    `${companyName}${c.tax_id ? ` · ${c.tax_id}` : ""}`,
-  );
-
-  drawSection(doc, "Datos");
-  drawKeyValue(doc, "Cliente", proposal.customer_or_lead_name);
-  drawKeyValue(doc, "Versión", `#${proposal.version_number}`);
-  drawKeyValue(doc, "Fecha", fmtDate(proposal.created_at));
-  if (proposal.validity_until) {
-    drawKeyValue(doc, "Validez hasta", fmtDate(proposal.validity_until));
+  // Resolver datos completos del destinatario (cliente o lead)
+  let recipientRow: {
+    party_kind?: "individual" | "company";
+    legal_name?: string | null;
+    trade_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    tax_id?: string | null;
+    phone_primary?: string | null;
+  } | null = null;
+  let addrLine = "—";
+  if (proposal.customer_id) {
+    const { data: c } = await supabase
+      .from("customers")
+      .select("party_kind, legal_name, trade_name, first_name, last_name, tax_id, phone_primary")
+      .eq("id", proposal.customer_id)
+      .single();
+    recipientRow = c;
+    const { data: a } = await supabase
+      .from("addresses")
+      .select("street_type, street, street_number, postal_code, city, province")
+      .eq("customer_id", proposal.customer_id)
+      .is("deleted_at", null)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (a) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const aa = a as any;
+      addrLine = [
+        `${aa.street_type ?? ""} ${aa.street ?? ""}${aa.street_number ? " " + aa.street_number : ""}`.trim(),
+        `${aa.postal_code ?? ""} ${aa.city ?? ""}`.trim(),
+        aa.province,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }
+  } else if (proposal.lead_id) {
+    const { data: l } = await supabase
+      .from("leads")
+      .select("party_kind, legal_name, trade_name, first_name, last_name, tax_id, phone_primary")
+      .eq("id", proposal.lead_id)
+      .single();
+    recipientRow = l;
   }
 
-  drawSection(doc, "Equipos / Servicios");
-  drawTable(
-    doc,
-    ["Concepto", "Cant.", "Precio", "Subtotal"],
-    items.map((it) => ({
-      cells: [
-        it.product_name_snapshot,
-        String(it.quantity),
-        fmtEur(it.unit_price_cash_cents),
-        fmtEur((it.unit_price_cash_cents ?? 0) * it.quantity),
-      ],
-    })),
-    [260, 60, 90, 90],
-  );
+  const doc = await newDashDoc();
+  const today = new Date();
 
-  drawHr(doc);
-  drawText(doc, `TOTAL CONTADO: ${fmtEur(proposal.total_cash_cents)}`, {
-    bold: true,
-    size: 14,
-    color: COLORS.brand,
+  drawDashHeader(doc, {
+    companyName: co.trade_name || co.legal_name || "Empresa",
+    companyPhone: cs.contact_phone ?? null,
+    companyEmail: cs.contact_email ?? null,
+    title: "PROPUESTA",
+    refCode: proposal.reference_code ?? null,
+    dateLabel: fmtDateLong(proposal.created_at ?? today),
+    statusBadge: watermarkFromProposalStatus(proposal.status),
   });
 
-  if (proposal.monthly_renting_min_cents || proposal.monthly_rental_cents) {
-    drawSection(doc, "Opciones financieras");
-    if (proposal.monthly_renting_min_cents) {
-      drawKeyValue(
-        doc,
-        "Renting (mes)",
-        `${fmtEur(proposal.monthly_renting_min_cents)} – ${fmtEur(
-          proposal.monthly_renting_max_cents,
-        )}`,
-      );
-    }
-    if (proposal.monthly_rental_cents) {
-      drawKeyValue(doc, "Alquiler (mes)", fmtEur(proposal.monthly_rental_cents));
-    }
+  drawTwoPartyCards(
+    doc,
+    {
+      title: "LA EMPRESA",
+      rows: [
+        ["Nombre", co.trade_name || co.legal_name || "—"],
+        ["CIF", co.tax_id || "—"],
+        [
+          "Dirección",
+          [cs.fiscal_address, cs.fiscal_postal_code, cs.fiscal_city].filter(Boolean).join(", ") || "—",
+        ],
+        ["Teléfono", cs.contact_phone || "—"],
+      ],
+    },
+    {
+      title: proposal.customer_id ? "EL CLIENTE" : "EL DESTINATARIO",
+      rows: [
+        ["Nombre", recipientRow ? partyName(recipientRow) : proposal.customer_or_lead_name],
+        ["DNI/CIF", recipientRow?.tax_id || "—"],
+        ["Dirección", addrLine],
+        ["Teléfono", recipientRow?.phone_primary || "—"],
+      ],
+    },
+  );
+
+  // Tiles destacando totales
+  const tiles = [
+    { label: "VERSIÓN", value: `v${proposal.version_number}` },
+    {
+      label: "TOTAL CONTADO",
+      value: fmtEur(proposal.total_cash_cents),
+      sub: "IVA incluido",
+    },
+  ];
+  if (proposal.monthly_renting_min_cents) {
+    tiles.push({
+      label: "RENTING (mes)",
+      value: fmtEur(proposal.monthly_renting_min_cents),
+      sub: proposal.monthly_renting_max_cents
+        ? `hasta ${fmtEur(proposal.monthly_renting_max_cents)}`
+        : undefined,
+    });
   }
+  if (proposal.monthly_rental_cents) {
+    tiles.push({
+      label: "ALQUILER (mes)",
+      value: fmtEur(proposal.monthly_rental_cents),
+      sub: undefined,
+    });
+  }
+  drawTiles(doc, tiles);
+
+  if (proposal.validity_until) {
+    drawCalloutBlock(doc, {
+      title: "VALIDEZ DE LA PROPUESTA",
+      tone: "info",
+      body: `Esta propuesta es válida hasta el ${fmtDateShort(proposal.validity_until)}.`,
+    });
+  }
+
+  drawSectionTitle(doc, "PRODUCTOS / SERVICIOS PROPUESTOS");
+  drawItemsTable(
+    doc,
+    items.map((it) => ({
+      product: it.product_name_snapshot,
+      qty: it.quantity,
+      price: fmtEur(it.unit_price_cash_cents),
+      subtotal: fmtEur((it.unit_price_cash_cents ?? 0) * it.quantity),
+    })),
+  );
 
   if (proposal.notes) {
-    drawSection(doc, "Notas");
-    drawText(doc, proposal.notes, { size: 10, maxWidth: 495 });
+    drawSectionTitle(doc, "NOTAS");
+    drawParagraph(doc, proposal.notes);
   }
 
-  drawHr(doc);
-  drawText(
-    doc,
-    "Documento informativo. Las condiciones definitivas se reflejarán en el contrato.",
-    { size: 8, color: COLORS.muted },
-  );
+  const ref = proposal.reference_code ?? `#${proposal.id.slice(0, 8)}`;
+  const footer = [
+    co.trade_name || co.legal_name || "Empresa",
+    `Propuesta ${ref}`,
+    `Generada el ${fmtDateShort(today)}`,
+    proposal.sent_at ? `Enviada el ${fmtDateShort(proposal.sent_at)}` : "Borrador",
+  ].join("  ·  ");
+  drawDashFooter(doc, footer);
 
   return await doc.pdf.save();
 }

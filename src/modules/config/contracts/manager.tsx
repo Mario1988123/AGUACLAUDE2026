@@ -5,35 +5,34 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { Card, CardContent } from "@/shared/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   upsertClauseTemplateAction,
   deleteClauseTemplateAction,
   type ClauseTemplate,
+  type ClausePlanType,
 } from "./actions";
 
-const VARIABLES = [
-  "{{customer_name}}",
-  "{{customer_tax_id}}",
-  "{{customer_address}}",
-  "{{contract_total}}",
-  "{{contract_monthly}}",
-  "{{contract_duration}}",
-  "{{product_list}}",
-  "{{representative_name}}",
-  "{{company_name}}",
-  "{{date}}",
-];
+const PLAN_LABEL: Record<ClausePlanType, string> = {
+  cash: "Venta al contado",
+  rental: "Alquiler",
+  renting: "Renting (anexo financiera)",
+};
+
+const PLAN_ORDER: ClausePlanType[] = ["cash", "rental", "renting"];
 
 export function ClausesManager({ clauses }: { clauses: ClauseTemplate[] }) {
-  const [editing, setEditing] = useState<ClauseTemplate | "new" | null>(null);
+  const [editing, setEditing] = useState<{ kind: "new"; planType: ClausePlanType } | ClauseTemplate | null>(null);
 
   if (editing) {
+    const initial = "kind" in editing ? null : editing;
+    const planType = "kind" in editing ? editing.planType : editing.plan_type;
     return (
       <ClauseForm
-        initial={editing === "new" ? null : editing}
+        initial={initial}
+        defaultPlanType={planType}
         onDone={() => {
           setEditing(null);
           location.reload();
@@ -42,19 +41,51 @@ export function ClausesManager({ clauses }: { clauses: ClauseTemplate[] }) {
     );
   }
 
+  // Agrupar por plan_type
+  const byPlan: Record<ClausePlanType, ClauseTemplate[]> = {
+    cash: [],
+    rental: [],
+    renting: [],
+  };
+  for (const c of clauses) byPlan[c.plan_type].push(c);
+
   return (
-    <div className="space-y-3">
-      {clauses.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          Aún no hay cláusulas. Añade las que tu empresa usará en los contratos.
-        </div>
-      )}
-      {clauses.map((c) => (
-        <ClauseRow key={c.id} clause={c} onEdit={() => setEditing(c)} />
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Cada tipo de contrato (Venta / Alquiler / Renting) tiene sus propias cláusulas. Se imprimen
+        en el PDF en el orden indicado y quedan congeladas en cada contrato (los cambios aquí solo
+        afectan a contratos futuros).
+      </p>
+
+      {PLAN_ORDER.map((plan) => (
+        <Card key={plan}>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>{PLAN_LABEL[plan]} ({byPlan[plan].length})</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditing({ kind: "new", planType: plan })}
+              >
+                <Plus className="h-4 w-4" /> Añadir cláusula
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {byPlan[plan].length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+                Sin cláusulas. Añade las que tu empresa use en contratos de {PLAN_LABEL[plan].toLowerCase()}.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {byPlan[plan].map((c) => (
+                  <ClauseRow key={c.id} clause={c} onEdit={() => setEditing(c)} />
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       ))}
-      <Button onClick={() => setEditing("new")} variant="outline" className="w-full">
-        <Plus className="h-4 w-4" /> Nueva cláusula
-      </Button>
     </div>
   );
 }
@@ -62,7 +93,7 @@ export function ClausesManager({ clauses }: { clauses: ClauseTemplate[] }) {
 function ClauseRow({ clause, onEdit }: { clause: ClauseTemplate; onEdit: () => void }) {
   const [pending, startTransition] = useTransition();
   function remove() {
-    if (!confirm(`¿Eliminar cláusula "${clause.title}"?`)) return;
+    if (!confirm(`¿Eliminar cláusula "${clause.title}"? (solo afecta a contratos futuros)`)) return;
     startTransition(async () => {
       try {
         await deleteClauseTemplateAction(clause.id);
@@ -74,48 +105,47 @@ function ClauseRow({ clause, onEdit }: { clause: ClauseTemplate; onEdit: () => v
     });
   }
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <li className="rounded-xl border border-border bg-card p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{clause.title}</span>
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline">#{clause.display_order}</Badge>
-            {clause.is_required && <Badge variant="warning">Obligatoria</Badge>}
+            <span className="font-semibold">{clause.title}</span>
+            {!clause.is_active && <Badge variant="secondary">Inactiva</Badge>}
           </div>
-          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{clause.body_template}</p>
+          <p className="mt-1 line-clamp-3 text-xs text-muted-foreground whitespace-pre-wrap">
+            {clause.body}
+          </p>
         </div>
         <div className="flex shrink-0 gap-1.5">
-          <Button variant="ghost" size="icon" onClick={onEdit}>
+          <Button variant="ghost" size="icon" onClick={onEdit} aria-label="Editar">
             <Pencil className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={remove} disabled={pending}>
+          <Button variant="ghost" size="icon" onClick={remove} disabled={pending} aria-label="Eliminar">
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
         </div>
       </div>
-    </div>
+    </li>
   );
 }
 
 function ClauseForm({
   initial,
+  defaultPlanType,
   onDone,
 }: {
   initial: ClauseTemplate | null;
+  defaultPlanType: ClausePlanType;
   onDone: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
-    key: initial?.key ?? "",
+    plan_type: (initial?.plan_type ?? defaultPlanType) as ClausePlanType,
     title: initial?.title ?? "",
-    body_template: initial?.body_template ?? "",
+    body: initial?.body ?? "",
     display_order: initial?.display_order ?? 0,
-    is_required: initial?.is_required ?? false,
   });
-
-  function insertVar(v: string) {
-    setForm((f) => ({ ...f, body_template: `${f.body_template}${v}` }));
-  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -134,55 +164,23 @@ function ClauseForm({
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="key">Clave (interna)</Label>
-              <Input
-                id="key"
-                required
-                value={form.key}
-                onChange={(e) => setForm({ ...form, key: e.target.value })}
-                placeholder="duracion, permanencia..."
-              />
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="title">Título</Label>
-              <Input
-                id="title"
-                required
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="body">Texto (puedes usar variables)</Label>
-            <textarea
-              id="body"
-              required
-              rows={6}
-              value={form.body_template}
-              onChange={(e) => setForm({ ...form, body_template: e.target.value })}
-              className="w-full rounded-xl border border-border bg-card p-3 text-sm font-mono"
-            />
-            <div className="flex flex-wrap gap-1.5">
-              {VARIABLES.map((v) => (
-                <button
-                  type="button"
-                  key={v}
-                  onClick={() => insertVar(v)}
-                  className="rounded-md bg-muted px-2 py-1 text-xs font-mono text-muted-foreground hover:bg-primary hover:text-primary-foreground"
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label>Orden</Label>
+              <Label>Tipo de contrato</Label>
+              <select
+                value={form.plan_type}
+                onChange={(e) => setForm({ ...form, plan_type: e.target.value as ClausePlanType })}
+                className="h-12 w-full rounded-xl border border-border bg-card px-3 text-base"
+              >
+                {PLAN_ORDER.map((p) => (
+                  <option key={p} value={p}>
+                    {PLAN_LABEL[p]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Orden de impresión</Label>
               <Input
                 type="number"
                 min={0}
@@ -190,15 +188,29 @@ function ClauseForm({
                 onChange={(e) => setForm({ ...form, display_order: Number(e.target.value) })}
               />
             </div>
-            <label className="flex items-center gap-2 self-end rounded-xl border border-border bg-muted/30 p-3">
-              <input
-                type="checkbox"
-                checked={form.is_required}
-                onChange={(e) => setForm({ ...form, is_required: e.target.checked })}
-                className="h-5 w-5"
-              />
-              <span className="text-sm font-semibold">Obligatoria en todo contrato</span>
-            </label>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="title">Título</Label>
+            <Input
+              id="title"
+              required
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="Garantía / Mantenimiento / Forma de pago…"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="body">Texto</Label>
+            <textarea
+              id="body"
+              required
+              rows={8}
+              value={form.body}
+              onChange={(e) => setForm({ ...form, body: e.target.value })}
+              className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+            />
           </div>
 
           <div className="flex justify-end gap-2">
