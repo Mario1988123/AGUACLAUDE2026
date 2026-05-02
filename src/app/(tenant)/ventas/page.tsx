@@ -1,6 +1,9 @@
-import { listObjectives, listSales } from "@/modules/sales/actions";
+import { listSales } from "@/modules/sales/actions";
+import { listObjectivesAchievement } from "@/modules/sales/achievement-actions";
+import { ObjectivesAchievementList } from "@/modules/sales/achievement-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Badge } from "@/shared/ui/badge";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -13,17 +16,14 @@ const PLAN_LABEL: Record<string, string> = {
   rental: "Alquiler",
 };
 
-const DEPT_LABEL: Record<string, string> = {
-  tech: "Técnico",
-  sales: "Comercial",
-  tmk: "Telemarketing",
-};
-
 export default async function VentasPage() {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
-  const [sales, objectives] = await Promise.all([listSales(y, m), listObjectives(y, m)]);
+  const [sales, achievements] = await Promise.all([
+    listSales(y, m),
+    listObjectivesAchievement(y, m),
+  ]);
 
   const totalMonth = sales.reduce((s, x) => s + x.total_cents, 0);
   const monthlyMonth = sales.reduce((s, x) => s + (x.monthly_cents ?? 0), 0);
@@ -46,46 +46,10 @@ export default async function VentasPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Objetivos del mes</CardTitle>
+          <CardTitle>Cumplimiento objetivos del mes</CardTitle>
         </CardHeader>
         <CardContent>
-          {objectives.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No hay objetivos definidos para este mes. Decisión D: nivel 1 fija meta de
-              departamento, nivel 2 distribuye entre su equipo nivel 3.
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Alcance</th>
-                  <th className="py-2 text-left">Métrica</th>
-                  <th className="py-2 text-right">Importe</th>
-                  <th className="py-2 text-right">Unidades</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {objectives.map((o) => (
-                  <tr key={o.id}>
-                    <td className="py-2">
-                      {o.scope_type === "department" ? (
-                        <Badge variant="outline">
-                          Dpto: {DEPT_LABEL[o.scope_department!] ?? o.scope_department}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Usuario</Badge>
-                      )}
-                    </td>
-                    <td className="py-2 text-xs">{o.metric_kind}</td>
-                    <td className="py-2 text-right tabular-nums">
-                      {formatCents(o.target_amount_cents)}
-                    </td>
-                    <td className="py-2 text-right tabular-nums">{o.target_units ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <ObjectivesAchievementList data={achievements} />
         </CardContent>
       </Card>
 
