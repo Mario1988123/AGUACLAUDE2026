@@ -12,6 +12,7 @@ import {
   completeInstallationSchema,
 } from "./schemas";
 import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
+import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 
 export interface InstallationRow {
   id: string;
@@ -443,13 +444,17 @@ export async function completeInstallation(input: unknown) {
     }
   }
 
-  // Activar contrato si seguía en signed
+  // Activar contrato si seguía en signed + programar mantenimientos
   if (i.contract_id) {
-    await supabase
+    const { data: updated } = await supabase
       .from("contracts")
       .update({ status: "active" })
       .eq("id", i.contract_id)
-      .eq("status", "signed");
+      .eq("status", "signed")
+      .select("id");
+    if (((updated ?? []) as Array<{ id: string }>).length > 0) {
+      await autoScheduleMaintenanceForContract(i.contract_id);
+    }
   }
 
   await supabase.from("events").insert({

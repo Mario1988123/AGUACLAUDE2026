@@ -7,6 +7,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { contractCreateSchema } from "./schemas";
 import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
+import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 
 export async function listContracts(): Promise<ContractListItem[]> {
   await requireSession();
@@ -322,12 +323,13 @@ export async function markContractActive(id: string) {
     .from("contracts")
     .update({ status: "active" } as never)
     .eq("id", id);
+  const scheduledJobs = await autoScheduleMaintenanceForContract(id);
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
     subject_id: id,
     kind: "contract.activated",
-    payload: {},
+    payload: { maintenance_jobs_scheduled: scheduledJobs },
     actor_user_id: session.user_id,
   } as never);
   revalidatePath(`/contratos/${id}`);
