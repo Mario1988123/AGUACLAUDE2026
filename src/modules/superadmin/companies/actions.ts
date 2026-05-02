@@ -48,6 +48,16 @@ export async function createCompanyAction(formData: FormData) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  // Verificación previa de slug duplicado para mostrar mensaje claro
+  const { data: existing } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("slug", parsed.slug)
+    .maybeSingle();
+  if (existing) {
+    throw new Error(`Ya existe una empresa con el slug "${parsed.slug}". Elige otro.`);
+  }
+
   const insertResult = await supabase
     .from("companies")
     .insert({
@@ -68,7 +78,15 @@ export async function createCompanyAction(formData: FormData) {
     .select("id")
     .single();
 
-  if (insertResult.error) throw insertResult.error;
+  if (insertResult.error) {
+    // PostgreSQL 23505 = unique_violation (carrera concurrente con verificación previa)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const code = (insertResult.error as any).code;
+    if (code === "23505") {
+      throw new Error(`Ya existe una empresa con el slug "${parsed.slug}". Elige otro.`);
+    }
+    throw insertResult.error;
+  }
   const companyId = (insertResult.data as { id: string }).id;
 
   // Activar módulos por defecto (los is_core + default_active=true)
