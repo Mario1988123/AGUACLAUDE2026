@@ -2,18 +2,26 @@ import Link from "next/link";
 import { listProposals } from "@/modules/proposals/actions";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
-import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/proposals/schemas";
+import { STATUS_LABEL, STATUS_VARIANT, PROPOSAL_STATUS } from "@/modules/proposals/schemas";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-export default async function PropuestasPage() {
-  const proposals = await listProposals();
+export default async function PropuestasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const sp = await searchParams;
+  const status = PROPOSAL_STATUS.includes(sp.status as never) ? sp.status : undefined;
+  const proposals = await listProposals({ status });
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Propuestas</h1>
           <p className="text-sm text-muted-foreground">{proposals.length} propuestas</p>
@@ -22,6 +30,35 @@ export default async function PropuestasPage() {
           <Link href={"/propuestas/nueva" as never}>+ Nueva propuesta</Link>
         </Button>
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Estado</label>
+          <select
+            name="status"
+            defaultValue={status ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {PROPOSAL_STATUS.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {status && (
+          <Link href="/propuestas" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <table className="w-full text-sm">

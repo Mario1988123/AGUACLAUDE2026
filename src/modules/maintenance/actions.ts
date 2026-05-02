@@ -69,7 +69,11 @@ export async function startMaintenanceAction(id: string) {
   revalidatePath("/mantenimientos");
 }
 
-export async function listMaintenance(): Promise<MaintenanceRow[]> {
+export async function listMaintenance(filters?: {
+  status?: string;
+  fromDate?: string;
+  toDate?: string;
+}): Promise<MaintenanceRow[]> {
   const session = await requireSession();
   const supabase = await createClient();
   let query = supabase
@@ -87,6 +91,9 @@ export async function listMaintenance(): Promise<MaintenanceRow[]> {
   ) {
     query = query.eq("technician_user_id", session.user_id);
   }
+  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.fromDate) query = query.gte("scheduled_at", filters.fromDate);
+  if (filters?.toDate) query = query.lte("scheduled_at", filters.toDate);
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as Array<Omit<MaintenanceRow, "customer_name">>;

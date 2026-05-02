@@ -6,13 +6,42 @@ import { Badge } from "@/shared/ui/badge";
 
 export const dynamic = "force-dynamic";
 
+const STATUS_OPTIONS = ["scheduled", "in_progress", "completed", "cancelled"] as const;
+const PERIOD_OPTIONS = {
+  "": "Todas las fechas",
+  upcoming: "Próximas",
+  this_month: "Este mes",
+  past: "Anteriores",
+} as const;
+
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-export default async function MantenimientosPage() {
-  const jobs = await listMaintenance();
+function periodToRange(period: string): { fromDate?: string; toDate?: string } {
+  const now = new Date();
+  if (period === "upcoming") return { fromDate: now.toISOString() };
+  if (period === "past") return { toDate: now.toISOString() };
+  if (period === "this_month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    return { fromDate: start, toDate: end };
+  }
+  return {};
+}
+
+export default async function MantenimientosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; period?: string }>;
+}) {
+  const sp = await searchParams;
+  const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
+  const period = sp.period && Object.prototype.hasOwnProperty.call(PERIOD_OPTIONS, sp.period) ? sp.period : "";
+  const { fromDate, toDate } = periodToRange(period);
+  const jobs = await listMaintenance({ status, fromDate, toDate });
+
   return (
     <div className="space-y-6">
       <div>
@@ -20,13 +49,56 @@ export default async function MantenimientosPage() {
         <p className="text-sm text-muted-foreground">{jobs.length} trabajos</p>
       </div>
 
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Estado</label>
+          <select
+            name="status"
+            defaultValue={status ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s] ?? s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Período</label>
+          <select
+            name="period"
+            defaultValue={period}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            {Object.entries(PERIOD_OPTIONS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {(status || period) && (
+          <Link href="/mantenimientos" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
+
       <Card>
         <CardHeader>
           <CardTitle>Listado</CardTitle>
         </CardHeader>
         <CardContent>
           {jobs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin mantenimientos programados.</p>
+            <p className="text-sm text-muted-foreground">Sin mantenimientos con esos filtros.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">

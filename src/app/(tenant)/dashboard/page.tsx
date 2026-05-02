@@ -18,6 +18,10 @@ import {
   UpcomingMaintenanceCard,
   getUpcomingMaintenance,
 } from "@/modules/maintenance/upcoming-card";
+import {
+  UpcomingInstallationsCard,
+  getUpcomingInstallations,
+} from "@/modules/installations/upcoming-card";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +91,10 @@ export default async function DashboardPage({
     listTeamMembers().catch(() => []),
   ]);
 
-  const upcomingMaintenance = await getUpcomingMaintenance().catch(() => []);
+  const [upcomingMaintenance, upcomingInstallations] = await Promise.all([
+    getUpcomingMaintenance().catch(() => []),
+    getUpcomingInstallations().catch(() => []),
+  ]);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
     (s, r) => s + r.total_cents,
@@ -236,11 +243,13 @@ export default async function DashboardPage({
         />
       </div>
 
-      {/* Próximos mantenimientos + Ranking */}
+      {/* Próximas instalaciones + mantenimientos */}
       <div className="grid gap-5 lg:grid-cols-2">
+        <UpcomingInstallationsCard items={upcomingInstallations} />
         <UpcomingMaintenanceCard items={upcomingMaintenance} />
-        <RankingCard rows={ranking} highlightUserId={session.user_id} />
       </div>
+
+      <RankingCard rows={ranking} highlightUserId={session.user_id} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SalesByMonthChart data={salesData} />

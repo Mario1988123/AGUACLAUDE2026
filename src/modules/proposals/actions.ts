@@ -8,10 +8,10 @@ import { proposalCreateSchema } from "./schemas";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
 
-export async function listProposals(): Promise<ProposalListItem[]> {
+export async function listProposals(filters?: { status?: string }): Promise<ProposalListItem[]> {
   await requireSession();
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("proposals")
     .select(
       "id, reference_code, status, customer_id, lead_id, total_cash_cents, validity_until, created_at, version_number",
@@ -19,6 +19,8 @@ export async function listProposals(): Promise<ProposalListItem[]> {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+  if (filters?.status) query = query.eq("status", filters.status);
+  const { data, error } = await query;
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{

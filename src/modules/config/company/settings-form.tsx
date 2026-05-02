@@ -22,6 +22,12 @@ export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
   const [geoTol, setGeoTol] = useState(initial.installation_geo_tolerance_m);
   const [timeTol, setTimeTol] = useState(initial.installation_time_tolerance_min);
   const [pdfColor, setPdfColor] = useState(initial.pdf_brand_color);
+  const [contactPhone, setContactPhone] = useState(initial.contact_phone ?? "");
+  const [contactEmail, setContactEmail] = useState(initial.contact_email ?? "");
+  const [fiscalAddress, setFiscalAddress] = useState(initial.fiscal_address ?? "");
+  const [fiscalPostalCode, setFiscalPostalCode] = useState(initial.fiscal_postal_code ?? "");
+  const [fiscalCity, setFiscalCity] = useState(initial.fiscal_city ?? "");
+  const [fiscalProvince, setFiscalProvince] = useState(initial.fiscal_province ?? "");
   const [pending, startTransition] = useTransition();
 
   function toggleDay(key: string) {
@@ -46,6 +52,12 @@ export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
           installation_geo_tolerance_m: geoTol,
           installation_time_tolerance_min: timeTol,
           pdf_brand_color: pdfColor,
+          contact_phone: contactPhone || null,
+          contact_email: contactEmail || null,
+          fiscal_address: fiscalAddress || null,
+          fiscal_postal_code: fiscalPostalCode || null,
+          fiscal_city: fiscalCity || null,
+          fiscal_province: fiscalProvince || null,
         });
         notify.success("Configuración guardada");
       } catch (err) {
@@ -56,6 +68,47 @@ export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+          Datos de la empresa (aparecen en PDFs)
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Teléfono</Label>
+            <Input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              value={contactEmail}
+              onChange={(e) => setContactEmail(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Dirección fiscal</Label>
+            <Input value={fiscalAddress} onChange={(e) => setFiscalAddress(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>CP</Label>
+            <Input
+              value={fiscalPostalCode}
+              onChange={(e) => setFiscalPostalCode(e.target.value)}
+              maxLength={5}
+              inputMode="numeric"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Ciudad</Label>
+            <Input value={fiscalCity} onChange={(e) => setFiscalCity(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Provincia</Label>
+            <Input value={fiscalProvince} onChange={(e) => setFiscalProvince(e.target.value)} />
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-3">
         <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
           Horario comercial
