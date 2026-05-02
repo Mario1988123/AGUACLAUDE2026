@@ -14,9 +14,14 @@ interface SidebarProps {
   fullName: string | null;
 }
 
+/**
+ * Sidebar tenant — estilo navy oscuro (var --sidebar de globals.css).
+ * Optimizado para tablet: tap targets ≥56px, iconos grandes, espaciado generoso.
+ */
 export function Sidebar({ userRoles, isSuperadmin, activeModuleKeys, fullName }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleModules = MODULES.filter((m) => {
     if (!activeModuleKeys.includes(m.key)) return false;
@@ -30,52 +35,100 @@ export function Sidebar({ userRoles, isSuperadmin, activeModuleKeys, fullName }:
   const core = visibleModules.filter((m) => m.group === "core");
   const config = visibleModules.filter((m) => m.group === "config");
 
-  return (
+  const sidebarContent = (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r bg-card transition-[width] duration-200",
-        collapsed ? "w-16" : "w-64",
+        "sidebar-scrollbar flex h-screen flex-col border-r transition-[width] duration-200",
+        "bg-sidebar text-sidebar-foreground border-sidebar-border",
+        collapsed ? "w-20" : "w-64",
       )}
     >
-      <div className="flex h-16 items-center justify-between border-b px-4">
+      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
         {!collapsed && (
-          <Link href="/" className="text-lg font-bold tracking-tight">
+          <Link href="/" className="text-lg font-bold tracking-tight text-sidebar-foreground">
             AGUACLAUDE
           </Link>
         )}
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className="rounded p-2 hover:bg-muted"
+          className="hidden h-11 w-11 items-center justify-center rounded-md hover:bg-sidebar-accent lg:flex"
           aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
         >
           <Icons.Menu className="h-5 w-5" />
         </button>
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="flex h-11 w-11 items-center justify-center rounded-md hover:bg-sidebar-accent lg:hidden"
+          aria-label="Cerrar menú"
+        >
+          <Icons.X className="h-5 w-5" />
+        </button>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
+      <nav className="flex-1 space-y-2 overflow-y-auto p-3">
         <SidebarGroup label="Principal" items={core} pathname={pathname} collapsed={collapsed} />
-        <SidebarGroup label="Operativa" items={operative} pathname={pathname} collapsed={collapsed} />
-        <SidebarGroup label="Administración" items={config} pathname={pathname} collapsed={collapsed} />
+        <SidebarGroup
+          label="Operativa"
+          items={operative}
+          pathname={pathname}
+          collapsed={collapsed}
+        />
+        <SidebarGroup
+          label="Administración"
+          items={config}
+          pathname={pathname}
+          collapsed={collapsed}
+        />
       </nav>
 
-      <div className="border-t p-3">
+      <div className="border-t border-sidebar-border p-3">
         {!collapsed && (
-          <div className="truncate text-xs text-muted-foreground" title={fullName ?? ""}>
+          <div className="truncate px-3 pb-2 text-xs text-sidebar-foreground/60" title={fullName ?? ""}>
             {fullName ?? "Usuario"}
           </div>
         )}
-        <Link
-          href="/logout"
-          className={cn(
-            "mt-2 flex items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted",
-            collapsed && "justify-center",
-          )}
-        >
-          <Icons.LogOut className="h-4 w-4" />
-          {!collapsed && <span>Salir</span>}
-        </Link>
+        <form action="/logout" method="post">
+          <button
+            type="submit"
+            className={cn(
+              "flex min-h-12 w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+              "hover:bg-sidebar-accent",
+              collapsed && "justify-center",
+            )}
+          >
+            <Icons.LogOut className="h-5 w-5" />
+            {!collapsed && <span>Salir</span>}
+          </button>
+        </form>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      {/* Botón flotante para abrir sidebar en móvil/tablet pequeño */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed left-4 top-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg lg:hidden"
+        aria-label="Abrir menú"
+      >
+        <Icons.Menu className="h-6 w-6" />
+      </button>
+
+      {/* Sidebar desktop */}
+      <div className="hidden lg:block">{sidebarContent}</div>
+
+      {/* Sidebar móvil con overlay */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="absolute left-0 top-0">{sidebarContent}</div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -94,27 +147,31 @@ function SidebarGroup({
   return (
     <div className="space-y-1">
       {!collapsed && (
-        <div className="px-3 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="px-3 pt-3 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/50">
           {label}
         </div>
       )}
       {items.map((m) => {
-        const Icon = (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[m.icon] ?? Icons.Square;
+        const Icon =
+          (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[
+            m.icon
+          ] ?? Icons.Square;
         const active = pathname === m.href || pathname.startsWith(`${m.href}/`);
         return (
           <Link
             key={m.key}
             href={m.href as never}
             className={cn(
-              "flex items-center gap-3 rounded px-3 py-2 text-sm transition-colors",
+              "flex min-h-12 items-center gap-3 rounded-md px-3 py-3 text-sm font-medium transition-colors",
               active
-                ? "bg-primary text-primary-foreground"
-                : "text-foreground hover:bg-muted",
-              collapsed && "justify-center",
+                ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+              collapsed && "justify-center px-0",
             )}
             title={collapsed ? m.label : undefined}
+            prefetch={false}
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className="h-5 w-5 shrink-0" />
             {!collapsed && <span className="truncate">{m.label}</span>}
           </Link>
         );
