@@ -421,7 +421,7 @@ export function drawClauseList(
 
 export interface ItemsRow {
   product: string;
-  qty: number;
+  qty: number | string;
   price: string;
   subtotal: string;
 }

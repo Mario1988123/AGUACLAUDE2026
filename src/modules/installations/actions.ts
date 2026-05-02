@@ -31,7 +31,10 @@ export interface InstallationRow {
   address_id: string | null;
 }
 
-export async function listInstallations(): Promise<InstallationRow[]> {
+export async function listInstallations(filters?: {
+  installer_user_id?: string;
+  status?: string;
+}): Promise<InstallationRow[]> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -44,6 +47,7 @@ export async function listInstallations(): Promise<InstallationRow[]> {
     .order("scheduled_at", { ascending: true, nullsFirst: false })
     .limit(200);
 
+  // Si es nivel 3 instalador → forzar a sus instalaciones
   if (
     session.roles.includes("installer") &&
     !session.is_superadmin &&
@@ -53,7 +57,10 @@ export async function listInstallations(): Promise<InstallationRow[]> {
     query = query
       .eq("installer_user_id", session.user_id)
       .not("status", "in", "(completed,cancelled)");
+  } else if (filters?.installer_user_id) {
+    query = query.eq("installer_user_id", filters.installer_user_id);
   }
+  if (filters?.status) query = query.eq("status", filters.status);
 
   const { data, error } = await query;
   if (error) throw error;

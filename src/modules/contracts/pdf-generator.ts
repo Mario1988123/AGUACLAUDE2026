@@ -256,15 +256,29 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
     })),
   );
 
-  // Plan de pagos (si los hay)
+  // Plan de pagos: concepto · momento · método · importe
   if (payments.length > 0) {
+    const MOMENT_LABEL: Record<string, string> = {
+      on_signature: "Firma",
+      on_installation: "Instalación",
+      intermediate: "Intermedio",
+      periodic: "Periódico",
+    };
+    const METHOD_LABEL: Record<string, string> = {
+      cash: "Efectivo",
+      card: "Tarjeta",
+      bizum: "Bizum",
+      transfer: "Transferencia",
+      direct_debit: "Domiciliación",
+      financing: "Financiera",
+    };
     drawSectionTitle(doc, "PLAN DE PAGOS");
     drawItemsTable(
       doc,
       payments.map((p) => ({
         product: p.concept,
-        qty: 1,
-        price: fmtEur(p.amount_cents),
+        qty: MOMENT_LABEL[p.moment] ?? p.moment,
+        price: METHOD_LABEL[p.method] ?? p.method,
         subtotal: fmtEur(p.amount_cents),
       })),
     );

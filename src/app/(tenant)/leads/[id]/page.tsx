@@ -12,8 +12,11 @@ import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "@/modules/leads/sche
 import { LeadStatusActions } from "@/modules/leads/status-actions";
 import { ConvertLeadButton } from "@/modules/leads/convert-button";
 import { LeadContactButtons } from "@/modules/leads/contact-buttons";
+import { ReassignLeadButton } from "@/modules/leads/reassign-button";
 import { Plus, MapPin } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import { requireSession } from "@/shared/lib/auth/session";
+import { listTeamMembers } from "@/modules/agenda/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -35,10 +38,17 @@ export default async function LeadDetailPage({
       ? lead.trade_name || lead.legal_name || "Sin nombre"
       : `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Sin nombre";
 
-  const [addresses, proposals] = await Promise.all([
+  const [addresses, proposals, session, team] = await Promise.all([
     listAddresses({ lead_id: id }),
     listProposalsByLead(id),
+    requireSession(),
+    listTeamMembers().catch(() => []),
   ]);
+  const canReassign =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
   const hasProposals = proposals.length > 0;
   const isConverted = lead.status === "converted";
 
@@ -170,8 +180,17 @@ export default async function LeadDetailPage({
             <CardHeader>
               <CardTitle>Estado</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
+              {canReassign && !isConverted && (
+                <div className="border-t pt-3">
+                  <ReassignLeadButton
+                    leadId={lead.id}
+                    currentUserId={lead.assigned_user_id}
+                    team={team}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

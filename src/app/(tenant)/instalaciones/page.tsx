@@ -1,11 +1,20 @@
 import Link from "next/link";
 import { listInstallations } from "@/modules/installations/actions";
+import { listTeamMembers } from "@/modules/agenda/actions";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Calendar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const STATUS_OPTIONS = [
+  "scheduled",
+  "in_progress",
+  "paused",
+  "completed",
+  "cancelled",
+] as const;
 
 const DAY_LABEL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
@@ -24,8 +33,18 @@ function fmtDayHeader(iso: string): string {
   return `${DAY_LABEL[d.getDay()]} ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
 }
 
-export default async function InstalacionesPage() {
-  const installations = await listInstallations();
+export default async function InstalacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ installer?: string; status?: string }>;
+}) {
+  const sp = await searchParams;
+  const installerFilter = sp.installer || undefined;
+  const statusFilter = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
+  const [installations, team] = await Promise.all([
+    listInstallations({ installer_user_id: installerFilter, status: statusFilter }),
+    listTeamMembers().catch(() => []),
+  ]);
 
   // Separar agendadas (con scheduled_at) y sin agendar
   type I = (typeof installations)[number];
@@ -63,6 +82,50 @@ export default async function InstalacionesPage() {
           ⬇ Exportar CSV
         </Link>
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Instalador</label>
+          <select
+            name="installer"
+            defaultValue={installerFilter ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {team.map((t) => (
+              <option key={t.user_id} value={t.user_id}>
+                {t.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Estado</label>
+          <select
+            name="status"
+            defaultValue={statusFilter ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s] ?? s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {(installerFilter || statusFilter) && (
+          <Link href="/instalaciones" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
 
       <Card>
         <CardHeader>
