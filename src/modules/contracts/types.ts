@@ -27,6 +27,7 @@ export interface ContractDetail {
   monthly_cents: number | null;
   has_provisional_data: boolean;
   signed_at: string | null;
+  service_start_date: string | null;
   maintenance_included: boolean;
   maintenance_months_included: number | null;
   maintenance_periodicity_months: number | null;

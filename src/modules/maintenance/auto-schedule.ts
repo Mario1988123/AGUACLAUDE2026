@@ -18,7 +18,7 @@ export async function autoScheduleMaintenanceForContract(contractId: string): Pr
   const { data: contract } = await a
     .from("contracts")
     .select(
-      "id, company_id, customer_id, status, maintenance_included, maintenance_months_included, maintenance_periodicity_months, duration_months",
+      "id, company_id, customer_id, status, maintenance_included, maintenance_months_included, maintenance_periodicity_months, duration_months, service_start_date",
     )
     .eq("id", contractId)
     .single();
@@ -33,6 +33,7 @@ export async function autoScheduleMaintenanceForContract(contractId: string): Pr
     maintenance_months_included: number | null;
     maintenance_periodicity_months: number | null;
     duration_months: number | null;
+    service_start_date: string | null;
   };
   if (!c.maintenance_included || !c.maintenance_periodicity_months) return 0;
 
@@ -57,10 +58,12 @@ export async function autoScheduleMaintenanceForContract(contractId: string): Pr
   const eqList = (equipment ?? []) as Array<{ id: string }>;
   const equipmentId = eqList[0]?.id ?? null;
 
-  const now = new Date();
+  // Anclamos las fechas de mantenimiento al inicio del servicio (no al "ahora").
+  // Si el contrato arranca el 01/05 y la periodicidad es 6 meses → 01/11, 01/05+1y…
+  const baseDate = c.service_start_date ? new Date(c.service_start_date) : new Date();
   const jobs = [] as Array<Record<string, unknown>>;
   for (let n = 1; n <= numJobs; n++) {
-    const scheduled = new Date(now);
+    const scheduled = new Date(baseDate);
     scheduled.setMonth(scheduled.getMonth() + n * periodicity);
     jobs.push({
       company_id: c.company_id,

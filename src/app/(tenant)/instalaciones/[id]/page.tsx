@@ -41,6 +41,7 @@ export default async function InstallationDetailPage({
     geo_distance_to_address_m: number | null;
     duration_seconds: number | null;
     notes: string | null;
+    contract_id: string | null;
   };
 
   const [items, photos, signatures] = await Promise.all([
@@ -160,6 +161,7 @@ export default async function InstallationDetailPage({
             hasPreviousDamage={i.has_previous_damage}
             needsCountertopDrilling={i.needs_countertop_drilling}
             geoDistanceM={i.geo_distance_to_address_m}
+            contractId={i.contract_id}
           />
         </div>
       </div>

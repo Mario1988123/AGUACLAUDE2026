@@ -32,4 +32,8 @@ export const completeInstallationSchema = z.object({
   geo_lat: z.number().optional(),
   geo_lng: z.number().optional(),
   notes: z.string().optional(),
+  /** Fecha en la que arranca el servicio del contrato (YYYY-MM-DD).
+   * Si es hoy o pasada → contrato pasa a active inmediatamente.
+   * Si es futura → queda en signed, el cron lo activa al llegar el día. */
+  service_start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });

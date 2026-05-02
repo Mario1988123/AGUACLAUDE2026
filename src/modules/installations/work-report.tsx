@@ -29,6 +29,12 @@ interface Props {
   needsCountertopDrilling: boolean | null;
   geoDistanceM: number | null;
   geoToleranceM?: number;
+  /** Si la instalación está vinculada a un contrato (para mostrar fecha inicio servicio) */
+  contractId: string | null;
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function getCurrentPosition(): Promise<{ lat: number; lng: number } | null> {
@@ -50,10 +56,13 @@ export function InstallationWorkReport({
   needsCountertopDrilling,
   geoDistanceM,
   geoToleranceM = 300,
+  contractId,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [completing, setCompleting] = useState(false);
   const [completeNotes, setCompleteNotes] = useState("");
+  const [serviceStartMode, setServiceStartMode] = useState<"today" | "later">("today");
+  const [serviceStartDate, setServiceStartDate] = useState(todayIso());
 
   const isInProgress = status === "in_progress";
   const isPaused = status === "paused";
@@ -119,6 +128,8 @@ export function InstallationWorkReport({
     });
   }
   function doComplete() {
+    const startDate =
+      serviceStartMode === "today" ? todayIso() : serviceStartDate || todayIso();
     startTransition(async () => {
       const geo = await getCurrentPosition();
       try {
@@ -127,6 +138,7 @@ export function InstallationWorkReport({
           geo_lat: geo?.lat,
           geo_lng: geo?.lng,
           notes: completeNotes,
+          service_start_date: contractId ? startDate : undefined,
         });
         notify.success("¡Instalación completada!");
         setCompleting(false);
@@ -275,6 +287,50 @@ export function InstallationWorkReport({
         {completing && (
           <div className="space-y-3 rounded-xl border-2 border-success bg-success/5 p-4">
             <div className="font-semibold">Finalizar parte</div>
+
+            {contractId && (
+              <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+                <div className="text-sm font-bold">¿Cuándo arranca el servicio?</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setServiceStartMode("today")}
+                    className={`rounded-xl border-2 p-3 text-sm font-semibold ${
+                      serviceStartMode === "today"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border"
+                    }`}
+                  >
+                    Hoy mismo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setServiceStartMode("later")}
+                    className={`rounded-xl border-2 p-3 text-sm font-semibold ${
+                      serviceStartMode === "later"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border"
+                    }`}
+                  >
+                    Otra fecha
+                  </button>
+                </div>
+                {serviceStartMode === "later" && (
+                  <input
+                    type="date"
+                    value={serviceStartDate}
+                    min={todayIso()}
+                    onChange={(e) => setServiceStartDate(e.target.value)}
+                    className="h-12 w-full rounded-xl border border-border bg-card px-3 text-base"
+                  />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  El contrato se activará el día indicado. Las cuotas y mantenimientos se calculan
+                  desde esa fecha.
+                </p>
+              </div>
+            )}
+
             <textarea
               value={completeNotes}
               onChange={(e) => setCompleteNotes(e.target.value)}

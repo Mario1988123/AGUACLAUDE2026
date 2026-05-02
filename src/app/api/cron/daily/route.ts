@@ -32,7 +32,37 @@ export async function GET(req: NextRequest) {
     installations_tomorrow: 0,
     maintenance_tomorrow: 0,
     stock_low: 0,
+    contracts_activated_today: 0,
   };
+
+  // 0) Contratos con service_start_date <= hoy y status=signed → activar y
+  // programar mantenimientos. Cubre el caso "instalado hoy pero arranca el 1 del mes".
+  const todayIsoDate = new Date().toISOString().slice(0, 10);
+  const { data: dueContracts } = await admin
+    .from("contracts")
+    .select("id, company_id")
+    .eq("status", "signed")
+    .not("service_start_date", "is", null)
+    .lte("service_start_date", todayIsoDate)
+    .is("deleted_at", null);
+  for (const c of ((dueContracts ?? []) as Array<{ id: string; company_id: string }>)) {
+    try {
+      await admin.from("contracts").update({ status: "active" }).eq("id", c.id);
+      const mod = await import("@/modules/maintenance/auto-schedule");
+      await mod.autoScheduleMaintenanceForContract(c.id);
+      await admin.from("events").insert({
+        company_id: c.company_id,
+        subject_type: "contract",
+        subject_id: c.id,
+        kind: "contract.activated",
+        payload: { auto: true, by_cron: true },
+        actor_user_id: null,
+      });
+      stats.contracts_activated_today += 1;
+    } catch {
+      /* no-op */
+    }
+  }
 
   // 1) Leads caducados ----------------------------------------------------------
   const { data: companies } = await admin

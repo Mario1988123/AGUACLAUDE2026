@@ -452,15 +452,26 @@ export async function completeInstallation(input: unknown) {
     }
   }
 
-  // Activar contrato si seguía en signed + programar mantenimientos
+  // Persistir service_start_date en el contrato (fecha de inicio del servicio).
+  // Si es hoy o pasada → activar; si es futura → dejar en signed (lo activará el cron).
   if (i.contract_id) {
+    const todayIso = now.toISOString().slice(0, 10);
+    const startIso = parsed.service_start_date ?? todayIso;
+    const isFuture = startIso > todayIso;
+
+    const update: Record<string, unknown> = { service_start_date: startIso };
+    if (!isFuture) update.status = "active";
+
     const { data: updated } = await supabase
       .from("contracts")
-      .update({ status: "active" })
+      .update(update)
       .eq("id", i.contract_id)
-      .eq("status", "signed")
-      .select("id");
-    if (((updated ?? []) as Array<{ id: string }>).length > 0) {
+      .in("status", ["signed", "active"])
+      .select("id, status");
+    const wasActivatedNow =
+      !isFuture &&
+      ((updated ?? []) as Array<{ id: string; status: string }>).some((r) => r.status === "active");
+    if (wasActivatedNow) {
       await autoScheduleMaintenanceForContract(i.contract_id);
     }
   }

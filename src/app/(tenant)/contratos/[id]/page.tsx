@@ -96,6 +96,8 @@ export default async function ContractDetailPage({
             Plan: {PLAN_TYPE_LABEL[contract.plan_type]}
             {contract.duration_months ? ` · ${contract.duration_months} meses` : ""}
             {contract.signed_at && ` · firmado ${new Date(contract.signed_at).toLocaleDateString("es-ES")}`}
+            {contract.service_start_date &&
+              ` · servicio desde ${new Date(contract.service_start_date).toLocaleDateString("es-ES")}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
