@@ -24,7 +24,7 @@ export default function NuevaEmpresaPage() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="slug">Slug interno</Label>
-            <Input id="slug" name="slug" required placeholder="osmofilter" pattern="[a-z0-9-]+" />
+            <Input id="slug" name="slug" required placeholder="osmofilter" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="status">Estado</Label>

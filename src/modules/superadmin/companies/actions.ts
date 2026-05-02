@@ -16,10 +16,13 @@ async function ensureSuperadmin() {
 
 export async function listCompanies(): Promise<CompanyListItem[]> {
   await ensureSuperadmin();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   const { data, error } = await supabase
     .from("companies")
-    .select("id, name, slug, status, max_users, max_storage_mb, monthly_cost_cents, billing_email, created_at")
+    .select(
+      "id, name, slug, status, max_users, max_storage_mb, monthly_cost_cents, billing_email, created_at",
+    )
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as CompanyListItem[];
@@ -27,7 +30,8 @@ export async function listCompanies(): Promise<CompanyListItem[]> {
 
 export async function getCompany(id: string): Promise<CompanyDetail> {
   await ensureSuperadmin();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   const { data, error } = await supabase.from("companies").select("*").eq("id", id).single();
   if (error) throw error;
   return data as CompanyDetail;
@@ -39,8 +43,12 @@ export async function createCompanyAction(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = companyCreateSchema.parse(raw);
 
-  const admin = createAdminClient();
-  const insertResult = await admin
+  // Las policies "<tabla>_super" permiten todas las operaciones al superadmin.
+  // No necesitamos service_role aquí.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const insertResult = await supabase
     .from("companies")
     .insert({
       name: parsed.name,
@@ -64,11 +72,17 @@ export async function createCompanyAction(formData: FormData) {
   const companyId = (insertResult.data as { id: string }).id;
 
   // Activar módulos por defecto (los is_core + default_active=true)
-  const modulesRes = await admin.from("modules_catalog").select("key, default_active, is_core");
-  const modules = (modulesRes.data ?? []) as { key: string; default_active: boolean; is_core: boolean }[];
+  const modulesRes = await supabase
+    .from("modules_catalog")
+    .select("key, default_active, is_core");
+  const modules = (modulesRes.data ?? []) as {
+    key: string;
+    default_active: boolean;
+    is_core: boolean;
+  }[];
   const toActivate = modules.filter((m) => m.is_core || m.default_active);
   if (toActivate.length > 0) {
-    await admin.from("company_modules").insert(
+    await supabase.from("company_modules").insert(
       toActivate.map((m) => ({
         company_id: companyId,
         module_key: m.key,
@@ -79,7 +93,7 @@ export async function createCompanyAction(formData: FormData) {
   }
 
   // Crear company_settings con defaults
-  await admin.from("company_settings").insert({ company_id: companyId });
+  await supabase.from("company_settings").insert({ company_id: companyId });
 
   revalidatePath("/superadmin");
   redirect(`/superadmin/empresas/${companyId}` as never);
@@ -88,7 +102,8 @@ export async function createCompanyAction(formData: FormData) {
 export async function updateCompanyAction(id: string, input: CompanyUpdateInput) {
   await ensureSuperadmin();
   const parsed = companyUpdateSchema.parse(input);
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   const update: Record<string, unknown> = {};
   if (parsed.name !== undefined) update.name = parsed.name;
   if (parsed.status !== undefined) update.status = parsed.status;
@@ -98,10 +113,7 @@ export async function updateCompanyAction(id: string, input: CompanyUpdateInput)
   if (parsed.billing_email !== undefined) update.billing_email = parsed.billing_email || null;
   if (parsed.primary_color !== undefined) update.primary_color = parsed.primary_color;
 
-  const { error } = await supabase
-    .from("companies")
-    .update(update as never)
-    .eq("id", id);
+  const { error } = await supabase.from("companies").update(update).eq("id", id);
   if (error) throw error;
   revalidatePath(`/superadmin/empresas/${id}`);
   revalidatePath("/superadmin");
@@ -109,8 +121,9 @@ export async function updateCompanyAction(id: string, input: CompanyUpdateInput)
 
 export async function toggleCompanyModule(companyId: string, moduleKey: string, isActive: boolean) {
   await ensureSuperadmin();
-  const admin = createAdminClient();
-  const { error } = await admin
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { error } = await supabase
     .from("company_modules")
     .upsert({ company_id: companyId, module_key: moduleKey, is_active: isActive });
   if (error) throw error;
@@ -125,6 +138,7 @@ export interface ResetUserPasswordInput {
 export async function resetUserPassword({ user_id, new_password }: ResetUserPasswordInput) {
   await ensureSuperadmin();
   if (new_password.length < 12) throw new Error("Mínimo 12 caracteres");
+  // Esta SÍ requiere service_role (usa Auth Admin API)
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(user_id, {
     password: new_password,

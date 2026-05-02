@@ -6,7 +6,8 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === "development",
+  // Desactivado temporalmente: causa errores 404 de chunks del worker en producción
+  disable: true,
 });
 
 const nextConfig: NextConfig = {

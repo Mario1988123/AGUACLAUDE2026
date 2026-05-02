@@ -12,13 +12,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "AGUACLAUDE2026",
   description: "CRM multi-tenant para empresas de tratamiento de agua",
-  manifest: "/manifest.webmanifest",
   applicationName: "AGUACLAUDE2026",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "AGUACLAUDE2026",
-  },
   formatDetection: {
     telephone: true,
   },
