@@ -2,7 +2,10 @@ import { listTenantUsers } from "@/modules/tenant/users/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { InviteUserForm } from "@/modules/tenant/users/invite-form";
+import { UserRowActions } from "@/modules/tenant/users/row-actions";
 import { ROLE_KEYS } from "@/modules/tenant/users/schemas";
+
+export const dynamic = "force-dynamic";
 
 const ROLE_LABEL: Record<string, string> = {
   company_admin: "Admin",
@@ -59,6 +62,7 @@ export default async function UsuariosPage() {
                     <th className="py-2 text-left">Email</th>
                     <th className="py-2 text-left">Roles</th>
                     <th className="py-2 text-left">Estado</th>
+                    <th className="py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -82,6 +86,13 @@ export default async function UsuariosPage() {
                       </td>
                       <td className="py-3">
                         <Badge variant={STATUS_VARIANT[u.status]}>{STATUS_LABEL[u.status]}</Badge>
+                      </td>
+                      <td className="py-3">
+                        <UserRowActions
+                          userId={u.user_id}
+                          currentRoles={u.roles}
+                          status={u.status}
+                        />
                       </td>
                     </tr>
                   ))}
