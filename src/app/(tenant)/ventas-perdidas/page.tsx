@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -17,6 +20,7 @@ const ORIGIN_LABEL: Record<string, string> = {
 interface Row {
   id: string;
   origin: string;
+  lead_id: string | null;
   reason: string | null;
   reason_category: string | null;
   amount_cents: number | null;
@@ -24,15 +28,44 @@ interface Row {
   created_at: string;
 }
 
+interface LeadInfo {
+  id: string;
+  party_kind: "individual" | "company";
+  legal_name: string | null;
+  trade_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone_primary: string | null;
+}
+
 export default async function VentasPerdidasPage() {
   await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("lost_sales")
-    .select("id, origin, reason, reason_category, amount_cents, is_recovered, created_at")
+    .select("id, origin, lead_id, reason, reason_category, amount_cents, is_recovered, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
   const rows = (data ?? []) as Row[];
+
+  const leadIds = Array.from(new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
+  const leadMap = new Map<string, LeadInfo>();
+  if (leadIds.length > 0) {
+    const { data: leads } = await supabase
+      .from("leads")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
+      .in("id", leadIds);
+    for (const l of (leads ?? []) as LeadInfo[]) leadMap.set(l.id, l);
+  }
+  function leadName(id: string | null): string {
+    if (!id) return "—";
+    const l = leadMap.get(id);
+    if (!l) return "—";
+    return l.party_kind === "company"
+      ? l.trade_name || l.legal_name || "—"
+      : `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "—";
+  }
   const totalLost = rows
     .filter((r) => !r.is_recovered)
     .reduce((s, r) => s + (r.amount_cents ?? 0), 0);
@@ -72,6 +105,7 @@ export default async function VentasPerdidasPage() {
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Fecha</th>
+                  <th className="py-2 text-left">Lead</th>
                   <th className="py-2 text-left">Origen</th>
                   <th className="py-2 text-left">Motivo</th>
                   <th className="py-2 text-right">Importe</th>
@@ -80,9 +114,21 @@ export default async function VentasPerdidasPage() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} className="hover:bg-muted/50">
                     <td className="py-2 text-xs text-muted-foreground">
                       {new Date(r.created_at).toLocaleDateString("es-ES")}
+                    </td>
+                    <td className="py-2">
+                      {r.lead_id ? (
+                        <Link
+                          href={`/leads/${r.lead_id}` as never}
+                          className="text-primary hover:underline"
+                        >
+                          {leadName(r.lead_id)}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="py-2 text-xs">{ORIGIN_LABEL[r.origin] ?? r.origin}</td>
                     <td className="py-2 text-xs">

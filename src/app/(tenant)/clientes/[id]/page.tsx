@@ -7,7 +7,11 @@ import { listBankAccounts } from "@/modules/customers/bank-accounts/actions";
 import { BankAccountList } from "@/modules/customers/bank-accounts/bank-list";
 import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
+import { listProposalsByCustomer } from "@/modules/proposals/actions";
+import { ProposalsCard } from "@/modules/proposals/proposals-card";
 import { Timeline } from "@/modules/events/timeline";
+import { Plus } from "lucide-react";
+import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -38,6 +42,7 @@ export default async function CustomerDetailPage({
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
+  const customerProposals = await listProposalsByCustomer(id).catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -138,6 +143,22 @@ export default async function CustomerDetailPage({
           </CardHeader>
           <CardContent>
             <CustomerEquipmentList equipment={equipment} />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Propuestas ({customerProposals.length})</CardTitle>
+              <Button asChild size="sm">
+                <Link href={`/propuestas/nueva?customer_id=${id}` as never}>
+                  <Plus className="h-4 w-4" /> Nueva propuesta
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ProposalsCard proposals={customerProposals} scope="customer" />
           </CardContent>
         </Card>
       </div>

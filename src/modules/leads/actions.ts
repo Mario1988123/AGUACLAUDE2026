@@ -25,7 +25,12 @@ export async function listLeads(filters?: {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  } else {
+    // Por defecto, los perdidos van a /ventas-perdidas y los caducados a su flujo
+    query = query.not("status", "in", "(lost,expired)");
+  }
   if (filters?.q) {
     const q = filters.q.replace(/[%_]/g, "");
     query = query.or(
@@ -279,9 +284,99 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
   return customerId;
 }
 
+/**
+ * Orden de progresión de estados. Sólo subimos, nunca bajamos.
+ * 'lost' y 'expired' son terminales — no se promueven automáticamente.
+ */
+const STATUS_ORDER: Record<LeadStatus, number> = {
+  new: 0,
+  contacted: 1,
+  free_trial_proposed: 2,
+  proposal_created: 3,
+  proposal_sent: 4,
+  converted: 5,
+  lost: 99,
+  expired: 99,
+};
+
+/**
+ * Sube el estado del lead al objetivo si y sólo si está más adelante en el flujo
+ * y no es un estado terminal. No-op si ya está igual o más avanzado.
+ */
+export async function bumpLeadStatus(leadId: string, target: LeadStatus): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("leads")
+    .select("status")
+    .eq("id", leadId)
+    .single();
+  if (!data) return;
+  const current = (data as { status: LeadStatus }).status;
+  if (STATUS_ORDER[current] >= 99) return; // terminal
+  if (STATUS_ORDER[target] <= STATUS_ORDER[current]) return;
+
+  await supabase.from("leads").update({ status: target }).eq("id", leadId);
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "lead",
+    subject_id: leadId,
+    kind: "lead.status_changed",
+    payload: { from: current, to: target, auto: true },
+    actor_user_id: session.user_id,
+  });
+}
+
+/**
+ * Registra contacto (call/whatsapp/email) en agenda + timeline + bump a contacted.
+ */
+export async function logLeadContactAction(
+  leadId: string,
+  channel: "call" | "whatsapp" | "email",
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const now = new Date().toISOString();
+
+  const titleMap = {
+    call: "Llamada",
+    whatsapp: "WhatsApp",
+    email: "Email",
+  } as const;
+
+  await supabase.from("agenda_events").insert({
+    company_id: session.company_id,
+    kind: channel === "call" ? "call" : "manual",
+    status: "completed",
+    title: `${titleMap[channel]} a lead`,
+    starts_at: now,
+    assigned_user_id: session.user_id,
+    subject_type: "lead",
+    subject_id: leadId,
+    created_by: session.user_id,
+  });
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "lead",
+    subject_id: leadId,
+    kind: "lead.contacted",
+    payload: { channel },
+    actor_user_id: session.user_id,
+  });
+
+  await bumpLeadStatus(leadId, "contacted");
+  revalidatePath(`/leads/${leadId}`);
+}
+
 export async function updateLeadStatus(id: string, status: LeadStatus, lostReason?: string) {
   const session = await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
 
   const update: Record<string, unknown> = { status };
   if (status === "lost") {
@@ -289,8 +384,29 @@ export async function updateLeadStatus(id: string, status: LeadStatus, lostReaso
     if (lostReason) update.lost_reason = lostReason;
   }
 
-  const { error } = await supabase.from("leads").update(update as never).eq("id", id);
+  const { error } = await supabase.from("leads").update(update).eq("id", id);
   if (error) throw error;
+
+  // Si pierde, registrar en lost_sales (idempotente: sólo si no existe ya)
+  if (status === "lost") {
+    const { data: existing } = await supabase
+      .from("lost_sales")
+      .select("id")
+      .eq("lead_id", id)
+      .eq("origin", "lead_lost")
+      .limit(1)
+      .maybeSingle();
+    if (!existing) {
+      await supabase.from("lost_sales").insert({
+        company_id: session.company_id,
+        origin: "lead_lost",
+        lead_id: id,
+        reason: lostReason ?? null,
+        is_recovered: false,
+        created_by: session.user_id,
+      });
+    }
+  }
 
   await supabase.from("events").insert({
     company_id: session.company_id!,
@@ -299,8 +415,9 @@ export async function updateLeadStatus(id: string, status: LeadStatus, lostReaso
     kind: "lead.status_changed",
     payload: { status, lost_reason: lostReason ?? null },
     actor_user_id: session.user_id,
-  } as never);
+  });
 
   revalidatePath(`/leads/${id}`);
   revalidatePath("/leads");
+  revalidatePath("/ventas-perdidas");
 }

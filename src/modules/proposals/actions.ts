@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { proposalCreateSchema } from "./schemas";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
+import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
 
 export async function listProposals(): Promise<ProposalListItem[]> {
   await requireSession();
@@ -217,16 +218,27 @@ export async function createProposalAction(input: unknown) {
     actor_user_id: session.user_id,
   } as never);
 
+  // Si la propuesta es para un lead, su estado avanza a "proposal_created"
+  if (parsed.lead_id) {
+    await bumpLeadStatus(parsed.lead_id, "proposal_created");
+  }
+
   revalidatePath("/propuestas");
   redirect(`/propuestas/${proposalId}` as never);
 }
 
 export async function markProposalSent(id: string) {
   const session = await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: prop } = await supabase
+    .from("proposals")
+    .select("lead_id")
+    .eq("id", id)
+    .single();
   await supabase
     .from("proposals")
-    .update({ status: "sent", sent_at: new Date().toISOString() } as never)
+    .update({ status: "sent", sent_at: new Date().toISOString() })
     .eq("id", id);
   await supabase.from("events").insert({
     company_id: session.company_id!,
@@ -235,20 +247,35 @@ export async function markProposalSent(id: string) {
     kind: "proposal.sent",
     payload: {},
     actor_user_id: session.user_id,
-  } as never);
+  });
+  const leadId = (prop as { lead_id: string | null } | null)?.lead_id;
+  if (leadId) await bumpLeadStatus(leadId, "proposal_sent");
   revalidatePath(`/propuestas/${id}`);
   revalidatePath("/propuestas");
 }
 
-export async function markProposalAccepted(id: string) {
+/**
+ * Acepta la propuesta. Si está vinculada a un lead, convierte el lead en
+ * cliente (crea customer + mueve direcciones), supersede el resto de
+ * propuestas del mismo lead y devuelve el customer_id para redirect.
+ * Si está vinculada a un cliente existente, sólo marca aceptada.
+ */
+export async function markProposalAccepted(id: string): Promise<{ customer_id: string | null }> {
   const session = await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const { data: prop } = await supabase
+    .from("proposals")
+    .select("id, lead_id, customer_id")
+    .eq("id", id)
+    .single();
+  if (!prop) throw new Error("Propuesta no encontrada");
+  const p = prop as { id: string; lead_id: string | null; customer_id: string | null };
+
   await supabase
     .from("proposals")
-    .update({
-      status: "accepted",
-      accepted_at: new Date().toISOString(),
-    } as never)
+    .update({ status: "accepted", accepted_at: new Date().toISOString() })
     .eq("id", id);
   await supabase.from("events").insert({
     company_id: session.company_id!,
@@ -257,8 +284,76 @@ export async function markProposalAccepted(id: string) {
     kind: "proposal.accepted",
     payload: {},
     actor_user_id: session.user_id,
-  } as never);
+  });
+
+  let customerId: string | null = p.customer_id;
+  if (p.lead_id) {
+    // Convertir lead → customer (mueve direcciones, marca lead converted)
+    customerId = await convertLeadToCustomerAction(p.lead_id);
+    // Vincular esta propuesta al cliente recién creado y supersede el resto
+    await supabase
+      .from("proposals")
+      .update({ customer_id: customerId, lead_id: null })
+      .eq("id", id);
+    await supabase
+      .from("proposals")
+      .update({
+        status: "rejected",
+        rejected_at: new Date().toISOString(),
+        rejected_reason: "Superseded by accepted sibling",
+        superseded_at: new Date().toISOString(),
+      })
+      .eq("lead_id", p.lead_id)
+      .neq("id", id)
+      .in("status", ["draft", "sent"]);
+  }
+
   revalidatePath(`/propuestas/${id}`);
+  revalidatePath("/propuestas");
+  if (customerId) revalidatePath(`/clientes/${customerId}`);
+  return { customer_id: customerId };
+}
+
+/**
+ * Devuelve las propuestas de un cliente concreto.
+ */
+export async function listProposalsByCustomer(customerId: string): Promise<ProposalListItem[]> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("proposals")
+    .select(
+      "id, reference_code, status, customer_id, lead_id, total_cash_cents, validity_until, created_at, version_number",
+    )
+    .eq("customer_id", customerId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  return ((data ?? []) as ProposalListItem[]).map((r) => ({
+    ...r,
+    customer_or_lead_name: "",
+  }));
+}
+
+/**
+ * Devuelve las propuestas de un lead concreto.
+ */
+export async function listProposalsByLead(leadId: string): Promise<ProposalListItem[]> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("proposals")
+    .select(
+      "id, reference_code, status, customer_id, lead_id, total_cash_cents, validity_until, created_at, version_number",
+    )
+    .eq("lead_id", leadId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  return ((data ?? []) as ProposalListItem[]).map((r) => ({
+    ...r,
+    customer_or_lead_name: "",
+  }));
 }
 
 export async function markProposalRejected(id: string, reason?: string) {

@@ -3,13 +3,17 @@ import Link from "next/link";
 import { getLead } from "@/modules/leads/actions";
 import { listAddresses } from "@/modules/addresses/actions";
 import { AddressList } from "@/modules/addresses/address-list";
+import { listProposalsByLead } from "@/modules/proposals/actions";
+import { ProposalsCard } from "@/modules/proposals/proposals-card";
 import { Timeline } from "@/modules/events/timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "@/modules/leads/schemas";
 import { LeadStatusActions } from "@/modules/leads/status-actions";
 import { ConvertLeadButton } from "@/modules/leads/convert-button";
-import { Phone, MessageCircle, Mail, MapPin } from "lucide-react";
+import { LeadContactButtons } from "@/modules/leads/contact-buttons";
+import { Plus, MapPin } from "lucide-react";
+import { Button } from "@/shared/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +35,12 @@ export default async function LeadDetailPage({
       ? lead.trade_name || lead.legal_name || "Sin nombre"
       : `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Sin nombre";
 
-  const addresses = await listAddresses({ lead_id: id });
+  const [addresses, proposals] = await Promise.all([
+    listAddresses({ lead_id: id }),
+    listProposalsByLead(id),
+  ]);
+  const hasProposals = proposals.length > 0;
+  const isConverted = lead.status === "converted";
 
   return (
     <div className="space-y-6">
@@ -52,41 +61,9 @@ export default async function LeadDetailPage({
         </Link>
       </div>
 
-      {(lead.phone_primary || lead.email) && (
-        <div className="flex flex-wrap gap-2">
-          {lead.phone_primary && (
-            <a
-              href={`tel:${lead.phone_primary}`}
-              className="inline-flex h-11 items-center gap-2 rounded-md bg-success px-4 text-sm font-medium text-success-foreground hover:bg-success/90"
-            >
-              <Phone className="h-4 w-4" />
-              Llamar
-            </a>
-          )}
-          {lead.phone_primary && (
-            <a
-              href={`https://wa.me/${lead.phone_primary.replace(/[^0-9+]/g, "")}`}
-              target="_blank"
-              rel="noopener"
-              className="inline-flex h-11 items-center gap-2 rounded-md bg-[#25D366] px-4 text-sm font-medium text-white hover:opacity-90"
-            >
-              <MessageCircle className="h-4 w-4" />
-              WhatsApp
-            </a>
-          )}
-          {lead.email && (
-            <a
-              href={`mailto:${lead.email}`}
-              className="inline-flex h-11 items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
-            >
-              <Mail className="h-4 w-4" />
-              Email
-            </a>
-          )}
-        </div>
-      )}
+      <LeadContactButtons leadId={lead.id} phone={lead.phone_primary} email={lead.email} />
 
-      {addresses.length === 0 && lead.status !== "converted" && (
+      {addresses.length === 0 && !isConverted && (
         <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-warning bg-warning/5 p-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
             <MapPin className="h-5 w-5" />
@@ -94,8 +71,7 @@ export default async function LeadDetailPage({
           <div className="flex-1 text-sm">
             <div className="font-bold">Falta la dirección</div>
             <p className="text-muted-foreground">
-              Añade una dirección abajo para poder programar visitas y, al convertir, traspasarla
-              al cliente.
+              Añádela abajo para programar visitas y traspasarla al cliente al convertir.
             </p>
           </div>
         </div>
@@ -138,25 +114,36 @@ export default async function LeadDetailPage({
         </Card>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Convertir</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ConvertLeadButton
-                leadId={lead.id}
-                alreadyConverted={!!lead.converted_to_customer_id}
-              />
-              {lead.converted_to_customer_id && (
-                <Link
-                  href={`/clientes/${lead.converted_to_customer_id}` as never}
-                  className="mt-3 block text-center text-sm text-primary hover:underline"
-                >
-                  Ver cliente →
-                </Link>
-              )}
-            </CardContent>
-          </Card>
+          {isConverted ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Convertido</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {lead.converted_to_customer_id && (
+                  <Link
+                    href={`/clientes/${lead.converted_to_customer_id}` as never}
+                    className="block rounded-xl bg-success px-4 py-3 text-center text-sm font-semibold text-success-foreground hover:bg-success/90"
+                  >
+                    Ver cliente →
+                  </Link>
+                )}
+              </CardContent>
+            </Card>
+          ) : !hasProposals ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Convertir directamente</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Crea cliente sin propuesta (uso poco habitual). Lo recomendado es crear
+                  propuesta y aceptarla.
+                </p>
+                <ConvertLeadButton leadId={lead.id} alreadyConverted={false} />
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card>
             <CardHeader>
@@ -168,6 +155,24 @@ export default async function LeadDetailPage({
           </Card>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Propuestas ({proposals.length})</CardTitle>
+            {!isConverted && (
+              <Button asChild size="sm">
+                <Link href={`/propuestas/nueva?lead_id=${lead.id}` as never}>
+                  <Plus className="h-4 w-4" /> Nueva propuesta
+                </Link>
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ProposalsCard proposals={proposals} scope="lead" onAcceptedRedirect />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
