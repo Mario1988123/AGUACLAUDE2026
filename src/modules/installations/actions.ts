@@ -11,6 +11,7 @@ import {
   installationStepSchema,
   completeInstallationSchema,
 } from "./schemas";
+import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 
 export interface InstallationRow {
   id: string;
@@ -459,6 +460,17 @@ export async function completeInstallation(input: unknown) {
     payload: { duration_seconds: durationSec },
     actor_user_id: session.user_id,
   });
+
+  const { data: instRef } = await supabase
+    .from("installations")
+    .select("reference_code")
+    .eq("id", parsed.id)
+    .single();
+  await notifyInstallationCompleted(
+    session.company_id!,
+    parsed.id,
+    (instRef as { reference_code: string | null } | null)?.reference_code ?? null,
+  );
 
   revalidatePath(`/instalaciones/${parsed.id}`);
   revalidatePath("/instalaciones");

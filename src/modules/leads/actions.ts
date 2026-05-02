@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { leadCreateSchema } from "./schemas";
 import type { LeadDetail, LeadListItem, LeadStatus } from "./types";
+import { notifyLeadCreated } from "@/modules/notifications/notifier";
 
 export async function listLeads(filters?: {
   status?: LeadStatus;
@@ -132,6 +133,13 @@ export async function createLeadAction(formData: FormData) {
     payload: { party_kind: parsed.party_kind, origin: parsed.origin },
     actor_user_id: session.user_id,
   } as never);
+
+  // Notificar a admin + directores
+  const leadName =
+    parsed.party_kind === "company"
+      ? parsed.trade_name || parsed.legal_name || "Sin nombre"
+      : `${parsed.first_name ?? ""} ${parsed.last_name ?? ""}`.trim() || "Sin nombre";
+  await notifyLeadCreated(session.company_id, newId, leadName);
 
   revalidatePath("/leads");
   redirect(`/leads/${newId}` as never);

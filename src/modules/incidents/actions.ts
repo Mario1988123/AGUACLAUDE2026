@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { notifyIncidentCreated } from "@/modules/notifications/notifier";
 
 const incidentCreateSchema = z.object({
   title: z.string().min(2),
@@ -31,20 +32,32 @@ export async function createIncidentAction(input: unknown) {
   const parsed = incidentCreateSchema.parse(input);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { error } = await supabase.from("incidents").insert({
-    company_id: session.company_id,
-    title: parsed.title,
-    description: parsed.description || null,
-    origin: parsed.origin,
-    priority: parsed.priority,
-    status: "open",
-    customer_id: parsed.customer_id || null,
-    installation_id: parsed.installation_id || null,
-    maintenance_job_id: parsed.maintenance_job_id || null,
-    customer_equipment_id: parsed.customer_equipment_id || null,
-    created_by: session.user_id,
-  });
+  const { data: created, error } = await supabase
+    .from("incidents")
+    .insert({
+      company_id: session.company_id,
+      title: parsed.title,
+      description: parsed.description || null,
+      origin: parsed.origin,
+      priority: parsed.priority,
+      status: "open",
+      customer_id: parsed.customer_id || null,
+      installation_id: parsed.installation_id || null,
+      maintenance_job_id: parsed.maintenance_job_id || null,
+      customer_equipment_id: parsed.customer_equipment_id || null,
+      created_by: session.user_id,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+  if (created) {
+    await notifyIncidentCreated(
+      session.company_id,
+      (created as { id: string }).id,
+      parsed.title,
+      parsed.priority,
+    );
+  }
   revalidatePath("/incidencias");
 }
 

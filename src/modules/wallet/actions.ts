@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { walletEntryCreateSchema } from "./schemas";
+import { notifyPaymentPendingValidation } from "@/modules/notifications/notifier";
 
 export interface WalletEntryRow {
   id: string;
@@ -86,20 +87,35 @@ export async function createWalletEntryAction(input: unknown) {
   if (parsed.method === "cash") status = "pending_settlement";
   else status = "collected";
 
-  const { error } = await supabase.from("wallet_entries").insert({
-    company_id: session.company_id,
-    contract_id: parsed.contract_id || null,
-    customer_id: parsed.customer_id || null,
-    installation_id: parsed.installation_id || null,
-    concept: parsed.concept,
-    amount_cents: parsed.amount_cents,
-    method: parsed.method,
-    status,
-    collected_by_user_id: session.user_id,
-    collected_at: new Date().toISOString(),
-    notes: parsed.notes || null,
-  });
+  const { data: created, error } = await supabase
+    .from("wallet_entries")
+    .insert({
+      company_id: session.company_id,
+      contract_id: parsed.contract_id || null,
+      customer_id: parsed.customer_id || null,
+      installation_id: parsed.installation_id || null,
+      concept: parsed.concept,
+      amount_cents: parsed.amount_cents,
+      method: parsed.method,
+      status,
+      collected_by_user_id: session.user_id,
+      collected_at: new Date().toISOString(),
+      notes: parsed.notes || null,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
+
+  // Si requiere validación admin, avisar
+  if (status === "collected" && created) {
+    await notifyPaymentPendingValidation(
+      session.company_id,
+      (created as { id: string }).id,
+      parsed.amount_cents,
+      parsed.concept,
+      parsed.method,
+    );
+  }
 
   revalidatePath("/wallet");
   if (parsed.contract_id) revalidatePath(`/contratos/${parsed.contract_id}`);

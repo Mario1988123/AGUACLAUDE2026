@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { contractCreateSchema } from "./schemas";
 import type { ContractDetail, ContractListItem } from "./types";
+import { notifyContractSigned } from "@/modules/notifications/notifier";
 
 export async function listContracts(): Promise<ContractListItem[]> {
   await requireSession();
@@ -296,6 +297,19 @@ export async function markContractSigned(id: string) {
     payload: { wallet_entries_created: list.length },
     actor_user_id: session.user_id,
   });
+
+  // Notificar a admin + directores
+  const { data: cref } = await supabase
+    .from("contracts")
+    .select("reference_code")
+    .eq("id", id)
+    .single();
+  await notifyContractSigned(
+    session.company_id!,
+    id,
+    (cref as { reference_code: string | null } | null)?.reference_code ?? null,
+  );
+
   revalidatePath(`/contratos/${id}`);
   revalidatePath("/contratos");
   revalidatePath("/wallet");

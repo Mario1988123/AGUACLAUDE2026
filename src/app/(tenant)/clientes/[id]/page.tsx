@@ -5,6 +5,8 @@ import { listAddresses } from "@/modules/addresses/actions";
 import { AddressList } from "@/modules/addresses/address-list";
 import { listBankAccounts } from "@/modules/customers/bank-accounts/actions";
 import { BankAccountList } from "@/modules/customers/bank-accounts/bank-list";
+import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
+import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { Timeline } from "@/modules/events/timeline";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -35,6 +37,7 @@ export default async function CustomerDetailPage({
   const addresses = await listAddresses({ customer_id: id });
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
+  const equipment = await listCustomerEquipment(id).catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -129,14 +132,12 @@ export default async function CustomerDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Equipos instalados</CardTitle>
+            <CardTitle>Equipos instalados ({equipment.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Listado de customer_equipment. Aparecerá tras la primera instalación completada.
-            </p>
+            <CustomerEquipmentList equipment={equipment} />
           </CardContent>
         </Card>
       </div>
