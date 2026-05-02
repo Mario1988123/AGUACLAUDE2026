@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Check } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -14,13 +14,37 @@ import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
 
+/**
+ * Wizard 3 pasos en lugar de scroll vertical largo. Tablet-first.
+ * Paso 1: Tipo + datos contacto + email/tlf (con dedupe live)
+ * Paso 2: Origen + potencial + notas
+ * Paso 3: Dirección opcional con auto-provincia desde CP
+ */
 export function LeadCreateForm() {
+  const [step, setStep] = useState(1);
   const [partyKind, setPartyKind] = useState<"individual" | "company">("individual");
   const [pending, startTransition] = useTransition();
+
+  // Paso 1
+  const [legalName, setLegalName] = useState("");
+  const [tradeName, setTradeName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [taxId, setTaxId] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneCompany, setPhoneCompany] = useState("");
+
+  // Paso 2
+  const [origin, setOrigin] = useState("other");
+  const [potential, setPotential] = useState("unknown");
+  const [notes, setNotes] = useState("");
+
+  // Paso 3
+  const [street, setStreet] = useState("");
+  const [streetNumber, setStreetNumber] = useState("");
   const [postal, setPostal] = useState("");
+  const [city, setCity] = useState("");
   const [province, setProvince] = useState("");
 
   const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });
@@ -33,17 +57,60 @@ export function LeadCreateForm() {
     }
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    if (taxId) fd.set("tax_id", taxId);
+  function validateStep1(): boolean {
+    if (partyKind === "company" && !legalName.trim()) {
+      notify.warning("Razón social obligatoria");
+      return false;
+    }
+    if (partyKind === "individual" && !firstName.trim()) {
+      notify.warning("Nombre obligatorio");
+      return false;
+    }
+    if (!phone.trim()) {
+      notify.warning("Teléfono obligatorio");
+      return false;
+    }
+    return true;
+  }
+
+  function next() {
+    if (step === 1 && !validateStep1()) return;
+    setStep((s) => Math.min(3, s + 1));
+  }
+  function back() {
+    setStep((s) => Math.max(1, s - 1));
+  }
+
+  function submit() {
+    if (!validateStep1()) {
+      setStep(1);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("party_kind", partyKind);
+    fd.set("legal_name", legalName);
+    fd.set("trade_name", tradeName);
+    fd.set("first_name", firstName);
+    fd.set("last_name", lastName);
+    fd.set("tax_id", taxId);
+    fd.set("email", email);
+    fd.set("phone_primary", phone);
+    fd.set("phone_company", phoneCompany);
+    fd.set("origin", origin);
+    fd.set("potential", potential);
+    fd.set("notes", notes);
+    fd.set("address_street", street);
+    fd.set("address_street_number", streetNumber);
+    fd.set("address_postal_code", postal);
+    fd.set("address_city", city);
+    fd.set("address_province", province);
     startTransition(async () => {
       try {
         await createLeadAction(fd);
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {
-          const digest = String((err as { digest?: unknown }).digest);
-          if (digest.startsWith("NEXT_REDIRECT")) throw err;
+          const d = String((err as { digest?: unknown }).digest);
+          if (d.startsWith("NEXT_REDIRECT")) throw err;
         }
         notify.error("No se pudo crear", err instanceof Error ? err.message : String(err));
       }
@@ -51,229 +118,244 @@ export function LeadCreateForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 rounded-lg border bg-card p-6">
-      <fieldset className="space-y-3">
-        <Label>Tipo</Label>
-        <div className="flex gap-2">
-          <label
-            className={`flex flex-1 cursor-pointer items-center justify-center rounded-md border px-4 py-3 text-sm font-medium ${
-              partyKind === "individual"
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-input"
-            }`}
-          >
-            <input
-              type="radio"
-              name="party_kind"
-              value="individual"
-              checked={partyKind === "individual"}
-              onChange={() => setPartyKind("individual")}
-              className="sr-only"
-            />
-            Particular
-          </label>
-          <label
-            className={`flex flex-1 cursor-pointer items-center justify-center rounded-md border px-4 py-3 text-sm font-medium ${
-              partyKind === "company" ? "border-primary bg-primary/10 text-primary" : "border-input"
-            }`}
-          >
-            <input
-              type="radio"
-              name="party_kind"
-              value="company"
-              checked={partyKind === "company"}
-              onChange={() => setPartyKind("company")}
-              className="sr-only"
-            />
-            Empresa
-          </label>
+    <div className="space-y-4 rounded-2xl border bg-card p-6">
+      {/* Indicador pasos */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="flex items-center gap-2">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
+                  n < step
+                    ? "bg-success text-success-foreground"
+                    : n === step
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {n < step ? <Check className="h-4 w-4" /> : n}
+              </div>
+              {n < 3 && <div className={`h-0.5 w-8 ${n < step ? "bg-success" : "bg-muted"}`} />}
+            </div>
+          ))}
         </div>
-      </fieldset>
+        <div className="text-sm text-muted-foreground">
+          Paso {step} de 3 ·{" "}
+          {step === 1 ? "Datos contacto" : step === 2 ? "Origen y notas" : "Dirección"}
+        </div>
+      </div>
 
-      {partyKind === "company" ? (
-        <fieldset className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="legal_name">Razón social *</Label>
-            <Input id="legal_name" name="legal_name" required />
+      {step === 1 && (
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <Label>Tipo</Label>
+            <div className="flex gap-2">
+              <label
+                className={`flex flex-1 cursor-pointer items-center justify-center rounded-xl border-2 px-4 py-4 text-sm font-semibold ${
+                  partyKind === "individual"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-input"
+                }`}
+              >
+                <input
+                  type="radio"
+                  value="individual"
+                  checked={partyKind === "individual"}
+                  onChange={() => setPartyKind("individual")}
+                  className="sr-only"
+                />
+                Particular
+              </label>
+              <label
+                className={`flex flex-1 cursor-pointer items-center justify-center rounded-xl border-2 px-4 py-4 text-sm font-semibold ${
+                  partyKind === "company"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-input"
+                }`}
+              >
+                <input
+                  type="radio"
+                  value="company"
+                  checked={partyKind === "company"}
+                  onChange={() => setPartyKind("company")}
+                  className="sr-only"
+                />
+                Empresa
+              </label>
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="trade_name">Nombre comercial</Label>
-            <Input id="trade_name" name="trade_name" />
+
+          {partyKind === "company" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Razón social *</Label>
+                <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Nombre comercial</Label>
+                <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>CIF</Label>
+                <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} placeholder="B12345678" />
+              </div>
+              <div className="space-y-2">
+                <Label>Tel. empresa</Label>
+                <Input
+                  type="tel"
+                  value={phoneCompany}
+                  onChange={(e) => setPhoneCompany(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Persona de contacto
+                </Label>
+              </div>
+              <div className="space-y-2">
+                <Label>Nombre</Label>
+                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Apellidos</Label>
+                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Apellidos</Label>
+                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>DNI / NIE</Label>
+                <TaxIdInput kind="dni" value={taxId} onChange={setTaxId} placeholder="12345678A" />
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Teléfono *</Label>
+              <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="tax_id">CIF</Label>
-            <TaxIdInput
-              id="tax_id"
-              kind="cif"
-              value={taxId}
-              onChange={setTaxId}
-              placeholder="B12345678"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="phone_company">Teléfono empresa</Label>
-            <Input id="phone_company" name="phone_company" type="tel" />
-          </div>
-          <div className="space-y-2 sm:col-span-2">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-              Persona de contacto
-            </Label>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="first_name">Nombre</Label>
-            <Input id="first_name" name="first_name" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="last_name">Apellidos</Label>
-            <Input id="last_name" name="last_name" />
-          </div>
-        </fieldset>
-      ) : (
-        <fieldset className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="first_name">Nombre *</Label>
-            <Input id="first_name" name="first_name" required />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="last_name">Apellidos</Label>
-            <Input id="last_name" name="last_name" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tax_id">DNI / NIE</Label>
-            <TaxIdInput
-              id="tax_id"
-              kind="dni"
-              value={taxId}
-              onChange={setTaxId}
-              placeholder="12345678A"
-            />
-          </div>
-        </fieldset>
+
+          <DedupeWarning matches={dedupeMatches} />
+        </div>
       )}
 
-      <fieldset className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone_primary">Teléfono *</Label>
-          <Input
-            id="phone_primary"
-            name="phone_primary"
-            type="tel"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-        </div>
-      </fieldset>
-
-      <DedupeWarning matches={dedupeMatches} />
-
-      <fieldset className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="origin">Origen</Label>
-          <select
-            id="origin"
-            name="origin"
-            defaultValue="other"
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-          >
-            {LEAD_ORIGIN.map((o) => (
-              <option key={o} value={o}>
-                {ORIGIN_LABEL[o]}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="potential">Potencial</Label>
-          <select
-            id="potential"
-            name="potential"
-            defaultValue="unknown"
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-          >
-            {LEAD_POTENTIAL.map((p) => (
-              <option key={p} value={p}>
-                {p === "unknown" ? "Sin clasificar" : `Clase ${p}`}
-              </option>
-            ))}
-          </select>
-        </div>
-      </fieldset>
-
-      <fieldset className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
-        <div className="flex items-center gap-2 text-sm font-bold">
-          <MapPin className="h-4 w-4 text-primary" />
-          Dirección principal (opcional)
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Puedes dejarla vacía y añadirla después desde la ficha del lead (con mapa).
-        </p>
-        <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-          <div className="space-y-1.5">
-            <Label htmlFor="address_street">Calle</Label>
-            <Input id="address_street" name="address_street" placeholder="Gran Vía" />
+      {step === 2 && (
+        <div className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Origen</Label>
+              <select
+                value={origin}
+                onChange={(e) => setOrigin(e.target.value)}
+                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+              >
+                {LEAD_ORIGIN.map((o) => (
+                  <option key={o} value={o}>
+                    {ORIGIN_LABEL[o]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Potencial</Label>
+              <select
+                value={potential}
+                onChange={(e) => setPotential(e.target.value)}
+                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+              >
+                {LEAD_POTENTIAL.map((p) => (
+                  <option key={p} value={p}>
+                    {p === "unknown" ? "Sin clasificar" : `Clase ${p}`}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="address_street_number">Número</Label>
-            <Input id="address_street_number" name="address_street_number" />
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="address_postal_code">CP</Label>
-            <Input
-              id="address_postal_code"
-              name="address_postal_code"
-              inputMode="numeric"
-              maxLength={5}
-              value={postal}
-              onChange={(e) => onPostalChange(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="address_city">Población</Label>
-            <Input id="address_city" name="address_city" />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="address_province">Provincia</Label>
-            <Input
-              id="address_province"
-              name="address_province"
-              value={province}
-              onChange={(e) => setProvince(e.target.value)}
+          <div className="space-y-2">
+            <Label>Notas</Label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={5}
+              className="w-full rounded-xl border border-input bg-background p-3 text-sm"
             />
           </div>
         </div>
-      </fieldset>
+      )}
 
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notas</Label>
-        <textarea
-          id="notes"
-          name="notes"
-          rows={3}
-          className="w-full rounded-md border border-input bg-background p-3 text-sm"
-        />
-      </div>
+      {step === 3 && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <MapPin className="h-4 w-4 text-primary" />
+            Dirección principal (opcional). Puedes añadirla después con mapa desde la ficha.
+          </div>
+          <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
+            <div className="space-y-2">
+              <Label>Calle</Label>
+              <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Gran Vía" />
+            </div>
+            <div className="space-y-2">
+              <Label>Número</Label>
+              <Input value={streetNumber} onChange={(e) => setStreetNumber(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>CP</Label>
+              <Input
+                inputMode="numeric"
+                maxLength={5}
+                value={postal}
+                onChange={(e) => onPostalChange(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Población</Label>
+              <Input value={city} onChange={(e) => setCity(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Provincia</Label>
+              <Input value={province} onChange={(e) => setProvince(e.target.value)} />
+            </div>
+          </div>
+        </div>
+      )}
 
-      <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" asChild>
-          <Link href="/leads">Cancelar</Link>
-        </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Creando..." : "Crear lead"}
-        </Button>
+      {/* Footer botones */}
+      <div className="flex items-center justify-between gap-3 border-t pt-4">
+        {step > 1 ? (
+          <Button variant="outline" onClick={back} disabled={pending}>
+            <ChevronLeft className="h-4 w-4" /> Anterior
+          </Button>
+        ) : (
+          <Button variant="outline" asChild>
+            <Link href="/leads">Cancelar</Link>
+          </Button>
+        )}
+        {step < 3 ? (
+          <Button onClick={next} disabled={pending}>
+            Siguiente <ChevronRight className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Button onClick={submit} disabled={pending} variant="success" size="lg">
+            {pending ? "Creando..." : "Crear lead"}
+          </Button>
+        )}
       </div>
-    </form>
+    </div>
   );
 }
