@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listIncidents } from "@/modules/incidents/actions";
 import {
   STATUS_LABEL,
@@ -45,9 +46,23 @@ export default async function IncidenciasPage() {
               </thead>
               <tbody className="divide-y">
                 {incidents.map((i) => (
-                  <tr key={i.id}>
-                    <td className="py-2 font-mono text-xs">{i.reference_code ?? "—"}</td>
-                    <td className="py-2">{i.title}</td>
+                  <tr key={i.id} className="hover:bg-muted/50">
+                    <td className="py-2 font-mono text-xs">
+                      <Link
+                        href={`/incidencias/${i.id}` as never}
+                        className="text-primary hover:underline"
+                      >
+                        {i.reference_code ?? `#${i.id.slice(0, 8)}`}
+                      </Link>
+                    </td>
+                    <td className="py-2">
+                      <Link
+                        href={`/incidencias/${i.id}` as never}
+                        className="hover:underline"
+                      >
+                        {i.title}
+                      </Link>
+                    </td>
                     <td className="py-2 text-xs">{ORIGIN_LABEL[i.origin] ?? i.origin}</td>
                     <td className="py-2">
                       <Badge variant={PRIORITY_VARIANT[i.priority]}>

@@ -61,6 +61,40 @@ export async function createIncidentAction(input: unknown) {
   revalidatePath("/incidencias");
 }
 
+export async function getIncident(id: string) {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data, error } = await supabase
+    .from("incidents")
+    .select(
+      "id, reference_code, title, description, status, priority, origin, assigned_user_id, assigned_at, customer_id, installation_id, maintenance_job_id, customer_equipment_id, resolution_notes, resolved_at, resolved_by, created_at, created_by",
+    )
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as {
+    id: string;
+    reference_code: string | null;
+    title: string;
+    description: string | null;
+    status: string;
+    priority: string;
+    origin: string;
+    assigned_user_id: string | null;
+    assigned_at: string | null;
+    customer_id: string | null;
+    installation_id: string | null;
+    maintenance_job_id: string | null;
+    customer_equipment_id: string | null;
+    resolution_notes: string | null;
+    resolved_at: string | null;
+    resolved_by: string | null;
+    created_at: string;
+    created_by: string | null;
+  };
+}
+
 export async function assignIncidentAction(id: string, userId: string) {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
