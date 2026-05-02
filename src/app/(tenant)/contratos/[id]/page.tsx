@@ -5,10 +5,16 @@ import {
   getContractItems,
   getContractPayments,
 } from "@/modules/contracts/actions";
+import { listTeamMembers } from "@/modules/agenda/actions";
+import { listWarehouses } from "@/modules/warehouses/actions";
+import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL } from "@/modules/contracts/schemas";
 import { ContractStatusActions } from "@/modules/contracts/status-actions";
+import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -51,7 +57,24 @@ export default async function ContractDetailPage({
   } catch {
     notFound();
   }
-  const [items, payments] = await Promise.all([getContractItems(id), getContractPayments(id)]);
+  const [items, payments, team, warehouses] = await Promise.all([
+    getContractItems(id),
+    getContractPayments(id),
+    listTeamMembers(),
+    listWarehouses().catch(() => []),
+  ]);
+  const installers = team; // TODO filtrar por rol installer cuando tengamos JWT roles en team
+
+  // ¿hay instalación ya creada para este contrato?
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabaseCheck = (await createClient()) as any;
+  const { count: instCount } = await supabaseCheck
+    .from("installations")
+    .select("id", { count: "exact", head: true })
+    .eq("contract_id", id)
+    .is("deleted_at", null);
+  const hasInstallation = (instCount ?? 0) > 0;
+  const isSignedOrActive = ["signed", "active"].includes(contract.status);
 
   return (
     <div className="space-y-6">
@@ -130,12 +153,22 @@ export default async function ContractDetailPage({
           <CardHeader>
             <CardTitle>Estado</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <ContractStatusActions
               contractId={contract.id}
               status={contract.status}
               hasProvisional={contract.has_provisional_data}
             />
+            {isSignedOrActive && (
+              <div className="border-t pt-4">
+                <CreateInstallationButton
+                  contractId={contract.id}
+                  installers={installers}
+                  warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                  hasInstallation={hasInstallation}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

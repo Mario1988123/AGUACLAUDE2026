@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { MapPin, Crosshair } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -60,7 +61,44 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     city: initial?.city ?? EMPTY.city,
     province: initial?.province ?? EMPTY.province,
     notes: initial?.notes ?? EMPTY.notes,
+    latitude: initial?.latitude ?? null,
+    longitude: initial?.longitude ?? null,
+    geo_source: null as null | "user_pin" | "user_location" | "geocoded",
   });
+
+  const [gpsLoading, setGpsLoading] = useState(false);
+
+  function captureMyLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      notify.warning("Geolocalización no disponible en este dispositivo");
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm((f) => ({
+          ...f,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          geo_source: "user_location",
+        }));
+        setGpsLoading(false);
+        notify.success("Ubicación capturada");
+      },
+      (err) => {
+        setGpsLoading(false);
+        notify.error(
+          "No se pudo obtener ubicación",
+          err.code === 1 ? "Permiso denegado" : "Sin señal GPS",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
+    );
+  }
+
+  function clearLocation() {
+    setForm((f) => ({ ...f, latitude: null, longitude: null, geo_source: null }));
+  }
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => {
@@ -91,6 +129,11 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       }
     });
   }
+
+  const hasGeo = form.latitude != null && form.longitude != null;
+  const mapsUrl = hasGeo
+    ? `https://www.google.com/maps?q=${form.latitude},${form.longitude}`
+    : null;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -206,6 +249,72 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
             onChange={(e) => update("contact_phone", e.target.value)}
           />
         </div>
+      </div>
+
+      {/* Geolocalización */}
+      <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+        <div className="flex items-center gap-2 text-sm font-bold">
+          <MapPin className="h-4 w-4" /> Geolocalización
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={captureMyLocation} disabled={gpsLoading}>
+            <Crosshair className="h-4 w-4" />
+            {gpsLoading ? "Buscando GPS..." : "Usar mi ubicación"}
+          </Button>
+          {hasGeo && (
+            <Button type="button" variant="ghost" onClick={clearLocation}>
+              Borrar
+            </Button>
+          )}
+        </div>
+        {hasGeo && (
+          <div className="space-y-2">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Latitud</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={form.latitude ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      latitude: e.target.value === "" ? null : Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Longitud</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={form.longitude ?? ""}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      longitude: e.target.value === "" ? null : Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            {mapsUrl && (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              >
+                <MapPin className="h-3 w-3" /> Ver en Google Maps
+              </a>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          Tip: usa &quot;Usar mi ubicación&quot; cuando estés en la dirección. Los coordenadas se
+          enviarán al instalador para abrir la ruta.
+        </p>
       </div>
 
       <label className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3">
