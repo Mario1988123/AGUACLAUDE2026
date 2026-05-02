@@ -10,6 +10,8 @@ const SECTIONS = [
   { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Caducidad y orígenes" },
   { href: "/configuracion/productos", label: "Productos", icon: "Package", desc: "Categorías y atributos" },
   { href: "/configuracion/contratos", label: "Contratos", icon: "FileSignature", desc: "Cláusulas con variables" },
+  { href: "/configuracion/pruebas-gratuitas", label: "Pruebas gratuitas", icon: "Gift", desc: "Duración y condiciones" },
+  { href: "/configuracion/objetivos", label: "Objetivos", icon: "Target", desc: "Metas mensuales por dpto y usuario" },
   { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo y permisos" },
 ];
 

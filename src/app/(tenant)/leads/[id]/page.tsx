@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getLead } from "@/modules/leads/actions";
 import { listAddresses } from "@/modules/addresses/actions";
 import { AddressList } from "@/modules/addresses/address-list";
+import { Timeline } from "@/modules/events/timeline";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "@/modules/leads/schemas";
@@ -144,9 +145,7 @@ export default async function LeadDetailPage({
           <CardTitle>Timeline</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Eventos del lead. Disponible cuando todos los módulos emitan eventos.
-          </p>
+          <Timeline subjectType="lead" subjectId={id} />
         </CardContent>
       </Card>
     </div>
