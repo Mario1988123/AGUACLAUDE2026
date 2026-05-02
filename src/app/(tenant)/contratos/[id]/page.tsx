@@ -13,6 +13,7 @@ import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL } from "@/modules/contracts/schemas";
 import { ContractStatusActions } from "@/modules/contracts/status-actions";
 import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
+import { Timeline } from "@/modules/events/timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -223,6 +224,15 @@ export default async function ContractDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Timeline subjectType="contract" subjectId={id} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
 import { InstallationWorkReport } from "@/modules/installations/work-report";
+import { Timeline } from "@/modules/events/timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -159,6 +160,15 @@ export default async function InstallationDetailPage({
           />
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Timeline subjectType="installation" subjectId={id} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
