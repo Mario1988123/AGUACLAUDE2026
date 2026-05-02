@@ -8,6 +8,8 @@ import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { createBankAccountAction, deleteBankAccountAction, type BankAccountRow } from "./actions";
+import { IbanInput } from "@/shared/components/iban-input";
+import { checkIbanLive } from "@/shared/lib/validations/iban-partial";
 
 interface Props {
   customerId: string;
@@ -33,6 +35,11 @@ export function BankAccountList({ customerId, accounts }: Props) {
 
   function add(e: React.FormEvent) {
     e.preventDefault();
+    const check = checkIbanLive(form.iban);
+    if (check.state !== "valid") {
+      notify.warning("IBAN no válido — corrige el dígito de control antes de guardar");
+      return;
+    }
     startTransition(async () => {
       try {
         await createBankAccountAction({ customer_id: customerId, ...form });
@@ -109,13 +116,11 @@ export function BankAccountList({ customerId, accounts }: Props) {
         <form onSubmit={add} className="space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="space-y-1.5">
             <Label htmlFor="iban">IBAN *</Label>
-            <Input
+            <IbanInput
               id="iban"
               required
               value={form.iban}
-              onChange={(e) => setForm({ ...form, iban: e.target.value.toUpperCase() })}
-              placeholder="ES00 0000 0000 0000 0000 0000"
-              className="font-mono"
+              onChange={(v) => setForm({ ...form, iban: v })}
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

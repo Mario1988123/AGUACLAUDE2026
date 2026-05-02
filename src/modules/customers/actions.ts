@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { customerCreateSchema } from "./schemas";
 import type { CustomerDetail, CustomerListItem } from "./types";
+import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 
 export async function listCustomers(q?: string): Promise<CustomerListItem[]> {
   await requireSession();
@@ -67,6 +68,25 @@ export async function createCustomerAction(formData: FormData) {
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const raw = Object.fromEntries(formData.entries());
   const parsed = customerCreateSchema.parse(raw);
+
+  // Anti-duplicado server-side. Si viene de lead, excluimos al propio lead
+  // (porque sus datos siguen ahí hasta que actualizamos su estado).
+  const dups = await checkDedupe({
+    tax_id: parsed.tax_id || undefined,
+    email: parsed.email || undefined,
+    phone: parsed.phone_primary || undefined,
+    exclude: parsed.source_lead_id
+      ? { entity: "lead", id: parsed.source_lead_id }
+      : undefined,
+  });
+  if (dups.length > 0) {
+    const first = dups[0]!;
+    const fieldLabel =
+      first.field === "tax_id" ? "DNI/CIF" : first.field === "email" ? "email" : "teléfono";
+    throw new Error(
+      `Duplicado: ${fieldLabel} ya registrado en ${first.entity === "lead" ? "lead" : "cliente"} "${first.display_name}"${first.assigned_user_name ? ` (asignado a ${first.assigned_user_name})` : ""}`,
+    );
+  }
 
   const supabase = await createClient();
   const isLevel3 = session.roles.includes("sales_rep");

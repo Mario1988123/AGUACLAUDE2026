@@ -7,6 +7,9 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createCustomerAction } from "./actions";
+import { TaxIdInput } from "@/shared/components/tax-id-input";
+import { DedupeWarning } from "@/shared/components/dedupe-warning";
+import { useDedupe } from "@/shared/hooks/use-dedupe";
 
 interface Props {
   sourceLeadId?: string;
@@ -15,11 +18,17 @@ interface Props {
 export function CustomerCreateForm({ sourceLeadId }: Props) {
   const [partyKind, setPartyKind] = useState<"individual" | "company">("individual");
   const [pending, startTransition] = useTransition();
+  const [taxId, setTaxId] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     if (sourceLeadId) fd.set("source_lead_id", sourceLeadId);
+    if (taxId) fd.set("tax_id", taxId);
     startTransition(async () => {
       try {
         await createCustomerAction(fd);
@@ -83,7 +92,14 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="tax_id">CIF *</Label>
-            <Input id="tax_id" name="tax_id" required placeholder="B12345678" />
+            <TaxIdInput
+              id="tax_id"
+              kind="cif"
+              required
+              value={taxId}
+              onChange={setTaxId}
+              placeholder="B12345678"
+            />
           </div>
         </fieldset>
       ) : (
@@ -98,7 +114,14 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="tax_id">DNI / NIE *</Label>
-            <Input id="tax_id" name="tax_id" required placeholder="12345678A" />
+            <TaxIdInput
+              id="tax_id"
+              kind="dni"
+              required
+              value={taxId}
+              onChange={setTaxId}
+              placeholder="12345678A"
+            />
           </div>
         </fieldset>
       )}
@@ -106,17 +129,32 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="phone_primary">Teléfono *</Label>
-          <Input id="phone_primary" name="phone_primary" type="tel" required />
+          <Input
+            id="phone_primary"
+            name="phone_primary"
+            type="tel"
+            required
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="phone_secondary">Teléfono secundario</Label>
           <Input id="phone_secondary" name="phone_secondary" type="tel" />
         </div>
       </fieldset>
+
+      <DedupeWarning matches={dedupeMatches} />
 
       <div className="space-y-2">
         <Label htmlFor="notes">Notas</Label>

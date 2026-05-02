@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { MapPin, Crosshair } from "lucide-react";
+import { MapPin, Crosshair, Search } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { MapPicker } from "@/shared/components/map-picker";
 import {
   ADDRESS_KIND,
   KIND_LABEL,
@@ -16,6 +17,7 @@ import {
 } from "./schemas";
 import { upsertAddressAction } from "./actions";
 import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
+import { reverseGeocode, forwardGeocode } from "@/shared/lib/geocoding/nominatim";
 import type { AddressRow } from "./actions";
 
 interface Props {
@@ -67,6 +69,29 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
   });
 
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+
+  async function fillFromCoords(lat: number, lng: number, source: "user_pin" | "user_location" | "geocoded") {
+    setForm((f) => ({ ...f, latitude: lat, longitude: lng, geo_source: source }));
+    // Reverse geocoding → autorelleno campos vacíos (no machacamos lo que ya escribió)
+    const rev = await reverseGeocode(lat, lng);
+    if (!rev) {
+      notify.warning("Coordenadas capturadas pero no se pudo identificar la calle");
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      street_type: (STREET_TYPE.includes(rev.street_type as StreetType)
+        ? (rev.street_type as StreetType)
+        : f.street_type),
+      street: f.street || rev.street,
+      street_number: f.street_number || rev.street_number || "",
+      postal_code: f.postal_code || rev.postal_code || "",
+      city: f.city || rev.city || "",
+      province: f.province || rev.province || "",
+    }));
+    notify.success("Dirección autorrellenada");
+  }
 
   function captureMyLocation() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -75,15 +100,9 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     }
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((f) => ({
-          ...f,
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          geo_source: "user_location",
-        }));
+      async (pos) => {
+        await fillFromCoords(pos.coords.latitude, pos.coords.longitude, "user_location");
         setGpsLoading(false);
-        notify.success("Ubicación capturada");
       },
       (err) => {
         setGpsLoading(false);
@@ -96,6 +115,35 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     );
   }
 
+  async function searchByAddress() {
+    const parts = [
+      form.street,
+      form.street_number,
+      form.postal_code,
+      form.city,
+      form.province,
+      "España",
+    ].filter(Boolean);
+    if (parts.length < 2) {
+      notify.warning("Escribe al menos calle y población");
+      return;
+    }
+    setGeoLoading(true);
+    const result = await forwardGeocode(parts.join(", "));
+    setGeoLoading(false);
+    if (!result) {
+      notify.warning("No se encontró la dirección");
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      latitude: result.lat,
+      longitude: result.lng,
+      geo_source: "geocoded",
+    }));
+    notify.success("Localizado en el mapa");
+  }
+
   function clearLocation() {
     setForm((f) => ({ ...f, latitude: null, longitude: null, geo_source: null }));
   }
@@ -103,7 +151,6 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => {
       const next = { ...f, [key]: value };
-      // Auto-sugerir provincia desde CP
       if (key === "postal_code" && typeof value === "string" && value.length === 5) {
         const p = provinceFromPostalCode(value);
         if (p && !next.province) next.province = p;
@@ -261,50 +308,36 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
             <Crosshair className="h-4 w-4" />
             {gpsLoading ? "Buscando GPS..." : "Usar mi ubicación"}
           </Button>
+          <Button type="button" variant="outline" onClick={searchByAddress} disabled={geoLoading}>
+            <Search className="h-4 w-4" />
+            {geoLoading ? "Buscando..." : "Buscar por dirección"}
+          </Button>
           {hasGeo && (
             <Button type="button" variant="ghost" onClick={clearLocation}>
               Borrar
             </Button>
           )}
         </div>
+
+        <MapPicker
+          latitude={form.latitude}
+          longitude={form.longitude}
+          onChange={(lat, lng) => {
+            void fillFromCoords(lat, lng, "user_pin");
+          }}
+        />
+
         {hasGeo && (
-          <div className="space-y-2">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <Label className="text-xs">Latitud</Label>
-                <Input
-                  type="number"
-                  step="any"
-                  value={form.latitude ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      latitude: e.target.value === "" ? null : Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Longitud</Label>
-                <Input
-                  type="number"
-                  step="any"
-                  value={form.longitude ?? ""}
-                  onChange={(e) =>
-                    setForm((f) => ({
-                      ...f,
-                      longitude: e.target.value === "" ? null : Number(e.target.value),
-                    }))
-                  }
-                />
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              Lat {form.latitude?.toFixed(6)} · Lng {form.longitude?.toFixed(6)}
+            </span>
             {mapsUrl && (
               <a
                 href={mapsUrl}
                 target="_blank"
                 rel="noopener"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
               >
                 <MapPin className="h-3 w-3" /> Ver en Google Maps
               </a>
@@ -312,8 +345,8 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          Tip: usa &quot;Usar mi ubicación&quot; cuando estés en la dirección. Los coordenadas se
-          enviarán al instalador para abrir la ruta.
+          En PC el GPS usa la IP/WiFi (puede fallar mucho). En móvil/tablet con GPS funcionará bien.
+          Puedes arrastrar la chincheta para corregir y se rellenará la dirección automáticamente.
         </p>
       </div>
 
