@@ -6,6 +6,14 @@ import {
   FunnelChart,
   YearComparisonChart,
 } from "@/modules/dashboard/charts";
+import {
+  getDashboardObjectives,
+  getMonthRanking,
+} from "@/modules/sales/dashboard-actions";
+import { DashboardObjectivesCard } from "@/modules/sales/dashboard-objectives-card";
+import { RankingCard } from "@/modules/sales/ranking-card";
+import { DashboardFilters } from "@/modules/sales/dashboard-filters";
+import { listTeamMembers } from "@/modules/agenda/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +23,17 @@ function formatCents(cents: number) {
 
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ dept?: string; user?: string }>;
+}) {
   const session = await requireSession();
+  const sp = await searchParams;
+  const filterDept =
+    sp.dept === "tech" || sp.dept === "sales" || sp.dept === "tmk" ? sp.dept : undefined;
+  const filterUser = sp.user || undefined;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
@@ -31,10 +48,12 @@ export default async function DashboardPage() {
     { count: customersCount },
     { count: contractsMonth },
     { count: installationsMonth },
-    salesMonthRes,
     salesYearRes,
     salesLastYearRes,
     leadsByStatusRes,
+    objectives,
+    ranking,
+    teamMembers,
   ] = await Promise.all([
     supabase.from("leads").select("id", { count: "exact", head: true }).is("deleted_at", null),
     supabase
@@ -49,7 +68,6 @@ export default async function DashboardPage() {
       .from("installations")
       .select("id", { count: "exact", head: true })
       .gte("created_at", monthStart),
-    supabase.from("sales_records").select("total_cents").gte("recorded_at", monthStart),
     supabase
       .from("sales_records")
       .select("total_cents, recorded_at")
@@ -60,18 +78,16 @@ export default async function DashboardPage() {
       .gte("recorded_at", lastYearStart)
       .lte("recorded_at", lastYearEnd),
     supabase.from("leads").select("status").is("deleted_at", null),
+    getDashboardObjectives(filterUser, filterDept),
+    getMonthRanking(filterDept),
+    listTeamMembers().catch(() => []),
   ]);
 
-  const totalMonth = ((salesMonthRes.data ?? []) as { total_cents: number }[]).reduce(
-    (s, r) => s + r.total_cents,
-    0,
-  );
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
     (s, r) => s + r.total_cents,
     0,
   );
 
-  // Series mensuales últimos 6 meses
   const sixMonths = Array.from({ length: 6 }).map((_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
     return { year: d.getFullYear(), month: d.getMonth() };
@@ -99,7 +115,6 @@ export default async function DashboardPage() {
     total_eur: sumByMonth(lastYearRows, now.getFullYear() - 1, m) / 100,
   }));
 
-  // Funnel comercial
   const leadStatuses = ((leadsByStatusRes.data ?? []) as { status: string }[]).reduce<
     Record<string, number>
   >((acc, l) => {
@@ -125,18 +140,56 @@ export default async function DashboardPage() {
     { step: "Convertidos", count: converted },
   ];
 
+  const isLevel1 = objectives.level === 1;
+  const isLevel3 = objectives.level === 3;
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Hola {session.full_name ?? session.email} 👋
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Hola {session.full_name ?? session.email} 👋
+            {objectives.level === 2 && " — vista de tu departamento"}
+            {objectives.level === 3 && " — vista personal"}
+          </p>
+        </div>
+        {(isLevel1 || objectives.level === 2) && (
+          <DashboardFilters
+            users={teamMembers.map((t) => ({ id: t.user_id, name: t.full_name }))}
+            showDeptFilter={isLevel1}
+          />
+        )}
       </div>
 
+      {/* Cabecera totales: el destacado es scope (yo / equipo / empresa según rol),
+          y secundario el total empresa para nivel 2/3 */}
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard
+          label={
+            isLevel3
+              ? "Mi venta este mes"
+              : objectives.level === 2
+                ? "Equipo este mes"
+                : "Vendido este mes"
+          }
+          value={formatCents(objectives.scope_month_total_cents)}
+          icon="TrendingUp"
+          iconColor="primary"
+        />
+        {!isLevel1 && (
+          <KpiCard
+            label="Total empresa este mes"
+            value={formatCents(objectives.company_month_total_cents)}
+            icon="Wallet"
+            iconColor="success"
+          />
+        )}
         <KpiCard label="Leads activos" value={leadsCount ?? 0} icon="Contact" iconColor="primary" />
         <KpiCard label="Clientes" value={customersCount ?? 0} icon="Users" iconColor="success" />
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           label="Contratos / mes"
           value={contractsMonth ?? 0}
@@ -149,22 +202,36 @@ export default async function DashboardPage() {
           icon="Wrench"
           iconColor="destructive"
         />
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-2">
-        <KpiCard
-          label="Vendido este mes"
-          value={formatCents(totalMonth)}
-          icon="TrendingUp"
-          iconColor="primary"
-        />
         <KpiCard
           label="Vendido este año"
           value={formatCents(totalYear)}
           icon="Wallet"
-          iconColor="success"
+          iconColor="primary"
         />
       </div>
+
+      {/* Objetivos: individual + departamento */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <DashboardObjectivesCard
+          title={isLevel3 ? "Mis objetivos" : "Objetivos individuales"}
+          icon="individual"
+          data={objectives.individual}
+          emptyMsg={
+            isLevel3
+              ? "No tienes objetivos individuales este mes."
+              : "Sin objetivos individuales para el filtro actual."
+          }
+        />
+        <DashboardObjectivesCard
+          title="Objetivos del departamento"
+          icon="team"
+          data={objectives.department_objectives}
+          emptyMsg="Sin objetivos de departamento definidos."
+        />
+      </div>
+
+      {/* Ranking */}
+      <RankingCard rows={ranking} highlightUserId={session.user_id} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SalesByMonthChart data={salesData} />
