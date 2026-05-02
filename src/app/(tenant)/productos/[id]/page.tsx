@@ -3,6 +3,11 @@ import { notFound } from "next/navigation";
 import { getProduct } from "@/modules/products/actions";
 import { listPricingPlans } from "@/modules/products/pricing-actions";
 import { PricingPlansPanel } from "@/modules/products/pricing-panel";
+import {
+  listAttributes,
+  listProductAttributeValues,
+} from "@/modules/products/attributes-actions";
+import { AttributesPanel } from "@/modules/products/attributes-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
@@ -26,7 +31,11 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const pricingPlans = await listPricingPlans(id);
+  const [pricingPlans, attributes, attrValues] = await Promise.all([
+    listPricingPlans(id),
+    listAttributes((product as { category_id: string | null }).category_id),
+    listProductAttributeValues(id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -105,6 +114,19 @@ export default async function ProductDetailPage({
           </CardHeader>
           <CardContent>
             <PricingPlansPanel productId={id} plans={pricingPlans} />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Atributos ({attrValues.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AttributesPanel
+              productId={id}
+              attributes={attributes}
+              values={attrValues}
+            />
           </CardContent>
         </Card>
       </div>

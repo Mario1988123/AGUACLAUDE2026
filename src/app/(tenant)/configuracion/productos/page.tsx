@@ -1,11 +1,19 @@
 import { listCategories, listGlobalCategories } from "@/modules/products/actions";
+import { listAttributes } from "@/modules/products/attributes-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CloneCategoryButton, CreateCategoryForm } from "@/modules/products/categories-panel";
+import { AttributesConfig } from "@/modules/config/products/attributes-config";
 import { KIND_LABEL } from "@/modules/products/schemas";
 
+export const dynamic = "force-dynamic";
+
 export default async function ConfiguracionProductosPage() {
-  const [local, globals] = await Promise.all([listCategories(), listGlobalCategories()]);
+  const [local, globals, attributes] = await Promise.all([
+    listCategories(),
+    listGlobalCategories(),
+    listAttributes(),
+  ]);
   const clonedIds = new Set(local.map((c) => c.cloned_from_global_id).filter(Boolean));
 
   return (
@@ -88,6 +96,15 @@ export default async function ConfiguracionProductosPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Atributos ({attributes.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AttributesConfig attributes={attributes} categories={local} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
