@@ -8,14 +8,20 @@ import {
 } from "@/modules/incidents/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { CreateIncidentButton } from "@/modules/incidents/create-button";
+
+export const dynamic = "force-dynamic";
 
 export default async function IncidenciasPage() {
   const incidents = await listIncidents();
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Incidencias</h1>
-        <p className="text-sm text-muted-foreground">{incidents.length} incidencias</p>
+    <div className="space-y-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Incidencias</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{incidents.length} incidencias</p>
+        </div>
+        <CreateIncidentButton />
       </div>
 
       <Card>
