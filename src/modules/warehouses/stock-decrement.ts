@@ -16,6 +16,7 @@ interface DecrementInput {
   installation_id?: string | null;
   free_trial_id?: string | null;
   maintenance_id?: string | null;
+  loading_request_id?: string | null;
   performed_by?: string | null;
   notes?: string | null;
 }
@@ -61,6 +62,7 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
       installation_id: input.installation_id ?? null,
       free_trial_id: input.free_trial_id ?? null,
       maintenance_id: input.maintenance_id ?? null,
+      loading_request_id: input.loading_request_id ?? null,
       performed_by: input.performed_by ?? null,
       notes: input.notes ?? null,
     });
