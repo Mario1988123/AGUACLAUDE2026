@@ -2,16 +2,28 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { MapPin } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createLeadAction } from "./actions";
 import { LEAD_ORIGIN, LEAD_POTENTIAL, ORIGIN_LABEL } from "./schemas";
+import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
 
 export function LeadCreateForm() {
   const [partyKind, setPartyKind] = useState<"individual" | "company">("individual");
   const [pending, startTransition] = useTransition();
+  const [postal, setPostal] = useState("");
+  const [province, setProvince] = useState("");
+
+  function onPostalChange(v: string) {
+    setPostal(v);
+    if (v.length === 5 && !province) {
+      const p = provinceFromPostalCode(v);
+      if (p) setProvince(p);
+    }
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -160,6 +172,52 @@ export function LeadCreateForm() {
               </option>
             ))}
           </select>
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+        <div className="flex items-center gap-2 text-sm font-bold">
+          <MapPin className="h-4 w-4 text-primary" />
+          Dirección principal (opcional)
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Puedes dejarla vacía y añadirla después desde la ficha del lead.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+          <div className="space-y-1.5">
+            <Label htmlFor="address_street">Calle</Label>
+            <Input id="address_street" name="address_street" placeholder="Gran Vía" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="address_street_number">Número</Label>
+            <Input id="address_street_number" name="address_street_number" />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="address_postal_code">CP</Label>
+            <Input
+              id="address_postal_code"
+              name="address_postal_code"
+              inputMode="numeric"
+              maxLength={5}
+              value={postal}
+              onChange={(e) => onPostalChange(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="address_city">Población</Label>
+            <Input id="address_city" name="address_city" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="address_province">Provincia</Label>
+            <Input
+              id="address_province"
+              name="address_province"
+              value={province}
+              onChange={(e) => setProvince(e.target.value)}
+            />
+          </div>
         </div>
       </fieldset>
 

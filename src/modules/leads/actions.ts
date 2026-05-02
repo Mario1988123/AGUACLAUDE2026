@@ -124,6 +124,22 @@ export async function createLeadAction(formData: FormData) {
   if (error) throw error;
   const newId = (data as { id: string }).id;
 
+  // Si rellenó la dirección opcional al crear, persistirla como principal
+  if (parsed.address_street && parsed.address_postal_code) {
+    await supabase.from("addresses").insert({
+      company_id: session.company_id,
+      lead_id: newId,
+      kind: parsed.party_kind === "company" ? "office" : "home",
+      is_primary: true,
+      street_type: "calle",
+      street: parsed.address_street,
+      street_number: parsed.address_street_number || null,
+      postal_code: parsed.address_postal_code,
+      city: parsed.address_city || null,
+      province: parsed.address_province || null,
+    } as never);
+  }
+
   // Emitir evento timeline
   await supabase.from("events").insert({
     company_id: session.company_id,
@@ -143,6 +159,108 @@ export async function createLeadAction(formData: FormData) {
 
   revalidatePath("/leads");
   redirect(`/leads/${newId}` as never);
+}
+
+/**
+ * Convierte un lead en cliente: crea customer copiando datos del lead, mueve
+ * todas sus direcciones (RPC promote_lead_to_customer) y marca el lead como
+ * 'converted' con converted_to_customer_id.
+ */
+export async function convertLeadToCustomerAction(leadId: string): Promise<string> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Usuario sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const { data: lead, error: e1 } = await supabase
+    .from("leads")
+    .select(
+      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, status, converted_to_customer_id",
+    )
+    .eq("id", leadId)
+    .is("deleted_at", null)
+    .single();
+  if (e1) throw e1;
+  const l = lead as {
+    id: string;
+    party_kind: "individual" | "company";
+    legal_name: string | null;
+    trade_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone_primary: string | null;
+    phone_company: string | null;
+    tax_id: string | null;
+    notes: string | null;
+    status: string;
+    converted_to_customer_id: string | null;
+  };
+  if (l.converted_to_customer_id) {
+    throw new Error("Lead ya convertido");
+  }
+
+  const { data: created, error: e2 } = await supabase
+    .from("customers")
+    .insert({
+      company_id: session.company_id,
+      party_kind: l.party_kind,
+      legal_name: l.legal_name,
+      trade_name: l.trade_name,
+      first_name: l.first_name,
+      last_name: l.last_name,
+      email: l.email,
+      phone_primary: l.phone_primary,
+      phone_secondary: l.phone_company,
+      tax_id: l.tax_id,
+      notes: l.notes,
+      is_active: true,
+      created_by: session.user_id,
+      source_lead_id: l.id,
+    })
+    .select("id")
+    .single();
+  if (e2) throw new Error(e2.message);
+  const customerId = (created as { id: string }).id;
+
+  // Mover direcciones via RPC (security definer + tenant check)
+  await supabase.rpc("promote_lead_to_customer", {
+    p_lead_id: l.id,
+    p_customer_id: customerId,
+  });
+
+  await supabase
+    .from("leads")
+    .update({
+      status: "converted",
+      converted_at: new Date().toISOString(),
+      converted_to_customer_id: customerId,
+    } as never)
+    .eq("id", l.id);
+
+  await supabase.from("events").insert([
+    {
+      company_id: session.company_id,
+      subject_type: "lead",
+      subject_id: l.id,
+      kind: "lead.converted",
+      payload: { customer_id: customerId },
+      actor_user_id: session.user_id,
+    },
+    {
+      company_id: session.company_id,
+      subject_type: "customer",
+      subject_id: customerId,
+      kind: "customer.created",
+      payload: { from_lead_id: l.id },
+      actor_user_id: session.user_id,
+    },
+  ] as never);
+
+  revalidatePath(`/leads/${l.id}`);
+  revalidatePath("/leads");
+  revalidatePath("/clientes");
+  return customerId;
 }
 
 export async function updateLeadStatus(id: string, status: LeadStatus, lostReason?: string) {

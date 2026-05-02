@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "@/modules/leads/schemas";
 import { LeadStatusActions } from "@/modules/leads/status-actions";
-import { Phone, MessageCircle, Mail } from "lucide-react";
+import { ConvertLeadButton } from "@/modules/leads/convert-button";
+import { Phone, MessageCircle, Mail, MapPin } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,21 @@ export default async function LeadDetailPage({
         </div>
       )}
 
+      {addresses.length === 0 && lead.status !== "converted" && (
+        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-warning bg-warning/5 p-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
+            <MapPin className="h-5 w-5" />
+          </div>
+          <div className="flex-1 text-sm">
+            <div className="font-bold">Falta la dirección</div>
+            <p className="text-muted-foreground">
+              Añade una dirección abajo para poder programar visitas y, al convertir, traspasarla
+              al cliente.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -121,19 +137,44 @@ export default async function LeadDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Estado</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Convertir</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ConvertLeadButton
+                leadId={lead.id}
+                alreadyConverted={!!lead.converted_to_customer_id}
+              />
+              {lead.converted_to_customer_id && (
+                <Link
+                  href={`/clientes/${lead.converted_to_customer_id}` as never}
+                  className="mt-3 block text-center text-sm text-primary hover:underline"
+                >
+                  Ver cliente →
+                </Link>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Estado</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Direcciones ({addresses.length})</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            Direcciones ({addresses.length})
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <AddressList leadId={id} addresses={addresses} />

@@ -73,6 +73,12 @@ export const leadCreateSchema = z
     origin: z.enum(LEAD_ORIGIN).default("other"),
     potential: z.enum(LEAD_POTENTIAL).default("unknown"),
     notes: z.string().optional().default(""),
+    // Dirección principal opcional al crear lead
+    address_street: z.string().optional().default(""),
+    address_street_number: z.string().optional().default(""),
+    address_postal_code: z.string().optional().default(""),
+    address_city: z.string().optional().default(""),
+    address_province: z.string().optional().default(""),
   })
   .refine(
     (v) => {
