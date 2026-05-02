@@ -1,11 +1,15 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLead } from "@/modules/leads/actions";
+import { listAddresses } from "@/modules/addresses/actions";
+import { AddressList } from "@/modules/addresses/address-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "@/modules/leads/schemas";
 import { LeadStatusActions } from "@/modules/leads/status-actions";
 import { Phone, MessageCircle, Mail } from "lucide-react";
+
+export const dynamic = "force-dynamic";
 
 export default async function LeadDetailPage({
   params,
@@ -24,6 +28,8 @@ export default async function LeadDetailPage({
     lead.party_kind === "company"
       ? lead.trade_name || lead.legal_name || "Sin nombre"
       : `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Sin nombre";
+
+  const addresses = await listAddresses({ lead_id: id });
 
   return (
     <div className="space-y-6">
@@ -126,12 +132,20 @@ export default async function LeadDetailPage({
 
       <Card>
         <CardHeader>
+          <CardTitle>Direcciones ({addresses.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AddressList leadId={id} addresses={addresses} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Timeline</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Eventos del lead. El componente de timeline se implementará al cubrir todos los módulos
-            que emiten eventos (propuestas, contratos, instalaciones, wallet…).
+            Eventos del lead. Disponible cuando todos los módulos emitan eventos.
           </p>
         </CardContent>
       </Card>

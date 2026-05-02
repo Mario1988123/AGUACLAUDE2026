@@ -236,25 +236,69 @@ export async function createContractFromProposal(proposalId: string) {
 
 export async function markContractSigned(id: string) {
   const session = await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   await supabase
     .from("contracts")
     .update({
       status: "signed",
       signed_at: new Date().toISOString(),
       signed_by_user_id: session.user_id,
-    } as never)
+    })
     .eq("id", id);
+
+  // Crear automáticamente wallet entries para todos los contract_payments
+  // pendientes que no tengan ya una wallet entry asociada (decisión: al
+  // firmar el contrato, los pagos previstos se materializan en Wallet).
+  const { data: payments } = await supabase
+    .from("contract_payments")
+    .select("id, concept, amount_cents, method, wallet_entry_id, contract_id")
+    .eq("contract_id", id)
+    .eq("status", "pending")
+    .is("wallet_entry_id", null);
+
+  type CP = {
+    id: string;
+    concept: string;
+    amount_cents: number;
+    method: string;
+    wallet_entry_id: string | null;
+    contract_id: string;
+  };
+  const list = (payments ?? []) as CP[];
+  for (const p of list) {
+    const { data: created } = await supabase
+      .from("wallet_entries")
+      .insert({
+        company_id: session.company_id!,
+        contract_id: p.contract_id,
+        contract_payment_id: p.id,
+        concept: p.concept,
+        amount_cents: p.amount_cents,
+        method: p.method,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    if (created) {
+      await supabase
+        .from("contract_payments")
+        .update({ wallet_entry_id: (created as { id: string }).id })
+        .eq("id", p.id);
+    }
+  }
+
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
     subject_id: id,
     kind: "contract.signed",
-    payload: {},
+    payload: { wallet_entries_created: list.length },
     actor_user_id: session.user_id,
-  } as never);
+  });
   revalidatePath(`/contratos/${id}`);
   revalidatePath("/contratos");
+  revalidatePath("/wallet");
 }
 
 export async function markContractActive(id: string) {
