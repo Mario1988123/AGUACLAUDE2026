@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+
+export const dynamic = "force-dynamic";
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Borrador",
@@ -72,8 +75,15 @@ export default async function PruebasGratuitasPage() {
               </thead>
               <tbody className="divide-y">
                 {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="py-2 font-mono text-xs">{r.reference_code ?? "—"}</td>
+                  <tr key={r.id} className="hover:bg-muted/50">
+                    <td className="py-2 font-mono text-xs">
+                      <Link
+                        href={`/pruebas-gratuitas/${r.id}` as never}
+                        className="text-primary hover:underline"
+                      >
+                        {r.reference_code ?? `#${r.id.slice(0, 8)}`}
+                      </Link>
+                    </td>
                     <td className="py-2">
                       <Badge variant={STATUS_VARIANT[r.status]}>
                         {STATUS_LABEL[r.status] ?? r.status}
