@@ -19,6 +19,35 @@ export interface AgendaItem {
   subject_id: string | null;
 }
 
+export async function listAgendaMonth(year: number, month: number): Promise<AgendaItem[]> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const start = new Date(year, month, 1).toISOString();
+  const end = new Date(year, month + 2, 0).toISOString(); // mes anterior + actual + sig
+  let query = supabase
+    .from("agenda_events")
+    .select(
+      "id, kind, status, title, description, starts_at, ends_at, assigned_user_id, is_outside_hours, subject_type, subject_id",
+    )
+    .is("deleted_at", null)
+    .gte("starts_at", start)
+    .lte("starts_at", end)
+    .order("starts_at");
+  if (
+    !session.is_superadmin &&
+    !session.roles.includes("company_admin") &&
+    !session.roles.includes("technical_director") &&
+    !session.roles.includes("commercial_director") &&
+    !session.roles.includes("telemarketing_director")
+  ) {
+    query = query.eq("assigned_user_id", session.user_id);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []) as AgendaItem[];
+}
+
 export async function listAgenda(daysAhead = 14): Promise<AgendaItem[]> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
