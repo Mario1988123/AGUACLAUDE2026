@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getSignedPhotoUrl } from "@/modules/installations/photo-actions";
 
 export const dynamic = "force-dynamic";

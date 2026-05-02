@@ -1,7 +1,8 @@
 import {
   PDFDocument,
-  PDFFont,
-  PDFPage,
+  type PDFFont,
+  type PDFPage,
+  type PDFImage,
   StandardFonts,
   rgb,
   type RGB,
@@ -247,7 +248,7 @@ export async function embedImage(
   doc: Doc,
   bytes: Uint8Array,
   mime: string,
-): Promise<{ embed: import("pdf-lib").PDFImage; width: number; height: number }> {
+): Promise<{ embed: PDFImage; width: number; height: number }> {
   const embed = mime.includes("png")
     ? await doc.pdf.embedPng(bytes)
     : await doc.pdf.embedJpg(bytes);

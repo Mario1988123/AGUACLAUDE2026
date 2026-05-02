@@ -77,10 +77,6 @@ export interface RankingRow {
   units: number;
 }
 
-function startOfMonth(): string {
-  const n = new Date();
-  return new Date(n.getFullYear(), n.getMonth(), 1).toISOString();
-}
 
 export async function getDashboardObjectives(
   filterUserId?: string,
@@ -99,7 +95,6 @@ export async function getDashboardObjectives(
   }
   const level = getUserLevel(session.roles, session.is_superadmin);
   const myDept = getUserDepartment(session.roles);
-  const monthStart = startOfMonth();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;

@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
-import { contractCreateSchema } from "./schemas";
 import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
@@ -372,6 +371,40 @@ export async function markContractSigned(id: string) {
   revalidatePath(`/contratos/${id}`);
   revalidatePath("/contratos");
   revalidatePath("/wallet");
+}
+
+/**
+ * Sustituye el snapshot de cláusulas de un contrato. Solo admin/director.
+ * Usado por el editor inline en la ficha contrato.
+ */
+export async function updateContractClausesAction(
+  contractId: string,
+  clauses: Array<{ title: string; body: string; display_order: number }>,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (!isUpper) throw new Error("Solo admin o director puede editar cláusulas");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("contracts")
+    .update({ clauses_snapshot: clauses })
+    .eq("id", contractId);
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "contract",
+    subject_id: contractId,
+    kind: "contract.clauses_updated",
+    payload: { count: clauses.length },
+    actor_user_id: session.user_id,
+  });
+  revalidatePath(`/contratos/${contractId}`);
 }
 
 /**

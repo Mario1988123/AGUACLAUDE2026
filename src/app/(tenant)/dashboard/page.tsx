@@ -165,7 +165,7 @@ export default async function DashboardPage({
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Hola {session.full_name ?? session.email} 👋
             {objectives.level === 2 && " — vista de tu departamento"}

@@ -4,6 +4,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Sidebar } from "@/shared/components/sidebar";
 import { Header } from "@/shared/components/header";
+import { BottomNav, BottomNavSpacer } from "@/shared/components/bottom-nav";
 import { getUnreadCount } from "@/modules/notifications/actions";
 import { redirect } from "next/navigation";
 
@@ -39,6 +40,8 @@ export default async function TenantLayout({ children }: { children: React.React
     (m) => m.module_key,
   );
 
+  const unread = await getUnreadCountSafe();
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -49,12 +52,16 @@ export default async function TenantLayout({ children }: { children: React.React
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header
-          unreadCount={await getUnreadCountSafe()}
+          unreadCount={unread}
           fullName={session.full_name}
           email={session.email}
         />
-        <main className="flex-1 overflow-y-auto bg-background p-6 lg:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-4 lg:p-8">
+          {children}
+          <BottomNavSpacer />
+        </main>
       </div>
+      <BottomNav unreadCount={unread} />
     </div>
   );
 }

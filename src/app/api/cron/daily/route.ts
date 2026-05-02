@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 

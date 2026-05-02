@@ -14,7 +14,9 @@ import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL } from "@/modules/contrac
 import { ContractStatusActions } from "@/modules/contracts/status-actions";
 import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
 import { QuickCollectButton } from "@/modules/contracts/quick-collect-button";
+import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
 import { Timeline } from "@/modules/events/timeline";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -59,13 +61,24 @@ export default async function ContractDetailPage({
   } catch {
     notFound();
   }
-  const [items, payments, team, warehouses] = await Promise.all([
+  const [items, payments, team, warehouses, session] = await Promise.all([
     getContractItems(id),
     getContractPayments(id),
     listTeamMembers(),
     listWarehouses().catch(() => []),
+    requireSession(),
   ]);
-  const installers = team; // TODO filtrar por rol installer cuando tengamos JWT roles en team
+  const installers = team;
+  const canEditClauses =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clauses = ((contract as any).clauses_snapshot ?? []) as Array<{
+    title: string;
+    body: string;
+    display_order: number;
+  }>;
 
   // ¿hay instalación ya creada para este contrato?
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -241,6 +254,19 @@ export default async function ContractDetailPage({
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cláusulas del contrato ({clauses.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ContractClausesEditor
+            contractId={id}
+            initial={clauses}
+            canEdit={canEditClauses}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

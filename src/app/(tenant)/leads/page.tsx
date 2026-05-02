@@ -8,6 +8,7 @@ import {
 import { requireSession } from "@/shared/lib/auth/session";
 import { SelectableLeadsTable } from "@/modules/leads/selectable-list";
 import { listTeamMembers } from "@/modules/agenda/actions";
+import { ImportLeadsButton } from "@/modules/leads/import-form";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,7 @@ export default async function LeadsPage({
           <p className="text-sm text-muted-foreground">{leads.length} resultados</p>
         </div>
         <div className="flex items-center gap-2">
+          {isUpperLevel && <ImportLeadsButton />}
           <Link
             href={"/api/export/leads" as never}
             prefetch={false}
