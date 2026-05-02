@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listAgenda, listAgendaMonth, listTeamMembers } from "@/modules/agenda/actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "@/modules/agenda/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -7,10 +8,21 @@ import { AgendaCalendar } from "@/modules/agenda/calendar";
 
 export const dynamic = "force-dynamic";
 
-export default async function AgendaPage() {
+const KIND_FILTER_OPTIONS = ["visit", "call", "manual", "meeting", "reminder"] as const;
+
+export default async function AgendaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ user?: string; kind?: string }>;
+}) {
+  const sp = await searchParams;
+  const userFilter = sp.user || undefined;
+  const kindFilter =
+    sp.kind && KIND_FILTER_OPTIONS.includes(sp.kind as never) ? sp.kind : undefined;
+
   const now = new Date();
   const [events, monthEvents, team] = await Promise.all([
-    listAgenda(14),
+    listAgenda(14, { user_id: userFilter, kind: kindFilter }),
     listAgendaMonth(now.getFullYear(), now.getMonth()),
     listTeamMembers(),
   ]);
@@ -32,6 +44,50 @@ export default async function AgendaPage() {
         </div>
         <CreateAgendaButton teamMembers={team} />
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Asignado a</label>
+          <select
+            name="user"
+            defaultValue={userFilter ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {team.map((t) => (
+              <option key={t.user_id} value={t.user_id}>
+                {t.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Tipo</label>
+          <select
+            name="kind"
+            defaultValue={kindFilter ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {KIND_FILTER_OPTIONS.map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABEL[k] ?? k}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {(userFilter || kindFilter) && (
+          <Link href="/agenda" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
 
       <AgendaCalendar events={monthEvents} />
 

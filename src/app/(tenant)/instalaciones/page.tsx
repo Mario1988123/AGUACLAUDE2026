@@ -1,67 +1,165 @@
+import Link from "next/link";
 import { listInstallations } from "@/modules/installations/actions";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { Calendar } from "lucide-react";
+
+export const dynamic = "force-dynamic";
+
+const DAY_LABEL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function fmtDayHeader(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  const today = new Date();
+  const t = dateKey(today);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  if (iso === t) return `Hoy · ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
+  if (iso === dateKey(tomorrow)) return `Mañana · ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
+  return `${DAY_LABEL[d.getDay()]} ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
+}
 
 export default async function InstalacionesPage() {
   const installations = await listInstallations();
-  const grouped = installations.reduce<Record<string, typeof installations>>((acc, i) => {
-    (acc[i.status] = acc[i.status] ?? []).push(i);
-    return acc;
-  }, {});
+
+  // Separar agendadas (con scheduled_at) y sin agendar
+  type I = (typeof installations)[number];
+  const scheduled: I[] = [];
+  const unscheduled: I[] = [];
+  for (const i of installations) {
+    if (i.scheduled_at) scheduled.push(i);
+    else unscheduled.push(i);
+  }
+
+  // Agrupar agendadas por día
+  const byDay = new Map<string, I[]>();
+  for (const i of scheduled) {
+    const k = dateKey(new Date(i.scheduled_at!));
+    const arr = byDay.get(k) ?? [];
+    arr.push(i);
+    byDay.set(k, arr);
+  }
+  const sortedDays = Array.from(byDay.keys()).sort();
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Instalaciones</h1>
-        <p className="text-sm text-muted-foreground">{installations.length} instalaciones</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Instalaciones</h1>
+          <p className="text-sm text-muted-foreground">
+            {installations.length} totales · {scheduled.length} agendadas · {unscheduled.length} sin programar
+          </p>
+        </div>
+        <Link
+          href={"/api/export/installations" as never}
+          prefetch={false}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+        >
+          ⬇ Exportar CSV
+        </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Listado</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            Calendario por día
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {installations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No hay instalaciones. Se crean desde un contrato firmado o como reubicación.
-            </p>
+          {sortedDays.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Ninguna instalación agendada.</p>
           ) : (
-            <div className="space-y-6">
-              {Object.entries(grouped).map(([status, items]) => (
-                <div key={status}>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Badge variant={STATUS_VARIANT[status]}>{STATUS_LABEL[status]}</Badge>
-                    <span className="text-xs text-muted-foreground">{items.length}</span>
+            <div className="space-y-5">
+              {sortedDays.map((day) => (
+                <div key={day} className="space-y-2">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
+                      {fmtDayHeader(day)}
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      {byDay.get(day)!.length} instalación{byDay.get(day)!.length === 1 ? "" : "es"}
+                    </span>
                   </div>
-                  <table className="w-full text-sm">
-                    <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                      <tr>
-                        <th className="py-2 text-left">Cliente</th>
-                        <th className="py-2 text-left">Tipo</th>
-                        <th className="py-2 text-left">Programada</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {items.map((i) => (
-                        <tr key={i.id}>
-                          <td className="py-2">{i.customer_name ?? "—"}</td>
-                          <td className="py-2 text-xs">{KIND_LABEL[i.kind] ?? i.kind}</td>
-                          <td className="py-2 text-xs text-muted-foreground">
-                            {i.scheduled_at
-                              ? new Date(i.scheduled_at).toLocaleString("es-ES")
-                              : "Sin agendar"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <ul className="space-y-1.5">
+                    {byDay
+                      .get(day)!
+                      .sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""))
+                      .map((i) => {
+                        const time = new Date(i.scheduled_at!).toLocaleTimeString("es-ES", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        });
+                        return (
+                          <li
+                            key={i.id}
+                            className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3"
+                          >
+                            <div className="font-mono text-xs font-bold text-primary tabular-nums w-12">
+                              {time}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <Link
+                                href={`/instalaciones/${i.id}` as never}
+                                className="font-medium hover:underline"
+                              >
+                                {i.customer_name ?? "—"}
+                              </Link>
+                              <div className="text-xs text-muted-foreground">
+                                {i.reference_code ?? `#${i.id.slice(0, 8)}`} · {KIND_LABEL[i.kind] ?? i.kind}
+                              </div>
+                            </div>
+                            <Badge variant={STATUS_VARIANT[i.status] ?? "default"}>
+                              {STATUS_LABEL[i.status] ?? i.status}
+                            </Badge>
+                          </li>
+                        );
+                      })}
+                  </ul>
                 </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {unscheduled.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sin programar ({unscheduled.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1.5">
+              {unscheduled.map((i) => (
+                <li
+                  key={i.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border p-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/instalaciones/${i.id}` as never}
+                      className="font-medium hover:underline"
+                    >
+                      {i.customer_name ?? "—"}
+                    </Link>
+                    <div className="text-xs text-muted-foreground">
+                      {i.reference_code ?? `#${i.id.slice(0, 8)}`} · {KIND_LABEL[i.kind] ?? i.kind}
+                    </div>
+                  </div>
+                  <Badge variant={STATUS_VARIANT[i.status] ?? "default"}>
+                    {STATUS_LABEL[i.status] ?? i.status}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

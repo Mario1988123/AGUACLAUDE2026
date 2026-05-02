@@ -48,7 +48,10 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
   return (data ?? []) as AgendaItem[];
 }
 
-export async function listAgenda(daysAhead = 14): Promise<AgendaItem[]> {
+export async function listAgenda(
+  daysAhead = 14,
+  filters?: { user_id?: string; kind?: string },
+): Promise<AgendaItem[]> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -65,7 +68,9 @@ export async function listAgenda(daysAhead = 14): Promise<AgendaItem[]> {
     .lte("starts_at", until.toISOString())
     .order("starts_at");
 
-  if (
+  if (filters?.user_id) {
+    query = query.eq("assigned_user_id", filters.user_id);
+  } else if (
     !session.is_superadmin &&
     !session.roles.includes("company_admin") &&
     !session.roles.includes("technical_director") &&
@@ -73,6 +78,10 @@ export async function listAgenda(daysAhead = 14): Promise<AgendaItem[]> {
     !session.roles.includes("telemarketing_director")
   ) {
     query = query.eq("assigned_user_id", session.user_id);
+  }
+
+  if (filters?.kind) {
+    query = query.eq("kind", filters.kind);
   }
 
   const { data, error } = await query;

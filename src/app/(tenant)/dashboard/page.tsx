@@ -14,6 +14,10 @@ import { DashboardObjectivesCard } from "@/modules/sales/dashboard-objectives-ca
 import { RankingCard } from "@/modules/sales/ranking-card";
 import { DashboardFilters } from "@/modules/sales/dashboard-filters";
 import { listTeamMembers } from "@/modules/agenda/actions";
+import {
+  UpcomingMaintenanceCard,
+  getUpcomingMaintenance,
+} from "@/modules/maintenance/upcoming-card";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +86,8 @@ export default async function DashboardPage({
     getMonthRanking(filterDept),
     listTeamMembers().catch(() => []),
   ]);
+
+  const upcomingMaintenance = await getUpcomingMaintenance().catch(() => []);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
     (s, r) => s + r.total_cents,
@@ -230,8 +236,11 @@ export default async function DashboardPage({
         />
       </div>
 
-      {/* Ranking */}
-      <RankingCard rows={ranking} highlightUserId={session.user_id} />
+      {/* Próximos mantenimientos + Ranking */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <UpcomingMaintenanceCard items={upcomingMaintenance} />
+        <RankingCard rows={ranking} highlightUserId={session.user_id} />
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SalesByMonthChart data={salesData} />
