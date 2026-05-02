@@ -46,7 +46,16 @@ export async function updateSession(request: NextRequest) {
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
-  // Rutas públicas
+  // En métodos no-GET (server actions, form posts) NUNCA redirigimos a /login.
+  // El handler / server action verifica auth con requireSession() y devuelve
+  // su propia respuesta. Si redirigiéramos aquí, el cliente recibiría HTML
+  // de /login en vez de la respuesta esperada por la server action y rompería
+  // con "An unexpected response was received from the server".
+  if (request.method !== "GET") {
+    return supabaseResponse;
+  }
+
+  // Rutas públicas (solo aplica a GET)
   const PUBLIC_PATHS = ["/login", "/recuperar-password", "/restablecer-password", "/api/health"];
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
