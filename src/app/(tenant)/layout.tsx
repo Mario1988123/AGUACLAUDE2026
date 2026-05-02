@@ -4,7 +4,16 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Sidebar } from "@/shared/components/sidebar";
 import { Header } from "@/shared/components/header";
+import { getUnreadCount } from "@/modules/notifications/actions";
 import { redirect } from "next/navigation";
+
+async function getUnreadCountSafe(): Promise<number> {
+  try {
+    return await getUnreadCount();
+  } catch {
+    return 0;
+  }
+}
 
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
@@ -39,7 +48,7 @@ export default async function TenantLayout({ children }: { children: React.React
         fullName={session.full_name}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header />
+        <Header unreadCount={await getUnreadCountSafe()} />
         <main className="flex-1 overflow-y-auto bg-background p-6 lg:p-8">{children}</main>
       </div>
     </div>
