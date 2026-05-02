@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCustomer } from "@/modules/customers/actions";
+import { listAddresses } from "@/modules/addresses/actions";
+import { AddressList } from "@/modules/addresses/address-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Phone, MessageCircle, Mail } from "lucide-react";
+
+export const dynamic = "force-dynamic";
 
 export default async function CustomerDetailPage({
   params,
@@ -22,6 +26,8 @@ export default async function CustomerDetailPage({
     customer.party_kind === "company"
       ? customer.trade_name || customer.legal_name || "Sin nombre"
       : `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() || "Sin nombre";
+
+  const addresses = await listAddresses({ customer_id: id });
 
   return (
     <div className="space-y-6">
@@ -94,12 +100,10 @@ export default async function CustomerDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Direcciones</CardTitle>
+            <CardTitle>Direcciones ({addresses.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Gestión de direcciones (sedes, vivienda, instalación) en próxima iteración.
-            </p>
+            <AddressList customerId={id} addresses={addresses} />
           </CardContent>
         </Card>
 
