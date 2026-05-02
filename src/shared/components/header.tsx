@@ -1,15 +1,14 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
-import Link from "next/link";
+import { Search } from "lucide-react";
+import { NotificationsBell } from "./notifications-poller";
 
 interface HeaderProps {
-  title?: string;
   unreadCount?: number;
 }
 
 /**
- * Header estilo DashStack — search bar central + bell + avatar.
+ * Header estilo DashStack — search bar central + notifications + avatar.
  */
 export function Header({ unreadCount = 0 }: HeaderProps) {
   return (
@@ -26,19 +25,7 @@ export function Header({ unreadCount = 0 }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-3">
-        <Link
-          href="/notificaciones"
-          className="relative inline-flex h-12 w-12 items-center justify-center rounded-full bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Notificaciones"
-          prefetch={false}
-        >
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute right-1.5 top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
-          )}
-        </Link>
+        <NotificationsBell initialCount={unreadCount} />
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
           M
         </div>
