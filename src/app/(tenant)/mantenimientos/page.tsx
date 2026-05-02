@@ -1,7 +1,10 @@
+import Link from "next/link";
 import { listMaintenance } from "@/modules/maintenance/actions";
 import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -36,8 +39,12 @@ export default async function MantenimientosPage() {
               </thead>
               <tbody className="divide-y">
                 {jobs.map((j) => (
-                  <tr key={j.id}>
-                    <td className="py-2">{j.customer_name ?? "—"}</td>
+                  <tr key={j.id} className="hover:bg-muted/50">
+                    <td className="py-2">
+                      <Link href={`/mantenimientos/${j.id}`} className="text-primary hover:underline">
+                        {j.customer_name ?? "—"}
+                      </Link>
+                    </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {j.scheduled_at ? new Date(j.scheduled_at).toLocaleString("es-ES") : "—"}
                     </td>

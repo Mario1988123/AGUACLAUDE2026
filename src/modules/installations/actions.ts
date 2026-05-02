@@ -13,6 +13,7 @@ import {
 } from "./schemas";
 import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
+import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
 
 export interface InstallationRow {
   id: string;
@@ -419,6 +420,13 @@ export async function completeInstallation(input: unknown) {
     geo_latitude: parsed.geo_lat ?? null,
     geo_longitude: parsed.geo_lng ?? null,
   });
+
+  // Decrementar stock del almacén origen (no falla si no hay warehouse)
+  try {
+    await decrementStockForInstallation(parsed.id);
+  } catch {
+    /* no-op: stock no debe tumbar finalización */
+  }
 
   // Crear customer_equipment para cada item instalado (si hay contract)
   const i = inst as { contract_id: string | null; customer_id: string | null; address_id: string | null };

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
+import { decrementStock } from "@/modules/warehouses/stock-decrement";
 
 export interface MaintenanceRow {
   id: string;
@@ -16,6 +17,56 @@ export interface MaintenanceRow {
   completed_at: string | null;
   is_charged: boolean;
   charge_cents: number | null;
+}
+
+export async function getMaintenance(id: string) {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data, error } = await supabase
+    .from("maintenance_jobs")
+    .select(
+      "id, status, kind, customer_id, customer_equipment_id, contract_id, technician_user_id, scheduled_at, started_at, completed_at, duration_seconds, is_charged, charge_cents, notes",
+    )
+    .eq("id", id)
+    .single();
+  if (error) throw error;
+  return data as {
+    id: string;
+    status: string;
+    kind: string;
+    customer_id: string;
+    customer_equipment_id: string | null;
+    contract_id: string | null;
+    technician_user_id: string | null;
+    scheduled_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    duration_seconds: number | null;
+    is_charged: boolean;
+    charge_cents: number | null;
+    notes: string | null;
+  };
+}
+
+export async function startMaintenanceAction(id: string) {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("maintenance_jobs")
+    .update({ status: "in_progress", started_at: new Date().toISOString() })
+    .eq("id", id);
+  await supabase.from("events").insert({
+    company_id: session.company_id!,
+    subject_type: "maintenance",
+    subject_id: id,
+    kind: "maintenance.started",
+    payload: {},
+    actor_user_id: session.user_id,
+  });
+  revalidatePath(`/mantenimientos/${id}`);
+  revalidatePath("/mantenimientos");
 }
 
 export async function listMaintenance(): Promise<MaintenanceRow[]> {
@@ -115,17 +166,30 @@ export async function completeMaintenanceAction(input: unknown) {
   const parsed = completeMaintenanceSchema.parse(input);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const now = new Date().toISOString();
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  const { data: prev } = await supabase
+    .from("maintenance_jobs")
+    .select("started_at, technician_user_id, company_id")
+    .eq("id", parsed.id)
+    .single();
+  const startTs = (prev as { started_at: string | null } | null)?.started_at;
+  const durationSec = startTs
+    ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
+    : null;
+
   await supabase
     .from("maintenance_jobs")
     .update({
       status: "completed",
-      completed_at: now,
+      completed_at: nowIso,
+      duration_seconds: durationSec,
       notes: parsed.notes ?? null,
     })
     .eq("id", parsed.id);
 
-  // Insertar items reemplazados (descuentan stock vía lógica posterior)
+  // Insertar items reemplazados + descontar stock del almacén del técnico
   if (parsed.replaced_items.length > 0) {
     await supabase.from("maintenance_items_replaced").insert(
       parsed.replaced_items.map((it) => ({
@@ -136,6 +200,53 @@ export async function completeMaintenanceAction(input: unknown) {
         was_replaced: true,
       })),
     );
+
+    // Buscar warehouse vehículo asignado al técnico
+    const technicianId =
+      (prev as { technician_user_id: string | null } | null)?.technician_user_id ?? null;
+    let warehouseId: string | null = null;
+    if (technicianId) {
+      const { data: wh } = await supabase
+        .from("warehouses")
+        .select("id")
+        .eq("company_id", session.company_id)
+        .eq("assigned_user_id", technicianId)
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      warehouseId = (wh as { id: string } | null)?.id ?? null;
+    }
+    // Fallback: primer almacén main de la empresa
+    if (!warehouseId) {
+      const { data: wh } = await supabase
+        .from("warehouses")
+        .select("id")
+        .eq("company_id", session.company_id)
+        .eq("kind", "main")
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      warehouseId = (wh as { id: string } | null)?.id ?? null;
+    }
+
+    if (warehouseId) {
+      for (const it of parsed.replaced_items) {
+        try {
+          await decrementStock({
+            company_id: session.company_id!,
+            warehouse_id: warehouseId,
+            product_id: it.product_id,
+            quantity: it.quantity,
+            movement_type: "outbound_maintenance",
+            maintenance_id: parsed.id,
+            performed_by: session.user_id,
+            notes: "Recambio mantenimiento",
+          });
+        } catch {
+          /* no-op */
+        }
+      }
+    }
   }
 
   await supabase.from("events").insert({
@@ -143,8 +254,9 @@ export async function completeMaintenanceAction(input: unknown) {
     subject_type: "maintenance",
     subject_id: parsed.id,
     kind: "maintenance.completed",
-    payload: { items_replaced: parsed.replaced_items.length },
+    payload: { items_replaced: parsed.replaced_items.length, duration_seconds: durationSec },
     actor_user_id: session.user_id,
   });
+  revalidatePath(`/mantenimientos/${parsed.id}`);
   revalidatePath("/mantenimientos");
 }
