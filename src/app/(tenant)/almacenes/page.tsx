@@ -1,19 +1,23 @@
 import { listLoadingRequests, listWarehouses } from "@/modules/warehouses/actions";
+import { listWarehouseStockSummary } from "@/modules/warehouses/stock-summary-actions";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { STATUS_LABEL_LR } from "@/modules/warehouses/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { WarehousesManager } from "@/modules/warehouses/warehouse-form";
+import { StockSummaryCards } from "@/modules/warehouses/stock-summary-cards";
 
 export const dynamic = "force-dynamic";
 
 export default async function AlmacenesPage() {
-  const [warehouses, requests, team] = await Promise.all([
+  const [warehouses, requests, team, stockSummary] = await Promise.all([
     listWarehouses(),
     listLoadingRequests(),
     listTeamMembers(),
+    listWarehouseStockSummary().catch(() => []),
   ]);
   const whMap = new Map(warehouses.map((w) => [w.id, w.name]));
+  const totalAlerts = stockSummary.reduce((s, w) => s + w.low_stock_alerts, 0);
 
   return (
     <div className="space-y-8">
@@ -21,8 +25,18 @@ export default async function AlmacenesPage() {
         <h1 className="text-3xl font-extrabold tracking-tight">Almacenes</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {warehouses.length} almacenes · {requests.length} solicitudes de carga
+          {totalAlerts > 0 && ` · ${totalAlerts} alertas stock bajo`}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stock por almacén</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StockSummaryCards data={stockSummary} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
