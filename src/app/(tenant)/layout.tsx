@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Sidebar } from "@/shared/components/sidebar";
@@ -18,12 +20,15 @@ export default async function TenantLayout({ children }: { children: React.React
   }
 
   const supabase = await createClient();
-  const { data: companyModules } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: companyModules } = await (supabase as any)
     .from("company_modules")
     .select("module_key, is_active")
     .eq("is_active", true);
 
-  const activeModuleKeys = (companyModules ?? []).map((m) => (m as { module_key: string }).module_key);
+  const activeModuleKeys = ((companyModules ?? []) as Array<{ module_key: string }>).map(
+    (m) => m.module_key,
+  );
 
   return (
     <div className="flex h-screen overflow-hidden">

@@ -51,3 +51,5 @@ legacy_reference/
 
 # Carpeta temporal local (logs dev, bundles SQL, etc.)
 tmp/
+
+.vercel

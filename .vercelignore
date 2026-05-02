@@ -1,0 +1,11 @@
+legacy_reference/
+tmp/
+.env.local
+.env.*.local
+docs/
+supabase/migrations/
+supabase/seed/
+supabase/functions/
+.vercel
+.next
+node_modules
