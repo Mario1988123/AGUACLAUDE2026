@@ -1,10 +1,62 @@
-import { ModulePlaceholder } from "@/shared/components/module-placeholder";
+import Link from "next/link";
+import * as Icons from "lucide-react";
+import { getCompanySettings } from "@/modules/config/company/actions";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { CompanySettingsForm } from "@/modules/config/company/settings-form";
 
-export default function ConfiguracionPage() {
+export const dynamic = "force-dynamic";
+
+const SECTIONS = [
+  { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Caducidad y orígenes" },
+  { href: "/configuracion/productos", label: "Productos", icon: "Package", desc: "Categorías y atributos" },
+  { href: "/configuracion/contratos", label: "Contratos", icon: "FileSignature", desc: "Cláusulas con variables" },
+  { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo y permisos" },
+];
+
+export default async function ConfiguracionPage() {
+  const settings = await getCompanySettings();
   return (
-    <ModulePlaceholder
-      title="Configuración"
-      description="Configuración de la empresa y de cada módulo. Solo accesible para el administrador. Replica el sidebar pero en modo configuración."
-    />
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight">Configuración</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Solo el administrador de la empresa puede modificar la configuración.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {SECTIONS.map((s) => {
+          const Icon =
+            (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[
+              s.icon
+            ] ?? Icons.Settings;
+          return (
+            <Link
+              key={s.href}
+              href={s.href as never}
+              prefetch={false}
+              className="group flex flex-col gap-2 rounded-2xl border border-border bg-card p-5 transition-all hover:border-primary hover:shadow-md hover:shadow-primary/10"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground">
+                <Icon className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="font-bold">{s.label}</div>
+                <div className="text-xs text-muted-foreground">{s.desc}</div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>General de la empresa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CompanySettingsForm initial={settings} />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
