@@ -31,5 +31,6 @@ export const MODULES: ModuleEntry[] = [
   { key: "incidents", label: "Incidencias", icon: "AlertTriangle", href: "/incidencias", group: "operative" },
   { key: "sales", label: "Ventas", icon: "TrendingUp", href: "/ventas", configHref: "/configuracion/objetivos", group: "operative" },
   { key: "wallet", label: "Wallet", icon: "Wallet", href: "/wallet", group: "operative" },
+  { key: "audit", label: "Auditoría", icon: "ScrollText", href: "/auditoria", group: "config", rolesAllowed: ["company_admin", "technical_director", "commercial_director", "telemarketing_director"] },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "config", rolesAllowed: ["company_admin"] },
 ];
