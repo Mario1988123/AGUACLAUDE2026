@@ -9,8 +9,9 @@ import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
-import { listContractsByCustomer } from "@/modules/customers/actions";
+import { listContractsByCustomer, listInstallationsByCustomer } from "@/modules/customers/actions";
 import { CustomerContractsCard } from "@/modules/customers/contracts-card";
+import { CustomerInstallationsCard } from "@/modules/customers/installations-card";
 import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
 import { Timeline } from "@/modules/events/timeline";
 import { Plus } from "lucide-react";
@@ -46,6 +47,7 @@ export default async function CustomerDetailPage({
   const equipment = await listCustomerEquipment(id).catch(() => []);
   const customerProposals = await listProposalsByCustomer(id).catch(() => []);
   const contracts = await listContractsByCustomer(id).catch(() => []);
+  const installations = await listInstallationsByCustomer(id).catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -148,6 +150,15 @@ export default async function CustomerDetailPage({
           </CardHeader>
           <CardContent>
             <CustomerContractsCard contracts={contracts} />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Instalaciones ({installations.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CustomerInstallationsCard installations={installations} />
           </CardContent>
         </Card>
       </div>

@@ -189,6 +189,31 @@ export async function logCustomerContactAction(
 }
 
 /**
+ * Lista instalaciones de un cliente concreto (para bloque en ficha cliente).
+ */
+export async function listInstallationsByCustomer(customerId: string): Promise<
+  Array<{
+    id: string;
+    reference_code: string | null;
+    status: string;
+    kind: string;
+    scheduled_at: string | null;
+    completed_at: string | null;
+  }>
+> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("installations")
+    .select("id, reference_code, status, kind, scheduled_at, completed_at")
+    .eq("customer_id", customerId)
+    .is("deleted_at", null)
+    .order("scheduled_at", { ascending: false });
+  return (data ?? []) as never;
+}
+
+/**
  * Lista contratos de un cliente concreto (para bloque en ficha cliente).
  */
 export async function listContractsByCustomer(customerId: string): Promise<
