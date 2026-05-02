@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getWalletSummary, listWalletEntries } from "@/modules/wallet/actions";
 import { WALLET_STATUS_LABEL, METHOD_LABEL } from "@/modules/wallet/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -40,7 +41,16 @@ export default async function WalletPage() {
             Cobros y liquidaciones. Objetivo: dejar saldo a 0 tras liquidar.
           </p>
         </div>
-        <RegisterPaymentButton />
+        <div className="flex items-center gap-2">
+          <Link
+            href={"/api/export/wallet" as never}
+            prefetch={false}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            ⬇ Exportar CSV
+          </Link>
+          <RegisterPaymentButton />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

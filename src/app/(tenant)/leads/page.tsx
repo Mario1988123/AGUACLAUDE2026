@@ -25,9 +25,18 @@ export default async function LeadsPage({
           <h1 className="text-2xl font-bold">Leads</h1>
           <p className="text-sm text-muted-foreground">{leads.length} resultados</p>
         </div>
-        <Button asChild>
-          <Link href={"/leads/nuevo" as never}>+ Nuevo lead</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link
+            href={"/api/export/leads" as never}
+            prefetch={false}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            ⬇ Exportar CSV
+          </Link>
+          <Button asChild>
+            <Link href={"/leads/nuevo" as never}>+ Nuevo lead</Link>
+          </Button>
+        </div>
       </div>
 
       <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">

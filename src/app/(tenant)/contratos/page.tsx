@@ -17,6 +17,13 @@ export default async function ContratosPage() {
           <h1 className="text-2xl font-bold">Contratos</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
+        <Link
+          href={"/api/export/contracts" as never}
+          prefetch={false}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+        >
+          ⬇ Exportar CSV
+        </Link>
       </div>
 
       <div className="overflow-hidden rounded-lg border bg-card">
