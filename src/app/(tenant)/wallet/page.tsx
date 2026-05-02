@@ -2,6 +2,12 @@ import { getWalletSummary, listWalletEntries } from "@/modules/wallet/actions";
 import { WALLET_STATUS_LABEL, METHOD_LABEL } from "@/modules/wallet/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { KpiCard } from "@/shared/components/kpi-card";
+import { RegisterPaymentButton } from "@/modules/wallet/register-button";
+import { ValidateWalletButtons } from "@/modules/wallet/validate-buttons";
+import { requireSession } from "@/shared/lib/auth/session";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
@@ -17,73 +23,107 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warn
 };
 
 export default async function WalletPage() {
+  const session = await requireSession();
   const [entries, summary] = await Promise.all([listWalletEntries(), getWalletSummary()]);
 
-  const cards: Array<{ label: string; value: number; variant?: "warning" | "success" }> = [
-    { label: "Pendiente", value: summary.pending_cents, variant: "warning" },
-    { label: "Cobrado", value: summary.collected_cents },
-    { label: "Pdte. liquidar", value: summary.pending_settlement_cents, variant: "warning" },
-    { label: "Liquidado", value: summary.settled_cents },
-    { label: "Validado", value: summary.validated_cents, variant: "success" },
-  ];
+  const canValidate =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Wallet</h1>
-        <p className="text-sm text-muted-foreground">
-          Cobros y liquidaciones. Objetivo: dejar saldo a 0 tras liquidar.
-        </p>
+    <div className="space-y-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Wallet</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cobros y liquidaciones. Objetivo: dejar saldo a 0 tras liquidar.
+          </p>
+        </div>
+        <RegisterPaymentButton />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-5">
-        {cards.map((c) => (
-          <div
-            key={c.label}
-            className={`rounded-lg border bg-card p-4 ${c.variant === "warning" ? "border-warning" : c.variant === "success" ? "border-success" : ""}`}
-          >
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">{c.label}</div>
-            <div className="mt-2 text-2xl font-bold tabular-nums">{formatCents(c.value)}</div>
-          </div>
-        ))}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <KpiCard
+          label="Pendiente"
+          value={formatCents(summary.pending_cents)}
+          icon="Clock"
+          iconColor="warning"
+        />
+        <KpiCard
+          label="Cobrado"
+          value={formatCents(summary.collected_cents)}
+          icon="Coins"
+          iconColor="primary"
+        />
+        <KpiCard
+          label="Pdte. liquidar"
+          value={formatCents(summary.pending_settlement_cents)}
+          icon="HandCoins"
+          iconColor="warning"
+        />
+        <KpiCard
+          label="Liquidado"
+          value={formatCents(summary.settled_cents)}
+          icon="Banknote"
+          iconColor="primary"
+        />
+        <KpiCard
+          label="Validado"
+          value={formatCents(summary.validated_cents)}
+          icon="CheckCircle2"
+          iconColor="success"
+        />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Movimientos</CardTitle>
+          <CardTitle>Movimientos ({entries.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {entries.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay movimientos.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Fecha</th>
-                  <th className="py-2 text-left">Concepto</th>
-                  <th className="py-2 text-right">Importe</th>
-                  <th className="py-2 text-left">Método</th>
-                  <th className="py-2 text-left">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {entries.map((e) => (
-                  <tr key={e.id}>
-                    <td className="py-2 text-xs text-muted-foreground">
-                      {new Date(e.created_at).toLocaleDateString("es-ES")}
-                    </td>
-                    <td className="py-2">{e.concept}</td>
-                    <td className="py-2 text-right tabular-nums">{formatCents(e.amount_cents)}</td>
-                    <td className="py-2 text-xs">{METHOD_LABEL[e.method] ?? e.method}</td>
-                    <td className="py-2">
-                      <Badge variant={STATUS_VARIANT[e.status] ?? "default"}>
-                        {WALLET_STATUS_LABEL[e.status] ?? e.status}
-                      </Badge>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="py-3 text-left">Fecha</th>
+                    <th className="py-3 text-left">Concepto</th>
+                    <th className="py-3 text-right">Importe</th>
+                    <th className="py-3 text-left">Método</th>
+                    <th className="py-3 text-left">Estado</th>
+                    <th className="py-3 text-right">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {entries.map((e) => (
+                    <tr key={e.id} className="hover:bg-muted/30">
+                      <td className="py-3 text-xs text-muted-foreground">
+                        {new Date(e.created_at).toLocaleDateString("es-ES")}
+                      </td>
+                      <td className="py-3 font-medium">{e.concept}</td>
+                      <td className="py-3 text-right font-semibold tabular-nums">
+                        {formatCents(e.amount_cents)}
+                      </td>
+                      <td className="py-3">
+                        <Badge variant="outline">{METHOD_LABEL[e.method] ?? e.method}</Badge>
+                      </td>
+                      <td className="py-3">
+                        <Badge variant={STATUS_VARIANT[e.status] ?? "default"}>
+                          {WALLET_STATUS_LABEL[e.status] ?? e.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3 text-right">
+                        {(e.status === "collected" || e.status === "pending_settlement") && (
+                          <ValidateWalletButtons id={e.id} canValidate={canValidate} />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
