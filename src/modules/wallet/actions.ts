@@ -19,7 +19,12 @@ export interface WalletEntryRow {
   created_at: string;
 }
 
-export async function listWalletEntries(): Promise<WalletEntryRow[]> {
+export async function listWalletEntries(filters?: {
+  method?: string;
+  status?: string;
+  fromDate?: string;
+  toDate?: string;
+}): Promise<WalletEntryRow[]> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -37,6 +42,10 @@ export async function listWalletEntries(): Promise<WalletEntryRow[]> {
   ) {
     query = query.eq("collected_by_user_id", session.user_id);
   }
+  if (filters?.method) query = query.eq("method", filters.method);
+  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.fromDate) query = query.gte("created_at", filters.fromDate);
+  if (filters?.toDate) query = query.lte("created_at", filters.toDate);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as WalletEntryRow[];

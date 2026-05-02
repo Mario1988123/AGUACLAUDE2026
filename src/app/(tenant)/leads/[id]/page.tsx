@@ -42,6 +42,21 @@ export default async function LeadDetailPage({
   const hasProposals = proposals.length > 0;
   const isConverted = lead.status === "converted";
 
+  // Resolver nombre del comercial asignado (si lo hay)
+  let assignedName: string | null = null;
+  if (lead.assigned_user_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { createClient } = await import("@/shared/lib/supabase/server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { data: prof } = await supabase
+      .from("user_profiles")
+      .select("full_name")
+      .eq("user_id", lead.assigned_user_id)
+      .maybeSingle();
+    assignedName = (prof as { full_name: string | null } | null)?.full_name ?? null;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -50,10 +65,16 @@ export default async function LeadDetailPage({
             <h1 className="text-2xl font-bold">{displayName}</h1>
             <Badge variant={STATUS_VARIANT[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
           </div>
-          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
             <span>{lead.party_kind === "company" ? "Empresa" : "Particular"}</span>
             <span>·</span>
             <span>Origen: {ORIGIN_LABEL[lead.origin]}</span>
+            {assignedName && (
+              <>
+                <span>·</span>
+                <span>Asignado a <strong className="text-foreground">{assignedName}</strong></span>
+              </>
+            )}
           </div>
         </div>
         <Link href="/leads" className="text-sm text-primary hover:underline">

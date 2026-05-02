@@ -23,9 +23,31 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warn
   rejected: "destructive",
 };
 
-export default async function WalletPage() {
+const METHOD_OPTIONS = ["cash", "card", "bizum", "transfer", "direct_debit", "financing"] as const;
+const STATUS_OPTIONS = [
+  "pending",
+  "collected",
+  "pending_settlement",
+  "settled",
+  "validated",
+  "rejected",
+] as const;
+
+export default async function WalletPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ method?: string; status?: string; from?: string; to?: string }>;
+}) {
   const session = await requireSession();
-  const [entries, summary] = await Promise.all([listWalletEntries(), getWalletSummary()]);
+  const sp = await searchParams;
+  const method = METHOD_OPTIONS.includes(sp.method as never) ? sp.method : undefined;
+  const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
+  const fromDate = sp.from ? new Date(sp.from + "T00:00:00").toISOString() : undefined;
+  const toDate = sp.to ? new Date(sp.to + "T23:59:59").toISOString() : undefined;
+  const [entries, summary] = await Promise.all([
+    listWalletEntries({ method, status, fromDate, toDate }),
+    getWalletSummary(),
+  ]);
 
   const canValidate =
     session.is_superadmin ||
@@ -85,6 +107,68 @@ export default async function WalletPage() {
           iconColor="success"
         />
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Método</label>
+          <select
+            name="method"
+            defaultValue={method ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {METHOD_OPTIONS.map((m) => (
+              <option key={m} value={m}>
+                {METHOD_LABEL[m] ?? m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Estado</label>
+          <select
+            name="status"
+            defaultValue={status ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {WALLET_STATUS_LABEL[s] ?? s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Desde</label>
+          <input
+            type="date"
+            name="from"
+            defaultValue={sp.from ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Hasta</label>
+          <input
+            type="date"
+            name="to"
+            defaultValue={sp.to ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {(method || status || sp.from || sp.to) && (
+          <Link href="/wallet" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
 
       <Card>
         <CardHeader>
