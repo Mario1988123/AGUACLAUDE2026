@@ -68,9 +68,19 @@ export default async function InstallationDetailPage({
               : "Sin agendar"}
           </p>
         </div>
-        <Link href="/instalaciones" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/pdf/work-report/${i.id}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            📄 Parte trabajo PDF
+          </a>
+          <Link href="/instalaciones" className="text-sm text-primary hover:underline">
+            ← Volver
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

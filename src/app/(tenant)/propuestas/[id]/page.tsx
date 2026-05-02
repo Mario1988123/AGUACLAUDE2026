@@ -38,9 +38,19 @@ export default async function ProposalDetailPage({
             Para: <strong>{proposal.customer_or_lead_name}</strong>
           </p>
         </div>
-        <Link href="/propuestas" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/pdf/proposal/${proposal.id}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            📄 Descargar PDF
+          </a>
+          <Link href="/propuestas" className="text-sm text-primary hover:underline">
+            ← Volver
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
