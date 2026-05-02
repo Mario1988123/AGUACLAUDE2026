@@ -26,9 +26,17 @@ export default async function SuperadminLayout({ children }: { children: React.R
           </Link>
         </nav>
         <div className="border-t p-3">
-          <Link href="/logout" className="text-sm text-muted-foreground hover:underline">
-            Salir ({session.email})
-          </Link>
+          <div className="mb-2 text-xs text-muted-foreground truncate" title={session.email ?? ""}>
+            {session.email}
+          </div>
+          <form action="/logout" method="post">
+            <button
+              type="submit"
+              className="w-full rounded px-3 py-2 text-left text-sm hover:bg-muted"
+            >
+              Salir
+            </button>
+          </form>
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto bg-muted/20 p-6">{children}</main>
