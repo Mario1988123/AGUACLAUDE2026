@@ -13,6 +13,7 @@ import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL } from "@/modules/contracts/schemas";
 import { ContractStatusActions } from "@/modules/contracts/status-actions";
 import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
+import { QuickCollectButton } from "@/modules/contracts/quick-collect-button";
 import { Timeline } from "@/modules/events/timeline";
 
 export const dynamic = "force-dynamic";
@@ -202,6 +203,7 @@ export default async function ContractDetailPage({
                   <th className="py-2 text-left">Método</th>
                   <th className="py-2 text-left">Momento</th>
                   <th className="py-2 text-left">Estado</th>
+                  <th className="py-2 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -217,6 +219,9 @@ export default async function ContractDetailPage({
                       <Badge variant={p.status === "validated" ? "success" : "secondary"}>
                         {PAYMENT_STATUS_LABEL[p.status] ?? p.status}
                       </Badge>
+                    </td>
+                    <td className="py-2 text-right">
+                      <QuickCollectButton paymentId={p.id} status={p.status} />
                     </td>
                   </tr>
                 ))}

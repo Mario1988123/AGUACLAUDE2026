@@ -368,6 +368,85 @@ export async function markContractSigned(id: string) {
   revalidatePath("/wallet");
 }
 
+/**
+ * Quick-collect: marca el contract_payment como collected_pending_validation,
+ * crea/actualiza el wallet_entry asociado y deja todo listo para validar.
+ */
+export async function collectContractPaymentAction(paymentId: string): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const { data: pay } = await supabase
+    .from("contract_payments")
+    .select("id, contract_id, concept, amount_cents, method, status, wallet_entry_id")
+    .eq("id", paymentId)
+    .single();
+  if (!pay) throw new Error("Pago no encontrado");
+  const p = pay as {
+    id: string;
+    contract_id: string;
+    concept: string;
+    amount_cents: number;
+    method: string;
+    status: string;
+    wallet_entry_id: string | null;
+  };
+  if (p.status !== "pending") throw new Error("El pago ya está procesado");
+
+  const newStatus = p.method === "cash" ? "pending_settlement" : "collected";
+
+  let walletEntryId = p.wallet_entry_id;
+  if (walletEntryId) {
+    await supabase
+      .from("wallet_entries")
+      .update({
+        status: newStatus,
+        collected_by_user_id: session.user_id,
+        collected_at: new Date().toISOString(),
+      })
+      .eq("id", walletEntryId);
+  } else {
+    const { data: created } = await supabase
+      .from("wallet_entries")
+      .insert({
+        company_id: session.company_id,
+        contract_id: p.contract_id,
+        contract_payment_id: p.id,
+        concept: p.concept,
+        amount_cents: p.amount_cents,
+        method: p.method,
+        status: newStatus,
+        collected_by_user_id: session.user_id,
+        collected_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    walletEntryId = (created as { id: string } | null)?.id ?? null;
+  }
+
+  await supabase
+    .from("contract_payments")
+    .update({
+      status: "collected_pending_validation",
+      wallet_entry_id: walletEntryId,
+    })
+    .eq("id", p.id);
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "contract",
+    subject_id: p.contract_id,
+    kind: "wallet.payment_recorded",
+    payload: { payment_id: p.id, amount_cents: p.amount_cents, method: p.method },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath(`/contratos/${p.contract_id}`);
+  revalidatePath("/wallet");
+}
+
 export async function markContractActive(id: string) {
   const session = await requireSession();
   const supabase = await createClient();

@@ -3,6 +3,8 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { LostSaleRowActions } from "@/modules/lost-sales/row-actions";
+import { listTeamMembers } from "@/modules/agenda/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,7 @@ interface Row {
   reason_category: string | null;
   amount_cents: number | null;
   is_recovered: boolean;
+  assigned_recovery_user_id: string | null;
   created_at: string;
 }
 
@@ -90,10 +93,13 @@ export default async function VentasPerdidasPage() {
 
   const { data } = await supabase
     .from("lost_sales")
-    .select("id, origin, lead_id, reason, reason_category, amount_cents, is_recovered, created_at")
+    .select(
+      "id, origin, lead_id, reason, reason_category, amount_cents, is_recovered, assigned_recovery_user_id, created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(200);
   const rows = (data ?? []) as Row[];
+  const team = await listTeamMembers().catch(() => []);
 
   const leadIds = Array.from(new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
   const leadMap = new Map<string, LeadInfo>();
@@ -156,6 +162,7 @@ export default async function VentasPerdidasPage() {
                   <th className="py-2 text-left">Motivo</th>
                   <th className="py-2 text-right">Importe</th>
                   <th className="py-2 text-left">Estado</th>
+                  <th className="py-2 text-right">Recuperación</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -190,6 +197,15 @@ export default async function VentasPerdidasPage() {
                       ) : (
                         <Badge variant="destructive">Sin recuperar</Badge>
                       )}
+                    </td>
+                    <td className="py-2 text-right">
+                      <LostSaleRowActions
+                        lostSaleId={r.id}
+                        hasLead={!!r.lead_id}
+                        isRecovered={r.is_recovered}
+                        assignedUserId={r.assigned_recovery_user_id}
+                        team={team}
+                      />
                     </td>
                   </tr>
                 ))}
