@@ -49,6 +49,22 @@ export default async function CustomerDetailPage({
   const contracts = await listContractsByCustomer(id).catch(() => []);
   const installations = await listInstallationsByCustomer(id).catch(() => []);
 
+  // Resolver nombre del comercial asignado
+  let assignedName: string | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const c = customer as any;
+  if (c.assigned_user_id) {
+    const { createClient: cc } = await import("@/shared/lib/supabase/server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = (await cc()) as any;
+    const { data: prof } = await sb
+      .from("user_profiles")
+      .select("full_name")
+      .eq("user_id", c.assigned_user_id)
+      .maybeSingle();
+    assignedName = (prof as { full_name: string | null } | null)?.full_name ?? null;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -64,6 +80,11 @@ export default async function CustomerDetailPage({
           <div className="mt-1 text-sm text-muted-foreground">
             {customer.party_kind === "company" ? "Empresa" : "Particular"}
             {customer.tax_id && ` · ${customer.tax_id}`}
+            {assignedName && (
+              <>
+                {" · "}Asignado a <strong className="text-foreground">{assignedName}</strong>
+              </>
+            )}
           </div>
         </div>
         <Link href="/clientes" className="text-sm text-primary hover:underline">
@@ -75,6 +96,7 @@ export default async function CustomerDetailPage({
         customerId={id}
         phone={customer.phone_primary}
         email={customer.email}
+        recipientName={displayName}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">

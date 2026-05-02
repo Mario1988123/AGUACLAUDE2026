@@ -4,15 +4,18 @@ import { useTransition } from "react";
 import { Phone, MessageCircle, Mail } from "lucide-react";
 import { logCustomerContactAction } from "./actions";
 import { notify } from "@/shared/hooks/use-toast";
+import { MessageTemplateButton } from "@/modules/messaging/template-button";
 
 export function CustomerContactButtons({
   customerId,
   phone,
   email,
+  recipientName,
 }: {
   customerId: string;
   phone: string | null;
   email: string | null;
+  recipientName?: string | null;
 }) {
   const [, startTransition] = useTransition();
 
@@ -60,6 +63,11 @@ export function CustomerContactButtons({
           <Mail className="h-4 w-4" /> Email
         </button>
       )}
+      <MessageTemplateButton
+        recipientName={recipientName ?? null}
+        phone={phone}
+        email={email}
+      />
     </div>
   );
 }

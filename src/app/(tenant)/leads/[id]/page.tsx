@@ -92,7 +92,12 @@ export default async function LeadDetailPage({
         </Link>
       </div>
 
-      <LeadContactButtons leadId={lead.id} phone={lead.phone_primary} email={lead.email} />
+      <LeadContactButtons
+        leadId={lead.id}
+        phone={lead.phone_primary}
+        email={lead.email}
+        recipientName={displayName}
+      />
 
       {addresses.length === 0 && !isConverted && (
         <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-warning bg-warning/5 p-4">

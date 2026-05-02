@@ -4,11 +4,13 @@ import { useTransition } from "react";
 import { Phone, MessageCircle, Mail } from "lucide-react";
 import { logLeadContactAction } from "./actions";
 import { notify } from "@/shared/hooks/use-toast";
+import { MessageTemplateButton } from "@/modules/messaging/template-button";
 
 interface Props {
   leadId: string;
   phone: string | null;
   email: string | null;
+  recipientName?: string | null;
 }
 
 /**
@@ -16,7 +18,7 @@ interface Props {
  * el enlace nativo. Bumpea status a 'contacted' + crea agenda_event + evento
  * timeline.
  */
-export function LeadContactButtons({ leadId, phone, email }: Props) {
+export function LeadContactButtons({ leadId, phone, email, recipientName }: Props) {
   const [, startTransition] = useTransition();
 
   function handle(channel: "call" | "whatsapp" | "email", url: string) {
@@ -69,6 +71,13 @@ export function LeadContactButtons({ leadId, phone, email }: Props) {
           <Mail className="h-4 w-4" />
           Email
         </button>
+      )}
+      {(phone || email) && (
+        <MessageTemplateButton
+          recipientName={recipientName ?? null}
+          phone={phone}
+          email={email}
+        />
       )}
     </div>
   );

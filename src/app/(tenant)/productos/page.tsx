@@ -1,20 +1,35 @@
 import Link from "next/link";
-import { listProducts } from "@/modules/products/actions";
+import { listProducts, listCategories } from "@/modules/products/actions";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
+
+export const dynamic = "force-dynamic";
+
+const KIND_OPTIONS = ["equipment", "accessory", "consumable", "service"] as const;
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-export default async function ProductsPage() {
-  const products = await listProducts();
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ kind?: string; cat?: string; q?: string; active?: string }>;
+}) {
+  const sp = await searchParams;
+  const kind = KIND_OPTIONS.includes(sp.kind as never) ? sp.kind : undefined;
+  const categoryId = sp.cat || undefined;
+  const activeOnly = sp.active === "1";
+  const [products, categories] = await Promise.all([
+    listProducts({ kind, category_id: categoryId, q: sp.q, active_only: activeOnly }),
+    listCategories().catch(() => []),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Productos</h1>
           <p className="text-sm text-muted-foreground">{products.length} productos</p>
@@ -28,6 +43,69 @@ export default async function ProductsPage() {
           </Button>
         </div>
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1 flex-1 min-w-48">
+          <label className="text-xs uppercase text-muted-foreground">Buscar</label>
+          <input
+            name="q"
+            defaultValue={sp.q ?? ""}
+            placeholder="Nombre o referencia..."
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Tipo</label>
+          <select
+            name="kind"
+            defaultValue={kind ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {KIND_OPTIONS.map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABEL[k] ?? k}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Categoría</label>
+          <select
+            name="cat"
+            defaultValue={categoryId ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todas</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2 self-end">
+          <input
+            type="checkbox"
+            name="active"
+            value="1"
+            defaultChecked={activeOnly}
+            className="h-4 w-4"
+          />
+          <span className="text-xs">Solo activos</span>
+        </label>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {(kind || categoryId || sp.q || activeOnly) && (
+          <Link href="/productos" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <table className="w-full text-sm">
@@ -46,11 +124,7 @@ export default async function ProductsPage() {
             {products.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  No hay productos. Crea categorías en{" "}
-                  <Link href={"/configuracion/productos" as never} className="text-primary underline">
-                    Configuración
-                  </Link>{" "}
-                  y luego añade productos.
+                  Sin productos con esos filtros.
                 </td>
               </tr>
             ) : (

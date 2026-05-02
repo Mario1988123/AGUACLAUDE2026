@@ -22,6 +22,7 @@ export interface CustomerDetail {
   notes: string | null;
   is_active: boolean;
   source_lead_id: string | null;
+  assigned_user_id: string | null;
   created_at: string;
   updated_at: string;
 }

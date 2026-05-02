@@ -7,14 +7,27 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { productCreateSchema } from "./schemas";
 import type { CategoryItem, ProductDetail, ProductListItem, ProductKind } from "./types";
 
-export async function listProducts(): Promise<ProductListItem[]> {
+export async function listProducts(filters?: {
+  kind?: string;
+  category_id?: string;
+  q?: string;
+  active_only?: boolean;
+}): Promise<ProductListItem[]> {
   await requireSession();
   const supabase = await createClient();
-  const { data: products, error } = await supabase
+  let query = supabase
     .from("products")
     .select("id, name, kind, category_id, internal_reference, is_active, main_image_url")
     .is("deleted_at", null)
     .order("name");
+  if (filters?.kind) query = query.eq("kind", filters.kind);
+  if (filters?.category_id) query = query.eq("category_id", filters.category_id);
+  if (filters?.active_only) query = query.eq("is_active", true);
+  if (filters?.q) {
+    const q = filters.q.replace(/[%_]/g, "");
+    query = query.or(`name.ilike.%${q}%,internal_reference.ilike.%${q}%`);
+  }
+  const { data: products, error } = await query;
   if (error) throw error;
   const rows = (products ?? []) as Array<{
     id: string;
