@@ -1,17 +1,25 @@
 import { listLoadingRequests, listWarehouses } from "@/modules/warehouses/actions";
-import { KIND_LABEL, STATUS_LABEL_LR } from "@/modules/warehouses/constants";
+import { listTeamMembers } from "@/modules/agenda/actions";
+import { STATUS_LABEL_LR } from "@/modules/warehouses/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { WarehousesManager } from "@/modules/warehouses/warehouse-form";
+
+export const dynamic = "force-dynamic";
 
 export default async function AlmacenesPage() {
-  const [warehouses, requests] = await Promise.all([listWarehouses(), listLoadingRequests()]);
+  const [warehouses, requests, team] = await Promise.all([
+    listWarehouses(),
+    listLoadingRequests(),
+    listTeamMembers(),
+  ]);
   const whMap = new Map(warehouses.map((w) => [w.id, w.name]));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Almacenes</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-3xl font-extrabold tracking-tight">Almacenes</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {warehouses.length} almacenes · {requests.length} solicitudes de carga
         </p>
       </div>
@@ -21,44 +29,13 @@ export default async function AlmacenesPage() {
           <CardTitle>Almacenes y furgonetas</CardTitle>
         </CardHeader>
         <CardContent>
-          {warehouses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aún no hay almacenes.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Nombre</th>
-                  <th className="py-2 text-left">Tipo</th>
-                  <th className="py-2 text-left">Matrícula</th>
-                  <th className="py-2 text-left">Estado</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {warehouses.map((w) => (
-                  <tr key={w.id}>
-                    <td className="py-2 font-medium">{w.name}</td>
-                    <td className="py-2 text-xs">{KIND_LABEL[w.kind]}</td>
-                    <td className="py-2 text-xs text-muted-foreground">
-                      {w.vehicle_plate ?? "—"}
-                    </td>
-                    <td className="py-2">
-                      {w.is_active ? (
-                        <Badge variant="success">Activo</Badge>
-                      ) : (
-                        <Badge variant="secondary">Inactivo</Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <WarehousesManager warehouses={warehouses} teamMembers={team} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Solicitudes de carga</CardTitle>
+          <CardTitle>Solicitudes de carga ({requests.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {requests.length === 0 ? (
