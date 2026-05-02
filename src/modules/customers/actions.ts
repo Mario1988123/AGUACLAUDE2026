@@ -144,3 +144,75 @@ export async function createCustomerAction(formData: FormData) {
   revalidatePath("/clientes");
   redirect(`/clientes/${newId}` as never);
 }
+
+/**
+ * Registra contacto (call/whatsapp/email) en agenda + timeline para un cliente.
+ */
+export async function logCustomerContactAction(
+  customerId: string,
+  channel: "call" | "whatsapp" | "email",
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const now = new Date().toISOString();
+
+  const titleMap = {
+    call: "Llamada",
+    whatsapp: "WhatsApp",
+    email: "Email",
+  } as const;
+
+  await supabase.from("agenda_events").insert({
+    company_id: session.company_id,
+    kind: channel === "call" ? "call" : "manual",
+    status: "completed",
+    title: `${titleMap[channel]} a cliente`,
+    starts_at: now,
+    assigned_user_id: session.user_id,
+    subject_type: "customer",
+    subject_id: customerId,
+    created_by: session.user_id,
+  });
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "customer",
+    subject_id: customerId,
+    kind: "customer.contacted",
+    payload: { channel },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath(`/clientes/${customerId}`);
+}
+
+/**
+ * Lista contratos de un cliente concreto (para bloque en ficha cliente).
+ */
+export async function listContractsByCustomer(customerId: string): Promise<
+  Array<{
+    id: string;
+    reference_code: string | null;
+    status: string;
+    plan_type: string;
+    total_cash_cents: number | null;
+    monthly_cents: number | null;
+    signed_at: string | null;
+    created_at: string;
+  }>
+> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("contracts")
+    .select(
+      "id, reference_code, status, plan_type, total_cash_cents, monthly_cents, signed_at, created_at",
+    )
+    .eq("customer_id", customerId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as never;
+}

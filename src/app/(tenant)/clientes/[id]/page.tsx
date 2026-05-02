@@ -9,13 +9,15 @@ import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
+import { listContractsByCustomer } from "@/modules/customers/actions";
+import { CustomerContractsCard } from "@/modules/customers/contracts-card";
+import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
 import { Timeline } from "@/modules/events/timeline";
 import { Plus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
-import { Phone, MessageCircle, Mail } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +45,7 @@ export default async function CustomerDetailPage({
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
   const customerProposals = await listProposalsByCustomer(id).catch(() => []);
+  const contracts = await listContractsByCustomer(id).catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -66,34 +69,11 @@ export default async function CustomerDetailPage({
         </Link>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {customer.phone_primary && (
-          <a
-            href={`tel:${customer.phone_primary}`}
-            className="inline-flex h-12 items-center gap-2 rounded-xl bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90"
-          >
-            <Phone className="h-4 w-4" /> Llamar
-          </a>
-        )}
-        {customer.phone_primary && (
-          <a
-            href={`https://wa.me/${customer.phone_primary.replace(/[^0-9+]/g, "")}`}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#25D366] px-4 text-sm font-semibold text-white hover:opacity-90"
-          >
-            <MessageCircle className="h-4 w-4" /> WhatsApp
-          </a>
-        )}
-        {customer.email && (
-          <a
-            href={`mailto:${customer.email}`}
-            className="inline-flex h-12 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold hover:bg-muted"
-          >
-            <Mail className="h-4 w-4" /> Email
-          </a>
-        )}
-      </div>
+      <CustomerContactButtons
+        customerId={id}
+        phone={customer.phone_primary}
+        email={customer.email}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -159,6 +139,15 @@ export default async function CustomerDetailPage({
           </CardHeader>
           <CardContent>
             <ProposalsCard proposals={customerProposals} scope="customer" />
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle>Contratos ({contracts.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CustomerContractsCard contracts={contracts} />
           </CardContent>
         </Card>
       </div>

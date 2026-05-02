@@ -39,9 +39,55 @@ interface LeadInfo {
 }
 
 export default async function VentasPerdidasPage() {
-  await requireSession();
+  const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  // Backfill: leads con status='lost' que no tienen fila en lost_sales aún
+  // (porque se marcaron lost antes del commit que añadió la inserción).
+  if (session.company_id) {
+    const { data: lostLeads } = await supabase
+      .from("leads")
+      .select("id, lost_at, lost_reason")
+      .eq("company_id", session.company_id)
+      .eq("status", "lost")
+      .is("deleted_at", null)
+      .limit(500);
+    const leadIdList = ((lostLeads ?? []) as Array<{
+      id: string;
+      lost_at: string | null;
+      lost_reason: string | null;
+    }>);
+    if (leadIdList.length > 0) {
+      const { data: existing } = await supabase
+        .from("lost_sales")
+        .select("lead_id")
+        .eq("company_id", session.company_id)
+        .eq("origin", "lead_lost")
+        .in(
+          "lead_id",
+          leadIdList.map((l) => l.id),
+        );
+      const existingSet = new Set(
+        ((existing ?? []) as Array<{ lead_id: string | null }>)
+          .map((e) => e.lead_id)
+          .filter((v): v is string => !!v),
+      );
+      const missing = leadIdList.filter((l) => !existingSet.has(l.id));
+      if (missing.length > 0) {
+        await supabase.from("lost_sales").insert(
+          missing.map((l) => ({
+            company_id: session.company_id,
+            origin: "lead_lost",
+            lead_id: l.id,
+            reason: l.lost_reason ?? null,
+            is_recovered: false,
+          })),
+        );
+      }
+    }
+  }
+
   const { data } = await supabase
     .from("lost_sales")
     .select("id, origin, lead_id, reason, reason_category, amount_cents, is_recovered, created_at")

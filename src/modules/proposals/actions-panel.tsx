@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { markProposalAccepted, markProposalRejected, markProposalSent } from "./actions";
@@ -16,6 +17,7 @@ export function ProposalActions({ proposalId, status }: Props) {
   const [pending, startTransition] = useTransition();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
+  const router = useRouter();
 
   function send() {
     startTransition(async () => {
@@ -30,8 +32,13 @@ export function ProposalActions({ proposalId, status }: Props) {
   function accept() {
     startTransition(async () => {
       try {
-        await markProposalAccepted(proposalId);
+        const res = await markProposalAccepted(proposalId);
         notify.success("Aceptada");
+        if (res.customer_id) {
+          router.push(`/clientes/${res.customer_id}` as never);
+        } else {
+          router.refresh();
+        }
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
       }

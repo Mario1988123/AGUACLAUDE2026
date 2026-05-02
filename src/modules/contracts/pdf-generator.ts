@@ -17,21 +17,12 @@ import {
 import { getContract, getContractItems, getContractPayments } from "./actions";
 
 const PLAN_LABEL = { cash: "Contado", renting: "Renting", rental: "Alquiler" } as const;
-const METHOD_LABEL: Record<string, string> = {
-  cash: "Efectivo",
-  card: "Tarjeta",
-  bizum: "Bizum",
-  transfer: "Transferencia",
-  direct_debit: "Domiciliación",
-  financing: "Financiera",
-};
-const MOMENT_LABEL: Record<string, string> = {
-  on_signature: "Firma",
-  on_installation: "Instalación",
-  intermediate: "Intermedio",
-  periodic: "Periódico",
-};
 
+/**
+ * PDF de contrato — versión BÁSICA / PROVISIONAL.
+ * APARCADO: el usuario adjuntará un ejemplo real cuando lo tenga listo y se
+ * sustituirá por el diseño definitivo. No invertir tiempo en este layout.
+ */
 export async function generateContractPdf(contractId: string): Promise<Uint8Array> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -52,17 +43,11 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
       .single(),
     supabase
       .from("customers")
-      .select(
-        "party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary",
-      )
+      .select("party_kind, legal_name, trade_name, first_name, last_name, tax_id")
       .eq("id", contract.customer_id)
       .single(),
   ]);
-  const co = (company ?? {}) as {
-    legal_name?: string | null;
-    trade_name?: string | null;
-    tax_id?: string | null;
-  };
+  const co = (company ?? {}) as { legal_name?: string | null; trade_name?: string | null; tax_id?: string | null };
   const cu = (customer ?? {}) as {
     party_kind?: "individual" | "company";
     legal_name?: string | null;
@@ -70,8 +55,6 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
     first_name?: string | null;
     last_name?: string | null;
     tax_id?: string | null;
-    email?: string | null;
-    phone_primary?: string | null;
   };
   const customerName =
     cu.party_kind === "company"
@@ -79,36 +62,22 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
       : `${cu.first_name ?? ""} ${cu.last_name ?? ""}`.trim() || "—";
 
   const doc = await newDoc();
-  drawHeader(
+  drawHeader(doc, `Contrato ${contract.reference_code ?? ""}`.trim(), co.trade_name || co.legal_name || "Empresa");
+
+  drawText(
     doc,
-    `Contrato ${contract.reference_code ?? ""}`.trim(),
-    `${co.trade_name || co.legal_name || "Empresa"}${co.tax_id ? ` · ${co.tax_id}` : ""}`,
+    "[Documento provisional — pendiente de plantilla definitiva del cliente]",
+    { size: 9, color: COLORS.muted },
   );
 
   drawSection(doc, "Cliente");
   drawKeyValue(doc, "Nombre", customerName);
   if (cu.tax_id) drawKeyValue(doc, "DNI/CIF", cu.tax_id);
-  if (cu.email) drawKeyValue(doc, "Email", cu.email);
-  if (cu.phone_primary) drawKeyValue(doc, "Teléfono", cu.phone_primary);
 
   drawSection(doc, "Condiciones");
   drawKeyValue(doc, "Modalidad", PLAN_LABEL[contract.plan_type] ?? contract.plan_type);
-  if (contract.duration_months) {
-    drawKeyValue(doc, "Duración", `${contract.duration_months} meses`);
-  }
-  if (contract.permanence_months) {
-    drawKeyValue(doc, "Permanencia", `${contract.permanence_months} meses`);
-  }
-  if (contract.maintenance_included) {
-    drawKeyValue(
-      doc,
-      "Mantenimiento",
-      `Incluido${contract.maintenance_months_included ? ` (${contract.maintenance_months_included} meses)` : ""}`,
-    );
-  }
-  if (contract.signed_at) {
-    drawKeyValue(doc, "Firmado", fmtDate(contract.signed_at));
-  }
+  if (contract.duration_months) drawKeyValue(doc, "Duración", `${contract.duration_months} meses`);
+  if (contract.signed_at) drawKeyValue(doc, "Firmado", fmtDate(contract.signed_at));
 
   drawSection(doc, "Equipos");
   drawTable(
@@ -126,35 +95,17 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
   );
 
   drawHr(doc);
-  drawText(doc, `TOTAL: ${fmtEur(contract.total_cash_cents)}`, {
-    bold: true,
-    size: 14,
-    color: COLORS.brand,
-  });
-  if (contract.monthly_cents) {
-    drawText(doc, `Cuota mensual: ${fmtEur(contract.monthly_cents)}`, { size: 11 });
-  }
+  drawText(doc, `TOTAL: ${fmtEur(contract.total_cash_cents)}`, { bold: true, size: 14, color: COLORS.brand });
+  if (contract.monthly_cents) drawText(doc, `Cuota mensual: ${fmtEur(contract.monthly_cents)}`, { size: 11 });
 
   if (payments.length > 0) {
     drawSection(doc, "Plan de pagos");
     drawTable(
       doc,
-      ["Concepto", "Importe", "Método", "Momento"],
-      payments.map((p) => ({
-        cells: [
-          p.concept,
-          fmtEur(p.amount_cents),
-          METHOD_LABEL[p.method] ?? p.method,
-          MOMENT_LABEL[p.moment] ?? p.moment,
-        ],
-      })),
-      [220, 90, 100, 90],
+      ["Concepto", "Importe"],
+      payments.map((p) => ({ cells: [p.concept, fmtEur(p.amount_cents)] })),
+      [350, 110],
     );
-  }
-
-  if (contract.notes) {
-    drawSection(doc, "Notas");
-    drawText(doc, contract.notes, { size: 10, maxWidth: 495 });
   }
 
   drawSection(doc, "Firmas");
