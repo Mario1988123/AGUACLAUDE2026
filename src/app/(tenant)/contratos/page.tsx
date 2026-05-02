@@ -1,18 +1,28 @@
 import Link from "next/link";
 import { listContracts } from "@/modules/contracts/actions";
 import { Badge } from "@/shared/ui/badge";
-import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL } from "@/modules/contracts/schemas";
+import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-export default async function ContratosPage() {
-  const contracts = await listContracts();
+export default async function ContratosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; plan?: string }>;
+}) {
+  const sp = await searchParams;
+  const status = CONTRACT_STATUS.includes(sp.status as never) ? sp.status : undefined;
+  const planType = sp.plan === "cash" || sp.plan === "renting" || sp.plan === "rental" ? sp.plan : undefined;
+  const contracts = await listContracts({ status, plan_type: planType });
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Contratos</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
@@ -25,6 +35,48 @@ export default async function ContratosPage() {
           ⬇ Exportar CSV
         </Link>
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Estado</label>
+          <select
+            name="status"
+            defaultValue={status ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {CONTRACT_STATUS.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Tipo</label>
+          <select
+            name="plan"
+            defaultValue={planType ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            <option value="cash">Contado</option>
+            <option value="renting">Renting</option>
+            <option value="rental">Alquiler</option>
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Aplicar
+        </button>
+        {(status || planType) && (
+          <Link href="/contratos" className="text-sm text-muted-foreground hover:underline">
+            Limpiar
+          </Link>
+        )}
+      </form>
 
       <div className="overflow-hidden rounded-lg border bg-card">
         <table className="w-full text-sm">
@@ -43,7 +95,7 @@ export default async function ContratosPage() {
             {contracts.length === 0 ? (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  No hay contratos. Genera uno desde una propuesta aceptada.
+                  No hay contratos con esos filtros.
                 </td>
               </tr>
             ) : (

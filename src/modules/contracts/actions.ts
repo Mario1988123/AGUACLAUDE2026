@@ -9,10 +9,13 @@ import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 
-export async function listContracts(): Promise<ContractListItem[]> {
+export async function listContracts(filters?: {
+  status?: string;
+  plan_type?: string;
+}): Promise<ContractListItem[]> {
   await requireSession();
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from("contracts")
     .select(
       "id, reference_code, status, customer_id, plan_type, total_cash_cents, monthly_cents, signed_at, created_at",
@@ -20,6 +23,9 @@ export async function listContracts(): Promise<ContractListItem[]> {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.plan_type) query = query.eq("plan_type", filters.plan_type);
+  const { data, error } = await query;
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{
