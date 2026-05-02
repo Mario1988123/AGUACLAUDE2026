@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { getCompany } from "@/modules/superadmin/companies/actions";
+import { getCompany, getCompanyAdmin } from "@/modules/superadmin/companies/actions";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CompanyEditForm } from "@/modules/superadmin/companies/edit-form";
 import { CompanyModulesPanel } from "@/modules/superadmin/companies/modules-panel";
+import { CompanyAdminPanel } from "@/modules/superadmin/companies/admin-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  const companyAdmin = await getCompanyAdmin(id);
   const [modulesRes, companyModulesRes, usersRes] = await Promise.all([
     supabase
       .from("modules_catalog")
@@ -111,17 +114,26 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
 
         <Card>
           <CardHeader>
-            <CardTitle>Módulos activos</CardTitle>
+            <CardTitle>Administrador de la empresa</CardTitle>
           </CardHeader>
           <CardContent>
-            <CompanyModulesPanel
-              companyId={id}
-              modules={modulesCatalog}
-              activeMap={Object.fromEntries(activeMap)}
-            />
+            <CompanyAdminPanel companyId={id} admin={companyAdmin} />
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Módulos activos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CompanyModulesPanel
+            companyId={id}
+            modules={modulesCatalog}
+            activeMap={Object.fromEntries(activeMap)}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
