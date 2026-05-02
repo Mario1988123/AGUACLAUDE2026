@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/shared/lib/supabase/server";
+import { requireSession } from "@/shared/lib/auth/session";
+
+export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   // Dev local autologin: directo al superadmin
@@ -10,19 +12,7 @@ export default async function HomePage() {
     redirect("/superadmin");
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
-  const claims = user.app_metadata as { is_superadmin?: boolean } | undefined;
-  if (claims?.is_superadmin) {
-    redirect("/superadmin");
-  }
-
+  const session = await requireSession();
+  if (session.is_superadmin) redirect("/superadmin");
   redirect("/dashboard");
 }
