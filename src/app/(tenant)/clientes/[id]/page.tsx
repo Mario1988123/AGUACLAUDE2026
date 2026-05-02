@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 import { getCustomer } from "@/modules/customers/actions";
 import { listAddresses } from "@/modules/addresses/actions";
 import { AddressList } from "@/modules/addresses/address-list";
+import { listBankAccounts } from "@/modules/customers/bank-accounts/actions";
+import { BankAccountList } from "@/modules/customers/bank-accounts/bank-list";
+import { Timeline } from "@/modules/events/timeline";
+import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Phone, MessageCircle, Mail } from "lucide-react";
@@ -27,14 +31,17 @@ export default async function CustomerDetailPage({
       ? customer.trade_name || customer.legal_name || "Sin nombre"
       : `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() || "Sin nombre";
 
+  const session = await requireSession();
   const addresses = await listAddresses({ customer_id: id });
+  const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
+  const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{displayName}</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">{displayName}</h1>
             {customer.is_active ? (
               <Badge variant="success">Activo</Badge>
             ) : (
@@ -55,7 +62,7 @@ export default async function CustomerDetailPage({
         {customer.phone_primary && (
           <a
             href={`tel:${customer.phone_primary}`}
-            className="inline-flex h-11 items-center gap-2 rounded-md bg-success px-4 text-sm font-medium text-success-foreground hover:bg-success/90"
+            className="inline-flex h-12 items-center gap-2 rounded-xl bg-success px-4 text-sm font-semibold text-success-foreground hover:bg-success/90"
           >
             <Phone className="h-4 w-4" /> Llamar
           </a>
@@ -65,7 +72,7 @@ export default async function CustomerDetailPage({
             href={`https://wa.me/${customer.phone_primary.replace(/[^0-9+]/g, "")}`}
             target="_blank"
             rel="noopener"
-            className="inline-flex h-11 items-center gap-2 rounded-md bg-[#25D366] px-4 text-sm font-medium text-white hover:opacity-90"
+            className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#25D366] px-4 text-sm font-semibold text-white hover:opacity-90"
           >
             <MessageCircle className="h-4 w-4" /> WhatsApp
           </a>
@@ -73,7 +80,7 @@ export default async function CustomerDetailPage({
         {customer.email && (
           <a
             href={`mailto:${customer.email}`}
-            className="inline-flex h-11 items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
+            className="inline-flex h-12 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold hover:bg-muted"
           >
             <Mail className="h-4 w-4" /> Email
           </a>
@@ -109,12 +116,16 @@ export default async function CustomerDetailPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Datos bancarios</CardTitle>
+            <CardTitle>Datos bancarios{canSeeBank ? ` (${bankAccounts.length})` : ""}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Solo visibles para el administrador. Pendientes de UI.
-            </p>
+            {canSeeBank ? (
+              <BankAccountList customerId={id} accounts={bankAccounts} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                🔒 Solo el administrador de la empresa puede ver los datos bancarios.
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -123,15 +134,26 @@ export default async function CustomerDetailPage({
             <CardTitle>Equipos instalados</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">Listado pendiente.</p>
+            <p className="text-sm text-muted-foreground">
+              Listado de customer_equipment. Aparecerá tras la primera instalación completada.
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Timeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Timeline subjectType="customer" subjectId={id} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string | null }) {
+function Row({ label, value }: { label: string | null; value: string | null }) {
   return (
     <div className="grid grid-cols-3 gap-2">
       <div className="text-muted-foreground">{label}</div>
