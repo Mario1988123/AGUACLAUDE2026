@@ -22,6 +22,10 @@ import {
   UpcomingInstallationsCard,
   getUpcomingInstallations,
 } from "@/modules/installations/upcoming-card";
+import {
+  CriticalIncidentsCard,
+  getCriticalOpenIncidents,
+} from "@/modules/incidents/critical-card";
 
 export const dynamic = "force-dynamic";
 
@@ -91,9 +95,10 @@ export default async function DashboardPage({
     listTeamMembers().catch(() => []),
   ]);
 
-  const [upcomingMaintenance, upcomingInstallations] = await Promise.all([
+  const [upcomingMaintenance, upcomingInstallations, criticalIncidents] = await Promise.all([
     getUpcomingMaintenance().catch(() => []),
     getUpcomingInstallations().catch(() => []),
+    getCriticalOpenIncidents().catch(() => []),
   ]);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
@@ -242,6 +247,8 @@ export default async function DashboardPage({
           emptyMsg="Sin objetivos de departamento definidos."
         />
       </div>
+
+      <CriticalIncidentsCard items={criticalIncidents} />
 
       {/* Próximas instalaciones + mantenimientos */}
       <div className="grid gap-5 lg:grid-cols-2">

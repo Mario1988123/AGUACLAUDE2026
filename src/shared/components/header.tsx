@@ -1,16 +1,36 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
+import { LogOut, User } from "lucide-react";
 import { NotificationsBell } from "./notifications-poller";
 import { GlobalSearchTrigger } from "@/modules/search/global-search";
 
 interface HeaderProps {
   unreadCount?: number;
+  fullName?: string | null;
+  email?: string | null;
 }
 
-/**
- * Header estilo DashStack — search global cmd+k + notifications + avatar.
- */
-export function Header({ unreadCount = 0 }: HeaderProps) {
+function initials(name: string | null | undefined, email: string | null | undefined): string {
+  const src = (name ?? email ?? "?").trim();
+  if (!src) return "?";
+  const parts = src.split(/\s+/);
+  if (parts.length >= 2) return `${parts[0]![0]!}${parts[1]![0]!}`.toUpperCase();
+  return src.slice(0, 2).toUpperCase();
+}
+
+export function Header({ unreadCount = 0, fullName, email }: HeaderProps) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
   return (
     <header className="flex h-20 items-center justify-between gap-4 border-b bg-card px-6 lg:px-8">
       <div className="ml-16 flex flex-1 items-center gap-4 lg:ml-0">
@@ -19,8 +39,40 @@ export function Header({ unreadCount = 0 }: HeaderProps) {
 
       <div className="flex items-center gap-3">
         <NotificationsBell initialCount={unreadCount} />
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
-          M
+        <div ref={ref} className="relative">
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground hover:opacity-90"
+            aria-label="Menú usuario"
+          >
+            {initials(fullName, email)}
+          </button>
+          {open && (
+            <div className="absolute right-0 top-14 z-50 w-64 rounded-2xl border border-border bg-card shadow-lg">
+              <div className="border-b p-4">
+                <div className="font-semibold">{fullName ?? "Usuario"}</div>
+                <div className="text-xs text-muted-foreground">{email ?? ""}</div>
+              </div>
+              <div className="p-2">
+                <a
+                  href="/configuracion"
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted"
+                  onClick={() => setOpen(false)}
+                >
+                  <User className="h-4 w-4" /> Configuración
+                </a>
+                <form action="/logout" method="post">
+                  <button
+                    type="submit"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4" /> Salir
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

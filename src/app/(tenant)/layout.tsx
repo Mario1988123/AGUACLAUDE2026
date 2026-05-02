@@ -48,7 +48,11 @@ export default async function TenantLayout({ children }: { children: React.React
         fullName={session.full_name}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header unreadCount={await getUnreadCountSafe()} />
+        <Header
+          unreadCount={await getUnreadCountSafe()}
+          fullName={session.full_name}
+          email={session.email}
+        />
         <main className="flex-1 overflow-y-auto bg-background p-6 lg:p-8">{children}</main>
       </div>
     </div>
