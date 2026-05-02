@@ -137,6 +137,24 @@ export async function getInstallationPhotos(installationId: string) {
   }>;
 }
 
+export async function getInstallationSignatures(installationId: string) {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("installation_signatures")
+    .select("id, signer_role, signer_name, context, signed_at")
+    .eq("installation_id", installationId)
+    .order("signed_at");
+  return (data ?? []) as Array<{
+    id: string;
+    signer_role: string;
+    signer_name: string;
+    context: string | null;
+    signed_at: string;
+  }>;
+}
+
 /**
  * Crea instalación a partir de un contrato firmado/activo.
  * Copia items del contrato y deja en estado unscheduled.

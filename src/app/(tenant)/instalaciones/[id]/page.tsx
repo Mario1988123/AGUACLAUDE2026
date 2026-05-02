@@ -4,11 +4,14 @@ import {
   getInstallation,
   getInstallationItems,
   getInstallationPhotos,
+  getInstallationSignatures,
 } from "@/modules/installations/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
 import { InstallationWorkReport } from "@/modules/installations/work-report";
+import { PhotoUploadPanel } from "@/modules/installations/photo-upload";
+import { SignaturesSection } from "@/modules/installations/signature-section";
 import { Timeline } from "@/modules/events/timeline";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +43,10 @@ export default async function InstallationDetailPage({
     notes: string | null;
   };
 
-  const [items, photos] = await Promise.all([
+  const [items, photos, signatures] = await Promise.all([
     getInstallationItems(id),
     getInstallationPhotos(id),
+    getInstallationSignatures(id),
   ]);
 
   return (
@@ -103,22 +107,11 @@ export default async function InstallationDetailPage({
               <CardTitle>Fotos ({photos.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              {photos.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Aún no se han subido fotos. Las fotos obligatorias se gestionan al finalizar el
-                  parte.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {photos.map((p) => (
-                    <div key={p.id} className="rounded-xl border bg-muted/30 p-2 text-xs">
-                      {p.category}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <PhotoUploadPanel installationId={i.id} existingPhotos={photos} />
             </CardContent>
           </Card>
+
+          <SignaturesSection installationId={i.id} existingSignatures={signatures} />
 
           {i.completed_at && (
             <Card>
