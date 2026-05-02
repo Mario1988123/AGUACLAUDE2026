@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProduct } from "@/modules/products/actions";
+import { listPricingPlans } from "@/modules/products/pricing-actions";
+import { PricingPlansPanel } from "@/modules/products/pricing-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
+
+export const dynamic = "force-dynamic";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -22,13 +26,14 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
+  const pricingPlans = await listPricingPlans(id);
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{product.name}</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight">{product.name}</h1>
             {product.is_active ? (
               <Badge variant="success">Activo</Badge>
             ) : (
@@ -94,14 +99,12 @@ export default async function ProductDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Planes de precio</CardTitle>
+            <CardTitle>Planes de precio ({pricingPlans.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Gestión de planes contado/renting/alquiler en próxima iteración.
-            </p>
+            <PricingPlansPanel productId={id} plans={pricingPlans} />
           </CardContent>
         </Card>
       </div>
