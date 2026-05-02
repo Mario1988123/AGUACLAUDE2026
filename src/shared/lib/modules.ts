@@ -16,6 +16,7 @@ export interface ModuleEntry {
 
 export const MODULES: ModuleEntry[] = [
   { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", href: "/dashboard", group: "core" },
+  { key: "my_day", label: "Mi día", icon: "CalendarCheck", href: "/mi-dia", group: "core" },
   { key: "notifications", label: "Notificaciones", icon: "Bell", href: "/notificaciones", group: "core" },
   { key: "agenda", label: "Agenda", icon: "Calendar", href: "/agenda", configHref: "/configuracion/agenda", group: "operative" },
   { key: "leads", label: "Leads", icon: "Contact", href: "/leads", configHref: "/configuracion/leads", group: "operative" },

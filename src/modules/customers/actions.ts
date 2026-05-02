@@ -8,15 +8,29 @@ import { customerCreateSchema } from "./schemas";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 
-export async function listCustomers(q?: string): Promise<CustomerListItem[]> {
-  await requireSession();
+export async function listCustomers(
+  q?: string,
+  scope?: "mine" | "all",
+): Promise<CustomerListItem[]> {
+  const session = await requireSession();
   const supabase = await createClient();
+  const isUpperLevel =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director") ||
+    session.roles.includes("technical_director");
+  const effective = !isUpperLevel ? "mine" : (scope ?? "all");
+
   let query = supabase
     .from("customers")
-    .select("id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at")
+    .select("id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at, assigned_user_id")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+  if (effective === "mine") {
+    query = query.eq("assigned_user_id", session.user_id);
+  }
   if (q) {
     const c = q.replace(/[%_]/g, "");
     query = query.or(

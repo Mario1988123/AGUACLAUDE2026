@@ -2,14 +2,29 @@ import Link from "next/link";
 import { listCustomers } from "@/modules/customers/actions";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
+import { requireSession } from "@/shared/lib/auth/session";
+
+export const dynamic = "force-dynamic";
 
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; scope?: string }>;
 }) {
   const sp = await searchParams;
-  const customers = await listCustomers(sp.q);
+  const session = await requireSession();
+  const isUpperLevel =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director") ||
+    session.roles.includes("technical_director");
+  const scope: "mine" | "all" = isUpperLevel
+    ? sp.scope === "mine"
+      ? "mine"
+      : "all"
+    : "mine";
+  const customers = await listCustomers(sp.q, scope);
 
   return (
     <div className="space-y-6">
@@ -32,7 +47,35 @@ export default async function CustomersPage({
         </div>
       </div>
 
+      {isUpperLevel && (
+        <div className="flex gap-2">
+          <Link
+            href={"/clientes" as never}
+            prefetch={false}
+            className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
+              scope === "all"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Todos
+          </Link>
+          <Link
+            href={"/clientes?scope=mine" as never}
+            prefetch={false}
+            className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
+              scope === "mine"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Mi cartera
+          </Link>
+        </div>
+      )}
+
       <form className="rounded-lg border bg-card p-4">
+        {scope === "mine" && <input type="hidden" name="scope" value="mine" />}
         <input
           name="q"
           defaultValue={sp.q ?? ""}

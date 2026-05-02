@@ -23,8 +23,8 @@ export function Sidebar({ userRoles, isSuperadmin, activeModuleKeys, fullName }:
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleModules = MODULES.filter((m) => {
-    // Items "system" (config/admin) no requieren company_modules — solo rol.
-    const isSystem = m.group === "config";
+    // Items "system" (config/admin/core) no requieren company_modules — solo rol.
+    const isSystem = m.group === "config" || m.group === "core";
     if (!isSystem && !activeModuleKeys.includes(m.key)) return false;
     if (m.rolesAllowed && m.rolesAllowed.length > 0) {
       return isSuperadmin || m.rolesAllowed.some((r) => userRoles.includes(r));

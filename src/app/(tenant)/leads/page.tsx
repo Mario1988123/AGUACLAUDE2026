@@ -1,22 +1,35 @@
 import Link from "next/link";
 import { listLeads } from "@/modules/leads/actions";
 import { Button } from "@/shared/ui/button";
-import { Badge } from "@/shared/ui/badge";
 import {
   STATUS_LABEL,
-  STATUS_VARIANT,
-  ORIGIN_LABEL,
   LEAD_STATUS,
 } from "@/modules/leads/schemas";
+import { requireSession } from "@/shared/lib/auth/session";
+import { SelectableLeadsTable } from "@/modules/leads/selectable-list";
+import { listTeamMembers } from "@/modules/agenda/actions";
+
+export const dynamic = "force-dynamic";
 
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; scope?: string }>;
 }) {
   const sp = await searchParams;
+  const session = await requireSession();
   const status = LEAD_STATUS.includes(sp.status as never) ? (sp.status as never) : undefined;
-  const leads = await listLeads({ status, q: sp.q });
+  const isUpperLevel =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director") ||
+    session.roles.includes("technical_director");
+  const scope = isUpperLevel ? (sp.scope === "mine" ? "mine" : "all") : "mine";
+  const [leads, team] = await Promise.all([
+    listLeads({ status, q: sp.q, scope }),
+    isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -39,7 +52,35 @@ export default async function LeadsPage({
         </div>
       </div>
 
+      {isUpperLevel && (
+        <div className="flex gap-2">
+          <Link
+            href={"/leads" as never}
+            prefetch={false}
+            className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
+              scope === "all"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Todos
+          </Link>
+          <Link
+            href={"/leads?scope=mine" as never}
+            prefetch={false}
+            className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
+              scope === "mine"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card hover:bg-muted"
+            }`}
+          >
+            Mi cartera
+          </Link>
+        </div>
+      )}
+
       <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">
+        {scope === "mine" && <input type="hidden" name="scope" value="mine" />}
         <input
           name="q"
           defaultValue={sp.q ?? ""}
@@ -63,91 +104,7 @@ export default async function LeadsPage({
         </Button>
       </form>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 text-left">Nombre</th>
-              <th className="px-4 py-3 text-left">Contacto</th>
-              <th className="px-4 py-3 text-left">Origen</th>
-              <th className="px-4 py-3 text-left">Estado</th>
-              <th className="px-4 py-3 text-left">Pot.</th>
-              <th className="px-4 py-3 text-right">Días</th>
-              <th className="px-4 py-3 text-right">Acción</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {leads.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                  No hay leads que coincidan con los filtros.
-                </td>
-              </tr>
-            ) : (
-              leads.map((l) => (
-                <tr key={l.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/leads/${l.id}` as never}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {l.display_name}
-                    </Link>
-                    <div className="text-xs text-muted-foreground">
-                      {l.party_kind === "company" ? "Empresa" : "Particular"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {l.phone_primary && (
-                      <a href={`tel:${l.phone_primary}`} className="block text-xs hover:underline">
-                        {l.phone_primary}
-                      </a>
-                    )}
-                    {l.email && (
-                      <a
-                        href={`mailto:${l.email}`}
-                        className="block text-xs text-muted-foreground hover:underline"
-                      >
-                        {l.email}
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-xs">{ORIGIN_LABEL[l.origin]}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant={STATUS_VARIANT[l.status]}>{STATUS_LABEL[l.status]}</Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                        l.potential === "A"
-                          ? "bg-success/20 text-success"
-                          : l.potential === "B"
-                            ? "bg-warning/20 text-warning"
-                            : l.potential === "C"
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-secondary text-secondary-foreground"
-                      }`}
-                    >
-                      {l.potential === "unknown" ? "?" : l.potential}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                    {l.days_since_created}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/leads/${l.id}` as never}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <SelectableLeadsTable leads={leads} team={team} canBulkReassign={isUpperLevel} />
     </div>
   );
 }

@@ -12,9 +12,20 @@ import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 export async function listLeads(filters?: {
   status?: LeadStatus;
   q?: string;
+  scope?: "mine" | "all";
 }): Promise<LeadListItem[]> {
-  await requireSession();
+  const session = await requireSession();
   const supabase = await createClient();
+
+  // Si nivel 3 (sin rol superior) → siempre "mine" (RLS lo hará igual, pero
+  // explícito para queries más eficientes)
+  const isUpperLevel =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director") ||
+    session.roles.includes("technical_director");
+  const scope = !isUpperLevel ? "mine" : (filters?.scope ?? "all");
 
   let query = supabase
     .from("leads")
@@ -25,10 +36,13 @@ export async function listLeads(filters?: {
     .order("created_at", { ascending: false })
     .limit(200);
 
+  if (scope === "mine") {
+    query = query.eq("assigned_user_id", session.user_id);
+  }
+
   if (filters?.status) {
     query = query.eq("status", filters.status);
   } else {
-    // Por defecto, los perdidos van a /ventas-perdidas y los caducados a su flujo
     query = query.not("status", "in", "(lost,expired)");
   }
   if (filters?.q) {
