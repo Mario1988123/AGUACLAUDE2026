@@ -396,6 +396,34 @@ export async function markContractSigned(id: string) {
     })
     .eq("id", id);
 
+  // Cuando se firma el contrato, el lead origen (si existía) ya cumplió
+  // su ciclo: lo soft-deleteamos para que desaparezca de /leads.
+  // El cliente sigue visible en /clientes con todo su historial.
+  try {
+    const { data: contractRow } = await supabase
+      .from("contracts")
+      .select("customer_id")
+      .eq("id", id)
+      .maybeSingle();
+    const customerId = (contractRow as { customer_id: string | null } | null)?.customer_id;
+    if (customerId) {
+      const { data: cust } = await supabase
+        .from("customers")
+        .select("source_lead_id")
+        .eq("id", customerId)
+        .maybeSingle();
+      const sourceLeadId = (cust as { source_lead_id: string | null } | null)?.source_lead_id;
+      if (sourceLeadId) {
+        await supabase
+          .from("leads")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", sourceLeadId);
+      }
+    }
+  } catch {
+    /* fail-soft */
+  }
+
   // Crear automáticamente wallet entries para todos los contract_payments
   // pendientes que no tengan ya una wallet entry asociada (decisión: al
   // firmar el contrato, los pagos previstos se materializan en Wallet).

@@ -136,21 +136,6 @@ export function Sidebar({
           <SidebarGroup label="Administración" items={config} pathname={pathname} collapsed={isCollapsed} badges={badges} />
         </nav>
 
-        <div className={cn("border-t border-sidebar-border", isCollapsed ? "p-2" : "p-4")}>
-          <form action="/logout" method="post">
-            <button
-              type="submit"
-              title="Salir"
-              className={cn(
-                "flex min-h-12 w-full items-center rounded-xl text-sm font-semibold text-foreground transition-colors hover:bg-sidebar-accent",
-                isCollapsed ? "justify-center px-2 py-3" : "gap-3 px-4 py-3",
-              )}
-            >
-              <Icons.LogOut className="h-5 w-5 shrink-0" />
-              {!isCollapsed && <span>Salir</span>}
-            </button>
-          </form>
-        </div>
       </aside>
     );
   }

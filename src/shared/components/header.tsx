@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, User, ChevronDown, PlayCircle } from "lucide-react";
+import { LogOut, User, ChevronDown, PlayCircle, Plus } from "lucide-react";
 import { NotificationsBell } from "./notifications-poller";
 import { GlobalSearchTrigger } from "@/modules/search/global-search";
 import { replayOnboardingAction } from "@/modules/onboarding/actions";
@@ -62,7 +63,24 @@ export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderPr
 
       <div className="flex items-center gap-3">
         <TimeClockWidget />
+        <Link
+          href={"/leads/nuevo" as never}
+          className="hidden sm:inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          title="Crear lead nuevo"
+        >
+          <Plus className="h-4 w-4" />
+          Lead
+        </Link>
         <NotificationsBell initialCount={unreadCount} />
+        <form action="/logout" method="post" className="hidden sm:block">
+          <button
+            type="submit"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-card px-3 text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </form>
         <div ref={ref} className="relative">
           <button
             type="button"

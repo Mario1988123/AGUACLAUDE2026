@@ -312,8 +312,15 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     status: string;
     converted_to_customer_id: string | null;
   };
+  // Si ya estaba convertido, devolver el customer_id existente sin tirar
   if (l.converted_to_customer_id) {
-    throw new Error("Lead ya convertido");
+    // Asegurar que las propuestas del lead apuntan al cliente (por si en
+    // versiones anteriores quedaron con lead_id huérfano)
+    await supabase
+      .from("proposals")
+      .update({ customer_id: l.converted_to_customer_id, lead_id: null })
+      .eq("lead_id", l.id);
+    return l.converted_to_customer_id;
   }
 
   const { data: created, error: e2 } = await supabase
@@ -338,6 +345,12 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     .single();
   if (e2) throw new Error(e2.message);
   const customerId = (created as { id: string }).id;
+
+  // Mover TODAS las propuestas del lead al nuevo cliente
+  await supabase
+    .from("proposals")
+    .update({ customer_id: customerId, lead_id: null })
+    .eq("lead_id", l.id);
 
   // Mover direcciones via RPC (security definer + tenant check)
   await supabase.rpc("promote_lead_to_customer", {

@@ -140,6 +140,132 @@ export async function getMyPunchesForDay(date: string): Promise<DayPunch[]> {
   }));
 }
 
+export interface ClockExtended {
+  status: "working" | "stopped" | "on_break";
+  since?: string;
+  shift?: { starts_at: string; ends_at: string } | null;
+  canPunch: boolean;
+  reason?: string;
+}
+
+/**
+ * Estado extendido + horario del día + si puede fichar (30min antes del
+ * turno y hasta 2h después del fin).
+ */
+export async function getMyClockExtended(): Promise<ClockExtended> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { status: "stopped", canPunch: false };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: punches } = await admin
+      .from("time_punches")
+      .select("punch_kind, punched_at")
+      .eq("user_id", session.user_id)
+      .gte("punched_at", todayStart.toISOString())
+      .order("punched_at", { ascending: false })
+      .limit(20);
+    type P = { punch_kind: PunchKind; punched_at: string };
+    const list = (punches ?? []) as P[];
+    const last = list[0] ?? null;
+    let status: ClockExtended["status"] = "stopped";
+    let since: string | undefined;
+    if (last) {
+      if (last.punch_kind === "clock_in" || last.punch_kind === "break_end") {
+        status = "working";
+        const firstIn = [...list].reverse().find((p) => p.punch_kind === "clock_in");
+        since = firstIn?.punched_at;
+      } else if (last.punch_kind === "break_start") {
+        status = "on_break";
+        since = last.punched_at;
+      }
+    }
+
+    const dow = (new Date().getDay() + 6) % 7;
+    const { data: sched } = await admin
+      .from("user_work_schedules")
+      .select("starts_at, ends_at")
+      .eq("user_id", session.user_id)
+      .eq("day_of_week", dow)
+      .maybeSingle();
+    const s = sched as { starts_at: string | null; ends_at: string | null } | null;
+    const shift =
+      s && s.starts_at && s.ends_at ? { starts_at: s.starts_at, ends_at: s.ends_at } : null;
+
+    let canPunch = true;
+    let reason: string | undefined;
+    if (shift) {
+      const now = new Date();
+      const [sh, sm] = shift.starts_at.split(":").map(Number);
+      const [eh, em] = shift.ends_at.split(":").map(Number);
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh!, sm!, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh!, em!, 0);
+      const earliestPunch = new Date(start.getTime() - 30 * 60 * 1000);
+      const latestPunch = new Date(end.getTime() + 2 * 3600 * 1000);
+      if (now < earliestPunch) {
+        canPunch = false;
+        reason = `Tu turno empieza a las ${shift.starts_at} (puedes fichar desde 30 min antes).`;
+      } else if (now > latestPunch && status === "stopped") {
+        canPunch = false;
+        reason = "Tu turno terminó hace más de 2 horas.";
+      }
+    }
+    return { status, since, shift, canPunch, reason };
+  } catch {
+    return { status: "stopped", canPunch: false };
+  }
+}
+
+/**
+ * Inserta un fichaje específico (clock_in/out, break_start/end). El
+ * frontend del widget pasa el tipo concreto.
+ */
+export async function punchKindAction(
+  kind: PunchKind,
+  input: {
+    geo_latitude: number | null;
+    geo_longitude: number | null;
+    accuracy_meters: number | null;
+  },
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const noGeo = input.geo_latitude == null || input.geo_longitude == null;
+  await admin.from("time_punches").insert({
+    company_id: session.company_id,
+    user_id: session.user_id,
+    punch_kind: kind,
+    punched_at: new Date().toISOString(),
+    geo_latitude: input.geo_latitude,
+    geo_longitude: input.geo_longitude,
+    accuracy_meters: input.accuracy_meters,
+    needs_geo_review: noGeo,
+    is_manual: false,
+  });
+  if (noGeo) {
+    try {
+      await admin.from("incidents").insert({
+        company_id: session.company_id,
+        title: `Fichaje sin geolocalización (${kind})`,
+        description: `${session.full_name ?? session.email ?? session.user_id} ha fichado sin permitir geolocalización.`,
+        origin: "other",
+        priority: "medium",
+        status: "open",
+        created_by: session.user_id,
+      });
+    } catch {
+      /* no-op */
+    }
+  }
+  revalidatePath("/fichajes");
+  revalidatePath("/", "layout");
+}
+
 /** Estado actual del usuario: ¿tiene un clock_in abierto hoy? */
 export async function getMyCurrentStatus(): Promise<{
   status: "working" | "stopped";
