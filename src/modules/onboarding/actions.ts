@@ -36,13 +36,18 @@ export async function replayOnboardingAction(): Promise<void> {
 }
 
 export async function hasSeenOnboarding(): Promise<boolean> {
-  const session = await requireSession();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  const { data } = await supabase
-    .from("user_profiles")
-    .select("has_seen_onboarding")
-    .eq("user_id", session.user_id)
-    .maybeSingle();
-  return Boolean((data as { has_seen_onboarding: boolean } | null)?.has_seen_onboarding);
+  try {
+    const session = await requireSession();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("has_seen_onboarding")
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    if (error) return true; // si la columna no existe, no mostrar tour
+    return Boolean((data as { has_seen_onboarding: boolean } | null)?.has_seen_onboarding);
+  } catch {
+    return true;
+  }
 }

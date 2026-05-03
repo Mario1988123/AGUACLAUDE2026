@@ -189,6 +189,17 @@ export async function listChatThreads(): Promise<ChatThreadRow[]> {
 
 export async function getChatTotalUnread(): Promise<number> {
   try {
+    const session = await requireSession();
+    if (!session.company_id) return 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    // Sondeo barato: si la tabla no existe (migración pendiente) salimos a 0
+    const { error } = await admin
+      .from("chat_threads")
+      .select("id", { head: true, count: "exact" })
+      .eq("company_id", session.company_id)
+      .limit(1);
+    if (error) return 0;
     const threads = await listChatThreads();
     return threads.reduce((s, t) => s + t.unread, 0);
   } catch {

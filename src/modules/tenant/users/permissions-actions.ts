@@ -69,18 +69,24 @@ export async function setUserModuleOverrideAction(
  * decidir qué módulos mostrar/ocultar en el sidebar.
  */
 export async function getMyModuleOverrides(): Promise<Record<string, boolean>> {
-  const session = await requireSession();
-  if (!session.company_id) return {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data } = await admin
-    .from("user_module_overrides")
-    .select("module_key, granted")
-    .eq("user_id", session.user_id)
-    .eq("company_id", session.company_id);
-  const map: Record<string, boolean> = {};
-  for (const r of (data ?? []) as ModuleOverride[]) {
-    map[r.module_key] = r.granted;
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data, error } = await admin
+      .from("user_module_overrides")
+      .select("module_key, granted")
+      .eq("user_id", session.user_id)
+      .eq("company_id", session.company_id);
+    if (error) return {};
+    const map: Record<string, boolean> = {};
+    for (const r of (data ?? []) as ModuleOverride[]) {
+      map[r.module_key] = r.granted;
+    }
+    return map;
+  } catch {
+    // Tabla no existe (migración pendiente) u otro fallo: ignorar
+    return {};
   }
-  return map;
 }
