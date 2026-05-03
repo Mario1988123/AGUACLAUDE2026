@@ -9,6 +9,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { rescheduleAgendaEventAction } from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
+import { MoveAgendaEventButton } from "./move-button";
 
 interface Props {
   events: AgendaItem[];
@@ -107,7 +108,7 @@ export function DraggableAgendaList({ events: initial }: Props) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        💡 Arrastra una tarjeta a otro día para reagendar (la hora se conserva).
+        💡 Arrastra una tarjeta a otro día (escritorio) o pulsa el icono 📅 (tablet/móvil) para reagendar.
       </p>
       {days.map((day) => (
         <div
@@ -165,6 +166,10 @@ export function DraggableAgendaList({ events: initial }: Props) {
                           </p>
                         )}
                       </div>
+                      <MoveAgendaEventButton
+                        eventId={ev.id}
+                        currentStartsAt={ev.starts_at}
+                      />
                     </li>
                   ))}
               </ul>
