@@ -11,6 +11,9 @@ export const AGENDA_KIND = [
   "meeting",
 ] as const;
 
+export const RECURRENCE_FREQ = ["none", "daily", "weekly", "monthly"] as const;
+export type RecurrenceFreq = (typeof RECURRENCE_FREQ)[number];
+
 export const agendaCreateSchema = z.object({
   kind: z.enum(AGENDA_KIND).default("manual"),
   title: z.string().min(2, "Título obligatorio"),
@@ -22,5 +25,7 @@ export const agendaCreateSchema = z.object({
   subject_type: z.string().optional(),
   subject_id: z.string().uuid().optional(),
   reminders_min_before: z.array(z.number().int().min(0)).default([60]),
+  recurrence_freq: z.enum(RECURRENCE_FREQ).default("none"),
+  recurrence_count: z.coerce.number().int().min(1).max(52).default(1),
 });
 export type AgendaCreateInput = z.infer<typeof agendaCreateSchema>;

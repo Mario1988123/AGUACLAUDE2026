@@ -4,7 +4,8 @@ import { KIND_LABEL } from "@/modules/agenda/constants";
 import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { AgendaCalendar } from "@/modules/agenda/calendar";
 import { DraggableAgendaList } from "@/modules/agenda/draggable-list";
-import { Calendar, ListTodo } from "lucide-react";
+import { AgendaWeekView } from "@/modules/agenda/week-view";
+import { Calendar, ListTodo, CalendarDays } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,8 @@ export default async function AgendaPage({
   const userFilter = sp.user || undefined;
   const kindFilter =
     sp.kind && KIND_FILTER_OPTIONS.includes(sp.kind as never) ? sp.kind : undefined;
-  const view: "calendar" | "list" = sp.view === "list" ? "list" : "calendar";
+  const view: "calendar" | "week" | "list" =
+    sp.view === "list" ? "list" : sp.view === "week" ? "week" : "calendar";
 
   const now = new Date();
   const [events, monthEvents, team] = await Promise.all([
@@ -53,7 +55,7 @@ export default async function AgendaPage({
       </div>
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
-        {view === "list" && <input type="hidden" name="view" value="list" />}
+        {view !== "calendar" && <input type="hidden" name="view" value={view} />}
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Asignado a</label>
           <select
@@ -106,7 +108,17 @@ export default async function AgendaPage({
               : "border-border bg-card hover:bg-muted"
           }`}
         >
-          <Calendar className="h-4 w-4" /> Calendario
+          <Calendar className="h-4 w-4" /> Mes
+        </Link>
+        <Link
+          href={buildHref({ view: "week" }) as never}
+          className={`inline-flex h-10 items-center gap-2 rounded-xl border-2 px-4 text-sm font-semibold ${
+            view === "week"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-card hover:bg-muted"
+          }`}
+        >
+          <CalendarDays className="h-4 w-4" /> Semana
         </Link>
         <Link
           href={buildHref({ view: "list" }) as never}
@@ -120,7 +132,7 @@ export default async function AgendaPage({
         </Link>
       </div>
 
-      {view === "calendar" ? (
+      {view === "calendar" && (
         <>
           <AgendaCalendar events={monthEvents} />
           <div className="space-y-3">
@@ -130,7 +142,9 @@ export default async function AgendaPage({
             <DraggableAgendaList events={events} />
           </div>
         </>
-      ) : (
+      )}
+      {view === "week" && <AgendaWeekView events={events} />}
+      {view === "list" && (
         <div className="space-y-3">
           <div className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
             Listado próximos 14 días ({events.length})

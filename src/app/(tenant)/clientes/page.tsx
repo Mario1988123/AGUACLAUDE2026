@@ -40,6 +40,15 @@ export default async function CustomersPage({
         </div>
         <div className="flex items-center gap-2">
           {isUpperLevel && <ImportCustomersButton />}
+          {isUpperLevel && (
+            <Link
+              href={"/clientes/duplicados" as never}
+              prefetch={false}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            >
+              ⚠ Duplicados
+            </Link>
+          )}
           <Link
             href={"/api/export/customers" as never}
             prefetch={false}

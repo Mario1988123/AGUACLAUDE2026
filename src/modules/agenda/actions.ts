@@ -107,29 +107,47 @@ export async function createAgendaEventAction(input: unknown) {
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const parsed = agendaCreateSchema.parse(input);
 
-  // Comprobación horario comercial (si fuera de 9-18 lun-vie marca flag)
-  const start = new Date(parsed.starts_at);
-  const day = start.getDay();
-  const hour = start.getHours();
-  const isOutsideHours = day === 0 || day === 6 || hour < 9 || hour > 18;
+  // Calcular fechas de la serie según recurrencia
+  const baseStart = new Date(parsed.starts_at);
+  const baseEnd = parsed.ends_at ? new Date(parsed.ends_at) : null;
+  const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
+  const occurrences =
+    parsed.recurrence_freq === "none" ? 1 : Math.max(1, parsed.recurrence_count);
+
+  function bumpDate(d: Date, i: number): Date {
+    const r = new Date(d);
+    if (parsed.recurrence_freq === "daily") r.setDate(r.getDate() + i);
+    else if (parsed.recurrence_freq === "weekly") r.setDate(r.getDate() + i * 7);
+    else if (parsed.recurrence_freq === "monthly") r.setMonth(r.getMonth() + i);
+    return r;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { error } = await supabase.from("agenda_events").insert({
-    company_id: session.company_id,
-    kind: parsed.kind,
-    title: parsed.title,
-    description: parsed.description || null,
-    starts_at: parsed.starts_at,
-    ends_at: parsed.ends_at || null,
-    all_day: parsed.all_day,
-    assigned_user_id: parsed.assigned_user_id || session.user_id,
-    subject_type: parsed.subject_type || null,
-    subject_id: parsed.subject_id || null,
-    is_outside_hours: isOutsideHours,
-    reminders_min_before: parsed.reminders_min_before,
-    created_by: session.user_id,
-  });
+  const rows = [];
+  for (let i = 0; i < occurrences; i++) {
+    const s = bumpDate(baseStart, i);
+    const e = baseEnd ? new Date(s.getTime() + durationMs) : null;
+    const day = s.getDay();
+    const hour = s.getHours();
+    const isOutsideHours = day === 0 || day === 6 || hour < 9 || hour > 18;
+    rows.push({
+      company_id: session.company_id,
+      kind: parsed.kind,
+      title: parsed.title,
+      description: parsed.description || null,
+      starts_at: s.toISOString(),
+      ends_at: e ? e.toISOString() : null,
+      all_day: parsed.all_day,
+      assigned_user_id: parsed.assigned_user_id || session.user_id,
+      subject_type: parsed.subject_type || null,
+      subject_id: parsed.subject_id || null,
+      is_outside_hours: isOutsideHours,
+      reminders_min_before: parsed.reminders_min_before,
+      created_by: session.user_id,
+    });
+  }
+  const { error } = await supabase.from("agenda_events").insert(rows);
   if (error) throw new Error(error.message);
   revalidatePath("/agenda");
 }

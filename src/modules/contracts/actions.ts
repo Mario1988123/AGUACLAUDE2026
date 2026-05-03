@@ -347,12 +347,24 @@ export async function markContractSigned(id: string) {
     }
   }
 
+  // Generar mantenimientos automáticos según frecuencia del contrato
+  let scheduledCount = 0;
+  try {
+    const { scheduleMaintenanceForContract } = await import("./maintenance-scheduler");
+    scheduledCount = await scheduleMaintenanceForContract(id);
+  } catch {
+    /* fail-soft: no bloquea la firma si la generación falla */
+  }
+
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
     subject_id: id,
     kind: "contract.signed",
-    payload: { wallet_entries_created: list.length },
+    payload: {
+      wallet_entries_created: list.length,
+      maintenance_jobs_scheduled: scheduledCount,
+    },
     actor_user_id: session.user_id,
   });
 

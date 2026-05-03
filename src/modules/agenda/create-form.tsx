@@ -25,6 +25,8 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
     starts_at: "",
     ends_at: "",
     assigned_user_id: "",
+    recurrence_freq: "none" as "none" | "daily" | "weekly" | "monthly",
+    recurrence_count: 1,
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -38,6 +40,8 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
           starts_at: form.starts_at,
           ends_at: form.ends_at,
           assigned_user_id: form.assigned_user_id || undefined,
+          recurrence_freq: form.recurrence_freq,
+          recurrence_count: form.recurrence_count,
         });
         notify.success("Evento agendado");
         setForm({
@@ -47,6 +51,8 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
           starts_at: "",
           ends_at: "",
           assigned_user_id: "",
+          recurrence_freq: "none",
+          recurrence_count: 1,
         });
         setOpen(false);
       } catch (err) {
@@ -145,6 +151,46 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               className="w-full rounded-xl border border-border bg-card p-3 text-sm"
             />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="recurrence_freq">Repetir</Label>
+              <select
+                id="recurrence_freq"
+                value={form.recurrence_freq}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    recurrence_freq: e.target.value as typeof form.recurrence_freq,
+                  })
+                }
+                className="flex h-12 w-full rounded-xl border border-border bg-card px-4 text-base"
+              >
+                <option value="none">Sin repetición</option>
+                <option value="daily">Diariamente</option>
+                <option value="weekly">Semanalmente</option>
+                <option value="monthly">Mensualmente</option>
+              </select>
+            </div>
+            {form.recurrence_freq !== "none" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="recurrence_count">Nº de repeticiones</Label>
+                <Input
+                  id="recurrence_count"
+                  type="number"
+                  min={1}
+                  max={52}
+                  value={form.recurrence_count}
+                  onChange={(e) =>
+                    setForm({ ...form, recurrence_count: Number(e.target.value) })
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Se crearán {form.recurrence_count} eventos en total.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2">

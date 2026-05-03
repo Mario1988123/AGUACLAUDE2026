@@ -21,6 +21,20 @@ export async function markOnboardingDoneAction(): Promise<void> {
     .eq("user_id", session.user_id);
 }
 
+/** Resetea el flag para volver a mostrar el tour la próxima vez. */
+export async function replayOnboardingAction(): Promise<void> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("user_profiles")
+    .update({
+      has_seen_onboarding: false,
+      onboarding_completed_at: null,
+    })
+    .eq("user_id", session.user_id);
+}
+
 export async function hasSeenOnboarding(): Promise<boolean> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

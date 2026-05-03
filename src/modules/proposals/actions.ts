@@ -270,16 +270,37 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
 
   const { data: prop } = await supabase
     .from("proposals")
-    .select("id, lead_id, customer_id")
+    .select("id, lead_id, customer_id, variant_group_id")
     .eq("id", id)
     .single();
   if (!prop) throw new Error("Propuesta no encontrada");
-  const p = prop as { id: string; lead_id: string | null; customer_id: string | null };
+  const p = prop as {
+    id: string;
+    lead_id: string | null;
+    customer_id: string | null;
+    variant_group_id: string | null;
+  };
 
   await supabase
     .from("proposals")
     .update({ status: "accepted", accepted_at: new Date().toISOString() })
     .eq("id", id);
+
+  // Si es parte de un grupo de variantes, supersede a las hermanas
+  if (p.variant_group_id) {
+    await supabase
+      .from("proposals")
+      .update({
+        status: "rejected",
+        rejected_at: new Date().toISOString(),
+        rejected_reason: "Variante hermana aceptada",
+        superseded_at: new Date().toISOString(),
+        superseded_by_id: id,
+      })
+      .eq("variant_group_id", p.variant_group_id)
+      .neq("id", id)
+      .in("status", ["draft", "sent"]);
+  }
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
@@ -479,6 +500,149 @@ export async function listProposalsByLead(leadId: string): Promise<ProposalListI
     ...r,
     customer_or_lead_name: "",
   }));
+}
+
+/**
+ * Duplica una propuesta como nueva variante del mismo grupo. Si la original
+ * no tenía variant_group_id, se crea uno y se asigna a ambas. Copia las
+ * líneas (proposal_items) tal cual; el comercial las edita después.
+ */
+export async function duplicateProposalAsVariantAction(
+  originalId: string,
+  label: string,
+): Promise<string> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const { data: orig } = await supabase
+    .from("proposals")
+    .select("*")
+    .eq("id", originalId)
+    .single();
+  if (!orig) throw new Error("Original no encontrada");
+  const o = orig as Record<string, unknown> & {
+    id: string;
+    variant_group_id: string | null;
+    company_id: string;
+  };
+
+  // Asegurar variant_group_id en la original
+  let groupId = o.variant_group_id;
+  if (!groupId) {
+    groupId = crypto.randomUUID();
+    await supabase
+      .from("proposals")
+      .update({ variant_group_id: groupId, variant_label: o.variant_label ?? "A" })
+      .eq("id", originalId);
+  }
+
+  // Crear nueva propuesta clonando los campos relevantes (excluye id, fechas terminales)
+  const EXCLUDE = new Set([
+    "id",
+    "reference_code",
+    "sent_at",
+    "accepted_at",
+    "rejected_at",
+    "rejected_reason",
+    "superseded_at",
+    "superseded_by_id",
+    "created_at",
+    "updated_at",
+  ]);
+  const cloneable: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(o)) {
+    if (!EXCLUDE.has(k)) cloneable[k] = v;
+  }
+  cloneable.status = "draft";
+  cloneable.variant_group_id = groupId;
+  cloneable.variant_label = label.trim() || "B";
+  cloneable.parent_proposal_id = originalId;
+
+  const { data: created, error } = await supabase
+    .from("proposals")
+    .insert(cloneable)
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  const newId = (created as { id: string }).id;
+
+  // Copiar líneas
+  const { data: items } = await supabase
+    .from("proposal_items")
+    .select("*")
+    .eq("proposal_id", originalId);
+  type Item = Record<string, unknown> & { id: string; proposal_id: string };
+  const ITEM_EXCLUDE = new Set(["id", "created_at", "updated_at"]);
+  const lines = ((items ?? []) as Item[]).map((it) => {
+    const copy: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(it)) {
+      if (!ITEM_EXCLUDE.has(k)) copy[k] = v;
+    }
+    copy.proposal_id = newId;
+    return copy;
+  });
+  if (lines.length > 0) {
+    await supabase.from("proposal_items").insert(lines);
+  }
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "proposal",
+    subject_id: newId,
+    kind: "proposal.variant_created",
+    payload: { from_proposal_id: originalId, variant_group_id: groupId, label },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath(`/propuestas/${originalId}`);
+  revalidatePath(`/propuestas/${newId}`);
+  revalidatePath("/propuestas");
+  return newId;
+}
+
+/**
+ * Devuelve las propuestas hermanas (mismo variant_group_id) ordenadas por
+ * variant_label. Incluye la propia.
+ */
+export async function listProposalVariants(
+  proposalId: string,
+): Promise<
+  Array<{
+    id: string;
+    variant_label: string | null;
+    status: string;
+    total_cash_cents: number | null;
+    monthly_renting_min_cents: number | null;
+    monthly_rental_cents: number | null;
+  }>
+> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: own } = await supabase
+    .from("proposals")
+    .select("variant_group_id")
+    .eq("id", proposalId)
+    .maybeSingle();
+  const gid = (own as { variant_group_id: string | null } | null)?.variant_group_id;
+  if (!gid) return [];
+  const { data } = await supabase
+    .from("proposals")
+    .select(
+      "id, variant_label, status, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents",
+    )
+    .eq("variant_group_id", gid)
+    .order("variant_label", { ascending: true });
+  return (data ?? []) as Array<{
+    id: string;
+    variant_label: string | null;
+    status: string;
+    total_cash_cents: number | null;
+    monthly_renting_min_cents: number | null;
+    monthly_rental_cents: number | null;
+  }>;
 }
 
 export async function markProposalRejected(id: string, reason?: string) {

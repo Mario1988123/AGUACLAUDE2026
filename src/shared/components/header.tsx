@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { LogOut, User, ChevronDown } from "lucide-react";
+import { useState, useRef, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { LogOut, User, ChevronDown, PlayCircle } from "lucide-react";
 import { NotificationsBell } from "./notifications-poller";
 import { GlobalSearchTrigger } from "@/modules/search/global-search";
+import { replayOnboardingAction } from "@/modules/onboarding/actions";
 
 interface HeaderProps {
   unreadCount?: number;
@@ -23,6 +25,25 @@ function initials(name: string | null | undefined, email: string | null | undefi
 export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+
+  function replayTour() {
+    setOpen(false);
+    startTransition(async () => {
+      try {
+        await replayOnboardingAction();
+        try {
+          window.localStorage.removeItem("onboarding.completed");
+        } catch {
+          /* no-op */
+        }
+        router.refresh();
+      } catch {
+        /* fail-soft */
+      }
+    });
+  }
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -74,6 +95,13 @@ export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderPr
                 >
                   <User className="h-4 w-4" /> Configuración
                 </a>
+                <button
+                  type="button"
+                  onClick={replayTour}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <PlayCircle className="h-4 w-4" /> Volver a ver el tour
+                </button>
                 <form action="/logout" method="post">
                   <button
                     type="submit"

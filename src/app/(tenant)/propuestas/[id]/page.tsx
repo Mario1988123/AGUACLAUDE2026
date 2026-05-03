@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProposal, getProposalItems } from "@/modules/proposals/actions";
+import { getProposal, getProposalItems, listProposalVariants } from "@/modules/proposals/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/proposals/schemas";
 import { ProposalActions } from "@/modules/proposals/actions-panel";
+import { ProposalVariantsCard } from "@/modules/proposals/variants-card";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -24,6 +25,7 @@ export default async function ProposalDetailPage({
     notFound();
   }
   const items = await getProposalItems(id);
+  const variants = await listProposalVariants(id).catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -119,6 +121,8 @@ export default async function ProposalDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <ProposalVariantsCard proposalId={proposal.id} variants={variants} />
 
       {proposal.notes && (
         <Card>
