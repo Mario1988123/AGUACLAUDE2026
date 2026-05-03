@@ -1,0 +1,672 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { requireSession } from "@/shared/lib/auth/session";
+import { getFiscalSettings } from "@/modules/config/fiscal/actions";
+
+export type InvoiceKind = "invoice" | "credit_note" | "proforma" | "delivery_note";
+export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "void" | "cancelled" | "proforma";
+
+async function ensureAdmin() {
+  const session = await requireSession();
+  if (!session.is_superadmin && !session.roles.includes("company_admin"))
+    throw new Error("Solo admin puede gestionar facturas");
+  return session;
+}
+
+export interface InvoiceListItem {
+  id: string;
+  full_reference: string;
+  kind: InvoiceKind;
+  status: InvoiceStatus;
+  customer_id: string;
+  customer_name: string | null;
+  contract_id: string | null;
+  issue_date: string;
+  due_date: string | null;
+  total_cents: number;
+  pending_cents: number;
+}
+
+export interface InvoiceLine {
+  id?: string;
+  description: string;
+  quantity: number;
+  unit_price_cents: number;
+  discount_percent: number;
+  tax_rate_percent: number;
+  product_id?: string | null;
+}
+
+export interface InvoiceDetail {
+  id: string;
+  full_reference: string;
+  kind: InvoiceKind;
+  status: InvoiceStatus;
+  series_id: string;
+  number: number;
+  fiscal_year: number;
+  customer_id: string;
+  customer_name: string | null;
+  customer_fiscal_snapshot: Record<string, unknown> | null;
+  company_fiscal_snapshot: Record<string, unknown> | null;
+  contract_id: string | null;
+  corrects_invoice_id: string | null;
+  issue_date: string;
+  due_date: string | null;
+  paid_at: string | null;
+  subtotal_cents: number;
+  tax_cents: number;
+  withholdings_cents: number;
+  total_cents: number;
+  pending_cents: number;
+  notes: string | null;
+  lines: InvoiceLine[];
+  payments: Array<{
+    id: string;
+    amount_cents: number;
+    paid_at: string;
+    wallet_entry_id: string | null;
+    notes: string | null;
+  }>;
+}
+
+interface SeriesRow {
+  id: string;
+  kind: InvoiceKind;
+  series_code: string;
+}
+
+async function getOrSeedSeries(companyId: string, kind: InvoiceKind): Promise<SeriesRow> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  let { data } = await admin
+    .from("invoice_series")
+    .select("id, kind, series_code")
+    .eq("company_id", companyId)
+    .eq("kind", kind)
+    .eq("is_active", true)
+    .order("series_code")
+    .limit(1)
+    .maybeSingle();
+  if (!data) {
+    await admin.rpc("seed_default_invoice_series", { p_company_id: companyId });
+    const r = await admin
+      .from("invoice_series")
+      .select("id, kind, series_code")
+      .eq("company_id", companyId)
+      .eq("kind", kind)
+      .eq("is_active", true)
+      .order("series_code")
+      .limit(1)
+      .maybeSingle();
+    data = r.data;
+  }
+  if (!data) throw new Error(`No existe serie para ${kind}`);
+  return data as SeriesRow;
+}
+
+function customerDisplayName(c: {
+  party_kind: "individual" | "company";
+  legal_name: string | null;
+  trade_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+}): string {
+  if (c.party_kind === "company") return c.trade_name || c.legal_name || "Cliente";
+  return `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente";
+}
+
+function calcLineTotals(line: InvoiceLine) {
+  const gross = line.unit_price_cents * line.quantity;
+  const discount = Math.round((gross * line.discount_percent) / 100);
+  const subtotal = gross - discount;
+  const tax = Math.round((subtotal * line.tax_rate_percent) / 100);
+  return { subtotal_cents: subtotal, tax_cents: tax, total_cents: subtotal + tax };
+}
+
+export async function listInvoices(filters?: {
+  status?: InvoiceStatus;
+  kind?: InvoiceKind;
+  customer_id?: string;
+  q?: string;
+}): Promise<InvoiceListItem[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  let query = admin
+    .from("invoices")
+    .select(
+      "id, full_reference, kind, status, customer_id, contract_id, issue_date, due_date, total_cents",
+    )
+    .eq("company_id", session.company_id)
+    .order("issue_date", { ascending: false })
+    .limit(500);
+  if (filters?.status) query = query.eq("status", filters.status);
+  if (filters?.kind) query = query.eq("kind", filters.kind);
+  if (filters?.customer_id) query = query.eq("customer_id", filters.customer_id);
+  if (filters?.q) {
+    const q = filters.q.replace(/[%_]/g, "");
+    query = query.ilike("full_reference", `%${q}%`);
+  }
+  const { data } = await query;
+  type R = {
+    id: string;
+    full_reference: string;
+    kind: InvoiceKind;
+    status: InvoiceStatus;
+    customer_id: string;
+    contract_id: string | null;
+    issue_date: string;
+    due_date: string | null;
+    total_cents: number;
+  };
+  const rows = (data ?? []) as R[];
+  if (rows.length === 0) return [];
+
+  // Resolver nombres de cliente
+  const cIds = Array.from(new Set(rows.map((r) => r.customer_id)));
+  const { data: cs } = await admin
+    .from("customers")
+    .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+    .in("id", cIds);
+  const nameMap = new Map<string, string>();
+  for (const c of (cs ?? []) as Array<{
+    id: string;
+    party_kind: "individual" | "company";
+    legal_name: string | null;
+    trade_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+  }>) {
+    nameMap.set(c.id, customerDisplayName(c));
+  }
+
+  // Pendiente = total - sum(payments)
+  const ids = rows.map((r) => r.id);
+  const { data: pays } = await admin
+    .from("invoice_payments")
+    .select("invoice_id, amount_cents")
+    .in("invoice_id", ids);
+  const paidMap = new Map<string, number>();
+  for (const p of (pays ?? []) as Array<{ invoice_id: string; amount_cents: number }>) {
+    paidMap.set(p.invoice_id, (paidMap.get(p.invoice_id) ?? 0) + p.amount_cents);
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    customer_name: nameMap.get(r.customer_id) ?? null,
+    pending_cents: r.total_cents - (paidMap.get(r.id) ?? 0),
+  }));
+}
+
+export async function getInvoice(id: string): Promise<InvoiceDetail> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: inv } = await admin
+    .from("invoices")
+    .select(
+      "id, full_reference, kind, status, series_id, number, fiscal_year, customer_id, customer_fiscal_snapshot, company_fiscal_snapshot, contract_id, corrects_invoice_id, issue_date, due_date, paid_at, subtotal_cents, tax_cents, withholdings_cents, total_cents, notes, company_id",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (!inv) throw new Error("Factura no encontrada");
+  if ((inv as { company_id: string }).company_id !== session.company_id)
+    throw new Error("Otra empresa");
+
+  const { data: cust } = await admin
+    .from("customers")
+    .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+    .eq("id", (inv as { customer_id: string }).customer_id)
+    .maybeSingle();
+  const customerName = cust ? customerDisplayName(cust as never) : null;
+
+  const { data: lines } = await admin
+    .from("invoice_lines")
+    .select(
+      "id, description, quantity, unit_price_cents, discount_percent, tax_rate_percent, product_id",
+    )
+    .eq("invoice_id", id)
+    .order("display_order", { ascending: true });
+
+  const { data: pays } = await admin
+    .from("invoice_payments")
+    .select("id, amount_cents, paid_at, wallet_entry_id, notes")
+    .eq("invoice_id", id)
+    .order("paid_at", { ascending: true });
+  const paid = ((pays ?? []) as Array<{ amount_cents: number }>).reduce(
+    (s, p) => s + p.amount_cents,
+    0,
+  );
+
+  return {
+    ...(inv as Omit<InvoiceDetail, "customer_name" | "lines" | "payments" | "pending_cents">),
+    customer_name: customerName,
+    lines: ((lines ?? []) as InvoiceLine[]).map((l) => ({
+      ...l,
+      quantity: Number(l.quantity),
+      discount_percent: Number(l.discount_percent),
+      tax_rate_percent: Number(l.tax_rate_percent),
+    })),
+    payments: (pays ?? []) as InvoiceDetail["payments"],
+    pending_cents: (inv as { total_cents: number }).total_cents - paid,
+  };
+}
+
+interface CreateInvoiceInput {
+  customer_id: string;
+  contract_id?: string | null;
+  kind?: InvoiceKind;
+  due_date?: string | null;
+  notes?: string | null;
+  lines: InvoiceLine[];
+  corrects_invoice_id?: string | null;
+}
+
+export async function createInvoiceAction(input: CreateInvoiceInput): Promise<string> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!input.lines || input.lines.length === 0) throw new Error("Añade al menos una línea");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const kind: InvoiceKind = input.kind ?? "invoice";
+  const series = await getOrSeedSeries(session.company_id, kind);
+  const { data: numRow, error: e1 } = await admin.rpc("next_invoice_number", {
+    p_series_id: series.id,
+  });
+  if (e1) throw new Error(e1.message);
+  const numInfo = (Array.isArray(numRow) ? numRow[0] : numRow) as {
+    number: number;
+    fiscal_year: number;
+  };
+  const fullRef = `${series.series_code}-${numInfo.fiscal_year}-${String(numInfo.number).padStart(5, "0")}`;
+
+  // Snapshots
+  const fiscal = await getFiscalSettings();
+  const { data: cust } = await admin
+    .from("customers")
+    .select(
+      "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary",
+    )
+    .eq("id", input.customer_id)
+    .maybeSingle();
+  const { data: addr } = await admin
+    .from("addresses")
+    .select("street, street_number, postal_code, city, province")
+    .eq("customer_id", input.customer_id)
+    .eq("is_primary", true)
+    .maybeSingle();
+
+  // Calcular totales
+  let subtotal = 0;
+  let tax = 0;
+  for (const l of input.lines) {
+    const t = calcLineTotals(l);
+    subtotal += t.subtotal_cents;
+    tax += t.tax_cents;
+  }
+  const total = subtotal + tax;
+
+  const { data: created, error: e2 } = await admin
+    .from("invoices")
+    .insert({
+      company_id: session.company_id,
+      customer_id: input.customer_id,
+      contract_id: input.contract_id ?? null,
+      kind,
+      series_id: series.id,
+      number: numInfo.number,
+      fiscal_year: numInfo.fiscal_year,
+      full_reference: fullRef,
+      status: "draft",
+      customer_fiscal_snapshot: { ...(cust ?? {}), address: addr ?? null },
+      company_fiscal_snapshot: fiscal,
+      subtotal_cents: subtotal,
+      tax_cents: tax,
+      total_cents: total,
+      withholdings_cents: 0,
+      issue_date: new Date().toISOString().slice(0, 10),
+      due_date:
+        input.due_date ??
+        new Date(Date.now() + (fiscal.invoice_default_due_days ?? 30) * 86400000)
+          .toISOString()
+          .slice(0, 10),
+      corrects_invoice_id: input.corrects_invoice_id ?? null,
+      notes: input.notes ?? null,
+    })
+    .select("id")
+    .single();
+  if (e2) throw new Error(e2.message);
+  const invoiceId = (created as { id: string }).id;
+
+  await admin.from("invoice_lines").insert(
+    input.lines.map((l, idx) => {
+      const t = calcLineTotals(l);
+      return {
+        invoice_id: invoiceId,
+        company_id: session.company_id,
+        product_id: l.product_id ?? null,
+        description: l.description,
+        quantity: l.quantity,
+        unit_price_cents: l.unit_price_cents,
+        discount_percent: l.discount_percent,
+        tax_rate_percent: l.tax_rate_percent,
+        subtotal_cents: t.subtotal_cents,
+        tax_cents: t.tax_cents,
+        total_cents: t.total_cents,
+        display_order: idx,
+      };
+    }),
+  );
+
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "contract",
+    subject_id: input.contract_id ?? invoiceId,
+    kind: "invoice.created",
+    payload: { invoice_id: invoiceId, full_reference: fullRef },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath("/facturas");
+  return invoiceId;
+}
+
+export async function markInvoiceIssuedAction(invoiceId: string): Promise<void> {
+  const session = await ensureAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin
+    .from("invoices")
+    .update({ status: "issued" })
+    .eq("id", invoiceId)
+    .eq("company_id", session.company_id)
+    .eq("status", "draft");
+  revalidatePath(`/facturas/${invoiceId}`);
+  revalidatePath("/facturas");
+}
+
+export async function markInvoicePaidAction(
+  invoiceId: string,
+  amount_cents?: number,
+): Promise<void> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: inv } = await admin
+    .from("invoices")
+    .select("id, total_cents, contract_id, customer_id")
+    .eq("id", invoiceId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!inv) throw new Error("Factura no encontrada");
+  const { data: pays } = await admin
+    .from("invoice_payments")
+    .select("amount_cents")
+    .eq("invoice_id", invoiceId);
+  const alreadyPaid = ((pays ?? []) as Array<{ amount_cents: number }>).reduce(
+    (s, p) => s + p.amount_cents,
+    0,
+  );
+  const pending = (inv as { total_cents: number }).total_cents - alreadyPaid;
+  const amt = amount_cents ?? pending;
+  if (amt <= 0) throw new Error("La factura ya está totalmente pagada");
+
+  // Crear wallet entry validada para que cuadre con la entrada manual
+  // (el flujo natural debería ser desde wallet, pero soportamos esta dirección)
+  const { data: walletEntry } = await admin
+    .from("wallet_entries")
+    .insert({
+      company_id: session.company_id,
+      contract_id: (inv as { contract_id: string | null }).contract_id,
+      customer_id: (inv as { customer_id: string }).customer_id,
+      concept: `Cobro factura ${invoiceId}`,
+      amount_cents: amt,
+      method: "transfer",
+      status: "validated",
+      collected_at: new Date().toISOString(),
+      validated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  await admin.from("invoice_payments").insert({
+    company_id: session.company_id,
+    invoice_id: invoiceId,
+    wallet_entry_id: (walletEntry as { id: string } | null)?.id ?? null,
+    amount_cents: amt,
+    created_by: session.user_id,
+  });
+
+  // Si llega al total, marca la factura como pagada
+  if (alreadyPaid + amt >= (inv as { total_cents: number }).total_cents) {
+    await admin
+      .from("invoices")
+      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .eq("id", invoiceId);
+  }
+  revalidatePath(`/facturas/${invoiceId}`);
+  revalidatePath("/facturas");
+  revalidatePath("/wallet");
+}
+
+export async function cancelInvoiceAction(invoiceId: string, reason?: string): Promise<void> {
+  const session = await ensureAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin
+    .from("invoices")
+    .update({ status: "cancelled", notes: reason ?? null })
+    .eq("id", invoiceId)
+    .eq("company_id", session.company_id);
+  revalidatePath(`/facturas/${invoiceId}`);
+  revalidatePath("/facturas");
+}
+
+/**
+ * Crea una factura rectificativa (nota de crédito) que anula la original.
+ * Copia las líneas con cantidades en negativo.
+ */
+export async function createCreditNoteAction(originalId: string): Promise<string> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const orig = await getInvoice(originalId);
+  return createInvoiceAction({
+    customer_id: orig.customer_id,
+    contract_id: orig.contract_id,
+    kind: "credit_note",
+    corrects_invoice_id: originalId,
+    notes: `Rectificativa de ${orig.full_reference}`,
+    lines: orig.lines.map((l) => ({
+      description: l.description,
+      quantity: -Math.abs(l.quantity),
+      unit_price_cents: l.unit_price_cents,
+      discount_percent: l.discount_percent,
+      tax_rate_percent: l.tax_rate_percent,
+      product_id: l.product_id ?? null,
+    })),
+  });
+}
+
+/**
+ * Crea una factura a partir de un contrato firmado: una línea por contract_item.
+ */
+export async function createInvoiceFromContractAction(contractId: string): Promise<string> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: c } = await admin
+    .from("contracts")
+    .select("id, customer_id, total_cash_cents, monthly_cents, plan_type")
+    .eq("id", contractId)
+    .maybeSingle();
+  if (!c) throw new Error("Contrato no encontrado");
+  const con = c as {
+    id: string;
+    customer_id: string;
+    total_cash_cents: number | null;
+    monthly_cents: number | null;
+    plan_type: string;
+  };
+
+  const { data: items } = await admin
+    .from("contract_items")
+    .select("product_name_snapshot, quantity, unit_price_cash_cents")
+    .eq("contract_id", contractId);
+  type CI = {
+    product_name_snapshot: string;
+    quantity: number;
+    unit_price_cash_cents: number | null;
+  };
+  const ci = (items ?? []) as CI[];
+  const fiscal = await getFiscalSettings();
+  const lines: InvoiceLine[] =
+    ci.length > 0
+      ? ci.map((it) => ({
+          description: it.product_name_snapshot,
+          quantity: it.quantity,
+          unit_price_cents: it.unit_price_cash_cents ?? 0,
+          discount_percent: 0,
+          tax_rate_percent: fiscal.invoice_default_iva,
+        }))
+      : [
+          {
+            description: `Contrato ${con.plan_type}`,
+            quantity: 1,
+            unit_price_cents:
+              con.plan_type === "cash" ? con.total_cash_cents ?? 0 : con.monthly_cents ?? 0,
+            discount_percent: 0,
+            tax_rate_percent: fiscal.invoice_default_iva,
+          },
+        ];
+
+  return createInvoiceAction({
+    customer_id: con.customer_id,
+    contract_id: contractId,
+    lines,
+  });
+}
+
+/**
+ * Crea una factura a partir de una entrada de wallet validada (cobro real).
+ */
+export async function createInvoiceFromWalletEntryAction(
+  walletEntryId: string,
+): Promise<string> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: w } = await admin
+    .from("wallet_entries")
+    .select("id, customer_id, contract_id, concept, amount_cents")
+    .eq("id", walletEntryId)
+    .maybeSingle();
+  if (!w) throw new Error("Movimiento no encontrado");
+  const we = w as {
+    id: string;
+    customer_id: string | null;
+    contract_id: string | null;
+    concept: string;
+    amount_cents: number;
+  };
+  if (!we.customer_id) throw new Error("El movimiento no tiene cliente asociado");
+  const fiscal = await getFiscalSettings();
+  // Importe en wallet ya es total con IVA. Calculamos base = total / (1 + iva)
+  const ivaPercent = fiscal.invoice_default_iva;
+  const baseCents = Math.round(we.amount_cents / (1 + ivaPercent / 100));
+  const invoiceId = await createInvoiceAction({
+    customer_id: we.customer_id,
+    contract_id: we.contract_id,
+    notes: we.concept,
+    lines: [
+      {
+        description: we.concept,
+        quantity: 1,
+        unit_price_cents: baseCents,
+        discount_percent: 0,
+        tax_rate_percent: ivaPercent,
+      },
+    ],
+  });
+  // Vincular como cobro inmediato
+  await admin.from("invoice_payments").insert({
+    company_id: session.company_id,
+    invoice_id: invoiceId,
+    wallet_entry_id: walletEntryId,
+    amount_cents: we.amount_cents,
+    created_by: session.user_id,
+  });
+  await admin
+    .from("invoices")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", invoiceId);
+  revalidatePath("/facturas");
+  return invoiceId;
+}
+
+/**
+ * Genera facturas mensuales para todos los contratos activos con cuota
+ * (alquiler/renting). Idempotente: no duplica si ya hay factura del mes.
+ */
+export async function generateMonthlyRecurringInvoicesAction(): Promise<{ created: number }> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+
+  const { data: contracts } = await admin
+    .from("contracts")
+    .select("id, customer_id, monthly_cents, plan_type, status")
+    .eq("company_id", session.company_id)
+    .in("plan_type", ["rental", "renting"])
+    .eq("status", "signed")
+    .is("deleted_at", null);
+  type C = {
+    id: string;
+    customer_id: string;
+    monthly_cents: number | null;
+    plan_type: string;
+    status: string;
+  };
+  const list = ((contracts ?? []) as C[]).filter((c) => c.monthly_cents && c.monthly_cents > 0);
+  let created = 0;
+  const fiscal = await getFiscalSettings();
+  for (const c of list) {
+    // Comprobar si ya hay factura para este contrato este mes
+    const { data: existing } = await admin
+      .from("invoices")
+      .select("id")
+      .eq("contract_id", c.id)
+      .gte("issue_date", monthStart)
+      .limit(1)
+      .maybeSingle();
+    if (existing) continue;
+    const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+    const baseCents = Math.round((c.monthly_cents ?? 0) / (1 + fiscal.invoice_default_iva / 100));
+    await createInvoiceAction({
+      customer_id: c.customer_id,
+      contract_id: c.id,
+      lines: [
+        {
+          description: `Cuota ${monthLabel}`,
+          quantity: 1,
+          unit_price_cents: baseCents,
+          discount_percent: 0,
+          tax_rate_percent: fiscal.invoice_default_iva,
+        },
+      ],
+    });
+    created++;
+  }
+  return { created };
+}

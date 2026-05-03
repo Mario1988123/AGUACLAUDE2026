@@ -14,6 +14,7 @@ import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL } from "@/modules/contrac
 import { ContractStatusActions } from "@/modules/contracts/status-actions";
 import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
 import { QuickCollectButton } from "@/modules/contracts/quick-collect-button";
+import { InvoiceFromContractButton } from "@/modules/invoices/invoice-from-contract-button";
 import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
 import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
 import { ReassignContractButton } from "@/modules/contracts/reassign-button";
@@ -117,7 +118,8 @@ export default async function ContractDetailPage({
               ` · servicio desde ${new Date(contract.service_start_date).toLocaleDateString("es-ES")}`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {contract.status === "signed" && <InvoiceFromContractButton contractId={contract.id} />}
           <a
             href={`/api/pdf/contract/${contract.id}`}
             target="_blank"

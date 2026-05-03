@@ -7,12 +7,15 @@ import { CompanySettingsForm } from "@/modules/config/company/settings-form";
 export const dynamic = "force-dynamic";
 
 const SECTIONS = [
+  { href: "/configuracion/fiscal", label: "Datos fiscales", icon: "Building2", desc: "Razón social, CIF, dirección, IBAN" },
   { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Caducidad y orígenes" },
   { href: "/configuracion/productos", label: "Productos", icon: "Package", desc: "Categorías y atributos" },
   { href: "/configuracion/contratos", label: "Contratos", icon: "FileSignature", desc: "Cláusulas con variables" },
   { href: "/configuracion/pruebas-gratuitas", label: "Pruebas gratuitas", icon: "Gift", desc: "Duración y condiciones" },
   { href: "/configuracion/objetivos", label: "Objetivos", icon: "Target", desc: "Metas mensuales por dpto y usuario" },
-  { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo y permisos" },
+  { href: "/configuracion/puntos", label: "Programa de puntos", icon: "Trophy", desc: "Puntos, hitos y comisiones €" },
+  { href: "/configuracion/plantillas", label: "Plantillas", icon: "FileText", desc: "Mensajes WhatsApp/email base" },
+  { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo, roles y permisos" },
 ];
 
 export default async function ConfiguracionPage() {
