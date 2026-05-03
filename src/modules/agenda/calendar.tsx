@@ -7,6 +7,7 @@ import { Badge } from "@/shared/ui/badge";
 import { cn } from "@/shared/lib/utils";
 import { KIND_LABEL } from "./constants";
 import type { AgendaItem } from "./actions";
+import { MoveEventDialog } from "./move-event-dialog";
 
 interface Props {
   events: AgendaItem[];
@@ -45,6 +46,7 @@ export function AgendaCalendar({ events }: Props) {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  const [moveTarget, setMoveTarget] = useState<AgendaItem | null>(null);
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -134,20 +136,22 @@ export function AgendaCalendar({ events }: Props) {
                     </div>
                     <div className="space-y-1">
                       {dayEvents.slice(0, 3).map((ev) => (
-                        <div
+                        <button
+                          type="button"
                           key={ev.id}
+                          onClick={() => setMoveTarget(ev)}
                           className={cn(
-                            "truncate rounded-md px-1.5 py-1 text-[10px] font-semibold",
+                            "block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-pointer",
                             KIND_COLOR[ev.kind] ?? KIND_COLOR.manual,
                           )}
-                          title={`${KIND_LABEL[ev.kind]}: ${ev.title}`}
+                          title={`${KIND_LABEL[ev.kind]}: ${ev.title} — pulsa para mover`}
                         >
                           {new Date(ev.starts_at).toLocaleTimeString("es-ES", {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}{" "}
                           {ev.title}
-                        </div>
+                        </button>
                       ))}
                       {dayEvents.length > 3 && (
                         <Badge variant="outline" className="text-[10px]">
@@ -174,6 +178,18 @@ export function AgendaCalendar({ events }: Props) {
           </span>
         ))}
       </div>
+
+      {moveTarget && (
+        <MoveEventDialog
+          open={moveTarget !== null}
+          onOpenChange={(o) => {
+            if (!o) setMoveTarget(null);
+          }}
+          eventId={moveTarget.id}
+          currentStartsAt={moveTarget.starts_at}
+          eventTitle={moveTarget.title}
+        />
+      )}
     </div>
   );
 }

@@ -29,6 +29,20 @@ const STATUS_VARIANT: Record<
   cancelled: "destructive",
 };
 
+const STATUS_LABEL: Record<string, string> = {
+  scheduled: "Programado",
+  in_progress: "En curso",
+  paused: "En pausa",
+  completed: "Completado",
+  cancelled: "Cancelado",
+  no_show: "No presentado",
+  rescheduled: "Reprogramado",
+  open: "Abierta",
+  assigned: "Asignada",
+  resolved: "Resuelta",
+  closed: "Cerrada",
+};
+
 export default async function MiDiaPage() {
   const session = await requireSession();
   const items = await getMyDayItems().catch(() => []);
@@ -92,7 +106,7 @@ export default async function MiDiaPage() {
                           <Clock className="h-4 w-4 text-primary" />
                           <span className="text-base font-bold tabular-nums">{time}</span>
                           <Badge variant={STATUS_VARIANT[it.status] ?? "default"}>
-                            {it.status}
+                            {STATUS_LABEL[it.status] ?? it.status}
                           </Badge>
                         </div>
                         <Link
