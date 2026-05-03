@@ -67,139 +67,216 @@ export interface CoverData {
 
 export function drawCoverPage(d: DashDoc, c: CoverData): void {
   const { page, font, bold } = d;
-  // Banda superior con color de marca
+
+  // Fondo entero gris muy claro
   page.drawRectangle({
     x: 0,
-    y: PAGE_H - 220,
+    y: 0,
     width: PAGE_W,
-    height: 220,
+    height: PAGE_H,
+    color: rgb(0.97, 0.98, 0.99),
+  });
+
+  // Banda lateral izquierda color marca (de arriba abajo)
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: 14,
+    height: PAGE_H,
     color: TEAL,
   });
-  // Nombre de la empresa
-  page.drawText(c.companyName.toUpperCase(), {
-    x: MARGIN,
-    y: PAGE_H - 90,
-    size: 28,
-    font: bold,
-    color: WHITE,
-  });
-  page.drawRectangle({
-    x: MARGIN,
+
+  // === Cabecera ===
+  // Eyebrow pequeño + título
+  page.drawText("DOCUMENTO COMERCIAL", {
+    x: MARGIN + 10,
     y: PAGE_H - 110,
-    width: 60,
-    height: 3,
-    color: WHITE,
+    size: 9,
+    font: bold,
+    color: TEAL,
   });
-  // Título documento
   page.drawText(c.documentTitle.toUpperCase(), {
-    x: MARGIN,
-    y: PAGE_H - 160,
-    size: 18,
-    font,
-    color: WHITE,
+    x: MARGIN + 10,
+    y: PAGE_H - 145,
+    size: 32,
+    font: bold,
+    color: TEXT,
+  });
+  // Línea separadora
+  page.drawRectangle({
+    x: MARGIN + 10,
+    y: PAGE_H - 165,
+    width: 80,
+    height: 4,
+    color: TEAL,
+  });
+
+  // Empresa emisora arriba derecha
+  const companyW = bold.widthOfTextAtSize(c.companyName.toUpperCase(), 14);
+  page.drawText(c.companyName.toUpperCase(), {
+    x: PAGE_W - MARGIN - companyW,
+    y: PAGE_H - 100,
+    size: 14,
+    font: bold,
+    color: TEXT,
   });
   if (c.documentRef) {
-    page.drawText(c.documentRef, {
-      x: MARGIN,
-      y: PAGE_H - 185,
-      size: 12,
+    const refStr = `Ref. ${c.documentRef}`;
+    const refW = font.widthOfTextAtSize(refStr, 10);
+    page.drawText(refStr, {
+      x: PAGE_W - MARGIN - refW,
+      y: PAGE_H - 118,
+      size: 10,
       font,
-      color: WHITE,
+      color: MUTED,
     });
   }
 
-  // Tarjeta destinatario centrada
-  const cardW = PAGE_W - 2 * MARGIN - 40;
-  const cardX = MARGIN + 20;
-  const cardY = PAGE_H - 380;
+  // === Bloque central tarjeta destinatario ===
+  const cardX = MARGIN + 10;
+  const cardW = PAGE_W - 2 * MARGIN - 10;
+  const cardTop = PAGE_H - 240;
+  const cardH = 180;
+
+  // Tarjeta blanca con sombra (rectángulo gris detrás)
+  page.drawRectangle({
+    x: cardX + 3,
+    y: cardTop - cardH - 3,
+    width: cardW,
+    height: cardH,
+    color: rgb(0.88, 0.9, 0.94),
+  });
   page.drawRectangle({
     x: cardX,
-    y: cardY,
+    y: cardTop - cardH,
     width: cardW,
-    height: 130,
+    height: cardH,
     color: WHITE,
     borderColor: BORDER,
     borderWidth: 1,
   });
+
+  // Eyebrow tarjeta
   page.drawText("PRESENTADA A", {
-    x: cardX + 24,
-    y: cardY + 100,
-    size: 9,
+    x: cardX + 28,
+    y: cardTop - 32,
+    size: 10,
     font: bold,
-    color: MUTED,
+    color: TEAL,
   });
+  // Nombre cliente GRANDE
+  const recipientSize = c.recipientName.length > 30 ? 22 : 28;
   page.drawText(c.recipientName, {
-    x: cardX + 24,
-    y: cardY + 70,
-    size: 22,
+    x: cardX + 28,
+    y: cardTop - 70,
+    size: recipientSize,
     font: bold,
     color: TEXT,
   });
+  // Línea
+  page.drawRectangle({
+    x: cardX + 28,
+    y: cardTop - 85,
+    width: 60,
+    height: 2,
+    color: TEAL,
+  });
   if (c.recipientLine) {
     page.drawText(c.recipientLine, {
-      x: cardX + 24,
-      y: cardY + 50,
+      x: cardX + 28,
+      y: cardTop - 105,
       size: 11,
       font,
       color: MUTED,
     });
   }
+
+  // Fecha + validez en columnas dentro de la tarjeta
+  const innerColY = cardTop - cardH + 50;
   if (c.dateLabel) {
-    page.drawText(`Fecha: ${c.dateLabel}`, {
-      x: cardX + 24,
-      y: cardY + 24,
-      size: 10,
-      font,
+    page.drawText("FECHA", {
+      x: cardX + 28,
+      y: innerColY,
+      size: 8,
+      font: bold,
+      color: MUTED,
+    });
+    page.drawText(c.dateLabel, {
+      x: cardX + 28,
+      y: innerColY - 16,
+      size: 12,
+      font: bold,
       color: TEXT,
     });
   }
-
-  // Validez en bloque destacado
   if (c.validUntil) {
-    const vy = cardY - 60;
-    page.drawRectangle({
-      x: cardX,
-      y: vy,
-      width: cardW,
-      height: 50,
-      color: BG,
-      borderColor: BORDER,
-      borderWidth: 1,
-    });
+    const validX = cardX + cardW / 2 + 10;
     page.drawText("VÁLIDA HASTA", {
-      x: cardX + 24,
-      y: vy + 30,
-      size: 9,
+      x: validX,
+      y: innerColY,
+      size: 8,
       font: bold,
       color: MUTED,
     });
     page.drawText(c.validUntil, {
-      x: cardX + 24,
-      y: vy + 12,
+      x: validX,
+      y: innerColY - 16,
       size: 14,
       font: bold,
       color: TEAL,
     });
   }
 
-  // Pie de portada
-  page.drawText(c.companyName, {
-    x: MARGIN,
-    y: 50,
-    size: 9,
-    font,
-    color: MUTED,
+  // === Bloque inferior con mensaje ===
+  const msgY = cardTop - cardH - 40;
+  page.drawText("ESTIMADO/A CLIENTE,", {
+    x: MARGIN + 10,
+    y: msgY,
+    size: 10,
+    font: bold,
+    color: TEAL,
   });
-  page.drawText("Documento confidencial", {
-    x: PAGE_W - MARGIN - 110,
-    y: 50,
-    size: 9,
+  const msg =
+    "Le presentamos a continuación nuestra propuesta personalizada. En las siguientes páginas encontrará todos los detalles, productos, condiciones y precios desglosados.";
+  let mY = msgY - 20;
+  for (const line of wrap(font, msg, 11, PAGE_W - 2 * MARGIN - 20)) {
+    page.drawText(line, { x: MARGIN + 10, y: mY, size: 11, font, color: TEXT });
+    mY -= 16;
+  }
+
+  page.drawText("Quedamos a su disposición para cualquier consulta.", {
+    x: MARGIN + 10,
+    y: mY - 10,
+    size: 11,
     font,
     color: MUTED,
   });
 
-  // Cambia a una nueva página para que el contenido siguiente arranque
-  // en blanco en página 2.
+  // === Pie de portada ===
+  page.drawLine({
+    start: { x: MARGIN + 10, y: 70 },
+    end: { x: PAGE_W - MARGIN, y: 70 },
+    thickness: 0.5,
+    color: BORDER,
+  });
+  page.drawText(c.companyName, {
+    x: MARGIN + 10,
+    y: 50,
+    size: 9,
+    font: bold,
+    color: TEXT,
+  });
+  const conf = "Documento confidencial · uso exclusivo del destinatario";
+  const confW = font.widthOfTextAtSize(conf, 8);
+  page.drawText(conf, {
+    x: PAGE_W - MARGIN - confW,
+    y: 50,
+    size: 8,
+    font,
+    color: MUTED,
+  });
+
+  // Nueva página para el contenido detallado
   newPage(d);
 }
 
