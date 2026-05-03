@@ -132,7 +132,9 @@ export async function createContractFromProposal(proposalId: string) {
 
   const { data: proposal, error: pErr } = await supabase
     .from("proposals")
-    .select("id, status, customer_id, lead_id, total_cash_cents")
+    .select(
+      "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents, chosen_plan_type, chosen_duration_months",
+    )
     .eq("id", proposalId)
     .single();
   if (pErr) throw pErr;
@@ -142,6 +144,10 @@ export async function createContractFromProposal(proposalId: string) {
     customer_id: string | null;
     lead_id: string | null;
     total_cash_cents: number | null;
+    monthly_renting_min_cents: number | null;
+    monthly_rental_cents: number | null;
+    chosen_plan_type: "cash" | "rental" | "renting" | null;
+    chosen_duration_months: number | null;
   };
 
   if (p.status !== "accepted") throw new Error("La propuesta debe estar aceptada");
@@ -184,13 +190,16 @@ export async function createContractFromProposal(proposalId: string) {
     .maybeSingle();
   if (!hasAddr) pending.push("address");
 
-  // Snapshot cláusulas: copia los templates activos del plan al contrato.
-  // Si no hay templates aún (empresa nueva), siembra los defaults via RPC.
+  // El plan elegido en la propuesta determina el plan del contrato. Si la
+  // propuesta es vieja (sin chosen_plan_type) asumimos cash por compat.
+  const planType = p.chosen_plan_type ?? "cash";
+
+  // Snapshot cláusulas del PLAN ELEGIDO
   let { data: tpls } = await supaAny
     .from("contract_clause_templates")
     .select("title, body, display_order")
     .eq("company_id", session.company_id)
-    .eq("plan_type", "cash")
+    .eq("plan_type", planType)
     .eq("is_active", true)
     .order("display_order");
   if (!tpls || (tpls as Array<unknown>).length === 0) {
@@ -199,7 +208,7 @@ export async function createContractFromProposal(proposalId: string) {
       .from("contract_clause_templates")
       .select("title, body, display_order")
       .eq("company_id", session.company_id)
-      .eq("plan_type", "cash")
+      .eq("plan_type", planType)
       .eq("is_active", true)
       .order("display_order");
     tpls = r.data;
@@ -210,6 +219,16 @@ export async function createContractFromProposal(proposalId: string) {
     display_order: number;
   }>).map((t) => ({ title: t.title, body: t.body, display_order: t.display_order }));
 
+  // Importes según plan
+  const totalCashCents = planType === "cash" ? p.total_cash_cents : null;
+  const monthlyCents =
+    planType === "rental"
+      ? p.monthly_rental_cents
+      : planType === "renting"
+        ? p.monthly_renting_min_cents
+        : null;
+  const durationMonths = p.chosen_duration_months;
+
   // Crear contract
   const { data: created, error: cErr } = await supabase
     .from("contracts")
@@ -217,9 +236,11 @@ export async function createContractFromProposal(proposalId: string) {
       company_id: session.company_id,
       customer_id: p.customer_id,
       source_proposal_id: p.id,
-      plan_type: "cash",
-      total_cash_cents: p.total_cash_cents,
-      monthly_cents: null,
+      plan_type: planType,
+      duration_months: durationMonths,
+      permanence_months: planType === "rental" ? durationMonths : null,
+      total_cash_cents: totalCashCents,
+      monthly_cents: monthlyCents,
       status: has_provisional_data ? "pending_data" : "pending_signature",
       has_provisional_data,
       customer_snapshot: cust,
@@ -232,10 +253,12 @@ export async function createContractFromProposal(proposalId: string) {
   if (cErr) throw cErr;
   const contractId = (created as { id: string }).id;
 
-  // Copiar items desde proposal_items
+  // Copiar items desde proposal_items con TODA la configuración de la propuesta
   const { data: items } = await supabase
     .from("proposal_items")
-    .select("product_id, product_name_snapshot, quantity, unit_price_cash_cents, display_order")
+    .select(
+      "product_id, product_name_snapshot, quantity, unit_price_cash_cents, display_order, installation_included, installation_price_cents, maintenance_included, maintenance_until_date, maintenance_price_cents, maintenance_periodicity_months, deposit_cents, charge_first_payment_now",
+    )
     .eq("proposal_id", p.id)
     .order("display_order");
   type PI = {
@@ -244,10 +267,17 @@ export async function createContractFromProposal(proposalId: string) {
     quantity: number;
     unit_price_cash_cents: number | null;
     display_order: number;
+    installation_included: boolean;
+    installation_price_cents: number | null;
+    maintenance_included: boolean;
+    maintenance_until_date: string | null;
+    maintenance_price_cents: number | null;
+    maintenance_periodicity_months: number | null;
+    deposit_cents: number | null;
+    charge_first_payment_now: boolean;
   };
   const ps = (items ?? []) as PI[];
 
-  // Necesitamos product_kind para snapshot
   if (ps.length > 0) {
     const ids = ps.map((i) => i.product_id);
     const { data: prods } = await supabase.from("products").select("id, kind").in("id", ids);
@@ -267,17 +297,77 @@ export async function createContractFromProposal(proposalId: string) {
     await supabase.from("contract_items").insert(rows as never);
   }
 
-  // Crear un pago básico contado por el total
-  if (p.total_cash_cents && p.total_cash_cents > 0) {
-    await supabase.from("contract_payments").insert({
-      contract_id: contractId,
-      company_id: session.company_id,
+  // === Generar pagos del contrato según plan ===
+  const payments: Array<{
+    concept: string;
+    amount_cents: number;
+    method: string;
+    moment: string;
+  }> = [];
+
+  // 1) Plan contado: pago único total
+  if (planType === "cash" && totalCashCents && totalCashCents > 0) {
+    payments.push({
       concept: "Pago contado",
-      amount_cents: p.total_cash_cents,
+      amount_cents: totalCashCents,
       method: "transfer",
       moment: "on_signature",
-      status: "pending",
-    } as never);
+    });
+  }
+
+  // 2) Fianzas (solo alquiler)
+  if (planType === "rental") {
+    for (const it of ps) {
+      if (it.deposit_cents && it.deposit_cents > 0) {
+        payments.push({
+          concept: `Fianza · ${it.product_name_snapshot}`,
+          amount_cents: it.deposit_cents * it.quantity,
+          method: "transfer",
+          moment: "on_signature",
+        });
+      }
+    }
+    // 3) 1ª cuota cobrada al firmar (si se marcó en propuesta)
+    for (const it of ps) {
+      if (it.charge_first_payment_now && it.unit_price_cash_cents) {
+        payments.push({
+          concept: `1ª cuota · ${it.product_name_snapshot}`,
+          amount_cents: (it.unit_price_cash_cents ?? 0) * it.quantity,
+          method: "transfer",
+          moment: "on_signature",
+        });
+      }
+    }
+  }
+
+  // 4) Instalación si NO está incluida
+  for (const it of ps) {
+    if (
+      !it.installation_included &&
+      it.installation_price_cents &&
+      it.installation_price_cents > 0
+    ) {
+      payments.push({
+        concept: `Instalación · ${it.product_name_snapshot}`,
+        amount_cents: it.installation_price_cents * it.quantity,
+        method: "cash",
+        moment: "on_installation",
+      });
+    }
+  }
+
+  if (payments.length > 0) {
+    await supabase.from("contract_payments").insert(
+      payments.map((pay) => ({
+        contract_id: contractId,
+        company_id: session.company_id,
+        concept: pay.concept,
+        amount_cents: pay.amount_cents,
+        method: pay.method,
+        moment: pay.moment,
+        status: "pending",
+      })) as never,
+    );
   }
 
   await supabase.from("events").insert({
