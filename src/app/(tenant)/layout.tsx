@@ -42,6 +42,20 @@ export default async function TenantLayout({ children }: { children: React.React
 
   const unread = await getUnreadCountSafe();
 
+  const ROLE_LABEL: Record<string, string> = {
+    company_admin: "Admin",
+    technical_director: "Director técnico",
+    commercial_director: "Director comercial",
+    telemarketing_director: "Director TMK",
+    installer: "Instalador",
+    sales_rep: "Comercial",
+    telemarketer: "Teleoperador",
+  };
+  const primaryRole = session.is_superadmin
+    ? "Superadmin"
+    : (session.roles.find((r) => ROLE_LABEL[r]) ?? null);
+  const roleLabel = primaryRole ? (ROLE_LABEL[primaryRole] ?? primaryRole) : null;
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -55,6 +69,7 @@ export default async function TenantLayout({ children }: { children: React.React
           unreadCount={unread}
           fullName={session.full_name}
           email={session.email}
+          roleLabel={roleLabel}
         />
         <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-4 lg:p-8">
           {children}

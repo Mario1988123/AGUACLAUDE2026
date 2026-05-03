@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, ChevronDown } from "lucide-react";
 import { NotificationsBell } from "./notifications-poller";
 import { GlobalSearchTrigger } from "@/modules/search/global-search";
 
@@ -9,6 +9,7 @@ interface HeaderProps {
   unreadCount?: number;
   fullName?: string | null;
   email?: string | null;
+  roleLabel?: string | null;
 }
 
 function initials(name: string | null | undefined, email: string | null | undefined): string {
@@ -19,7 +20,7 @@ function initials(name: string | null | undefined, email: string | null | undefi
   return src.slice(0, 2).toUpperCase();
 }
 
-export function Header({ unreadCount = 0, fullName, email }: HeaderProps) {
+export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
@@ -43,10 +44,21 @@ export function Header({ unreadCount = 0, fullName, email }: HeaderProps) {
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground hover:opacity-90"
+            className="flex items-center gap-2 rounded-2xl px-2 py-1.5 hover:bg-muted"
             aria-label="Menú usuario"
           >
-            {initials(fullName, email)}
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+              {initials(fullName, email)}
+            </div>
+            <div className="hidden text-left sm:block">
+              <div className="text-sm font-bold leading-tight">
+                {fullName ?? email ?? "Usuario"}
+              </div>
+              {roleLabel && (
+                <div className="text-xs text-muted-foreground leading-tight">{roleLabel}</div>
+              )}
+            </div>
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
           </button>
           {open && (
             <div className="absolute right-0 top-14 z-50 w-64 rounded-2xl border border-border bg-card shadow-lg">

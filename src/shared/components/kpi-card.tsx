@@ -35,15 +35,18 @@ export function KpiCard({
   const TrendIcon = delta?.positive ? Icons.TrendingUp : Icons.TrendingDown;
 
   return (
-    <div className={cn("rounded-2xl border border-border bg-card p-5 shadow-sm shadow-black/[0.02]", className)}>
-      <div className="flex items-start justify-between">
-        <div className="space-y-1.5">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {label}
-          </div>
-          <div className="text-3xl font-extrabold tracking-tight">{value}</div>
+    <div className={cn("rounded-2xl border border-border bg-card p-5", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1.5 min-w-0">
+          <div className="text-sm font-medium text-muted-foreground">{label}</div>
+          <div className="text-3xl font-extrabold tracking-tight tabular-nums">{value}</div>
         </div>
-        <div className={cn("flex h-12 w-12 items-center justify-center rounded-2xl", ICON_BG[iconColor])}>
+        <div
+          className={cn(
+            "flex h-14 w-14 shrink-0 items-center justify-center rounded-full",
+            ICON_BG[iconColor],
+          )}
+        >
           <Icon className="h-6 w-6" />
         </div>
       </div>

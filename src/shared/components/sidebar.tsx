@@ -129,13 +129,19 @@ function SidebarGroup({
             key={m.key}
             href={m.href as never}
             className={cn(
-              "flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors",
+              "relative flex min-h-12 items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-colors",
               active
-                ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md shadow-primary/20"
+                ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                 : "text-foreground/80 hover:bg-sidebar-accent hover:text-foreground",
             )}
             prefetch={false}
           >
+            {active && (
+              <span
+                aria-hidden
+                className="absolute -left-4 top-2 bottom-2 w-1 rounded-r-full bg-primary"
+              />
+            )}
             <Icon className="h-5 w-5 shrink-0" />
             <span className="truncate">{m.label}</span>
           </Link>

@@ -2,10 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Badge } from "@/shared/ui/badge";
 import { LeadBulkToolbar } from "./bulk-toolbar";
-import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "./schemas";
+import { STATUS_LABEL, ORIGIN_LABEL } from "./schemas";
+import { StatusPill } from "@/shared/components/status-pill";
 import type { LeadListItem } from "./types";
+
+const LEAD_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  new: "info",
+  contacted: "onhold",
+  proposal_created: "processing",
+  proposal_sent: "processing",
+  free_trial_proposed: "processing",
+  converted: "success",
+  lost: "rejected",
+  expired: "neutral",
+};
 
 interface Props {
   leads: LeadListItem[];
@@ -101,7 +115,10 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                   </td>
                   <td className="px-4 py-3 text-xs">{ORIGIN_LABEL[l.origin]}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={STATUS_VARIANT[l.status]}>{STATUS_LABEL[l.status]}</Badge>
+                    <StatusPill
+                      label={STATUS_LABEL[l.status]}
+                      tone={LEAD_TONE[l.status] ?? "info"}
+                    />
                   </td>
                   <td className="px-4 py-3 text-xs">
                     {l.potential === "unknown" ? "—" : l.potential}
