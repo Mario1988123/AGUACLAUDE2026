@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { notifyIncidentCreated } from "@/modules/notifications/notifier";
+import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 const incidentCreateSchema = z.object({
   title: z.string().min(2),
@@ -115,6 +116,13 @@ export async function resolveIncidentAction(id: string, notes: string) {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  const { data: prev } = await supabase
+    .from("incidents")
+    .select("assigned_user_id, company_id")
+    .eq("id", id)
+    .single();
+
   await supabase
     .from("incidents")
     .update({
@@ -124,6 +132,29 @@ export async function resolveIncidentAction(id: string, notes: string) {
       resolution_notes: notes,
     })
     .eq("id", id);
+
+  // Puntos al asignado (o resolutor si no había asignado)
+  if (session.company_id) {
+    try {
+      const technicianId =
+        (prev as { assigned_user_id: string | null } | null)?.assigned_user_id ??
+        session.user_id;
+      const cfg = await getPointsSettings(session.company_id);
+      if (technicianId && cfg.points_per_incident > 0) {
+        await awardPoints({
+          company_id: session.company_id,
+          user_id: technicianId,
+          points: cfg.points_per_incident,
+          reason: "incident_resolved",
+          subject_type: "incident",
+          subject_id: id,
+        });
+      }
+    } catch {
+      /* no-op */
+    }
+  }
+
   revalidatePath(`/incidencias`);
 }
 

@@ -8,6 +8,7 @@ import { leadCreateSchema } from "./schemas";
 import type { LeadDetail, LeadListItem, LeadStatus } from "./types";
 import { notifyLeadCreated } from "@/modules/notifications/notifier";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
+import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 export async function listLeads(filters?: {
   status?: LeadStatus;
@@ -191,6 +192,23 @@ export async function createLeadAction(formData: FormData) {
       ? parsed.trade_name || parsed.legal_name || "Sin nombre"
       : `${parsed.first_name ?? ""} ${parsed.last_name ?? ""}`.trim() || "Sin nombre";
   await notifyLeadCreated(session.company_id, newId, leadName);
+
+  // Puntos: lead captado por telemarketer (origin tmk)
+  if (parsed.origin === "tmk" && session.roles.includes("telemarketer")) {
+    try {
+      const cfg = await getPointsSettings(session.company_id);
+      await awardPoints({
+        company_id: session.company_id,
+        user_id: session.user_id,
+        points: cfg.points_lead_captured,
+        reason: "lead_captured",
+        subject_type: "lead",
+        subject_id: newId,
+      });
+    } catch {
+      /* no-op fail-soft */
+    }
+  }
 
   revalidatePath("/leads");
   redirect(`/leads/${newId}` as never);

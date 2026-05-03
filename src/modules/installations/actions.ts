@@ -12,6 +12,7 @@ import {
   completeInstallationSchema,
 } from "./schemas";
 import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
+import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
 
@@ -537,6 +538,34 @@ export async function completeInstallation(input: unknown) {
     parsed.id,
     (instRef as { reference_code: string | null } | null)?.reference_code ?? null,
   );
+
+  // Puntos al instalador
+  if (session.company_id) {
+    try {
+      const { data: full } = await supabase
+        .from("installations")
+        .select("installer_user_id")
+        .eq("id", parsed.id)
+        .maybeSingle();
+      const installerId =
+        (full as { installer_user_id: string | null } | null)?.installer_user_id ??
+        session.user_id;
+      const cfg = await getPointsSettings(session.company_id);
+      if (installerId && cfg.points_per_installation > 0) {
+        await awardPoints({
+          company_id: session.company_id,
+          user_id: installerId,
+          points: cfg.points_per_installation,
+          reason: "installation_completed",
+          subject_type: "installation",
+          subject_id: parsed.id,
+          installation_id: parsed.id,
+        });
+      }
+    } catch {
+      /* no-op */
+    }
+  }
 
   revalidatePath(`/instalaciones/${parsed.id}`);
   revalidatePath("/instalaciones");

@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
+import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 export interface MaintenanceRow {
   id: string;
@@ -264,6 +265,29 @@ export async function completeMaintenanceAction(input: unknown) {
     payload: { items_replaced: parsed.replaced_items.length, duration_seconds: durationSec },
     actor_user_id: session.user_id,
   });
+
+  // Puntos al técnico
+  if (session.company_id) {
+    try {
+      const technicianId =
+        (prev as { technician_user_id: string | null } | null)?.technician_user_id ??
+        session.user_id;
+      const cfg = await getPointsSettings(session.company_id);
+      if (technicianId && cfg.points_per_maintenance > 0) {
+        await awardPoints({
+          company_id: session.company_id,
+          user_id: technicianId,
+          points: cfg.points_per_maintenance,
+          reason: "maintenance_completed",
+          subject_type: "maintenance",
+          subject_id: parsed.id,
+        });
+      }
+    } catch {
+      /* no-op */
+    }
+  }
+
   revalidatePath(`/mantenimientos/${parsed.id}`);
   revalidatePath("/mantenimientos");
 }
