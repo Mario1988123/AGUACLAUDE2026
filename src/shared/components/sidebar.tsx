@@ -39,7 +39,7 @@ export function Sidebar({ userRoles, isSuperadmin, activeModuleKeys, fullName }:
   const sidebarContent = (
     <aside
       className={cn(
-        "sidebar-scrollbar flex h-screen w-64 flex-col border-r bg-sidebar text-sidebar-foreground border-sidebar-border",
+        "sidebar-scrollbar flex h-screen w-64 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border",
       )}
     >
       <div className="flex h-20 items-center justify-between border-b border-sidebar-border px-6">
@@ -136,12 +136,6 @@ function SidebarGroup({
             )}
             prefetch={false}
           >
-            {active && (
-              <span
-                aria-hidden
-                className="absolute -left-4 top-2 bottom-2 w-1 rounded-r-full bg-primary"
-              />
-            )}
             <Icon className="h-5 w-5 shrink-0" />
             <span className="truncate">{m.label}</span>
           </Link>

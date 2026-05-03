@@ -54,15 +54,15 @@
   /* Radius */
   --radius: 0.5rem;
   
-  /* Sidebar - Darker navy for contrast */
-  --sidebar: oklch(0.22 0.06 255);
-  --sidebar-foreground: oklch(0.92 0.01 250);
-  --sidebar-primary: oklch(0.55 0.18 245);
+  /* Sidebar DashStack: blanco con item activo azul */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.20 0.01 250);
+  --sidebar-primary: oklch(0.62 0.20 260);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.30 0.06 255);
-  --sidebar-accent-foreground: oklch(0.92 0.01 250);
-  --sidebar-border: oklch(0.28 0.05 255);
-  --sidebar-ring: oklch(0.55 0.18 245);
+  --sidebar-accent: oklch(0.97 0.005 250);
+  --sidebar-accent-foreground: oklch(0.20 0.01 250);
+  --sidebar-border: oklch(0.93 0.005 250);
+  --sidebar-ring: oklch(0.62 0.20 260);
 
   /* Semantic state colors (no shadcn default — necesarios en CRM) */
   --success: oklch(0.55 0.18 155);
