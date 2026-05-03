@@ -1,4 +1,4 @@
-import { listProducts } from "@/modules/products/actions";
+import { listProductsForProposal } from "@/modules/products/actions";
 import { listCustomers } from "@/modules/customers/actions";
 import { listLeads, getLead } from "@/modules/leads/actions";
 import { ProposalCreateForm } from "@/modules/proposals/create-form";
@@ -9,15 +9,13 @@ export default async function NuevaPropuestaPage({
   searchParams: Promise<{ customer_id?: string; lead_id?: string; lead?: string }>;
 }) {
   const sp = await searchParams;
-  // Soportar tanto `?lead_id=` como `?lead=` (link viejo y nuevo)
   const leadId = sp.lead_id ?? sp.lead;
   const [products, customers, leads] = await Promise.all([
-    listProducts(),
+    listProductsForProposal(),
     listCustomers(),
     listLeads().catch(() => []),
   ]);
 
-  // Si hay leadId, traer su display_name para mostrarlo arriba
   let leadDisplay: string | null = null;
   if (leadId) {
     try {
@@ -41,18 +39,14 @@ export default async function NuevaPropuestaPage({
               Para el lead <strong>{leadDisplay}</strong>
             </>
           ) : (
-            "Selecciona destinatario, añade productos y revisa precios."
+            "Selecciona destinatario, plan único y configura instalación, mantenimiento y precios por producto."
           )}
         </p>
       </div>
       <ProposalCreateForm
         customers={customers.map((c) => ({ id: c.id, name: c.display_name }))}
         leads={leads.map((l) => ({ id: l.id, name: l.display_name }))}
-        products={products.map((p) => ({
-          id: p.id,
-          name: p.name,
-          cash_price_cents: p.cash_price_cents,
-        }))}
+        products={products}
         defaultCustomerId={sp.customer_id}
         defaultLeadId={leadId}
       />

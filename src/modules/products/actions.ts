@@ -68,6 +68,61 @@ export async function listProducts(filters?: {
   }));
 }
 
+export interface ProductForProposal {
+  id: string;
+  name: string;
+  main_image_url: string | null;
+  plans: Array<{
+    plan_type: "cash" | "rental" | "renting";
+    duration_months: number | null;
+    permanence_months: number | null;
+    monthly_price_cents: number | null;
+    total_price_cents: number;
+    min_authorized_cents: number | null;
+    absolute_min_cents: number | null;
+  }>;
+}
+
+/**
+ * Listado de productos activos con TODOS sus planes activos. Lo usa el form
+ * de creación de propuesta para saber qué planes ofrecer y precargar cuotas.
+ */
+export async function listProductsForProposal(): Promise<ProductForProposal[]> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, main_image_url")
+    .is("deleted_at", null)
+    .eq("is_active", true)
+    .order("name");
+  type P = { id: string; name: string; main_image_url: string | null };
+  const list = (products ?? []) as P[];
+  if (list.length === 0) return [];
+  const ids = list.map((p) => p.id);
+  const { data: plans } = await supabase
+    .from("product_pricing_plans")
+    .select(
+      "product_id, plan_type, duration_months, permanence_months, monthly_price_cents, total_price_cents, min_authorized_cents, absolute_min_cents",
+    )
+    .in("product_id", ids)
+    .eq("is_active", true);
+  type Pl = ProductForProposal["plans"][number] & { product_id: string };
+  const plansByProduct = new Map<string, Pl[]>();
+  for (const pl of (plans ?? []) as Pl[]) {
+    const arr = plansByProduct.get(pl.product_id) ?? [];
+    arr.push(pl);
+    plansByProduct.set(pl.product_id, arr);
+  }
+  return list.map((p) => ({
+    id: p.id,
+    name: p.name,
+    main_image_url: p.main_image_url,
+    plans: plansByProduct.get(p.id) ?? [],
+  }));
+}
+
 export async function getProduct(id: string): Promise<ProductDetail> {
   await requireSession();
   const supabase = await createClient();

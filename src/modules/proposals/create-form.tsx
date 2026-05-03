@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Link from "next/link";
+import { useMemo, useState, useTransition } from "react";
+import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createProposalAction } from "./actions";
-import { Trash2 } from "lucide-react";
+import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
+import type { ProductForProposal } from "@/modules/products/actions";
+
+type PlanType = "cash" | "rental" | "renting";
 
 interface Props {
   customers: { id: string; name: string }[];
   leads?: { id: string; name: string }[];
-  products: { id: string; name: string; cash_price_cents: number | null }[];
+  products: ProductForProposal[];
   defaultCustomerId?: string;
   defaultLeadId?: string;
 }
@@ -20,11 +23,51 @@ interface Props {
 interface ItemRow {
   product_id: string;
   quantity: number;
+  /** Cuota o precio total (cash=total, rental/renting=mensual). Céntimos. */
   unit_price_cents: number;
+  installation_included: boolean;
+  installation_price_cents: number | null;
+  maintenance_included: boolean;
+  maintenance_until_date: string | null;
+  maintenance_price_cents: number | null;
+  maintenance_periodicity_months: number | null;
+  deposit_cents: number | null;
+  charge_first_payment_now: boolean;
 }
 
-function formatCents(cents: number) {
+function eur(cents: number | null | undefined): string {
+  if (cents == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
+}
+
+function emptyItem(
+  productId: string,
+  plan: PlanType,
+  plans: ProductForProposal["plans"],
+  duration: number | null,
+): ItemRow {
+  const planMatch = plans.find((p) => {
+    if (p.plan_type !== plan) return false;
+    if (plan === "renting" && duration) return p.duration_months === duration;
+    return true;
+  });
+  const cuota =
+    plan === "cash"
+      ? planMatch?.total_price_cents ?? 0
+      : planMatch?.monthly_price_cents ?? 0;
+  return {
+    product_id: productId,
+    quantity: 1,
+    unit_price_cents: cuota,
+    installation_included: true,
+    installation_price_cents: null,
+    maintenance_included: false,
+    maintenance_until_date: null,
+    maintenance_price_cents: null,
+    maintenance_periodicity_months: 12,
+    deposit_cents: plan === "rental" ? 0 : null,
+    charge_first_payment_now: false,
+  };
 }
 
 export function ProposalCreateForm({
@@ -37,23 +80,41 @@ export function ProposalCreateForm({
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [validityUntil, setValidityUntil] = useState("");
   const [notes, setNotes] = useState("");
+  const [planType, setPlanType] = useState<PlanType>("cash");
+  const [duration, setDuration] = useState<number | null>(48);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [pending, startTransition] = useTransition();
 
+  const availableProducts = useMemo(
+    () =>
+      products.filter((p) =>
+        p.plans.some((pl) => {
+          if (pl.plan_type !== planType) return false;
+          if (planType === "renting" && duration) return pl.duration_months === duration;
+          return true;
+        }),
+      ),
+    [products, planType, duration],
+  );
+
+  const rentingDurations = useMemo(() => {
+    if (planType !== "renting") return [];
+    const all = new Set<number>();
+    products.forEach((p) =>
+      p.plans
+        .filter((pl) => pl.plan_type === "renting" && pl.duration_months)
+        .forEach((pl) => all.add(pl.duration_months!)),
+    );
+    return Array.from(all).sort((a, b) => a - b);
+  }, [products, planType]);
+
   function addItem() {
-    if (products.length === 0) {
-      notify.warning("No hay productos disponibles");
+    if (availableProducts.length === 0) {
+      notify.warning(`No hay productos con plan ${PLAN_TYPE_LABEL[planType]} configurado`);
       return;
     }
-    const first = products[0]!;
-    setItems((prev) => [
-      ...prev,
-      {
-        product_id: first.id,
-        quantity: 1,
-        unit_price_cents: first.cash_price_cents ?? 0,
-      },
-    ]);
+    const first = availableProducts[0]!;
+    setItems((prev) => [...prev, emptyItem(first.id, planType, first.plans, duration)]);
   }
 
   function updateItem(idx: number, patch: Partial<ItemRow>) {
@@ -62,8 +123,11 @@ export function ProposalCreateForm({
         if (i !== idx) return it;
         const next = { ...it, ...patch };
         if (patch.product_id) {
-          const p = products.find((p) => p.id === patch.product_id);
-          if (p && p.cash_price_cents != null) next.unit_price_cents = p.cash_price_cents;
+          const prod = products.find((p) => p.id === patch.product_id);
+          if (prod) {
+            const fresh = emptyItem(patch.product_id, planType, prod.plans, duration);
+            return { ...next, ...fresh, quantity: next.quantity };
+          }
         }
         return next;
       }),
@@ -74,10 +138,25 @@ export function ProposalCreateForm({
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  const total = items.reduce((s, it) => s + it.unit_price_cents * it.quantity, 0);
+  function changePlan(newPlan: PlanType) {
+    setPlanType(newPlan);
+    setItems([]);
+    if (newPlan === "rental" && !duration) setDuration(48);
+    if (newPlan === "cash") setDuration(null);
+  }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const approvalNeeded = items.some((it) => {
+    const prod = products.find((p) => p.id === it.product_id);
+    if (!prod) return false;
+    const plan = prod.plans.find((pl) => {
+      if (pl.plan_type !== planType) return false;
+      if (planType === "renting" && duration) return pl.duration_months === duration;
+      return true;
+    });
+    return plan?.min_authorized_cents != null && it.unit_price_cents < plan.min_authorized_cents;
+  });
+
+  function submit() {
     if (!customerId && !defaultLeadId) {
       notify.warning("Selecciona destinatario");
       return;
@@ -86,11 +165,22 @@ export function ProposalCreateForm({
       notify.warning("Añade al menos un producto");
       return;
     }
+    for (const it of items) {
+      if (
+        !it.maintenance_included &&
+        ((it.maintenance_price_cents ?? 0) < 0 || !it.maintenance_periodicity_months)
+      ) {
+        notify.warning("Precio + periodicidad de mantenimiento obligatorios cuando no incluido");
+        return;
+      }
+    }
     startTransition(async () => {
       try {
         await createProposalAction({
           customer_id: customerId || undefined,
           lead_id: defaultLeadId,
+          chosen_plan_type: planType,
+          chosen_duration_months: planType === "cash" ? null : duration,
           validity_until: validityUntil || undefined,
           notes,
           items,
@@ -106,140 +196,362 @@ export function ProposalCreateForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 rounded-lg border bg-card p-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>{defaultLeadId ? "Lead" : "Cliente *"}</Label>
-          {defaultLeadId ? (
-            <div className="flex h-11 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-base">
-              <span className="truncate font-semibold">
-                {leads.find((l) => l.id === defaultLeadId)?.name ?? "Lead seleccionado"}
-              </span>
-            </div>
-          ) : (
-            <select
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-            >
-              <option value="">Selecciona un cliente</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          )}
-          {defaultLeadId && (
-            <p className="text-xs text-muted-foreground">
-              Propuesta sobre lead pre-cliente. Al aceptar se convertirá en cliente.
-            </p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="validity">Validez hasta</Label>
-          <Input
-            id="validity"
-            type="date"
-            value={validityUntil}
-            onChange={(e) => setValidityUntil(e.target.value)}
-          />
-        </div>
+    <div className="space-y-6 rounded-2xl border bg-card p-6">
+      <div className="space-y-2">
+        <Label>{defaultLeadId ? "Lead" : "Cliente *"}</Label>
+        {defaultLeadId ? (
+          <div className="flex h-12 w-full items-center rounded-xl border border-input bg-muted/30 px-3 font-semibold">
+            {leads.find((l) => l.id === defaultLeadId)?.name ?? "Lead"}
+          </div>
+        ) : (
+          <select
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+            className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+          >
+            <option value="">Selecciona un cliente</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
+
+      <div className="space-y-2">
+        <Label>Plan de pago de la propuesta *</Label>
+        <div className="flex gap-2">
+          {(["cash", "rental", "renting"] as PlanType[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => changePlan(p)}
+              className={`flex-1 rounded-xl border-2 p-4 text-center font-bold transition-all ${
+                planType === p
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted/30"
+              }`}
+            >
+              {PLAN_TYPE_LABEL[p]}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Toda la propuesta usa un único plan. Si quieres ofrecer dos opciones (alquiler y
+          contado), crea dos propuestas separadas y el cliente elige una.
+        </p>
+      </div>
+
+      {planType === "rental" && (
+        <div className="space-y-2">
+          <Label>Permanencia (meses) *</Label>
+          <Input
+            type="number"
+            min={1}
+            value={duration ?? 48}
+            onChange={(e) => setDuration(Number(e.target.value) || 48)}
+            className="max-w-[200px]"
+          />
+          <p className="text-xs text-muted-foreground">Por defecto 48 meses, modificable.</p>
+        </div>
+      )}
+
+      {planType === "renting" && (
+        <div className="space-y-2">
+          <Label>Duración renting *</Label>
+          <div className="flex flex-wrap gap-2">
+            {rentingDurations.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Ningún producto tiene plan de renting configurado.
+              </p>
+            ) : (
+              rentingDurations.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setDuration(m)}
+                  className={`rounded-xl border-2 px-4 py-2 font-bold ${
+                    duration === m
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:bg-muted/30"
+                  }`}
+                >
+                  {m} meses
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       <fieldset className="space-y-3">
         <div className="flex items-center justify-between">
           <Label>Productos</Label>
           <Button type="button" variant="outline" size="sm" onClick={addItem}>
-            + Añadir
+            <Plus className="h-4 w-4" /> Añadir producto
           </Button>
         </div>
-        {items.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Pulsa “Añadir” para incluir productos.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {items.map((it, idx) => (
-              <div
-                key={idx}
-                className="grid items-end gap-2 rounded-md border bg-muted/20 p-3 sm:grid-cols-[2fr_80px_140px_44px]"
-              >
-                <div>
-                  <Label className="text-xs">Producto</Label>
-                  <select
-                    value={it.product_id}
-                    onChange={(e) => updateItem(idx, { product_id: e.target.value })}
-                    className="flex h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  >
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label className="text-xs">Cant.</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={it.quantity}
-                    onChange={(e) =>
-                      updateItem(idx, { quantity: Math.max(1, Number(e.target.value)) })
-                    }
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Precio unit. (cts)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={it.unit_price_cents}
-                    onChange={(e) =>
-                      updateItem(idx, { unit_price_cents: Math.max(0, Number(e.target.value)) })
-                    }
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeItem(idx)}
-                  aria-label="Eliminar"
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+
+        {items.length === 0 && (
+          <div className="rounded-xl border border-dashed bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+            Sin productos. Pulsa &laquo;Añadir producto&raquo; para empezar.
           </div>
         )}
+
+        {items.map((it, idx) => (
+          <ItemEditor
+            key={idx}
+            item={it}
+            availableProducts={availableProducts}
+            allProducts={products}
+            planType={planType}
+            duration={duration}
+            onChange={(patch) => updateItem(idx, patch)}
+            onRemove={() => removeItem(idx)}
+          />
+        ))}
       </fieldset>
 
-      <div className="rounded-md bg-muted/40 p-4 text-right">
-        <div className="text-sm text-muted-foreground">Total contado</div>
-        <div className="text-2xl font-bold tabular-nums">{formatCents(total)}</div>
+      {approvalNeeded && (
+        <div className="flex items-start gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          <AlertTriangle className="h-5 w-5 shrink-0" />
+          <span>
+            Alguna cuota está por debajo del mínimo autorizado. Al guardar, la propuesta quedará{" "}
+            <strong>pendiente de aprobación</strong> de admin/director.
+          </span>
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Validez hasta</Label>
+          <Input
+            type="date"
+            value={validityUntil}
+            onChange={(e) => setValidityUntil(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label>Notas (opcional)</Label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="notes">Notas</Label>
-        <textarea
-          id="notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          className="w-full rounded-md border border-input bg-background p-3 text-sm"
-        />
+      <div className="flex justify-end gap-2 border-t pt-4">
+        <Button onClick={submit} disabled={pending} variant="success" size="lg">
+          {pending ? "Creando…" : "Crear propuesta"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ItemEditor({
+  item,
+  availableProducts,
+  allProducts,
+  planType,
+  duration,
+  onChange,
+  onRemove,
+}: {
+  item: ItemRow;
+  availableProducts: ProductForProposal[];
+  allProducts: ProductForProposal[];
+  planType: PlanType;
+  duration: number | null;
+  onChange: (patch: Partial<ItemRow>) => void;
+  onRemove: () => void;
+}) {
+  const product = allProducts.find((p) => p.id === item.product_id);
+  const plan = product?.plans.find((pl) => {
+    if (pl.plan_type !== planType) return false;
+    if (planType === "renting" && duration) return pl.duration_months === duration;
+    return true;
+  });
+  const minAuth = plan?.min_authorized_cents ?? null;
+  const belowMin = minAuth != null && item.unit_price_cents < minAuth;
+  const cuotaLabel = planType === "cash" ? "Precio total (€)" : "Cuota mensual (€)";
+
+  return (
+    <div className="space-y-3 rounded-xl border bg-background p-4">
+      <div className="flex items-start gap-3">
+        <select
+          value={item.product_id}
+          onChange={(e) => onChange({ product_id: e.target.value })}
+          className="h-11 flex-1 rounded-md border border-input bg-background px-3 text-base"
+        >
+          {availableProducts.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <Button variant="ghost" size="icon" onClick={onRemove} type="button">
+          <Trash2 className="h-4 w-4 text-destructive" />
+        </Button>
       </div>
 
-      <div className="flex justify-end gap-3">
-        <Button type="button" variant="outline" asChild>
-          <Link href="/propuestas">Cancelar</Link>
-        </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Creando..." : "Crear propuesta"}
-        </Button>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Cantidad</Label>
+          <Input
+            type="number"
+            min={1}
+            value={item.quantity}
+            onChange={(e) => onChange({ quantity: Number(e.target.value) || 1 })}
+          />
+        </div>
+        <div className="space-y-1 sm:col-span-2">
+          <Label className="text-xs">{cuotaLabel}</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min={0}
+            value={(item.unit_price_cents / 100).toFixed(2)}
+            onChange={(e) =>
+              onChange({ unit_price_cents: Math.round(Number(e.target.value) * 100) })
+            }
+            className={belowMin ? "border-amber-400 focus-visible:ring-amber-400" : ""}
+          />
+          {belowMin && (
+            <p className="text-[10px] text-amber-700">
+              Por debajo del mínimo autorizado ({eur(minAuth)}). Requerirá aprobación.
+            </p>
+          )}
+        </div>
       </div>
-    </form>
+
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={item.installation_included}
+            onChange={(e) => onChange({ installation_included: e.target.checked })}
+            className="h-4 w-4"
+          />
+          <span className="text-sm font-bold">Instalación incluida en la cuota / precio</span>
+        </label>
+        {!item.installation_included && (
+          <div className="mt-2 space-y-1">
+            <Label className="text-xs">Precio instalación aparte (€)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              value={(item.installation_price_cents ?? 0) / 100}
+              onChange={(e) =>
+                onChange({
+                  installation_price_cents: Math.round(Number(e.target.value) * 100),
+                })
+              }
+              className="max-w-[200px]"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border bg-muted/20 p-3">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={item.maintenance_included}
+            onChange={(e) => onChange({ maintenance_included: e.target.checked })}
+            className="h-4 w-4"
+          />
+          <span className="text-sm font-bold">Mantenimiento incluido</span>
+        </label>
+        {item.maintenance_included ? (
+          <div className="mt-2 space-y-1">
+            <Label className="text-xs">Cubierto hasta fecha</Label>
+            <Input
+              type="date"
+              value={item.maintenance_until_date ?? ""}
+              onChange={(e) => onChange({ maintenance_until_date: e.target.value || null })}
+              className="max-w-[200px]"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Por defecto, lo que dure el contrato. Editable.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Precio mantenimiento (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                value={(item.maintenance_price_cents ?? 0) / 100}
+                onChange={(e) =>
+                  onChange({
+                    maintenance_price_cents: Math.round(Number(e.target.value) * 100),
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Periodicidad (meses)</Label>
+              <select
+                value={item.maintenance_periodicity_months ?? 12}
+                onChange={(e) =>
+                  onChange({ maintenance_periodicity_months: Number(e.target.value) })
+                }
+                className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {PERIODICITY_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m} meses
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {planType === "rental" && (
+        <div className="rounded-lg border bg-muted/20 p-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Fianza (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                value={(item.deposit_cents ?? 0) / 100}
+                onChange={(e) =>
+                  onChange({ deposit_cents: Math.round(Number(e.target.value) * 100) })
+                }
+              />
+              <p className="text-[10px] text-muted-foreground">Por producto. Puede ser 0.</p>
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-center gap-2 pt-6">
+                <input
+                  type="checkbox"
+                  checked={item.charge_first_payment_now}
+                  onChange={(e) =>
+                    onChange({ charge_first_payment_now: e.target.checked })
+                  }
+                  className="h-4 w-4"
+                />
+                <span className="text-sm font-bold">Cobrar 1ª cuota al firmar</span>
+              </label>
+              <p className="text-[10px] text-muted-foreground">
+                Si activo: el cliente paga {duration ? duration - 1 : "N-1"} cuotas restantes a
+                partir del mes siguiente.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
