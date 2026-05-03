@@ -377,6 +377,26 @@ export async function markContractSigned(id: string) {
  * Sustituye el snapshot de cláusulas de un contrato. Solo admin/director.
  * Usado por el editor inline en la ficha contrato.
  */
+/**
+ * Actualiza las notas del contrato. Solo admin/director.
+ */
+export async function updateContractNotesAction(
+  contractId: string,
+  notes: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (!isUpper) throw new Error("Solo admin o director");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase.from("contracts").update({ notes: notes || null }).eq("id", contractId);
+  revalidatePath(`/contratos/${contractId}`);
+}
+
 export async function updateContractClausesAction(
   contractId: string,
   clauses: Array<{ title: string; body: string; display_order: number }>,

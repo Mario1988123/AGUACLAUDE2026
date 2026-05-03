@@ -15,6 +15,7 @@ import { ContractStatusActions } from "@/modules/contracts/status-actions";
 import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
 import { QuickCollectButton } from "@/modules/contracts/quick-collect-button";
 import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
+import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
 import { Timeline } from "@/modules/events/timeline";
 import { requireSession } from "@/shared/lib/auth/session";
 
@@ -244,16 +245,18 @@ export default async function ContractDetailPage({
         </CardContent>
       </Card>
 
-      {contract.notes && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Notas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap text-sm">{contract.notes}</p>
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Notas internas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ContractNotesEditor
+            contractId={id}
+            initial={contract.notes}
+            canEdit={canEditClauses}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

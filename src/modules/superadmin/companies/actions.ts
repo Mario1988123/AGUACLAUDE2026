@@ -14,18 +14,83 @@ async function ensureSuperadmin() {
   return session;
 }
 
-export async function listCompanies(): Promise<CompanyListItem[]> {
+export async function listCompanies(filters?: { status?: string }): Promise<CompanyListItem[]> {
   await ensureSuperadmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data, error } = await supabase
+  let query = supabase
     .from("companies")
     .select(
       "id, name, slug, status, max_users, max_storage_mb, monthly_cost_cents, billing_email, created_at",
     )
     .order("created_at", { ascending: false });
+  if (filters?.status) query = query.eq("status", filters.status);
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as CompanyListItem[];
+}
+
+export interface CompanyMetric {
+  company_id: string;
+  users_count: number;
+  leads_count: number;
+  customers_count: number;
+  contracts_active_count: number;
+}
+
+/**
+ * Métricas agregadas por empresa para el panel superadmin.
+ */
+export async function getCompaniesMetrics(companyIds: string[]): Promise<Map<string, CompanyMetric>> {
+  await ensureSuperadmin();
+  const map = new Map<string, CompanyMetric>();
+  if (companyIds.length === 0) return map;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const [users, leads, customers, contracts] = await Promise.all([
+    supabase.from("user_profiles").select("company_id").in("company_id", companyIds),
+    supabase
+      .from("leads")
+      .select("company_id")
+      .in("company_id", companyIds)
+      .is("deleted_at", null),
+    supabase
+      .from("customers")
+      .select("company_id")
+      .in("company_id", companyIds)
+      .is("deleted_at", null),
+    supabase
+      .from("contracts")
+      .select("company_id")
+      .in("company_id", companyIds)
+      .eq("status", "active")
+      .is("deleted_at", null),
+  ]);
+
+  for (const id of companyIds) {
+    map.set(id, {
+      company_id: id,
+      users_count: 0,
+      leads_count: 0,
+      customers_count: 0,
+      contracts_active_count: 0,
+    });
+  }
+  function bump(rows: Array<{ company_id: string }>, key: keyof CompanyMetric) {
+    for (const r of rows) {
+      const m = map.get(r.company_id);
+      if (m && typeof m[key] === "number") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (m as any)[key] = (m[key] as number) + 1;
+      }
+    }
+  }
+  bump((users.data ?? []) as Array<{ company_id: string }>, "users_count");
+  bump((leads.data ?? []) as Array<{ company_id: string }>, "leads_count");
+  bump((customers.data ?? []) as Array<{ company_id: string }>, "customers_count");
+  bump((contracts.data ?? []) as Array<{ company_id: string }>, "contracts_active_count");
+  return map;
 }
 
 export async function getCompany(id: string): Promise<CompanyDetail> {

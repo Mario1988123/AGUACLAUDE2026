@@ -14,6 +14,8 @@ interface Props {
   ref?: string | null;
   phone?: string | null;
   email?: string | null;
+  /** Plantillas a usar. Si no se pasa, usa MESSAGE_TEMPLATES hardcoded fallback */
+  templates?: MessageTemplate[];
 }
 
 export function MessageTemplateButton({
@@ -23,7 +25,9 @@ export function MessageTemplateButton({
   ref,
   phone,
   email,
+  templates,
 }: Props) {
+  const list = templates && templates.length > 0 ? templates : MESSAGE_TEMPLATES;
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<MessageTemplate | null>(null);
 
@@ -72,7 +76,7 @@ export function MessageTemplateButton({
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
           <ul className="space-y-1">
-            {MESSAGE_TEMPLATES.map((t) => (
+            {list.map((t) => (
               <li key={t.key}>
                 <button
                   type="button"

@@ -1,10 +1,34 @@
-import { ModulePlaceholder } from "@/shared/components/module-placeholder";
+import {
+  listGlobalCategoriesAdmin,
+  listGlobalAttributesAdmin,
+  listGlobalExternalModels,
+} from "@/modules/superadmin/catalogo/actions";
+import { CatalogoManager } from "@/modules/superadmin/catalogo/manager";
 
-export default function SuperadminCatalogoPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SuperadminCatalogoPage() {
+  const [categories, attributes, externalModels] = await Promise.all([
+    listGlobalCategoriesAdmin().catch(() => []),
+    listGlobalAttributesAdmin().catch(() => []),
+    listGlobalExternalModels().catch(() => []),
+  ]);
+
   return (
-    <ModulePlaceholder
-      title="Catálogo global"
-      description="Categorías y atributos de producto que el superadmin define para que las empresas puedan precargarlos al crear su catálogo."
-    />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Catálogo global</h1>
+        <p className="text-sm text-muted-foreground">
+          Categorías, atributos y modelos externos que las empresas pueden precargar al crear su
+          catálogo de productos.
+        </p>
+      </div>
+
+      <CatalogoManager
+        categories={categories}
+        attributes={attributes}
+        externalModels={externalModels}
+      />
+    </div>
   );
 }
