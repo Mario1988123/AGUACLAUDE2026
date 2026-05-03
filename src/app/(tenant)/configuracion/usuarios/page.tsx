@@ -4,6 +4,7 @@ import { Badge } from "@/shared/ui/badge";
 import { InviteUserForm } from "@/modules/tenant/users/invite-form";
 import { UserRowActions } from "@/modules/tenant/users/row-actions";
 import { ROLE_KEYS } from "@/modules/tenant/users/schemas";
+import { UserAvatar } from "@/shared/components/user-avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ export default async function UsuariosPage() {
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
+                    <th className="w-12 py-2"></th>
                     <th className="py-2 text-left">Nombre</th>
                     <th className="py-2 text-left">Email</th>
                     <th className="py-2 text-left">Roles</th>
@@ -68,6 +70,9 @@ export default async function UsuariosPage() {
                 <tbody className="divide-y">
                   {users.map((u) => (
                     <tr key={u.user_id}>
+                      <td className="py-3">
+                        <UserAvatar userId={u.user_id} name={u.full_name} size="md" />
+                      </td>
                       <td className="py-3">
                         <div className="font-medium">{u.full_name}</div>
                         {u.job_title && (

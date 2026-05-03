@@ -1,0 +1,177 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { GripVertical } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { Badge } from "@/shared/ui/badge";
+import { notify } from "@/shared/hooks/use-toast";
+import { rescheduleAgendaEventAction } from "./actions";
+import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
+import type { AgendaItem } from "./actions";
+
+interface Props {
+  events: AgendaItem[];
+}
+
+/**
+ * Lista de agenda agrupada por día con drag-and-drop nativo HTML5 para
+ * arrastrar tarjetas de un día a otro. Conserva la hora original; si quieres
+ * cambiar la hora, edita el evento.
+ */
+export function DraggableAgendaList({ events: initial }: Props) {
+  const [events, setEvents] = useState(initial);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [overDay, setOverDay] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+  const router = useRouter();
+
+  const byDay = events.reduce<Record<string, AgendaItem[]>>((acc, ev) => {
+    const day = ev.starts_at.slice(0, 10);
+    (acc[day] = acc[day] ?? []).push(ev);
+    return acc;
+  }, {});
+  const days = Object.keys(byDay).sort();
+
+  function onDragStart(e: React.DragEvent<HTMLLIElement>, id: string) {
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("text/plain", id);
+    } catch {
+      /* algunos browsers móvil no soportan, lo gestionamos por state */
+    }
+  }
+  function onDragEnd() {
+    setDraggingId(null);
+    setOverDay(null);
+  }
+  function onDragOverDay(e: React.DragEvent<HTMLDivElement>, day: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (overDay !== day) setOverDay(day);
+  }
+  function onDropDay(e: React.DragEvent<HTMLDivElement>, day: string) {
+    e.preventDefault();
+    const id = draggingId ?? e.dataTransfer.getData("text/plain");
+    if (!id) return;
+    const ev = events.find((x) => x.id === id);
+    if (!ev) return;
+    const currentDay = ev.starts_at.slice(0, 10);
+    if (currentDay === day) {
+      setOverDay(null);
+      return;
+    }
+    // Mantener hora original, sólo cambiar fecha
+    const oldDate = new Date(ev.starts_at);
+    const [y, m, d] = day.split("-").map(Number);
+    const newDate = new Date(
+      y!,
+      (m ?? 1) - 1,
+      d!,
+      oldDate.getHours(),
+      oldDate.getMinutes(),
+      0,
+    );
+    const newIso = newDate.toISOString();
+
+    // Optimistic update
+    setEvents((prev) =>
+      prev.map((x) => (x.id === id ? { ...x, starts_at: newIso } : x)),
+    );
+    setOverDay(null);
+
+    startTransition(async () => {
+      try {
+        await rescheduleAgendaEventAction(id, newIso);
+        notify.success("Evento reagendado");
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+        // Revertir si falla
+        setEvents(initial);
+      }
+    });
+  }
+
+  if (days.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-sm text-muted-foreground">
+          Sin eventos en los próximos 14 días.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        💡 Arrastra una tarjeta a otro día para reagendar (la hora se conserva).
+      </p>
+      {days.map((day) => (
+        <div
+          key={day}
+          onDragOver={(e) => onDragOverDay(e, day)}
+          onDragLeave={() => setOverDay(null)}
+          onDrop={(e) => onDropDay(e, day)}
+          className={overDay === day ? "ring-2 ring-primary rounded-2xl" : ""}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="capitalize">
+                {new Date(day + "T00:00:00").toLocaleDateString("es-ES", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y">
+                {byDay[day]!
+                  .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+                  .map((ev) => (
+                    <li
+                      key={ev.id}
+                      draggable
+                      onDragStart={(e) => onDragStart(e, ev.id)}
+                      onDragEnd={onDragEnd}
+                      className={`flex items-start gap-3 py-3 cursor-move transition-opacity ${
+                        draggingId === ev.id ? "opacity-40" : ""
+                      }`}
+                    >
+                      <GripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="w-20 shrink-0 text-sm font-bold tabular-nums text-primary">
+                        {new Date(ev.starts_at).toLocaleTimeString("es-ES", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold">{ev.title}</span>
+                          <Badge variant="outline">{KIND_LABEL[ev.kind] ?? ev.kind}</Badge>
+                          <Badge variant={STATUS_VARIANT[ev.status]}>
+                            {STATUS_LABEL[ev.status] ?? ev.status}
+                          </Badge>
+                          {ev.is_outside_hours && (
+                            <Badge variant="warning">Fuera horario</Badge>
+                          )}
+                        </div>
+                        {ev.description && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {ev.description}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      ))}
+    </div>
+  );
+}

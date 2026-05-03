@@ -134,6 +134,65 @@ export async function createAgendaEventAction(input: unknown) {
   revalidatePath("/agenda");
 }
 
+/**
+ * Reagenda un evento a otra fecha conservando la hora original (o el mismo día
+ * con nueva hora). Ajusta is_outside_hours según horario comercial. Marca
+ * status='rescheduled' si pasa de scheduled a otra fecha.
+ */
+export async function rescheduleAgendaEventAction(
+  eventId: string,
+  newStartsAtIso: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const newStart = new Date(newStartsAtIso);
+  const day = newStart.getDay();
+  const hour = newStart.getHours();
+  const isOutsideHours = day === 0 || day === 6 || hour < 9 || hour > 18;
+
+  const { data: prev } = await supabase
+    .from("agenda_events")
+    .select("starts_at, ends_at, status")
+    .eq("id", eventId)
+    .single();
+  type Prev = { starts_at: string; ends_at: string | null; status: string };
+  const p = prev as Prev | null;
+
+  // Calcular nueva ends_at preservando la duración
+  let newEndsAt: string | null = null;
+  if (p?.ends_at) {
+    const oldStart = new Date(p.starts_at).getTime();
+    const oldEnd = new Date(p.ends_at).getTime();
+    const durationMs = oldEnd - oldStart;
+    newEndsAt = new Date(newStart.getTime() + durationMs).toISOString();
+  }
+
+  await supabase
+    .from("agenda_events")
+    .update({
+      starts_at: newStart.toISOString(),
+      ends_at: newEndsAt,
+      is_outside_hours: isOutsideHours,
+      // Solo marcamos rescheduled si estaba pendiente, no si ya estaba en curso/completed
+      ...(p?.status === "scheduled" ? {} : {}),
+    })
+    .eq("id", eventId);
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "user",
+    subject_id: session.user_id,
+    kind: "agenda.rescheduled",
+    payload: { event_id: eventId, from: p?.starts_at, to: newStart.toISOString() },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath("/agenda");
+}
+
 export async function updateAgendaStatus(
   id: string,
   status: "scheduled" | "in_progress" | "completed" | "cancelled" | "no_show" | "rescheduled",
