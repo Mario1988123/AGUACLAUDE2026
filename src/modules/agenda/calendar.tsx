@@ -28,15 +28,16 @@ const MONTHS = [
   "Diciembre",
 ];
 
+// Paleta pastel estilo DashStack — bloques tipo Glastonbury/Design Conference
 const KIND_COLOR: Record<string, string> = {
-  visit: "bg-primary/15 text-primary",
-  installation: "bg-success/15 text-success",
-  maintenance: "bg-warning/15 text-warning",
-  call: "bg-secondary text-secondary-foreground",
-  reminder: "bg-muted text-muted-foreground",
-  manual: "bg-muted text-muted-foreground",
-  incident_followup: "bg-destructive/15 text-destructive",
-  meeting: "bg-primary/15 text-primary",
+  visit: "bg-[#e6e6ff] text-[#5a5acf]", // lila
+  installation: "bg-[#dcf6e6] text-[#0caf60]", // verde
+  maintenance: "bg-[#ffe9c8] text-[#cf8c1a]", // naranja
+  call: "bg-[#dde7ff] text-[#3b82f6]", // azul
+  reminder: "bg-[#f4d8ff] text-[#9333ea]", // morado
+  manual: "bg-[#fde2e2] text-[#cf2727]", // rosa
+  incident_followup: "bg-[#ffe1e1] text-[#cf2727]", // rojo suave
+  meeting: "bg-[#d8f0ff] text-[#0891b2]", // cyan
 };
 
 export function AgendaCalendar({ events }: Props) {

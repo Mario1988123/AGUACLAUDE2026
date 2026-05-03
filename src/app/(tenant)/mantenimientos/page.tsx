@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { listMaintenance } from "@/modules/maintenance/actions";
-import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/maintenance/constants";
+import { STATUS_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Badge } from "@/shared/ui/badge";
+import { StatusPill } from "@/shared/components/status-pill";
 
 export const dynamic = "force-dynamic";
+
+const MAINT_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  scheduled: "info",
+  in_progress: "onhold",
+  completed: "success",
+  cancelled: "rejected",
+};
 
 const STATUS_OPTIONS = ["scheduled", "in_progress", "completed", "cancelled"] as const;
 const PERIOD_OPTIONS = {
@@ -121,9 +131,10 @@ export default async function MantenimientosPage({
                       {j.scheduled_at ? new Date(j.scheduled_at).toLocaleString("es-ES") : "—"}
                     </td>
                     <td className="py-2">
-                      <Badge variant={STATUS_VARIANT[j.status]}>
-                        {STATUS_LABEL[j.status] ?? j.status}
-                      </Badge>
+                      <StatusPill
+                        label={STATUS_LABEL[j.status] ?? j.status}
+                        tone={MAINT_TONE[j.status] ?? "info"}
+                      />
                     </td>
                     <td className="py-2 text-right tabular-nums">
                       {j.is_charged ? formatCents(j.charge_cents) : <span className="text-xs text-muted-foreground">Incluido</span>}

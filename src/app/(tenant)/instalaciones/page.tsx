@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { listInstallations } from "@/modules/installations/actions";
 import { listTeamMembers } from "@/modules/agenda/actions";
-import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
+import { STATUS_LABEL, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Badge } from "@/shared/ui/badge";
+import { StatusPill } from "@/shared/components/status-pill";
 import { Calendar } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const INST_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  unscheduled: "neutral",
+  scheduled: "info",
+  in_progress: "onhold",
+  paused: "neutral",
+  completed: "success",
+  cancelled: "rejected",
+};
 
 const STATUS_OPTIONS = [
   "scheduled",
@@ -177,9 +189,10 @@ export default async function InstalacionesPage({
                                 {i.reference_code ?? `#${i.id.slice(0, 8)}`} · {KIND_LABEL[i.kind] ?? i.kind}
                               </div>
                             </div>
-                            <Badge variant={STATUS_VARIANT[i.status] ?? "default"}>
-                              {STATUS_LABEL[i.status] ?? i.status}
-                            </Badge>
+                            <StatusPill
+                              label={STATUS_LABEL[i.status] ?? i.status}
+                              tone={INST_TONE[i.status] ?? "info"}
+                            />
                           </li>
                         );
                       })}
@@ -214,9 +227,10 @@ export default async function InstalacionesPage({
                       {i.reference_code ?? `#${i.id.slice(0, 8)}`} · {KIND_LABEL[i.kind] ?? i.kind}
                     </div>
                   </div>
-                  <Badge variant={STATUS_VARIANT[i.status] ?? "default"}>
-                    {STATUS_LABEL[i.status] ?? i.status}
-                  </Badge>
+                  <StatusPill
+                    label={STATUS_LABEL[i.status] ?? i.status}
+                    tone={INST_TONE[i.status] ?? "info"}
+                  />
                 </li>
               ))}
             </ul>

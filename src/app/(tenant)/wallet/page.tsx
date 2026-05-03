@@ -4,6 +4,7 @@ import { WALLET_STATUS_LABEL, METHOD_LABEL } from "@/modules/wallet/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KpiCard } from "@/shared/components/kpi-card";
+import { StatusPill } from "@/shared/components/status-pill";
 import { RegisterPaymentButton } from "@/modules/wallet/register-button";
 import { ValidateWalletButtons } from "@/modules/wallet/validate-buttons";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -14,13 +15,16 @@ function formatCents(cents: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
-  pending: "warning",
-  collected: "default",
-  pending_settlement: "warning",
-  settled: "secondary",
+const WALLET_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  pending: "onhold",
+  collected: "processing",
+  pending_settlement: "onhold",
+  settled: "neutral",
   validated: "success",
-  rejected: "destructive",
+  rejected: "rejected",
 };
 
 const METHOD_OPTIONS = ["cash", "card", "bizum", "transfer", "direct_debit", "financing"] as const;
@@ -204,9 +208,10 @@ export default async function WalletPage({
                         <Badge variant="outline">{METHOD_LABEL[e.method] ?? e.method}</Badge>
                       </td>
                       <td className="py-3">
-                        <Badge variant={STATUS_VARIANT[e.status] ?? "default"}>
-                          {WALLET_STATUS_LABEL[e.status] ?? e.status}
-                        </Badge>
+                        <StatusPill
+                          label={WALLET_STATUS_LABEL[e.status] ?? e.status}
+                          tone={WALLET_TONE[e.status] ?? "info"}
+                        />
                       </td>
                       <td className="py-3 text-right">
                         {(e.status === "collected" || e.status === "pending_settlement") && (

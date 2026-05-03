@@ -1,8 +1,20 @@
 import Link from "next/link";
 import { listProposals } from "@/modules/proposals/actions";
 import { Button } from "@/shared/ui/button";
-import { Badge } from "@/shared/ui/badge";
-import { STATUS_LABEL, STATUS_VARIANT, PROPOSAL_STATUS } from "@/modules/proposals/schemas";
+import { StatusPill } from "@/shared/components/status-pill";
+import { STATUS_LABEL, PROPOSAL_STATUS } from "@/modules/proposals/schemas";
+
+const PROP_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  draft: "neutral",
+  sent: "info",
+  accepted: "success",
+  rejected: "rejected",
+  expired: "neutral",
+  superseded: "neutral",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -93,7 +105,10 @@ export default async function PropuestasPage({
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={STATUS_VARIANT[p.status]}>{STATUS_LABEL[p.status]}</Badge>
+                    <StatusPill
+                      label={STATUS_LABEL[p.status]}
+                      tone={PROP_TONE[p.status] ?? "info"}
+                    />
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {formatCents(p.total_cash_cents)}

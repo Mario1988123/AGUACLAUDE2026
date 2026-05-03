@@ -1,9 +1,22 @@
 import Link from "next/link";
 import { listContracts } from "@/modules/contracts/actions";
-import { Badge } from "@/shared/ui/badge";
-import { STATUS_LABEL, STATUS_VARIANT, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
+import { StatusPill } from "@/shared/components/status-pill";
+import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
 
 export const dynamic = "force-dynamic";
+
+const CONTRACT_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  draft: "neutral",
+  pending_data: "onhold",
+  pending_signature: "onhold",
+  signed: "processing",
+  active: "success",
+  cancelled: "rejected",
+  completed: "info",
+};
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -111,7 +124,10 @@ export default async function ContratosPage({
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={STATUS_VARIANT[c.status]}>{STATUS_LABEL[c.status]}</Badge>
+                    <StatusPill
+                      label={STATUS_LABEL[c.status]}
+                      tone={CONTRACT_TONE[c.status] ?? "info"}
+                    />
                   </td>
                   <td className="px-4 py-3 text-xs">{PLAN_TYPE_LABEL[c.plan_type]}</td>
                   <td className="px-4 py-3 text-right tabular-nums">

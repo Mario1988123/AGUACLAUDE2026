@@ -374,6 +374,44 @@ export async function markContractSigned(id: string) {
 }
 
 /**
+ * Reasigna comercial del contrato. Solo admin/director comercial.
+ */
+export async function reassignContractAction(
+  contractId: string,
+  userId: string | null,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (!isUpper) throw new Error("Solo admin o director comercial");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("contracts")
+    .update({
+      assigned_user_id: userId,
+      assigned_at: userId ? new Date().toISOString() : null,
+    })
+    .eq("id", contractId);
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "contract",
+    subject_id: contractId,
+    kind: "contract.reassigned",
+    payload: { to_user_id: userId },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath(`/contratos/${contractId}`);
+  revalidatePath("/contratos");
+}
+
+/**
  * Sustituye el snapshot de cláusulas de un contrato. Solo admin/director.
  * Usado por el editor inline en la ficha contrato.
  */

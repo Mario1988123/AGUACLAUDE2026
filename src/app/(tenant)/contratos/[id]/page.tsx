@@ -16,6 +16,7 @@ import { CreateInstallationButton } from "@/modules/contracts/create-installatio
 import { QuickCollectButton } from "@/modules/contracts/quick-collect-button";
 import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
 import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
+import { ReassignContractButton } from "@/modules/contracts/reassign-button";
 import { Timeline } from "@/modules/events/timeline";
 import { requireSession } from "@/shared/lib/auth/session";
 
@@ -187,6 +188,16 @@ export default async function ContractDetailPage({
               status={contract.status}
               hasProvisional={contract.has_provisional_data}
             />
+            {canEditClauses && (
+              <div className="border-t pt-4">
+                <ReassignContractButton
+                  contractId={contract.id}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  currentUserId={(contract as any).assigned_user_id ?? null}
+                  team={team}
+                />
+              </div>
+            )}
             {isSignedOrActive && (
               <div className="border-t pt-4">
                 <CreateInstallationButton

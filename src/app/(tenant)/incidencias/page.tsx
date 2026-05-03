@@ -2,14 +2,33 @@ import Link from "next/link";
 import { listIncidents } from "@/modules/incidents/actions";
 import {
   STATUS_LABEL,
-  STATUS_VARIANT,
   PRIORITY_LABEL,
-  PRIORITY_VARIANT,
   ORIGIN_LABEL,
 } from "@/modules/incidents/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Badge } from "@/shared/ui/badge";
+import { StatusPill } from "@/shared/components/status-pill";
 import { CreateIncidentButton } from "@/modules/incidents/create-button";
+
+const PRIORITY_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  low: "neutral",
+  medium: "info",
+  high: "onhold",
+  critical: "rejected",
+};
+const INCIDENT_TONE: Record<
+  string,
+  "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
+> = {
+  open: "onhold",
+  assigned: "info",
+  in_progress: "processing",
+  resolved: "success",
+  closed: "neutral",
+  cancelled: "neutral",
+};
 
 export const dynamic = "force-dynamic";
 
@@ -65,14 +84,16 @@ export default async function IncidenciasPage() {
                     </td>
                     <td className="py-2 text-xs">{ORIGIN_LABEL[i.origin] ?? i.origin}</td>
                     <td className="py-2">
-                      <Badge variant={PRIORITY_VARIANT[i.priority]}>
-                        {PRIORITY_LABEL[i.priority]}
-                      </Badge>
+                      <StatusPill
+                        label={PRIORITY_LABEL[i.priority] ?? i.priority}
+                        tone={PRIORITY_TONE[i.priority] ?? "info"}
+                      />
                     </td>
                     <td className="py-2">
-                      <Badge variant={STATUS_VARIANT[i.status] ?? "default"}>
-                        {STATUS_LABEL[i.status] ?? i.status}
-                      </Badge>
+                      <StatusPill
+                        label={STATUS_LABEL[i.status] ?? i.status}
+                        tone={INCIDENT_TONE[i.status] ?? "info"}
+                      />
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {new Date(i.created_at).toLocaleDateString("es-ES")}
