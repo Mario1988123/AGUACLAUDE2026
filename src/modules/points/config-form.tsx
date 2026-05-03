@@ -97,6 +97,27 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
       </section>
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-primary">
+          Comisiones (€)
+        </h3>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Conversión: € por punto</Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={v.euros_per_point}
+              onChange={(e) => set("euros_per_point", Number(e.target.value))}
+            />
+            <p className="text-xs text-muted-foreground">
+              Cálculo informativo. 0 desactiva el desglose en €. Ej: 0,10 € → 100 puntos = 10 €.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-primary">Técnico</h3>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">

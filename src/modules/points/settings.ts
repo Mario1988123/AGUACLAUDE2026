@@ -17,6 +17,8 @@ export interface PointsSettings {
   points_per_maintenance: number;
   /** Puntos por resolver una incidencia */
   points_per_incident: number;
+  /** Conversión informativa: € que vale cada punto. 0 = comisiones desactivadas. */
+  euros_per_point: number;
 }
 
 export const DEFAULT_POINTS_SETTINGS: PointsSettings = {
@@ -27,4 +29,5 @@ export const DEFAULT_POINTS_SETTINGS: PointsSettings = {
   points_per_installation: 30,
   points_per_maintenance: 15,
   points_per_incident: 20,
+  euros_per_point: 0,
 };

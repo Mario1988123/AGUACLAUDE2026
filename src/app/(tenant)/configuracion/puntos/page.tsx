@@ -1,5 +1,6 @@
 import { getPointsSettingsAdmin } from "@/modules/points/config-actions";
 import { PointsConfigForm } from "@/modules/points/config-form";
+import { CommissionsCard } from "@/modules/points/commissions-card";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function ConfiguracionPuntosPage() {
         </p>
       </div>
       <PointsConfigForm initial={settings} />
+      <CommissionsCard />
     </div>
   );
 }

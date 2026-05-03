@@ -4,6 +4,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { getMyDayItems } from "@/modules/my-day/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { RoutePlannerButton } from "@/modules/routes/route-planner-button";
 
 export const dynamic = "force-dynamic";
 
@@ -56,11 +57,14 @@ export default async function MiDiaPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Mi día</h1>
-        <p className="mt-1 text-sm text-muted-foreground capitalize">
-          {dateLabel} · Hola {session.full_name ?? session.email}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Mi día</h1>
+          <p className="mt-1 text-sm text-muted-foreground capitalize">
+            {dateLabel} · Hola {session.full_name ?? session.email}
+          </p>
+        </div>
+        {items.length > 1 && <RoutePlannerButton />}
       </div>
 
       {items.length === 0 ? (
