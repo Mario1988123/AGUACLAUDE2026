@@ -13,6 +13,9 @@ import { InstallationWorkReport } from "@/modules/installations/work-report";
 import { PhotoUploadPanel } from "@/modules/installations/photo-upload";
 import { SignaturesSection } from "@/modules/installations/signature-section";
 import { Timeline } from "@/modules/events/timeline";
+import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
+import { requireSession } from "@/shared/lib/auth/session";
+import { listTeamMembers } from "@/modules/agenda/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,13 +45,20 @@ export default async function InstallationDetailPage({
     duration_seconds: number | null;
     notes: string | null;
     contract_id: string | null;
+    installer_user_id: string | null;
   };
 
-  const [items, photos, signatures] = await Promise.all([
+  const [items, photos, signatures, session, team] = await Promise.all([
     getInstallationItems(id),
     getInstallationPhotos(id),
     getInstallationSignatures(id),
+    requireSession(),
+    listTeamMembers().catch(() => []),
   ]);
+  const canReassign =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
 
   return (
     <div className="space-y-6">
@@ -153,7 +163,7 @@ export default async function InstallationDetailPage({
           )}
         </div>
 
-        <div>
+        <div className="space-y-4">
           <InstallationWorkReport
             installationId={i.id}
             status={i.status}
@@ -163,6 +173,20 @@ export default async function InstallationDetailPage({
             geoDistanceM={i.geo_distance_to_address_m}
             contractId={i.contract_id}
           />
+          {canReassign && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Asignación</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ReassignInstallationButton
+                  installationId={i.id}
+                  currentInstallerId={i.installer_user_id}
+                  team={team}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
 

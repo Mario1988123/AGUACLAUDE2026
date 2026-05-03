@@ -15,6 +15,41 @@ import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
 
+/**
+ * Reasigna instalador. Solo admin/director técnico.
+ */
+export async function reassignInstallationAction(
+  installationId: string,
+  installerUserId: string | null,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
+  if (!isUpper) throw new Error("Solo admin o director técnico");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("installations")
+    .update({ installer_user_id: installerUserId })
+    .eq("id", installationId);
+
+  await supabase.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "installation",
+    subject_id: installationId,
+    kind: "installation.reassigned",
+    payload: { to_user_id: installerUserId },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath(`/instalaciones/${installationId}`);
+  revalidatePath("/instalaciones");
+}
+
 export interface InstallationRow {
   id: string;
   reference_code: string | null;

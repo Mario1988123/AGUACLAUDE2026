@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { listCustomers } from "@/modules/customers/actions";
 import { Button } from "@/shared/ui/button";
-import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
+import { SelectableCustomersTable } from "@/modules/customers/selectable-list";
+import { listTeamMembers } from "@/modules/agenda/actions";
+import { ImportCustomersButton } from "@/modules/customers/import-form";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,10 @@ export default async function CustomersPage({
       ? "mine"
       : "all"
     : "mine";
-  const customers = await listCustomers(sp.q, scope);
+  const [customers, team] = await Promise.all([
+    listCustomers(sp.q, scope),
+    isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -34,6 +39,7 @@ export default async function CustomersPage({
           <p className="text-sm text-muted-foreground">{customers.length} clientes</p>
         </div>
         <div className="flex items-center gap-2">
+          {isUpperLevel && <ImportCustomersButton />}
           <Link
             href={"/api/export/customers" as never}
             prefetch={false}
@@ -84,63 +90,7 @@ export default async function CustomersPage({
         />
       </form>
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 text-left">Nombre</th>
-              <th className="px-4 py-3 text-left">Tipo</th>
-              <th className="px-4 py-3 text-left">Contacto</th>
-              <th className="px-4 py-3 text-left">Estado</th>
-              <th className="px-4 py-3 text-right">Acción</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {customers.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                  No hay clientes.
-                </td>
-              </tr>
-            ) : (
-              customers.map((c) => (
-                <tr key={c.id} className="hover:bg-muted/30">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/clientes/${c.id}` as never}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {c.display_name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {c.party_kind === "company" ? "Empresa" : "Particular"}
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {c.phone_primary && <div>{c.phone_primary}</div>}
-                    {c.email && <div className="text-muted-foreground">{c.email}</div>}
-                  </td>
-                  <td className="px-4 py-3">
-                    {c.is_active ? (
-                      <Badge variant="success">Activo</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactivo</Badge>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/clientes/${c.id}` as never}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <SelectableCustomersTable customers={customers} team={team} canBulkReassign={isUpperLevel} />
     </div>
   );
 }
