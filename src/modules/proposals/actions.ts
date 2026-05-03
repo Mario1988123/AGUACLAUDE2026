@@ -156,32 +156,86 @@ export async function createProposalAction(input: unknown) {
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const parsed = proposalCreateSchema.parse(input);
 
-  const supabase = await createClient();
-  // Calcular total_cash
-  const total_cash_cents = parsed.items.reduce(
-    (sum, it) => sum + it.unit_price_cents * it.quantity,
-    0,
-  );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  // Total = suma cuota * cantidad por todas las líneas (la cuota representa
+  // cash si plan=cash, mensual si rental/renting). Para mostrar también en
+  // las columnas de monthly se calcula aparte abajo.
+  const lineTotal = (it: typeof parsed.items[number]) =>
+    it.unit_price_cents * it.quantity;
+  const planTotal = parsed.items.reduce((s, it) => s + lineTotal(it), 0);
+
+  // Detectar si la propuesta requiere aprobación: comparar cuota con mínimo
+  // autorizado del plan correspondiente para cada producto.
+  let requiresApproval = false;
+  if (parsed.items.length > 0) {
+    const productIds = Array.from(new Set(parsed.items.map((i) => i.product_id)));
+    const { data: plans } = await supabase
+      .from("product_pricing_plans")
+      .select("product_id, plan_type, min_authorized_cents, duration_months")
+      .in("product_id", productIds)
+      .eq("plan_type", parsed.chosen_plan_type)
+      .eq("is_active", true);
+    type Plan = {
+      product_id: string;
+      plan_type: string;
+      min_authorized_cents: number | null;
+      duration_months: number | null;
+    };
+    const planByProduct = new Map<string, Plan>();
+    for (const p of (plans ?? []) as Plan[]) {
+      // Si hay varias duraciones (renting), nos quedamos con la que coincide
+      if (
+        parsed.chosen_duration_months &&
+        p.duration_months &&
+        p.duration_months === parsed.chosen_duration_months
+      ) {
+        planByProduct.set(p.product_id, p);
+      } else if (!planByProduct.has(p.product_id)) {
+        planByProduct.set(p.product_id, p);
+      }
+    }
+    for (const it of parsed.items) {
+      const p = planByProduct.get(it.product_id);
+      if (p?.min_authorized_cents != null && it.unit_price_cents < p.min_authorized_cents) {
+        requiresApproval = true;
+        break;
+      }
+    }
+  }
+
+  // Mapear total a la columna correcta según plan
+  const isCash = parsed.chosen_plan_type === "cash";
+  const isRenting = parsed.chosen_plan_type === "renting";
+  const isRental = parsed.chosen_plan_type === "rental";
+
+  const insertPayload: Record<string, unknown> = {
+    company_id: session.company_id,
+    customer_id: parsed.customer_id || null,
+    lead_id: parsed.lead_id || null,
+    status: requiresApproval ? "pending_approval" : "draft",
+    validity_until: parsed.validity_until || null,
+    chosen_plan_type: parsed.chosen_plan_type,
+    chosen_duration_months: parsed.chosen_duration_months,
+    requires_approval: requiresApproval,
+    total_cash_cents: isCash ? planTotal : null,
+    monthly_renting_min_cents: isRenting ? planTotal : null,
+    monthly_rental_cents: isRental ? planTotal : null,
+    notes: parsed.notes || null,
+    created_by: session.user_id,
+    version_number: 1,
+  };
 
   const { data, error } = await supabase
     .from("proposals")
-    .insert({
-      company_id: session.company_id,
-      customer_id: parsed.customer_id || null,
-      lead_id: parsed.lead_id || null,
-      status: "draft",
-      validity_until: parsed.validity_until || null,
-      total_cash_cents,
-      notes: parsed.notes || null,
-      created_by: session.user_id,
-      version_number: 1,
-    } as never)
+    .insert(insertPayload)
     .select("id")
     .single();
   if (error) throw error;
   const proposalId = (data as { id: string }).id;
 
-  // Insertar items con snapshot del nombre del producto
+  // Snapshot nombres
   const productIds = parsed.items.map((i) => i.product_id);
   const { data: prods } = await supabase
     .from("products")
@@ -193,41 +247,111 @@ export async function createProposalAction(input: unknown) {
 
   const itemRows = parsed.items.map((it, i) => ({
     proposal_id: proposalId,
-    company_id: session.company_id!,
+    company_id: session.company_id,
     product_id: it.product_id,
     quantity: it.quantity,
     product_name_snapshot: nameMap.get(it.product_id) ?? "Producto",
     unit_price_cash_cents: it.unit_price_cents,
+    installation_included: it.installation_included,
+    installation_price_cents: it.installation_included ? null : it.installation_price_cents,
+    maintenance_included: it.maintenance_included,
+    maintenance_until_date: it.maintenance_included ? it.maintenance_until_date : null,
+    maintenance_price_cents: it.maintenance_included ? null : it.maintenance_price_cents,
+    maintenance_periodicity_months: it.maintenance_included
+      ? null
+      : it.maintenance_periodicity_months,
+    deposit_cents: isRental ? it.deposit_cents : null,
+    charge_first_payment_now: isRental ? it.charge_first_payment_now : false,
     display_order: i,
   }));
-  await supabase.from("proposal_items").insert(itemRows as never);
+  await supabase.from("proposal_items").insert(itemRows);
 
-  // Una payment option cash con el total
-  await supabase.from("proposal_payment_options").insert({
-    proposal_id: proposalId,
-    company_id: session.company_id,
-    plan_type: "cash",
-    total_cents: total_cash_cents,
-    is_recommended: true,
-  } as never);
-
-  // Evento timeline
   await supabase.from("events").insert({
     company_id: session.company_id,
     subject_type: "proposal",
     subject_id: proposalId,
     kind: "proposal.created",
-    payload: { items: parsed.items.length, total_cash_cents },
+    payload: {
+      items: parsed.items.length,
+      plan: parsed.chosen_plan_type,
+      requires_approval: requiresApproval,
+    },
     actor_user_id: session.user_id,
-  } as never);
+  });
 
-  // Si la propuesta es para un lead, su estado avanza a "proposal_created"
   if (parsed.lead_id) {
     await bumpLeadStatus(parsed.lead_id, "proposal_created");
   }
 
   revalidatePath("/propuestas");
   redirect(`/propuestas/${proposalId}` as never);
+}
+
+/**
+ * Aprueba una propuesta en estado pending_approval (solo nivel 1/2).
+ * Tras aprobar pasa a 'draft' para que el comercial decida cuándo enviarla.
+ */
+export async function approveProposalAction(id: string): Promise<void> {
+  const session = await requireSession();
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+  if (!isUpper) throw new Error("Solo nivel 1 o 2 puede validar propuestas");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("proposals")
+    .update({
+      status: "draft",
+      requires_approval: false,
+      approved_by: session.user_id,
+      approved_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "pending_approval");
+  await supabase.from("events").insert({
+    company_id: session.company_id!,
+    subject_type: "proposal",
+    subject_id: id,
+    kind: "proposal.approved",
+    payload: {},
+    actor_user_id: session.user_id,
+  });
+  revalidatePath(`/propuestas/${id}`);
+  revalidatePath("/propuestas");
+}
+
+/** Rechaza una aprobación. Vuelve a borrador con marca para revisar. */
+export async function rejectApprovalAction(id: string, reason?: string): Promise<void> {
+  const session = await requireSession();
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
+  if (!isUpper) throw new Error("Solo nivel 1 o 2 puede rechazar aprobaciones");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  await supabase
+    .from("proposals")
+    .update({
+      status: "draft",
+      notes: reason ? `[Aprobación rechazada] ${reason}` : null,
+    })
+    .eq("id", id)
+    .eq("status", "pending_approval");
+  await supabase.from("events").insert({
+    company_id: session.company_id!,
+    subject_type: "proposal",
+    subject_id: id,
+    kind: "proposal.approval_rejected",
+    payload: { reason: reason ?? null },
+    actor_user_id: session.user_id,
+  });
+  revalidatePath(`/propuestas/${id}`);
 }
 
 export async function markProposalSent(id: string) {
@@ -310,26 +434,23 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
     actor_user_id: session.user_id,
   });
 
-  let customerId: string | null = p.customer_id;
+  // Si la propuesta era para un lead, supersede las hermanas del MISMO lead
+  // pero NO convertimos a cliente todavía: eso pasa al pulsar
+  // "Pasar a contrato" como paso explícito posterior.
+  const customerId: string | null = p.customer_id;
   if (p.lead_id) {
-    // Convertir lead → customer (mueve direcciones, marca lead converted)
-    customerId = await convertLeadToCustomerAction(p.lead_id);
-    // Vincular esta propuesta al cliente recién creado y supersede el resto
-    await supabase
-      .from("proposals")
-      .update({ customer_id: customerId, lead_id: null })
-      .eq("id", id);
     await supabase
       .from("proposals")
       .update({
         status: "rejected",
         rejected_at: new Date().toISOString(),
-        rejected_reason: "Superseded by accepted sibling",
+        rejected_reason: "Otra propuesta del mismo lead aceptada",
         superseded_at: new Date().toISOString(),
+        superseded_by_id: id,
       })
       .eq("lead_id", p.lead_id)
       .neq("id", id)
-      .in("status", ["draft", "sent"]);
+      .in("status", ["draft", "sent", "pending_approval"]);
   }
 
   // Puntos: comercial + (si origen TMK) telemarketer
@@ -457,6 +578,49 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
   revalidatePath(`/propuestas/${id}`);
   revalidatePath("/propuestas");
   if (customerId) revalidatePath(`/clientes/${customerId}`);
+  return { customer_id: customerId };
+}
+
+/**
+ * Paso explícito "Pasar a contrato" una vez la propuesta está aceptada.
+ * Si era para un lead, primero lo convierte a cliente. Devuelve customer_id.
+ *
+ * El generador de contrato propiamente dicho corre en otro flujo (puede ser
+ * inmediato si chosen_plan_type=cash, o una pantalla intermedia para
+ * confirmar datos en alquiler/renting).
+ */
+export async function convertAcceptedProposalToCustomerAction(
+  proposalId: string,
+): Promise<{ customer_id: string }> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: prop } = await supabase
+    .from("proposals")
+    .select("id, status, lead_id, customer_id")
+    .eq("id", proposalId)
+    .maybeSingle();
+  if (!prop) throw new Error("Propuesta no encontrada");
+  const p = prop as {
+    id: string;
+    status: string;
+    lead_id: string | null;
+    customer_id: string | null;
+  };
+  if (p.status !== "accepted") throw new Error("La propuesta debe estar aceptada");
+
+  let customerId = p.customer_id;
+  if (!customerId && p.lead_id) {
+    customerId = await convertLeadToCustomerAction(p.lead_id);
+    await supabase
+      .from("proposals")
+      .update({ customer_id: customerId, lead_id: null })
+      .eq("id", proposalId);
+  }
+  if (!customerId) throw new Error("No hay cliente asociado");
+  revalidatePath(`/propuestas/${proposalId}`);
+  revalidatePath(`/clientes/${customerId}`);
   return { customer_id: customerId };
 }
 

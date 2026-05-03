@@ -855,6 +855,8 @@ export function watermarkFromProposalStatus(status: string): {
 } {
   if (status === "accepted") return { label: "ACEPTADA", tone: "success" };
   if (status === "sent") return { label: "ENVIADA", tone: "warning" };
+  if (status === "pending_approval")
+    return { label: "PENDIENTE APROBACIÓN", tone: "warning" };
   if (status === "rejected") return { label: "RECHAZADA", tone: "draft" };
   if (status === "expired") return { label: "EXPIRADA", tone: "draft" };
   return { label: "BORRADOR", tone: "draft" };

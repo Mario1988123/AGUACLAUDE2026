@@ -6,6 +6,7 @@ import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/proposals/schemas";
 import { ProposalActions } from "@/modules/proposals/actions-panel";
 import { ProposalVariantsCard } from "@/modules/proposals/variants-card";
+import { requireSession } from "@/shared/lib/auth/session";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -26,6 +27,13 @@ export default async function ProposalDetailPage({
   }
   const items = await getProposalItems(id);
   const variants = await listProposalVariants(id).catch(() => []);
+  const session = await requireSession();
+  const canApprove =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
 
   return (
     <div className="space-y-6">
@@ -107,7 +115,12 @@ export default async function ProposalDetailPage({
             <CardTitle>Acciones</CardTitle>
           </CardHeader>
           <CardContent>
-            <ProposalActions proposalId={proposal.id} status={proposal.status} />
+            <ProposalActions
+              proposalId={proposal.id}
+              status={proposal.status}
+              canApprove={canApprove}
+              hasLead={Boolean(proposal.lead_id)}
+            />
             {proposal.validity_until && (
               <p className="mt-4 text-xs text-muted-foreground">
                 Validez hasta {proposal.validity_until}
