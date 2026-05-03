@@ -8,6 +8,7 @@ import { BottomNav, BottomNavSpacer } from "@/shared/components/bottom-nav";
 import { getUnreadCount } from "@/modules/notifications/actions";
 import { getChatTotalUnread } from "@/modules/chat/actions";
 import { hasSeenOnboarding } from "@/modules/onboarding/actions";
+import { getMyModuleOverrides } from "@/modules/tenant/users/permissions-actions";
 import { getStepsForRoles } from "@/modules/onboarding/steps";
 import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { redirect } from "next/navigation";
@@ -48,6 +49,7 @@ export default async function TenantLayout({ children }: { children: React.React
   const chatUnread = await getChatTotalUnread().catch(() => 0);
   const seenOnboarding = await hasSeenOnboarding().catch(() => true);
   const onboardingSteps = getStepsForRoles(session.roles, session.is_superadmin);
+  const moduleOverrides = await getMyModuleOverrides().catch(() => ({}));
 
   const ROLE_LABEL: Record<string, string> = {
     company_admin: "Admin",
@@ -71,6 +73,7 @@ export default async function TenantLayout({ children }: { children: React.React
         activeModuleKeys={activeModuleKeys}
         fullName={session.full_name}
         badges={{ chat: chatUnread, notifications: unread }}
+        moduleOverrides={moduleOverrides}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header

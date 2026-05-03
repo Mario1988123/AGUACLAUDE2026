@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/di
 import { notify } from "@/shared/hooks/use-toast";
 import { setUserStatus, updateUserRoles } from "./actions";
 import { ROLE_KEYS, type RoleKey } from "./schemas";
+import { UserPermissionsButton } from "./permissions-dialog";
 
 const ROLE_LABEL: Record<string, string> = {
   company_admin: "Admin",
@@ -76,6 +77,7 @@ export function UserRowActions({
   return (
     <>
       <div className="flex items-center justify-end gap-1.5">
+        <UserPermissionsButton userId={userId} />
         <Button size="sm" variant="ghost" onClick={() => setOpen(true)} aria-label="Editar roles">
           <Pencil className="h-4 w-4" />
         </Button>

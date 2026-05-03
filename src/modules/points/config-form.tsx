@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Save } from "lucide-react";
+import { Save, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -148,6 +148,94 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
             />
           </div>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-primary">
+            Hitos / bonus mensuales
+          </h3>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setV((x) => ({
+                ...x,
+                monthly_milestones: [
+                  ...(x.monthly_milestones ?? []),
+                  { threshold: 100, bonus_points: 25, label: "Nuevo hito" },
+                ],
+              }))
+            }
+          >
+            <Plus className="h-4 w-4" /> Añadir hito
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Solo se otorgan al alcanzar el 100% del umbral en el mes en curso.
+        </p>
+        {(v.monthly_milestones ?? []).length === 0 ? (
+          <p className="text-xs text-muted-foreground">Sin hitos configurados.</p>
+        ) : (
+          <div className="space-y-2">
+            {(v.monthly_milestones ?? []).map((m, idx) => (
+              <div
+                key={idx}
+                className="grid grid-cols-12 items-end gap-2 rounded-xl border bg-background p-3"
+              >
+                <div className="col-span-5 space-y-1">
+                  <Label className="text-xs">Etiqueta</Label>
+                  <Input
+                    value={m.label}
+                    onChange={(e) => {
+                      const next = [...(v.monthly_milestones ?? [])];
+                      next[idx] = { ...m, label: e.target.value };
+                      set("monthly_milestones", next);
+                    }}
+                  />
+                </div>
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs">Umbral (puntos)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={m.threshold}
+                    onChange={(e) => {
+                      const next = [...(v.monthly_milestones ?? [])];
+                      next[idx] = { ...m, threshold: Number(e.target.value) };
+                      set("monthly_milestones", next);
+                    }}
+                  />
+                </div>
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs">Bonus</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={m.bonus_points}
+                    onChange={(e) => {
+                      const next = [...(v.monthly_milestones ?? [])];
+                      next[idx] = { ...m, bonus_points: Number(e.target.value) };
+                      set("monthly_milestones", next);
+                    }}
+                  />
+                </div>
+                <div className="col-span-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      const next = (v.monthly_milestones ?? []).filter((_, i) => i !== idx);
+                      set("monthly_milestones", next);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <div className="flex justify-end">

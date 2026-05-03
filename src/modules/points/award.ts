@@ -63,6 +63,16 @@ export async function awardPoints(args: AwardArgs): Promise<void> {
     period_month: now.getMonth() + 1,
     awarded_at: now.toISOString(),
   });
+  // Comprobar hitos del mes (no recursivo: bonus de hito tiene reason
+  // distinto y la función filtra para no contarse a sí mismo)
+  if (args.points > 0 && args.reason !== "milestone_reached") {
+    try {
+      const { checkAndAwardMilestones } = await import("./milestones");
+      await checkAndAwardMilestones(args.company_id, args.user_id);
+    } catch {
+      /* fail-soft */
+    }
+  }
 }
 
 /**

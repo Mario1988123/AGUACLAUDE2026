@@ -19,6 +19,19 @@ export interface PointsSettings {
   points_per_incident: number;
   /** Conversión informativa: € que vale cada punto. 0 = comisiones desactivadas. */
   euros_per_point: number;
+  /**
+   * Hitos / bonus por metas conseguidas en el mes. Se otorgan al alcanzar el
+   * umbral indicado de puntos (sólo se aplica si llega al 100% del threshold).
+   * Lista ordenada de menor a mayor threshold.
+   */
+  monthly_milestones: Array<{
+    /** Puntos necesarios para desbloquear el hito */
+    threshold: number;
+    /** Puntos extra que se otorgan al cumplirlo */
+    bonus_points: number;
+    /** Etiqueta visible al usuario */
+    label: string;
+  }>;
 }
 
 export const DEFAULT_POINTS_SETTINGS: PointsSettings = {
@@ -30,4 +43,9 @@ export const DEFAULT_POINTS_SETTINGS: PointsSettings = {
   points_per_maintenance: 15,
   points_per_incident: 20,
   euros_per_point: 0,
+  monthly_milestones: [
+    { threshold: 100, bonus_points: 25, label: "100 puntos" },
+    { threshold: 250, bonus_points: 75, label: "250 puntos" },
+    { threshold: 500, bonus_points: 200, label: "500 puntos" },
+  ],
 };

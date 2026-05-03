@@ -13,6 +13,8 @@ interface SidebarProps {
   activeModuleKeys: string[];
   fullName: string | null;
   badges?: Partial<Record<string, number>>;
+  /** Overrides de módulos del usuario: granted=true fuerza acceso, false lo niega */
+  moduleOverrides?: Record<string, boolean>;
 }
 
 const COLLAPSED_KEY = "sidebar.collapsed";
@@ -28,6 +30,7 @@ export function Sidebar({
   activeModuleKeys,
   fullName,
   badges,
+  moduleOverrides,
 }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,6 +58,10 @@ export function Sidebar({
   }
 
   const visibleModules = MODULES.filter((m) => {
+    // Override del admin para este usuario tiene precedencia absoluta
+    const ov = moduleOverrides?.[m.key];
+    if (ov === false) return false;
+    if (ov === true) return true;
     const isSystem = m.group === "config" || m.group === "core";
     if (!isSystem && !activeModuleKeys.includes(m.key)) return false;
     if (m.rolesAllowed && m.rolesAllowed.length > 0) {

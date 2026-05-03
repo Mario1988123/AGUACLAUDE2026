@@ -26,6 +26,8 @@ import {
   CriticalIncidentsCard,
   getCriticalOpenIncidents,
 } from "@/modules/incidents/critical-card";
+import { getMonthlyEvolution } from "@/modules/dashboard/evolution-actions";
+import { EvolutionChart } from "@/modules/dashboard/evolution-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -95,11 +97,13 @@ export default async function DashboardPage({
     listTeamMembers().catch(() => []),
   ]);
 
-  const [upcomingMaintenance, upcomingInstallations, criticalIncidents] = await Promise.all([
-    getUpcomingMaintenance().catch(() => []),
-    getUpcomingInstallations().catch(() => []),
-    getCriticalOpenIncidents().catch(() => []),
-  ]);
+  const [upcomingMaintenance, upcomingInstallations, criticalIncidents, evolution] =
+    await Promise.all([
+      getUpcomingMaintenance().catch(() => []),
+      getUpcomingInstallations().catch(() => []),
+      getCriticalOpenIncidents().catch(() => []),
+      getMonthlyEvolution().catch(() => []),
+    ]);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
     (s, r) => s + r.total_cents,
@@ -264,6 +268,13 @@ export default async function DashboardPage({
       </div>
 
       <YearComparisonChart thisYear={yearMonthly} lastYear={lastYearMonthly} />
+
+      {evolution.length > 0 && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <EvolutionChart data={evolution} metric="sales_cents" title="Ventas (€) últimos 12 meses" />
+          <EvolutionChart data={evolution} metric="contracts" title="Contratos firmados últimos 12 meses" />
+        </div>
+      )}
     </div>
   );
 }
