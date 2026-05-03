@@ -10,21 +10,17 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { upsertAttributeAction, type ProductAttribute } from "@/modules/products/attributes-actions";
 import type { CategoryItem } from "@/modules/products/types";
+import { toSnakeCase } from "@/shared/lib/slug";
 
-const TYPES: ProductAttribute["data_type"][] = [
-  "text",
-  "number",
-  "boolean",
-  "enum",
-  "dimension",
-  "date",
-];
+// Solo tipos relevantes para una empresa sin conocimientos técnicos:
+// fecha y dimensión han sido retirados (decisión usuario 2026-05-03).
+const TYPES: ProductAttribute["data_type"][] = ["text", "number", "boolean", "enum"];
 
 const TYPE_LABEL: Record<ProductAttribute["data_type"], string> = {
-  text: "Texto",
+  text: "Texto libre",
   number: "Número",
-  boolean: "Sí/No",
-  enum: "Lista",
+  boolean: "Sí / No",
+  enum: "Lista de opciones",
   dimension: "Dimensión",
   date: "Fecha",
 };
@@ -32,9 +28,10 @@ const TYPE_LABEL: Record<ProductAttribute["data_type"], string> = {
 interface Props {
   attributes: ProductAttribute[];
   categories: CategoryItem[];
+  units?: Array<{ code: string; label: string }>;
 }
 
-export function AttributesConfig({ attributes, categories }: Props) {
+export function AttributesConfig({ attributes, categories, units = [] }: Props) {
   const [editing, setEditing] = useState<ProductAttribute | "new" | null>(null);
   const catName = (id: string | null) =>
     id ? categories.find((c) => c.id === id)?.name ?? "?" : "Todas";
@@ -44,6 +41,7 @@ export function AttributesConfig({ attributes, categories }: Props) {
       <AttrForm
         initial={editing === "new" ? null : editing}
         categories={categories}
+        units={units}
         onDone={() => {
           setEditing(null);
           location.reload();
@@ -91,30 +89,51 @@ export function AttributesConfig({ attributes, categories }: Props) {
 function AttrForm({
   initial,
   categories,
+  units,
   onDone,
 }: {
   initial: ProductAttribute | null;
   categories: CategoryItem[];
+  units: Array<{ code: string; label: string }>;
   onDone: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
     key: initial?.key ?? "",
     name: initial?.name ?? "",
-    data_type: initial?.data_type ?? "text",
+    data_type: initial?.data_type ?? ("text" as ProductAttribute["data_type"]),
     unit: initial?.unit ?? "",
     category_id: initial?.category_id ?? "",
     is_required: initial?.is_required ?? false,
     sort_order: initial?.sort_order ?? 0,
   });
 
+  function setName(name: string) {
+    // Auto-generar key desde nombre solo cuando es nuevo o si key sigue derivada
+    setForm((f) => {
+      const autoKey = toSnakeCase(name);
+      const wasAuto = !initial && (!f.key || f.key === toSnakeCase(f.name));
+      return {
+        ...f,
+        name,
+        key: wasAuto ? autoKey : f.key,
+      };
+    });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const finalKey = form.key || toSnakeCase(form.name);
+    if (!finalKey) {
+      notify.warning("El nombre es obligatorio");
+      return;
+    }
     startTransition(async () => {
       try {
         await upsertAttributeAction({
           id: initial?.id,
           ...form,
+          key: finalKey,
           category_id: form.category_id || null,
         });
         notify.success("Guardado");
@@ -129,27 +148,20 @@ function AttrForm({
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="name">Nombre *</Label>
-              <Input
-                id="name"
-                required
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Caudal, Presión..."
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="key">Clave (snake_case) *</Label>
-              <Input
-                id="key"
-                required
-                value={form.key}
-                onChange={(e) => setForm({ ...form, key: e.target.value })}
-                placeholder="flow_lpm"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="name">Nombre *</Label>
+            <Input
+              id="name"
+              required
+              value={form.name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Caudal, Presión, Color..."
+            />
+            {form.key && (
+              <p className="text-[10px] text-muted-foreground">
+                Identificador interno: <code>{form.key}</code>
+              </p>
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
@@ -174,7 +186,19 @@ function AttrForm({
                 value={form.unit}
                 onChange={(e) => setForm({ ...form, unit: e.target.value })}
                 placeholder="L/min, bar, kg..."
+                list="units-list"
               />
+              <datalist id="units-list">
+                {units.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.label}
+                  </option>
+                ))}
+              </datalist>
+              <p className="text-[10px] text-muted-foreground">
+                Selecciona del catálogo o escribe la tuya. Puedes añadir nuevas en la sección de
+                arriba.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label>Orden</Label>

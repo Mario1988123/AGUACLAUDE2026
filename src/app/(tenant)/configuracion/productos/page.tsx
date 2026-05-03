@@ -5,14 +5,17 @@ import { Badge } from "@/shared/ui/badge";
 import { CloneCategoryButton, CreateCategoryForm } from "@/modules/products/categories-panel";
 import { AttributesConfig } from "@/modules/config/products/attributes-config";
 import { KIND_LABEL } from "@/modules/products/schemas";
+import { listUnits } from "@/modules/config/units/actions";
+import { UnitsManager } from "@/modules/config/units/units-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConfiguracionProductosPage() {
-  const [local, globals, attributes] = await Promise.all([
+  const [local, globals, attributes, units] = await Promise.all([
     listCategories(),
     listGlobalCategories(),
     listAttributes(),
+    listUnits(),
   ]);
   const clonedIds = new Set(local.map((c) => c.cloned_from_global_id).filter(Boolean));
 
@@ -99,10 +102,23 @@ export default async function ConfiguracionProductosPage() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Unidades ({units.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <UnitsManager units={units} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Atributos ({attributes.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <AttributesConfig attributes={attributes} categories={local} />
+          <AttributesConfig
+            attributes={attributes}
+            categories={local}
+            units={units.map((u) => ({ code: u.code, label: u.label }))}
+          />
         </CardContent>
       </Card>
     </div>

@@ -8,6 +8,7 @@ import {
   listProductAttributeValues,
 } from "@/modules/products/attributes-actions";
 import { AttributesPanel } from "@/modules/products/attributes-panel";
+import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
@@ -51,10 +52,29 @@ export default async function ProductDetailPage({
           </div>
           <p className="text-sm text-muted-foreground">{KIND_LABEL[product.kind]}</p>
         </div>
-        <Link href="/productos" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/pdf/product-datasheet/${product.id}`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            📄 Ficha técnica
+          </a>
+          <Link href="/productos" className="text-sm text-primary hover:underline">
+            ← Volver
+          </Link>
+        </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Foto principal</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
