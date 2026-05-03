@@ -9,7 +9,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { rescheduleAgendaEventAction } from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
-import { MoveAgendaEventButton } from "./move-button";
+import { MoveEventDialog } from "./move-event-dialog";
 
 interface Props {
   events: AgendaItem[];
@@ -24,6 +24,7 @@ export function DraggableAgendaList({ events: initial }: Props) {
   const [events, setEvents] = useState(initial);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overDay, setOverDay] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState<AgendaItem | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -108,7 +109,7 @@ export function DraggableAgendaList({ events: initial }: Props) {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        💡 Arrastra una tarjeta a otro día (escritorio) o pulsa el icono 📅 (tablet/móvil) para reagendar.
+        💡 Pulsa cualquier tarjeta para reagendarla (fecha + hora). En escritorio también puedes arrastrarla a otro día.
       </p>
       {days.map((day) => (
         <div
@@ -138,7 +139,16 @@ export function DraggableAgendaList({ events: initial }: Props) {
                       draggable
                       onDragStart={(e) => onDragStart(e, ev.id)}
                       onDragEnd={onDragEnd}
-                      className={`flex items-start gap-3 py-3 cursor-move transition-opacity ${
+                      onClick={() => setMoveTarget(ev)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setMoveTarget(ev);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      className={`flex items-start gap-3 py-3 cursor-pointer hover:bg-muted/40 rounded-lg px-2 -mx-2 transition-all ${
                         draggingId === ev.id ? "opacity-40" : ""
                       }`}
                     >
@@ -166,10 +176,6 @@ export function DraggableAgendaList({ events: initial }: Props) {
                           </p>
                         )}
                       </div>
-                      <MoveAgendaEventButton
-                        eventId={ev.id}
-                        currentStartsAt={ev.starts_at}
-                      />
                     </li>
                   ))}
               </ul>
@@ -177,6 +183,18 @@ export function DraggableAgendaList({ events: initial }: Props) {
           </Card>
         </div>
       ))}
+
+      {moveTarget && (
+        <MoveEventDialog
+          open={moveTarget !== null}
+          onOpenChange={(o) => {
+            if (!o) setMoveTarget(null);
+          }}
+          eventId={moveTarget.id}
+          currentStartsAt={moveTarget.starts_at}
+          eventTitle={moveTarget.title}
+        />
+      )}
     </div>
   );
 }
