@@ -31,7 +31,7 @@ export async function listLeads(filters?: {
   let query = supabase
     .from("leads")
     .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, status, origin, potential, assigned_user_id, created_at",
+      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, status, origin, potential, assigned_user_id, created_at, tags",
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -70,6 +70,7 @@ export async function listLeads(filters?: {
     potential: LeadListItem["potential"];
     assigned_user_id: string | null;
     created_at: string;
+    tags: string[] | null;
   }>;
 
   const now = Date.now();
@@ -88,6 +89,7 @@ export async function listLeads(filters?: {
     assigned_user_id: r.assigned_user_id,
     created_at: r.created_at,
     days_since_created: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
+    tags: r.tags ?? [],
   }));
 }
 

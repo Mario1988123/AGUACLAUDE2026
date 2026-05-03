@@ -99,12 +99,24 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                     </td>
                   )}
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/leads/${l.id}` as never}
-                      className="font-medium text-primary hover:underline"
-                    >
-                      {l.display_name}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Link
+                        href={`/leads/${l.id}` as never}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        {l.display_name}
+                      </Link>
+                      {l.tags?.includes("reabierto") && (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
+                          ↻ Reabierto
+                        </span>
+                      )}
+                      {!l.assigned_user_id && (
+                        <span className="inline-flex items-center rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-700">
+                          Sin asignar
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {l.party_kind === "company" ? "Empresa" : "Particular"}
                     </div>

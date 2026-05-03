@@ -17,6 +17,7 @@ export interface LeadListItem {
   assigned_user_id: string | null;
   created_at: string;
   days_since_created: number;
+  tags: string[];
 }
 
 export interface LeadDetail extends Omit<LeadListItem, "display_name" | "days_since_created"> {

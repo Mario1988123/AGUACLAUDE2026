@@ -44,6 +44,17 @@ export async function reopenLostSaleAction(lostSaleId: string) {
   if (row.is_recovered) throw new Error("Ya recuperada");
   if (!row.lead_id) throw new Error("Esta venta perdida no tiene lead asociado");
 
+  // Recuperar tags actuales para añadir "reabierto" sin perder los existentes
+  const { data: leadRow } = await supabase
+    .from("leads")
+    .select("tags")
+    .eq("id", row.lead_id)
+    .single();
+  const currentTags = ((leadRow as { tags: string[] | null } | null)?.tags ?? []) as string[];
+  const nextTags = currentTags.includes("reabierto")
+    ? currentTags
+    : [...currentTags, "reabierto"];
+
   await supabase
     .from("leads")
     .update({
@@ -51,6 +62,11 @@ export async function reopenLostSaleAction(lostSaleId: string) {
       lost_at: null,
       lost_reason: null,
       expired_at: null,
+      // Liberar la asignación: queda sin asignar para que admin/director lo
+      // reasigne al comercial que toque.
+      assigned_user_id: null,
+      assigned_at: null,
+      tags: nextTags,
     })
     .eq("id", row.lead_id);
 
