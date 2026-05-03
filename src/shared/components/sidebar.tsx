@@ -12,6 +12,7 @@ interface SidebarProps {
   isSuperadmin: boolean;
   activeModuleKeys: string[];
   fullName: string | null;
+  badges?: Partial<Record<string, number>>;
 }
 
 const COLLAPSED_KEY = "sidebar.collapsed";
@@ -21,7 +22,13 @@ const COLLAPSED_KEY = "sidebar.collapsed";
  * (escritorio) con preferencia persistida en localStorage. En tablet/móvil
  * se sigue mostrando como overlay con el botón hamburguesa.
  */
-export function Sidebar({ userRoles, isSuperadmin, activeModuleKeys, fullName }: SidebarProps) {
+export function Sidebar({
+  userRoles,
+  isSuperadmin,
+  activeModuleKeys,
+  fullName,
+  badges,
+}: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -117,9 +124,9 @@ export function Sidebar({ userRoles, isSuperadmin, activeModuleKeys, fullName }:
         </div>
 
         <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-5">
-          <SidebarGroup label="Principal" items={core} pathname={pathname} collapsed={isCollapsed} />
-          <SidebarGroup label="Operativa" items={operative} pathname={pathname} collapsed={isCollapsed} />
-          <SidebarGroup label="Administración" items={config} pathname={pathname} collapsed={isCollapsed} />
+          <SidebarGroup label="Principal" items={core} pathname={pathname} collapsed={isCollapsed} badges={badges} />
+          <SidebarGroup label="Operativa" items={operative} pathname={pathname} collapsed={isCollapsed} badges={badges} />
+          <SidebarGroup label="Administración" items={config} pathname={pathname} collapsed={isCollapsed} badges={badges} />
         </nav>
 
         <div className={cn("border-t border-sidebar-border", isCollapsed ? "p-2" : "p-4")}>
@@ -175,11 +182,13 @@ function SidebarGroup({
   items,
   pathname,
   collapsed,
+  badges,
 }: {
   label: string;
   items: ModuleEntry[];
   pathname: string;
   collapsed: boolean;
+  badges?: Partial<Record<string, number>>;
 }) {
   if (items.length === 0) return null;
   return (
@@ -210,7 +219,23 @@ function SidebarGroup({
             prefetch={false}
           >
             <Icon className="h-5 w-5 shrink-0" />
-            {!collapsed && <span className="truncate">{m.label}</span>}
+            {!collapsed && <span className="truncate flex-1">{m.label}</span>}
+            {(() => {
+              const count = badges?.[m.key] ?? 0;
+              if (!count) return null;
+              return (
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full bg-red-500 text-[10px] font-bold text-white",
+                    collapsed
+                      ? "absolute right-0 top-0 h-4 min-w-4 px-1 leading-4 text-center"
+                      : "px-2 py-0.5",
+                  )}
+                >
+                  {count > 99 ? "99+" : count}
+                </span>
+              );
+            })()}
           </Link>
         );
       })}

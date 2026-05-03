@@ -6,6 +6,10 @@ import { Sidebar } from "@/shared/components/sidebar";
 import { Header } from "@/shared/components/header";
 import { BottomNav, BottomNavSpacer } from "@/shared/components/bottom-nav";
 import { getUnreadCount } from "@/modules/notifications/actions";
+import { getChatTotalUnread } from "@/modules/chat/actions";
+import { hasSeenOnboarding } from "@/modules/onboarding/actions";
+import { getStepsForRoles } from "@/modules/onboarding/steps";
+import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { redirect } from "next/navigation";
 
 async function getUnreadCountSafe(): Promise<number> {
@@ -41,6 +45,9 @@ export default async function TenantLayout({ children }: { children: React.React
   );
 
   const unread = await getUnreadCountSafe();
+  const chatUnread = await getChatTotalUnread().catch(() => 0);
+  const seenOnboarding = await hasSeenOnboarding().catch(() => true);
+  const onboardingSteps = getStepsForRoles(session.roles, session.is_superadmin);
 
   const ROLE_LABEL: Record<string, string> = {
     company_admin: "Admin",
@@ -63,6 +70,7 @@ export default async function TenantLayout({ children }: { children: React.React
         isSuperadmin={session.is_superadmin}
         activeModuleKeys={activeModuleKeys}
         fullName={session.full_name}
+        badges={{ chat: chatUnread, notifications: unread }}
       />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header
@@ -77,6 +85,7 @@ export default async function TenantLayout({ children }: { children: React.React
         </main>
       </div>
       <BottomNav unreadCount={unread} />
+      <OnboardingTour steps={onboardingSteps} enabled={!seenOnboarding} />
     </div>
   );
 }
