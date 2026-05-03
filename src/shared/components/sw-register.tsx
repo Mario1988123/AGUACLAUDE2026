@@ -3,24 +3,29 @@
 import { useEffect } from "react";
 
 /**
- * Registra el Service Worker pre-generado en /sw.js para habilitar PWA
- * (instalable en escritorio, Android e iOS). Se ejecuta sólo en producción
- * para evitar interferir con HMR de Next dev.
+ * Limpia cualquier Service Worker previamente registrado por la app.
+ * Mientras la PWA está desactivada (Serwist disable=true) este componente
+ * desregistra los SW antiguos y borra sus cachés para que los clientes
+ * que ya los tenían instalados dejen de interceptar las navegaciones.
  */
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
-    if (process.env.NODE_ENV !== "production") return;
-    const onLoad = () => {
-      navigator.serviceWorker
-        .register("/sw.js", { scope: "/" })
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .catch(() => {
+        /* no-op */
+      });
+    if ("caches" in window) {
+      caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
         .catch(() => {
-          /* fail-soft: si falla seguimos como web normal */
+          /* no-op */
         });
-    };
-    if (document.readyState === "complete") onLoad();
-    else window.addEventListener("load", onLoad, { once: true });
+    }
   }, []);
   return null;
 }

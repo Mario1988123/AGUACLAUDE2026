@@ -6,9 +6,9 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
-  // Activado en producción para soporte offline real. En dev queda desactivado
-  // para no interferir con HMR.
-  disable: process.env.NODE_ENV !== "production",
+  // Desactivado: el SW interceptaba navegaciones que fallaban en server y
+  // empeoraba la UX (no-response). Volverá cuando endurecemos el offline.
+  disable: true,
 });
 
 const nextConfig: NextConfig = {

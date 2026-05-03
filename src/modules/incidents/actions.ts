@@ -174,14 +174,40 @@ export interface IncidentRow {
 export async function listIncidents(): Promise<IncidentRow[]> {
   await requireSession();
   const supabase = await createClient();
-  const { data, error } = await supabase
+  const FULL =
+    "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at, deadline_at";
+  const FALLBACK =
+    "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+  let { data, error } = await sb
     .from("incidents")
-    .select(
-      "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at, deadline_at",
-    )
+    .select(FULL)
     .order("priority", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(200);
+  // Si deadline_at no existe (migración SLA pendiente) reintenta sin esa columna
+  if (error && /deadline_at/.test(error.message ?? "")) {
+    const r = await sb
+      .from("incidents")
+      .select(FALLBACK)
+      .order("priority", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(200);
+    data = r.data;
+    error = r.error;
+  }
   if (error) throw error;
-  return (data ?? []) as IncidentRow[];
+  return ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    id: r.id as string,
+    reference_code: (r.reference_code as string | null) ?? null,
+    title: r.title as string,
+    status: r.status as string,
+    priority: r.priority as string,
+    origin: r.origin as string,
+    assigned_user_id: (r.assigned_user_id as string | null) ?? null,
+    customer_id: (r.customer_id as string | null) ?? null,
+    created_at: r.created_at as string,
+    deadline_at: (r.deadline_at as string | null) ?? null,
+  }));
 }
