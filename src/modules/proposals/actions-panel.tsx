@@ -99,12 +99,16 @@ export function ProposalActions({ proposalId, status, canApprove, hasLead }: Pro
     startTransition(async () => {
       try {
         if (hasLead) {
-          // Si era para un lead: 1) convertir a cliente, 2) generar contrato.
+          // Si era para un lead, primero convertimos a cliente y enviamos
+          // al usuario a la ficha del cliente para que complete los datos
+          // pendientes (DNI, IBAN, dirección) ANTES de generar el contrato.
           const r = await convertAcceptedProposalToCustomerAction(proposalId);
-          notify.success(`Cliente creado, generando contrato…`);
-          await createContractFromProposal(proposalId);
-          router.push(`/clientes/${r.customer_id}` as never);
+          notify.success("Cliente creado. Completa sus datos y luego genera el contrato.");
+          router.push(
+            `/clientes/${r.customer_id}?from_proposal=${proposalId}` as never,
+          );
         } else {
+          // Cliente ya existe: generar el contrato directamente
           await createContractFromProposal(proposalId);
         }
       } catch (err) {

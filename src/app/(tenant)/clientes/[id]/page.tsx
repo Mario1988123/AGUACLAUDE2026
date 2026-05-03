@@ -13,6 +13,7 @@ import { listContractsByCustomer, listInstallationsByCustomer } from "@/modules/
 import { CustomerContractsCard } from "@/modules/customers/contracts-card";
 import { CustomerInstallationsCard } from "@/modules/customers/installations-card";
 import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
+import { FromProposalBanner } from "@/modules/customers/from-proposal-banner";
 import { Timeline } from "@/modules/events/timeline";
 import { Plus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -24,10 +25,14 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomerDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from_proposal?: string }>;
 }) {
   const { id } = await params;
+  const sp = await searchParams;
+  const fromProposal = sp.from_proposal;
   let customer;
   try {
     customer = await getCustomer(id);
@@ -65,8 +70,20 @@ export default async function CustomerDetailPage({
     assignedName = (prof as { full_name: string | null } | null)?.full_name ?? null;
   }
 
+  // Pendientes para el banner si venimos desde una propuesta aceptada
+  const pendingFromProposal = fromProposal
+    ? {
+        dni: !customer.tax_id,
+        iban: bankAccounts.length === 0,
+        address: addresses.length === 0,
+      }
+    : null;
+
   return (
     <div className="space-y-6">
+      {fromProposal && pendingFromProposal && (
+        <FromProposalBanner proposalId={fromProposal} pending={pendingFromProposal} />
+      )}
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
