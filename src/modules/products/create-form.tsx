@@ -72,13 +72,20 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
     fd.set("dim_height_mm", height);
     fd.set("dim_depth_mm", depth);
     fd.set("weight_grams", weight);
-    fd.set("cost_cents", cost);
-    fd.set("supplier_price_cents", supplierPrice);
+    // Los inputs de la UI son EUROS (con decimales). El backend espera céntimos.
+    const eurToCents = (v: string): string => {
+      if (!v) return "";
+      const n = Number(v.replace(",", "."));
+      if (!Number.isFinite(n)) return "";
+      return String(Math.round(n * 100));
+    };
+    fd.set("cost_cents", eurToCents(cost));
+    fd.set("supplier_price_cents", eurToCents(supplierPrice));
     fd.set("stock_min", stockMin);
     if (stockManaged) fd.set("stock_managed", "on");
-    fd.set("cash_total_cents", cashTotal);
-    fd.set("cash_min_authorized_cents", cashMin);
-    fd.set("cash_absolute_min_cents", cashAbsMin);
+    fd.set("cash_total_cents", eurToCents(cashTotal));
+    fd.set("cash_min_authorized_cents", eurToCents(cashMin));
+    fd.set("cash_absolute_min_cents", eurToCents(cashAbsMin));
     startTransition(async () => {
       try {
         await createProductAction(fd);
@@ -210,19 +217,23 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
         <div className="space-y-5">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label>Coste (cts)</Label>
+              <Label>Coste (€)</Label>
               <Input
                 type="number"
                 min={0}
+                step="0.01"
+                placeholder="200,63"
                 value={cost}
                 onChange={(e) => setCost(e.target.value)}
               />
             </div>
             <div className="space-y-2">
-              <Label>Precio proveedor (cts)</Label>
+              <Label>Precio proveedor (€)</Label>
               <Input
                 type="number"
                 min={0}
+                step="0.01"
+                placeholder="200,63"
                 value={supplierPrice}
                 onChange={(e) => setSupplierPrice(e.target.value)}
               />
@@ -253,28 +264,32 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
             </Label>
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label className="text-xs">PVP (cts)</Label>
+                <Label className="text-xs">PVP (€)</Label>
                 <Input
                   type="number"
                   min={0}
+                  step="0.01"
+                  placeholder="200,63"
                   value={cashTotal}
                   onChange={(e) => setCashTotal(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Mín. comercial (cts)</Label>
+                <Label className="text-xs">Mín. comercial (€)</Label>
                 <Input
                   type="number"
                   min={0}
+                  step="0.01"
                   value={cashMin}
                   onChange={(e) => setCashMin(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Mín. absoluto (cts)</Label>
+                <Label className="text-xs">Mín. absoluto (€)</Label>
                 <Input
                   type="number"
                   min={0}
+                  step="0.01"
                   value={cashAbsMin}
                   onChange={(e) => setCashAbsMin(e.target.value)}
                 />

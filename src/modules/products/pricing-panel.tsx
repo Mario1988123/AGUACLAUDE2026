@@ -29,8 +29,17 @@ function formatCents(cents: number | null) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
+const RENTING_DURATIONS = [12, 24, 36, 48, 60] as const;
+
 export function PricingPlansPanel({ productId, plans }: Props) {
   const [adding, setAdding] = useState<null | "cash" | "renting" | "rental">(null);
+  const [rentingDuration, setRentingDuration] = useState<number | null>(null);
+
+  const existingRentingDurations = new Set(
+    plans.filter((p) => p.plan_type === "renting").map((p) => p.duration_months),
+  );
+  const hasCash = plans.some((p) => p.plan_type === "cash");
+  const hasRental = plans.some((p) => p.plan_type === "rental");
 
   return (
     <div className="space-y-4">
@@ -48,21 +57,58 @@ export function PricingPlansPanel({ productId, plans }: Props) {
         <PlanForm
           productId={productId}
           planType={adding}
-          onDone={() => setAdding(null)}
+          fixedDuration={adding === "renting" ? rentingDuration : null}
+          onDone={() => {
+            setAdding(null);
+            setRentingDuration(null);
+          }}
         />
       )}
 
       {!adding && (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setAdding("cash")}>
-            <Plus className="h-4 w-4" /> Contado
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAdding("renting")}>
-            <Plus className="h-4 w-4" /> Renting
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setAdding("rental")}>
-            <Plus className="h-4 w-4" /> Alquiler
-          </Button>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {!hasCash && (
+              <Button variant="outline" size="sm" onClick={() => setAdding("cash")}>
+                <Plus className="h-4 w-4" /> Contado
+              </Button>
+            )}
+            {!hasRental && (
+              <Button variant="outline" size="sm" onClick={() => setAdding("rental")}>
+                <Plus className="h-4 w-4" /> Alquiler
+              </Button>
+            )}
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Renting · selecciona duración
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {RENTING_DURATIONS.map((m) => {
+                const exists = existingRentingDurations.has(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      if (exists) return;
+                      setRentingDuration(m);
+                      setAdding("renting");
+                    }}
+                    disabled={exists}
+                    className={`inline-flex h-10 items-center justify-center rounded-xl border-2 px-3 text-sm font-bold transition-colors ${
+                      exists
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 cursor-default"
+                        : "border-border bg-card text-foreground hover:border-primary hover:bg-primary/10"
+                    }`}
+                  >
+                    {m}m{exists && " ✓"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -136,18 +182,21 @@ function PlanRow({ plan, productId }: { plan: PricingPlan; productId: string }) 
 function PlanForm({
   productId,
   planType,
+  fixedDuration,
   onDone,
 }: {
   productId: string;
   planType: "cash" | "renting" | "rental";
+  fixedDuration?: number | null;
   onDone: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
-    duration_months: planType === "cash" ? "" : "12",
+    duration_months: planType === "cash" ? "" : String(fixedDuration ?? 12),
     monthly_euros: "",
     total_euros: "",
-    coefficient: planType === "renting" ? "0.02375" : "",
+    /** % comisión que retiene la financiera del total cliente (0-100). */
+    financier_fee_percent: planType === "renting" ? "5" : "",
     permanence_months: planType === "rental" ? "12" : "",
     min_authorized_euros: "",
     absolute_min_euros: "",
@@ -159,10 +208,7 @@ function PlanForm({
     const monthly = Number(form.monthly_euros) || 0;
     if (months > 0 && monthly > 0) {
       const total = (months * monthly).toFixed(2);
-      const coef = Number(form.coefficient) || 0;
-      const financier =
-        planType === "renting" && coef > 0 ? (monthly / coef).toFixed(2) : "";
-      setForm((f) => ({ ...f, total_euros: total, ...(financier && { financier }) }));
+      setForm((f) => ({ ...f, total_euros: total }));
     }
   }
 
@@ -181,8 +227,13 @@ function PlanForm({
       return;
     }
     const monthsVal = form.duration_months ? Number(form.duration_months) : null;
-    const coef = form.coefficient ? Number(form.coefficient) : null;
-    const financier = monthly && coef ? Math.round((monthly / coef) * 100) : null;
+    const feePercent = form.financier_fee_percent ? Number(form.financier_fee_percent) : null;
+    // En renting, la financiera anticipa al proveedor el TOTAL menos su comisión.
+    // Nunca puede ser MAYOR que lo que el cliente acabará pagando.
+    const financier =
+      planType === "renting" && total
+        ? Math.round(total * (1 - (feePercent ?? 0) / 100))
+        : null;
 
     startTransition(async () => {
       try {
@@ -192,7 +243,8 @@ function PlanForm({
           duration_months: planType === "cash" ? null : monthsVal,
           monthly_price_cents: planType === "cash" ? null : monthly,
           total_price_cents: total,
-          financing_coefficient: planType === "renting" ? coef : null,
+          financing_coefficient:
+            planType === "renting" && feePercent != null ? feePercent / 100 : null,
           financier_payment_cents: planType === "renting" ? financier : null,
           permanence_months: planType === "rental" ? Number(form.permanence_months) || null : null,
           min_authorized_cents: minAuth,
@@ -224,6 +276,7 @@ function PlanForm({
               type="number"
               min={1}
               required
+              readOnly={planType === "renting" && fixedDuration != null}
               value={form.duration_months}
               onChange={(e) => setForm({ ...form, duration_months: e.target.value })}
               onBlur={calc}
@@ -242,14 +295,20 @@ function PlanForm({
           </div>
           {planType === "renting" && (
             <div className="space-y-1.5">
-              <Label>Coeficiente financiera</Label>
+              <Label>% comisión financiera</Label>
               <Input
                 type="number"
-                step="0.000001"
-                value={form.coefficient}
-                onChange={(e) => setForm({ ...form, coefficient: e.target.value })}
-                onBlur={calc}
+                step="0.01"
+                min={0}
+                max={100}
+                value={form.financier_fee_percent}
+                onChange={(e) =>
+                  setForm({ ...form, financier_fee_percent: e.target.value })
+                }
               />
+              <p className="text-[10px] text-muted-foreground">
+                % que retiene la financiera. Por defecto 5%.
+              </p>
             </div>
           )}
           {planType === "rental" && (
