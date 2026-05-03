@@ -18,8 +18,20 @@ export const EVENT_LABEL: Record<string, string> = {
   "maintenance.completed": "Mantenimiento completado",
   "wallet.payment_recorded": "Pago registrado",
   "lead.expired": "Lead caducado",
+  "lead.reassigned": "Lead reasignado",
+  "lead.reopened_from_lost": "Lead reabierto desde venta perdida",
+  "lead.tampered": "Cambios sospechosos en lead",
+  "lead.converted": "Lead convertido a cliente",
   "incident.created": "Incidencia creada",
   "incident.resolved": "Incidencia resuelta",
+  "contract.reassigned": "Contrato reasignado",
+  "contract.cancelled": "Contrato cancelado",
+  "invoice.created": "Factura creada",
+  "invoice.paid": "Factura cobrada",
+  "proposal.variant_created": "Variante de propuesta creada",
+  "customer.merged": "Clientes fusionados",
+  "customer.purged": "Cliente borrado definitivamente",
+  "customer.anonymized": "Cliente anonimizado (RGPD)",
 };
 
 export const SUBJECT_TYPE_LABEL: Record<string, string> = {

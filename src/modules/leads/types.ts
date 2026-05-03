@@ -9,6 +9,8 @@ export interface LeadListItem {
   id: string;
   party_kind: PartyKind;
   display_name: string;
+  /** Si es empresa: nombre del contacto (first_name + last_name) bajo el nombre comercial */
+  contact_name: string | null;
   email: string | null;
   phone_primary: string | null;
   status: LeadStatus;
@@ -18,6 +20,11 @@ export interface LeadListItem {
   created_at: string;
   days_since_created: number;
   tags: string[];
+  /** Dirección principal si está cargada */
+  address_city: string | null;
+  address_province: string | null;
+  address_lat: number | null;
+  address_lng: number | null;
 }
 
 export interface LeadDetail extends Omit<LeadListItem, "display_name" | "days_since_created"> {

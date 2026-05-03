@@ -85,24 +85,64 @@ export async function listLeads(filters?: {
     tags: string[] | null;
   }>;
 
+  // Cargar direcciones primarias de los leads listados
+  const addrMap = new Map<
+    string,
+    { city: string | null; province: string | null; lat: number | null; lng: number | null }
+  >();
+  if (rows.length > 0) {
+    const ids = rows.map((r) => r.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { data: addrs } = await sb
+      .from("addresses")
+      .select("lead_id, city, province, latitude, longitude, is_primary")
+      .in("lead_id", ids)
+      .eq("is_primary", true);
+    for (const a of (addrs ?? []) as Array<{
+      lead_id: string;
+      city: string | null;
+      province: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    }>) {
+      addrMap.set(a.lead_id, {
+        city: a.city,
+        province: a.province,
+        lat: a.latitude,
+        lng: a.longitude,
+      });
+    }
+  }
+
   const now = Date.now();
-  return rows.map((r) => ({
-    id: r.id,
-    party_kind: r.party_kind,
-    display_name:
-      r.party_kind === "company"
+  return rows.map((r) => {
+    const addr = addrMap.get(r.id) ?? { city: null, province: null, lat: null, lng: null };
+    const isCompany = r.party_kind === "company";
+    return {
+      id: r.id,
+      party_kind: r.party_kind,
+      display_name: isCompany
         ? r.trade_name || r.legal_name || "Sin nombre"
         : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Sin nombre",
-    email: r.email,
-    phone_primary: r.phone_primary,
-    status: r.status,
-    origin: r.origin,
-    potential: r.potential,
-    assigned_user_id: r.assigned_user_id,
-    created_at: r.created_at,
-    days_since_created: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
-    tags: r.tags ?? [],
-  }));
+      contact_name: isCompany
+        ? `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || null
+        : null,
+      email: r.email,
+      phone_primary: r.phone_primary,
+      status: r.status,
+      origin: r.origin,
+      potential: r.potential,
+      assigned_user_id: r.assigned_user_id,
+      created_at: r.created_at,
+      days_since_created: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
+      tags: r.tags ?? [],
+      address_city: addr.city,
+      address_province: addr.province,
+      address_lat: addr.lat,
+      address_lng: addr.lng,
+    };
+  });
 }
 
 export async function getLead(id: string): Promise<LeadDetail> {
@@ -200,12 +240,18 @@ export async function createLeadAction(formData: FormData) {
     actor_user_id: session.user_id,
   } as never);
 
-  // Notificar a admin + directores
-  const leadName =
-    parsed.party_kind === "company"
-      ? parsed.trade_name || parsed.legal_name || "Sin nombre"
-      : `${parsed.first_name ?? ""} ${parsed.last_name ?? ""}`.trim() || "Sin nombre";
-  await notifyLeadCreated(session.company_id, newId, leadName);
+  // Notificar SOLO si el lead lo crea un nivel 1/2 sin asignárselo a sí mismo
+  // (evita ruido cuando un comercial captura su propio lead). Si el creador es
+  // nivel 3 (sales_rep / telemarketer) no notifica.
+  const isLevel3Creator =
+    session.roles.includes("sales_rep") || session.roles.includes("telemarketer");
+  if (!isLevel3Creator) {
+    const leadName =
+      parsed.party_kind === "company"
+        ? parsed.trade_name || parsed.legal_name || "Sin nombre"
+        : `${parsed.first_name ?? ""} ${parsed.last_name ?? ""}`.trim() || "Sin nombre";
+    await notifyLeadCreated(session.company_id, newId, leadName);
+  }
 
   // Puntos: lead captado por telemarketer (origin tmk)
   if (parsed.origin === "tmk" && session.roles.includes("telemarketer")) {
@@ -225,7 +271,10 @@ export async function createLeadAction(formData: FormData) {
   }
 
   revalidatePath("/leads");
-  redirect(`/leads/${newId}` as never);
+  // Si NO se rellenó dirección, abrir directamente el formulario completo en
+  // la ficha del lead (mismo modal que cliente, con MapPicker).
+  const noAddress = !parsed.address_street || !parsed.address_postal_code;
+  redirect(`/leads/${newId}${noAddress ? "?address=open" : ""}` as never);
 }
 
 /**

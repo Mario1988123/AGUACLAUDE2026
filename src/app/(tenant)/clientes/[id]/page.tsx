@@ -97,6 +97,7 @@ export default async function CustomerDetailPage({
         phone={customer.phone_primary}
         email={customer.email}
         recipientName={displayName}
+        commercialName={session.full_name}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">

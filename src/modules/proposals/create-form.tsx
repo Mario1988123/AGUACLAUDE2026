@@ -11,6 +11,7 @@ import { Trash2 } from "lucide-react";
 
 interface Props {
   customers: { id: string; name: string }[];
+  leads?: { id: string; name: string }[];
   products: { id: string; name: string; cash_price_cents: number | null }[];
   defaultCustomerId?: string;
   defaultLeadId?: string;
@@ -28,6 +29,7 @@ function formatCents(cents: number) {
 
 export function ProposalCreateForm({
   customers,
+  leads = [],
   products,
   defaultCustomerId,
   defaultLeadId,
@@ -107,23 +109,30 @@ export function ProposalCreateForm({
     <form onSubmit={handleSubmit} className="space-y-6 rounded-lg border bg-card p-6">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Cliente *</Label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            disabled={Boolean(defaultLeadId)}
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-          >
-            <option value="">Selecciona un cliente</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <Label>{defaultLeadId ? "Lead" : "Cliente *"}</Label>
+          {defaultLeadId ? (
+            <div className="flex h-11 w-full items-center rounded-md border border-input bg-muted/30 px-3 text-base">
+              <span className="truncate font-semibold">
+                {leads.find((l) => l.id === defaultLeadId)?.name ?? "Lead seleccionado"}
+              </span>
+            </div>
+          ) : (
+            <select
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
+            >
+              <option value="">Selecciona un cliente</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
           {defaultLeadId && (
             <p className="text-xs text-muted-foreground">
-              Propuesta sobre lead pre-cliente.
+              Propuesta sobre lead pre-cliente. Al aceptar se convertirá en cliente.
             </p>
           )}
         </div>

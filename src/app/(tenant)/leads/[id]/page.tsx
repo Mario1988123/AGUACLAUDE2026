@@ -97,6 +97,7 @@ export default async function LeadDetailPage({
         phone={lead.phone_primary}
         email={lead.email}
         recipientName={displayName}
+        commercialName={session.full_name}
       />
 
       {addresses.length === 0 && !isConverted && (

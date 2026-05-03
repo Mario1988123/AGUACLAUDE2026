@@ -55,6 +55,22 @@ export async function bulkReassignLeadsAction(input: unknown): Promise<number> {
     })),
   );
 
+  // Notificar al comercial asignado
+  if (parsed.user_id) {
+    await supabase.from("notifications").insert(
+      parsed.lead_ids.map((id) => ({
+        company_id: session.company_id,
+        recipient_user_id: parsed.user_id,
+        kind: "lead_assigned",
+        severity: "info",
+        title: parsed.lead_ids.length === 1 ? "Te han asignado un lead" : "Te han asignado leads",
+        body: "Revisa /leads para empezar a gestionarlo.",
+        subject_type: "lead",
+        subject_id: id,
+      })),
+    );
+  }
+
   revalidatePath("/leads");
   return count ?? parsed.lead_ids.length;
 }

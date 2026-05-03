@@ -11,6 +11,9 @@ interface Props {
   phone: string | null;
   email: string | null;
   recipientName?: string | null;
+  /** Nombre del comercial actual (sesión) para sustituir {comercial} en plantillas */
+  commercialName?: string | null;
+  companyName?: string | null;
 }
 
 /**
@@ -18,7 +21,14 @@ interface Props {
  * el enlace nativo. Bumpea status a 'contacted' + crea agenda_event + evento
  * timeline.
  */
-export function LeadContactButtons({ leadId, phone, email, recipientName }: Props) {
+export function LeadContactButtons({
+  leadId,
+  phone,
+  email,
+  recipientName,
+  commercialName,
+  companyName,
+}: Props) {
   const [, startTransition] = useTransition();
 
   function handle(channel: "call" | "whatsapp" | "email", url: string) {
@@ -75,6 +85,8 @@ export function LeadContactButtons({ leadId, phone, email, recipientName }: Prop
       {(phone || email) && (
         <MessageTemplateButton
           recipientName={recipientName ?? null}
+          commercialName={commercialName ?? null}
+          companyName={companyName ?? null}
           phone={phone}
           email={email}
         />

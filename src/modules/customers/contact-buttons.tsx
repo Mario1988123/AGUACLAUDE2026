@@ -11,11 +11,13 @@ export function CustomerContactButtons({
   phone,
   email,
   recipientName,
+  commercialName,
 }: {
   customerId: string;
   phone: string | null;
   email: string | null;
   recipientName?: string | null;
+  commercialName?: string | null;
 }) {
   const [, startTransition] = useTransition();
 
@@ -65,6 +67,7 @@ export function CustomerContactButtons({
       )}
       <MessageTemplateButton
         recipientName={recipientName ?? null}
+        commercialName={commercialName ?? null}
         phone={phone}
         email={email}
       />

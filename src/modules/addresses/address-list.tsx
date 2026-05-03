@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { MapPin, Pencil, Trash2, Plus, Star } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -16,8 +17,16 @@ interface Props {
 }
 
 export function AddressList({ customerId, leadId, addresses }: Props) {
+  const sp = useSearchParams();
   const [editing, setEditing] = useState<AddressRow | "new" | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Auto-abrir el formulario cuando viene ?address=open (típico al crear lead)
+  useEffect(() => {
+    if (sp?.get("address") === "open" && addresses.length === 0) {
+      setEditing("new");
+    }
+  }, [sp, addresses.length]);
 
   function handleDelete(id: string) {
     if (!confirm("¿Eliminar esta dirección?")) return;
