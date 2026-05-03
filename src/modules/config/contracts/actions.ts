@@ -105,3 +105,26 @@ export async function toggleClauseActiveAction(id: string, isActive: boolean) {
     .eq("id", id);
   revalidatePath("/configuracion/contratos");
 }
+
+/**
+ * Reordena las cláusulas de un plan_type asignando display_order según la
+ * posición en `orderedIds` (0-indexado, en pasos de 10 para dejar margen
+ * a futuras inserciones manuales).
+ */
+export async function reorderClausesAction(
+  planType: ClausePlanType,
+  orderedIds: string[],
+): Promise<void> {
+  const session = await ensureAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  for (let i = 0; i < orderedIds.length; i++) {
+    await supabase
+      .from("contract_clause_templates")
+      .update({ display_order: (i + 1) * 10 })
+      .eq("id", orderedIds[i])
+      .eq("company_id", session.company_id)
+      .eq("plan_type", planType);
+  }
+  revalidatePath("/configuracion/contratos");
+}

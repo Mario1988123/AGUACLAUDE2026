@@ -168,6 +168,7 @@ export interface IncidentRow {
   assigned_user_id: string | null;
   customer_id: string | null;
   created_at: string;
+  deadline_at: string | null;
 }
 
 export async function listIncidents(): Promise<IncidentRow[]> {
@@ -176,7 +177,7 @@ export async function listIncidents(): Promise<IncidentRow[]> {
   const { data, error } = await supabase
     .from("incidents")
     .select(
-      "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at",
+      "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at, deadline_at",
     )
     .order("priority", { ascending: false })
     .order("created_at", { ascending: false })

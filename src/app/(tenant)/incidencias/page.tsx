@@ -8,6 +8,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
 import { CreateIncidentButton } from "@/modules/incidents/create-button";
+import { SlaPill } from "@/modules/incidents/sla-pill";
 
 const PRIORITY_TONE: Record<
   string,
@@ -60,6 +61,7 @@ export default async function IncidenciasPage() {
                   <th className="py-2 text-left">Origen</th>
                   <th className="py-2 text-left">Prioridad</th>
                   <th className="py-2 text-left">Estado</th>
+                  <th className="py-2 text-left">SLA</th>
                   <th className="py-2 text-left">Fecha</th>
                 </tr>
               </thead>
@@ -94,6 +96,9 @@ export default async function IncidenciasPage() {
                         label={STATUS_LABEL[i.status] ?? i.status}
                         tone={INCIDENT_TONE[i.status] ?? "info"}
                       />
+                    </td>
+                    <td className="py-2">
+                      <SlaPill deadlineAt={i.deadline_at} status={i.status} />
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {new Date(i.created_at).toLocaleDateString("es-ES")}

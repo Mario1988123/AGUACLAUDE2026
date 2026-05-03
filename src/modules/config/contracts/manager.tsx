@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -11,9 +11,11 @@ import { notify } from "@/shared/hooks/use-toast";
 import {
   upsertClauseTemplateAction,
   deleteClauseTemplateAction,
+  reorderClausesAction,
   type ClauseTemplate,
   type ClausePlanType,
 } from "./actions";
+import { RichTextarea } from "./rich-textarea";
 
 const PLAN_LABEL: Record<ClausePlanType, string> = {
   cash: "Venta al contado",
@@ -78,8 +80,24 @@ export function ClausesManager({ clauses }: { clauses: ClauseTemplate[] }) {
               </div>
             ) : (
               <ul className="space-y-2">
-                {byPlan[plan].map((c) => (
-                  <ClauseRow key={c.id} clause={c} onEdit={() => setEditing(c)} />
+                {byPlan[plan].map((c, idx) => (
+                  <ClauseRow
+                    key={c.id}
+                    clause={c}
+                    onEdit={() => setEditing(c)}
+                    canMoveUp={idx > 0}
+                    canMoveDown={idx < byPlan[plan].length - 1}
+                    onMove={(dir) => {
+                      const ids = byPlan[plan].map((x) => x.id);
+                      const target = dir === "up" ? idx - 1 : idx + 1;
+                      [ids[idx], ids[target]] = [ids[target]!, ids[idx]!];
+                      reorderClausesAction(plan, ids)
+                        .then(() => location.reload())
+                        .catch((err) =>
+                          notify.error("Error", err instanceof Error ? err.message : String(err)),
+                        );
+                    }}
+                  />
                 ))}
               </ul>
             )}
@@ -90,7 +108,19 @@ export function ClausesManager({ clauses }: { clauses: ClauseTemplate[] }) {
   );
 }
 
-function ClauseRow({ clause, onEdit }: { clause: ClauseTemplate; onEdit: () => void }) {
+function ClauseRow({
+  clause,
+  onEdit,
+  canMoveUp,
+  canMoveDown,
+  onMove,
+}: {
+  clause: ClauseTemplate;
+  onEdit: () => void;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMove: (dir: "up" | "down") => void;
+}) {
   const [pending, startTransition] = useTransition();
   function remove() {
     if (!confirm(`¿Eliminar cláusula "${clause.title}"? (solo afecta a contratos futuros)`)) return;
@@ -107,6 +137,28 @@ function ClauseRow({ clause, onEdit }: { clause: ClauseTemplate; onEdit: () => v
   return (
     <li className="rounded-xl border border-border bg-card p-3">
       <div className="flex items-start justify-between gap-3">
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!canMoveUp}
+            onClick={() => onMove("up")}
+            aria-label="Subir"
+            className="h-7 w-7"
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={!canMoveDown}
+            onClick={() => onMove("down")}
+            aria-label="Bajar"
+            className="h-7 w-7"
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </Button>
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline">#{clause.display_order}</Badge>
@@ -203,13 +255,12 @@ function ClauseForm({
 
           <div className="space-y-1.5">
             <Label htmlFor="body">Texto</Label>
-            <textarea
+            <RichTextarea
               id="body"
               required
-              rows={8}
               value={form.body}
-              onChange={(e) => setForm({ ...form, body: e.target.value })}
-              className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+              onChange={(v) => setForm({ ...form, body: v })}
+              rows={10}
             />
           </div>
 

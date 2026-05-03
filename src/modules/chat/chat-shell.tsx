@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { createClient as createBrowserSupabase } from "@/shared/lib/supabase/client";
 import {
   Megaphone,
   Users,
@@ -92,6 +93,36 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
+
+  // Realtime: suscribir al canal de mensajes globales y refrescar cuando llega
+  // uno del hilo activo o cualquiera (para actualizar badges del sidebar).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let cancelled = false;
+    const supabase = createBrowserSupabase();
+    const channel = supabase
+      .channel("chat-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages" },
+        (payload) => {
+          if (cancelled) return;
+          const row = payload.new as { thread_id: string };
+          if (row.thread_id === activeId) {
+            getChatMessages(activeId)
+              .then(setMessages)
+              .catch(() => {});
+          }
+          // Refrescar layout (sidebar badges, lista de hilos)
+          router.refresh();
+        },
+      )
+      .subscribe();
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [activeId, router]);
 
   function send() {
     if (!activeId || !draft.trim()) return;

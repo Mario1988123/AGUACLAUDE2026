@@ -6,7 +6,15 @@ import { toCsv } from "@/shared/lib/csv/to-csv";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ENTITIES = ["leads", "customers", "contracts", "payments", "installations", "wallet"] as const;
+const ENTITIES = [
+  "leads",
+  "customers",
+  "contracts",
+  "payments",
+  "installations",
+  "wallet",
+  "audit",
+] as const;
 type Entity = (typeof ENTITIES)[number];
 
 function fmtCents(c: number | null | undefined): string {
@@ -200,6 +208,58 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
           fmtDate(r.started_at as string),
           fmtDate(r.completed_at as string),
           r.duration_seconds ? Math.round((r.duration_seconds as number) / 60) : "",
+        ]),
+      );
+      break;
+    }
+    case "audit": {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
+      const { data } = await supabase
+        .from("events")
+        .select(
+          "id, occurred_at, subject_type, subject_id, kind, actor_user_id, payload",
+        )
+        .eq("company_id", session.company_id)
+        .gte("occurred_at", ninetyDaysAgo)
+        .order("occurred_at", { ascending: false })
+        .limit(50000);
+      type Row = {
+        id: string;
+        occurred_at: string;
+        subject_type: string;
+        subject_id: string;
+        kind: string;
+        actor_user_id: string | null;
+        payload: Record<string, unknown> | null;
+      };
+      const rows = (data ?? []) as Row[];
+      const actorIds = Array.from(
+        new Set(rows.map((r) => r.actor_user_id).filter((v): v is string => !!v)),
+      );
+      const nameMap = new Map<string, string>();
+      if (actorIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("user_profiles")
+          .select("user_id, full_name")
+          .in("user_id", actorIds);
+        for (const p of (profiles ?? []) as Array<{
+          user_id: string;
+          full_name: string | null;
+        }>) {
+          nameMap.set(p.user_id, p.full_name ?? "");
+        }
+      }
+      csv = toCsv(
+        ["ID", "Fecha", "Entidad", "Entidad ID", "Evento", "Actor ID", "Actor", "Payload"],
+        rows.map((r) => [
+          r.id,
+          fmtDate(r.occurred_at),
+          r.subject_type,
+          r.subject_id,
+          r.kind,
+          r.actor_user_id ?? "",
+          r.actor_user_id ? nameMap.get(r.actor_user_id) ?? "" : "Sistema",
+          r.payload ? JSON.stringify(r.payload) : "",
         ]),
       );
       break;
