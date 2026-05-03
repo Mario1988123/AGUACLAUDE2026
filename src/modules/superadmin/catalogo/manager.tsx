@@ -16,10 +16,14 @@ import {
   deleteGlobalAttributeAction,
   upsertExternalModelAction,
   deleteExternalModelAction,
+  getAttributeCategoryKeys,
+  setAttributeCategoriesAction,
   type GlobalCategory,
   type GlobalAttribute,
   type GlobalExternalModel,
 } from "./actions";
+import { Tag } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 
 export function CatalogoManager({
   categories,
@@ -33,7 +37,7 @@ export function CatalogoManager({
   return (
     <div className="space-y-6">
       <CategoriesPanel items={categories} />
-      <AttributesPanel items={attributes} />
+      <AttributesPanel items={attributes} categories={categories} />
       <ExternalModelsPanel items={externalModels} />
     </div>
   );
@@ -205,7 +209,13 @@ function CategoryForm({ initial, onDone }: { initial?: GlobalCategory; onDone: (
   );
 }
 
-function AttributesPanel({ items }: { items: GlobalAttribute[] }) {
+function AttributesPanel({
+  items,
+  categories,
+}: {
+  items: GlobalAttribute[];
+  categories: GlobalCategory[];
+}) {
   const [creating, setCreating] = useState(false);
   return (
     <Card>
@@ -224,7 +234,7 @@ function AttributesPanel({ items }: { items: GlobalAttribute[] }) {
         ) : (
           <ul className="mt-3 space-y-2">
             {items.map((a) => (
-              <AttributeRow key={a.id} item={a} />
+              <AttributeRow key={a.id} item={a} categories={categories} />
             ))}
           </ul>
         )}
@@ -233,8 +243,15 @@ function AttributesPanel({ items }: { items: GlobalAttribute[] }) {
   );
 }
 
-function AttributeRow({ item }: { item: GlobalAttribute }) {
+function AttributeRow({
+  item,
+  categories,
+}: {
+  item: GlobalAttribute;
+  categories: GlobalCategory[];
+}) {
   const [editing, setEditing] = useState(false);
+  const [catOpen, setCatOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   if (editing) return <AttributeForm initial={item} onDone={() => setEditing(false)} />;
@@ -248,6 +265,14 @@ function AttributeRow({ item }: { item: GlobalAttribute }) {
           {item.unit && <span className="text-xs text-muted-foreground">({item.unit})</span>}
         </div>
       </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setCatOpen(true)}
+        title="Asignar categorías"
+      >
+        <Tag className="h-4 w-4" />
+      </Button>
       <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
         <Pencil className="h-4 w-4" />
       </Button>
@@ -270,7 +295,121 @@ function AttributeRow({ item }: { item: GlobalAttribute }) {
       >
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>
+      <AttributeCategoriesDialog
+        open={catOpen}
+        onOpenChange={setCatOpen}
+        attributeKey={item.key}
+        attributeName={item.name_es}
+        categories={categories}
+      />
     </li>
+  );
+}
+
+function AttributeCategoriesDialog({
+  open,
+  onOpenChange,
+  attributeKey,
+  attributeName,
+  categories,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  attributeKey: string;
+  attributeName: string;
+  categories: GlobalCategory[];
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  // Cargar selección actual al abrir
+  useState(() => {
+    if (!open) return undefined;
+    return undefined;
+  });
+  // Usamos efecto manual: cargar cuando abre
+  if (open && !loading && selected.size === 0) {
+    setLoading(true);
+    getAttributeCategoryKeys(attributeKey)
+      .then((keys) => setSelected(new Set(keys)))
+      .finally(() => setLoading(false));
+  }
+
+  function toggle(key: string) {
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function save() {
+    startTransition(async () => {
+      try {
+        await setAttributeCategoriesAction(attributeKey, Array.from(selected));
+        notify.success("Asignación guardada");
+        onOpenChange(false);
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) {
+          setSelected(new Set());
+          setLoading(false);
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Categorías de &laquo;{attributeName}&raquo;</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Marca las categorías de producto en las que este atributo debe aparecer al editar
+          una ficha.
+        </p>
+        <div className="max-h-[60vh] space-y-1.5 overflow-y-auto">
+          {categories.map((c) => {
+            const checked = selected.has(c.key);
+            return (
+              <label
+                key={c.key}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-2.5 ${
+                  checked ? "border-primary bg-primary/5" : "border-border"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(c.key)}
+                  className="h-4 w-4"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold">{c.name_es}</div>
+                  <code className="text-xs text-muted-foreground">{c.key}</code>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+        <div className="flex justify-end gap-2 border-t pt-3">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+            Cancelar
+          </Button>
+          <Button onClick={save} disabled={pending} variant="success">
+            {pending ? "Guardando…" : "Guardar"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

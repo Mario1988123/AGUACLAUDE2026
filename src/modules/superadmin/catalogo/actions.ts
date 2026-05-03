@@ -147,6 +147,54 @@ export async function deleteGlobalAttributeAction(id: string): Promise<void> {
   revalidatePath("/superadmin/catalogo");
 }
 
+/**
+ * Devuelve los keys de categorías a las que se aplica un atributo dado.
+ */
+export async function getAttributeCategoryKeys(attributeKey: string): Promise<string[]> {
+  await ensureSuperadmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("product_attributes_global_categories")
+    .select("category_key")
+    .eq("attribute_key", attributeKey);
+  return ((data ?? []) as Array<{ category_key: string }>).map((r) => r.category_key);
+}
+
+/**
+ * Reemplaza la lista de categorías a las que aplica este atributo
+ * (DELETE de las que sobran + INSERT de las nuevas).
+ */
+export async function setAttributeCategoriesAction(
+  attributeKey: string,
+  categoryKeys: string[],
+): Promise<void> {
+  await ensureSuperadmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const desired = Array.from(new Set(categoryKeys));
+  const { data: current } = await supabase
+    .from("product_attributes_global_categories")
+    .select("category_key")
+    .eq("attribute_key", attributeKey);
+  const currentKeys = ((current ?? []) as Array<{ category_key: string }>).map((r) => r.category_key);
+  const toDelete = currentKeys.filter((k) => !desired.includes(k));
+  const toInsert = desired.filter((k) => !currentKeys.includes(k));
+  if (toDelete.length > 0) {
+    await supabase
+      .from("product_attributes_global_categories")
+      .delete()
+      .eq("attribute_key", attributeKey)
+      .in("category_key", toDelete);
+  }
+  if (toInsert.length > 0) {
+    await supabase.from("product_attributes_global_categories").insert(
+      toInsert.map((k) => ({ attribute_key: attributeKey, category_key: k })),
+    );
+  }
+  revalidatePath("/superadmin/catalogo");
+}
+
 export async function upsertExternalModelAction(input: {
   id?: string;
   brand: string;
