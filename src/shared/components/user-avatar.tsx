@@ -37,14 +37,28 @@ export function UserAvatar({
   userId,
   name,
   size = "md",
+  src,
 }: {
   userId: string;
   name: string | null;
   size?: "sm" | "md" | "lg";
+  /** URL pública del avatar (si existe). Si null/undefined, fallback a iniciales. */
+  src?: string | null;
 }) {
   const cls = COLORS[hashStr(userId) % COLORS.length]!;
   const dim =
     size === "sm" ? "h-8 w-8 text-xs" : size === "lg" ? "h-14 w-14 text-base" : "h-10 w-10 text-sm";
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={name ?? ""}
+        className={`shrink-0 rounded-full object-cover ${dim}`}
+        title={name ?? ""}
+      />
+    );
+  }
   return (
     <div
       className={`flex shrink-0 items-center justify-center rounded-full font-bold ${cls} ${dim}`}

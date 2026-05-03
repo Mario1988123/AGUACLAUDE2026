@@ -6,8 +6,9 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
-  // Desactivado temporalmente: causa errores 404 de chunks del worker en producción
-  disable: true,
+  // Activado en producción para soporte offline real. En dev queda desactivado
+  // para no interferir con HMR.
+  disable: process.env.NODE_ENV !== "production",
 });
 
 const nextConfig: NextConfig = {

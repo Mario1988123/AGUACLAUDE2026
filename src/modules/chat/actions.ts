@@ -23,6 +23,7 @@ export interface ChatMessageRow {
   sender_name: string;
   body: string;
   created_at: string;
+  edited_at: string | null;
   is_mine: boolean;
 }
 
@@ -236,12 +237,19 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
 
   const { data: rows } = await admin
     .from("chat_messages")
-    .select("id, thread_id, sender_id, body, created_at")
+    .select("id, thread_id, sender_id, body, created_at, edited_at")
     .eq("thread_id", threadId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
     .limit(500);
-  type R = { id: string; thread_id: string; sender_id: string; body: string; created_at: string };
+  type R = {
+    id: string;
+    thread_id: string;
+    sender_id: string;
+    body: string;
+    created_at: string;
+    edited_at: string | null;
+  };
   const items = (rows ?? []) as R[];
   const senderIds = Array.from(new Set(items.map((r) => r.sender_id)));
   const nameMap = new Map<string, string>();
@@ -261,6 +269,7 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     sender_name: nameMap.get(r.sender_id) ?? r.sender_id.slice(0, 8),
     body: r.body,
     created_at: r.created_at,
+    edited_at: r.edited_at,
     is_mine: r.sender_id === session.user_id,
   }));
 }
@@ -327,6 +336,11 @@ export async function sendChatMessageAction(threadId: string, body: string): Pro
     sender_id: session.user_id,
     body: trimmed,
   });
+
+  // Detectar menciones @user (ignora 'all' especial). Las resuelve por
+  // coincidencia de full_name (case-insensitive, prefijo) entre los miembros
+  // del hilo (o cualquier user de la empresa si broadcast).
+  await processMentions(admin, t, trimmed, session.user_id, session.company_id);
   // Marcar al remitente como leído hasta ahora
   await admin
     .from("chat_thread_members")
@@ -339,6 +353,129 @@ export async function sendChatMessageAction(threadId: string, body: string): Pro
       },
       { onConflict: "thread_id,user_id" },
     );
+  revalidatePath("/chat");
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function processMentions(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  thread: { id: string; kind: ChatThreadKind; company_id: string },
+  body: string,
+  senderId: string,
+  companyId: string,
+): Promise<void> {
+  const matches = Array.from(body.matchAll(/@([a-zA-ZÀ-ÿ0-9_.-]+)/g));
+  if (matches.length === 0) return;
+  const tokens = Array.from(new Set(matches.map((m) => m[1]!.toLowerCase())));
+
+  // Resolver candidatos: si hilo direct/team usa miembros; si broadcast usa
+  // todos los users de la empresa.
+  let candidates: Array<{ user_id: string; full_name: string }> = [];
+  if (thread.kind === "broadcast") {
+    const { data } = await admin
+      .from("user_roles")
+      .select("user_id")
+      .eq("company_id", companyId)
+      .is("revoked_at", null);
+    const ids = Array.from(
+      new Set(((data ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)),
+    );
+    if (ids.length > 0) {
+      const { data: profs } = await admin
+        .from("user_profiles")
+        .select("user_id, full_name")
+        .in("user_id", ids);
+      candidates = ((profs ?? []) as Array<{ user_id: string; full_name: string | null }>).map(
+        (p) => ({ user_id: p.user_id, full_name: p.full_name ?? "" }),
+      );
+    }
+  } else {
+    const { data: members } = await admin
+      .from("chat_thread_members")
+      .select("user_id")
+      .eq("thread_id", thread.id);
+    const ids = ((members ?? []) as Array<{ user_id: string }>).map((m) => m.user_id);
+    if (ids.length > 0) {
+      const { data: profs } = await admin
+        .from("user_profiles")
+        .select("user_id, full_name")
+        .in("user_id", ids);
+      candidates = ((profs ?? []) as Array<{ user_id: string; full_name: string | null }>).map(
+        (p) => ({ user_id: p.user_id, full_name: p.full_name ?? "" }),
+      );
+    }
+  }
+
+  const matched = new Set<string>();
+  for (const tok of tokens) {
+    for (const c of candidates) {
+      if (c.user_id === senderId) continue;
+      const name = c.full_name.toLowerCase();
+      const handle = name.split(/\s+/)[0] ?? "";
+      if (handle.startsWith(tok) || name.replace(/\s+/g, "").startsWith(tok)) {
+        matched.add(c.user_id);
+      }
+    }
+  }
+  if (matched.size === 0) return;
+
+  for (const uid of matched) {
+    try {
+      await admin.from("notifications").insert({
+        company_id: companyId,
+        recipient_user_id: uid,
+        kind: "chat_mention",
+        severity: "info",
+        title: "Te han mencionado en el chat",
+        body: body.slice(0, 140),
+      });
+    } catch {
+      /* fail-soft */
+    }
+  }
+}
+
+export async function editChatMessageAction(
+  messageId: string,
+  newBody: string,
+): Promise<void> {
+  const session = await requireSession();
+  const trimmed = newBody.trim();
+  if (!trimmed) throw new Error("El mensaje no puede estar vacío");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: msg } = await admin
+    .from("chat_messages")
+    .select("sender_id")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (!msg) throw new Error("Mensaje no encontrado");
+  if ((msg as { sender_id: string }).sender_id !== session.user_id)
+    throw new Error("Solo puedes editar tus propios mensajes");
+  await admin
+    .from("chat_messages")
+    .update({ body: trimmed, edited_at: new Date().toISOString() })
+    .eq("id", messageId);
+  revalidatePath("/chat");
+}
+
+export async function deleteChatMessageAction(messageId: string): Promise<void> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: msg } = await admin
+    .from("chat_messages")
+    .select("sender_id")
+    .eq("id", messageId)
+    .maybeSingle();
+  if (!msg) return;
+  if ((msg as { sender_id: string }).sender_id !== session.user_id)
+    throw new Error("Solo puedes borrar tus propios mensajes");
+  await admin
+    .from("chat_messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", messageId);
   revalidatePath("/chat");
 }
 

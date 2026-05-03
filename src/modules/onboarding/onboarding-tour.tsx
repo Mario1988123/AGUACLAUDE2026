@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, X, Check } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { markOnboardingDoneAction } from "./actions";
 import type { OnboardingStep } from "./steps";
+import { toEmbedUrl } from "./steps";
 
 interface Props {
   steps: OnboardingStep[];
@@ -78,6 +79,17 @@ export function OnboardingTour({ steps, enabled }: Props) {
           </div>
           <h2 className="text-xl font-extrabold">{step.title}</h2>
           <p className="mt-2 text-sm text-muted-foreground">{step.body}</p>
+          {step.video_url && (
+            <div className="mt-4 aspect-video overflow-hidden rounded-xl border bg-black">
+              <iframe
+                src={toEmbedUrl(step.video_url)}
+                title={step.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full"
+              />
+            </div>
+          )}
           {step.href && (
             <Link
               href={step.href as never}

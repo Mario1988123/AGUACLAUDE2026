@@ -29,10 +29,13 @@ import {
   createBroadcastThreadAction,
   createTeamThreadAction,
   getOrCreateDirectThreadAction,
+  editChatMessageAction,
+  deleteChatMessageAction,
   type ChatMessageRow,
   type ChatThreadRow,
   type DirectoryUser,
 } from "./actions";
+import { Pencil, Trash2 } from "lucide-react";
 
 interface Props {
   threads: ChatThreadRow[];
@@ -265,35 +268,16 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
                   </div>
                 )}
                 {messages.map((m) => (
-                  <div
+                  <ChatMessageItem
                     key={m.id}
-                    className={cn(
-                      "flex flex-col",
-                      m.is_mine ? "items-end" : "items-start",
-                    )}
-                  >
-                    {!m.is_mine && (
-                      <span className="ml-2 text-[10px] font-semibold text-muted-foreground">
-                        {m.sender_name}
-                      </span>
-                    )}
-                    <div
-                      className={cn(
-                        "max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
-                        m.is_mine
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted",
-                      )}
-                    >
-                      {m.body}
-                    </div>
-                    <span className="mt-0.5 text-[10px] text-muted-foreground">
-                      {new Date(m.created_at).toLocaleTimeString("es-ES", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
+                    message={m}
+                    onChanged={() => {
+                      if (!activeId) return;
+                      getChatMessages(activeId)
+                        .then(setMessages)
+                        .catch(() => {});
+                    }}
+                  />
                 ))}
                 <div ref={messagesEndRef} />
               </div>
@@ -347,6 +331,120 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
         }}
       />
     </>
+  );
+}
+
+function ChatMessageItem({
+  message,
+  onChanged,
+}: {
+  message: ChatMessageRow;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(message.body);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    if (!draft.trim() || draft.trim() === message.body) {
+      setEditing(false);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await editChatMessageAction(message.id, draft);
+        setEditing(false);
+        onChanged();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  function remove() {
+    if (!confirm("¿Eliminar este mensaje?")) return;
+    startTransition(async () => {
+      try {
+        await deleteChatMessageAction(message.id);
+        onChanged();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  return (
+    <div
+      className={cn(
+        "group flex flex-col",
+        message.is_mine ? "items-end" : "items-start",
+      )}
+    >
+      {!message.is_mine && (
+        <span className="ml-2 text-[10px] font-semibold text-muted-foreground">
+          {message.sender_name}
+        </span>
+      )}
+      {editing ? (
+        <div className="w-full max-w-[80%] space-y-1.5">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={2}
+            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          />
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={pending}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={save} disabled={pending}>
+              Guardar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          {message.is_mine && (
+            <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+              <button
+                onClick={() => setEditing(true)}
+                className="rounded p-1 text-muted-foreground hover:bg-muted"
+                title="Editar"
+                aria-label="Editar"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+              <button
+                onClick={remove}
+                className="rounded p-1 text-muted-foreground hover:bg-muted"
+                title="Eliminar"
+                aria-label="Eliminar"
+                disabled={pending}
+              >
+                <Trash2 className="h-3 w-3 text-destructive" />
+              </button>
+            </div>
+          )}
+          <div
+            className={cn(
+              "max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
+              message.is_mine ? "bg-primary text-primary-foreground" : "bg-muted",
+            )}
+          >
+            {message.body}
+            {message.edited_at && (
+              <span className="ml-1 text-[10px] opacity-70">(editado)</span>
+            )}
+          </div>
+        </div>
+      )}
+      <span className="mt-0.5 text-[10px] text-muted-foreground">
+        {new Date(message.created_at).toLocaleTimeString("es-ES", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </span>
+    </div>
   );
 }
 

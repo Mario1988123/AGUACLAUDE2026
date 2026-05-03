@@ -18,6 +18,7 @@ import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
 import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
 import { ReassignContractButton } from "@/modules/contracts/reassign-button";
 import { Timeline } from "@/modules/events/timeline";
+import { ContractPhotosCard } from "@/modules/contracts/photo-uploader";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -281,6 +282,8 @@ export default async function ContractDetailPage({
           />
         </CardContent>
       </Card>
+
+      <ContractPhotosCard contractId={id} />
 
       <Card>
         <CardHeader>

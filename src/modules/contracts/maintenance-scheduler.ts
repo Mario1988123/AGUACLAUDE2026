@@ -48,6 +48,19 @@ export async function scheduleMaintenanceForContract(
     c.maintenance_months_included ?? c.duration_months ?? 12;
   if (monthsCovered <= 0) return 0;
 
+  // Si solo hay un instalador/técnico activo en la empresa, autoasignar.
+  let autoTechnicianId: string | null = null;
+  const { data: techs } = await supabase
+    .from("user_roles")
+    .select("user_id")
+    .eq("company_id", c.company_id)
+    .in("role_key", ["installer", "technical_director"])
+    .is("revoked_at", null);
+  const uniqTechs = Array.from(
+    new Set(((techs ?? []) as Array<{ user_id: string }>).map((r) => r.user_id)),
+  );
+  if (uniqTechs.length === 1) autoTechnicianId = uniqTechs[0]!;
+
   const startSrc = c.service_start_date ?? c.signed_at ?? c.created_at;
   const start = new Date(startSrc);
 
@@ -71,6 +84,7 @@ export async function scheduleMaintenanceForContract(
     scheduled_at: string;
     is_charged: boolean;
     notes: string;
+    technician_user_id: string | null;
   }> = [];
   for (let i = 1; i <= occurrences; i++) {
     const d = new Date(start);
@@ -86,9 +100,54 @@ export async function scheduleMaintenanceForContract(
       scheduled_at: d.toISOString(),
       is_charged: false,
       notes: `Mantenimiento preventivo programado automáticamente (#${i} de ${occurrences})`,
+      technician_user_id: autoTechnicianId,
     });
   }
   if (rows.length === 0) return 0;
   await supabase.from("maintenance_jobs").insert(rows);
+
+  // Encolar avisos de email al cliente 3 días antes de cada mantenimiento
+  // (cuando el usuario configure proveedor de email, se enviarán de la cola).
+  try {
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("email, first_name, last_name, trade_name, legal_name, party_kind")
+      .eq("id", c.customer_id)
+      .maybeSingle();
+    type CC = {
+      email: string | null;
+      first_name: string | null;
+      last_name: string | null;
+      trade_name: string | null;
+      legal_name: string | null;
+      party_kind: "individual" | "company";
+    };
+    const cust = customer as CC | null;
+    if (cust?.email) {
+      const toName =
+        cust.party_kind === "company"
+          ? cust.trade_name || cust.legal_name || "Cliente"
+          : `${cust.first_name ?? ""} ${cust.last_name ?? ""}`.trim() || "Cliente";
+      const reminders = rows.map((row) => {
+        const d = new Date(row.scheduled_at);
+        const sendAt = new Date(d.getTime() - 3 * 86400000);
+        return {
+          company_id: c.company_id,
+          to_email: cust.email,
+          to_name: toName,
+          subject: "Recordatorio: mantenimiento programado",
+          body_text: `Hola ${toName},\n\nLe recordamos que su próximo mantenimiento está programado para el ${d.toLocaleDateString("es-ES")}.\n\nUn saludo.`,
+          kind: "maintenance_reminder",
+          send_at: sendAt.toISOString(),
+          subject_type: "contract",
+          subject_id: c.id,
+        };
+      });
+      await supabase.from("email_outbox").insert(reminders);
+    }
+  } catch {
+    /* fail-soft */
+  }
+
   return rows.length;
 }

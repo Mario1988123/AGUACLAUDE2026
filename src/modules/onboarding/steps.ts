@@ -14,6 +14,9 @@ import {
   Phone,
   Trophy,
   Sun,
+  Building2,
+  Package,
+  Video,
 } from "lucide-react";
 
 export interface OnboardingStep {
@@ -24,6 +27,8 @@ export interface OnboardingStep {
   /** Ruta a navegar opcional (botón "Ver") */
   href?: string;
   icon: LucideIcon;
+  /** URL de vídeo embebido (YouTube, Vimeo, Loom). Opcional. */
+  video_url?: string;
 }
 
 const STEPS_COMMERCIAL: OnboardingStep[] = [
@@ -140,6 +145,26 @@ const STEPS_TMK: OnboardingStep[] = [
   },
 ];
 
+const STEPS_SUPERADMIN: OnboardingStep[] = [
+  {
+    title: "Bienvenido superadmin",
+    body: "Eres el administrador global. Desde aquí gestionas empresas inquilinas y el catálogo común.",
+    icon: Building2,
+  },
+  {
+    title: "Empresas",
+    body: "Da de alta clientes SaaS y configura sus módulos activos.",
+    href: "/superadmin",
+    icon: Building2,
+  },
+  {
+    title: "Catálogo global",
+    body: "Categorías, atributos y productos de fábrica que cualquier empresa puede activar.",
+    href: "/superadmin/catalogo",
+    icon: Package,
+  },
+];
+
 const STEPS_ADMIN: OnboardingStep[] = [
   {
     title: "Tu menú lateral",
@@ -167,10 +192,12 @@ const STEPS_ADMIN: OnboardingStep[] = [
 ];
 
 /**
- * Devuelve el recorrido apropiado según roles. Prioridad: admin > comercial > tmk > técnico.
+ * Devuelve el recorrido apropiado según roles. Prioridad: superadmin > admin > comercial > tmk > técnico.
  */
 export function getStepsForRoles(roles: string[], isSuperadmin: boolean): OnboardingStep[] {
-  if (isSuperadmin || roles.includes("company_admin")) return STEPS_ADMIN;
+  if (isSuperadmin && roles.length === 0) return STEPS_SUPERADMIN;
+  if (roles.includes("company_admin")) return STEPS_ADMIN;
+  if (isSuperadmin) return STEPS_SUPERADMIN;
   if (
     roles.includes("commercial_director") ||
     roles.includes("sales_rep")
@@ -185,3 +212,24 @@ export function getStepsForRoles(roles: string[], isSuperadmin: boolean): Onboar
   // fallback: comercial
   return STEPS_COMMERCIAL;
 }
+
+/**
+ * Convierte URLs de YouTube/Vimeo/Loom a su forma embebible.
+ */
+export function toEmbedUrl(url: string): string {
+  // YouTube watch
+  let m = url.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  // YouTube short
+  m = url.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  // Vimeo
+  m = url.match(/vimeo\.com\/(\d+)/);
+  if (m) return `https://player.vimeo.com/video/${m[1]}`;
+  // Loom
+  m = url.match(/loom\.com\/share\/([a-zA-Z0-9]+)/);
+  if (m) return `https://www.loom.com/embed/${m[1]}`;
+  return url;
+}
+
+export { Video };
