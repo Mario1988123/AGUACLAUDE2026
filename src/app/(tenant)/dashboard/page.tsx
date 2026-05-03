@@ -37,7 +37,48 @@ function formatCents(cents: number) {
 
 const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 
-export default async function DashboardPage({
+export default async function DashboardPage(props: {
+  searchParams: Promise<{ dept?: string; user?: string }>;
+}) {
+  try {
+    return await renderDashboard(props);
+  } catch (err) {
+    console.error("[DashboardPage]", err);
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Hola {(await requireSession()).full_name ?? ""}
+          </p>
+        </div>
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-6">
+          <div className="text-3xl">⚠️</div>
+          <h2 className="mt-2 text-lg font-bold text-amber-900">
+            El dashboard no se pudo cargar completamente
+          </h2>
+          <p className="mt-1 text-sm text-amber-800">
+            Probablemente falta aplicar alguna migración SQL en Supabase. Mientras tanto puedes
+            usar el resto del menú con normalidad.
+          </p>
+          {err instanceof Error && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-semibold text-amber-900">
+                Detalles técnicos
+              </summary>
+              <pre className="mt-2 overflow-auto rounded-md bg-amber-100 p-3 text-xs text-amber-900">
+                {err.message}
+                {err.stack ? `\n\n${err.stack}` : ""}
+              </pre>
+            </details>
+          )}
+        </div>
+      </div>
+    );
+  }
+}
+
+async function renderDashboard({
   searchParams,
 }: {
   searchParams: Promise<{ dept?: string; user?: string }>;

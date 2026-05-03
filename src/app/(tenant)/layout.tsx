@@ -13,53 +13,68 @@ import { getStepsForRoles } from "@/modules/onboarding/steps";
 import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { redirect } from "next/navigation";
 
-async function getUnreadCountSafe(): Promise<number> {
+const ROLE_LABEL: Record<string, string> = {
+  company_admin: "Admin",
+  technical_director: "Director técnico",
+  commercial_director: "Director comercial",
+  telemarketing_director: "Director TMK",
+  installer: "Instalador",
+  sales_rep: "Comercial",
+  telemarketer: "Teleoperador",
+};
+
+async function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
   try {
-    return await getUnreadCount();
+    return await p;
   } catch {
-    return 0;
+    return fallback;
   }
 }
 
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
 
-  // Superadmin tiene su propio layout
+  // Superadmin tiene su propio layout (redirect lanza NEXT_REDIRECT, NO capturar)
   if (session.is_superadmin) {
     redirect("/superadmin");
   }
 
   if (!session.company_id) {
-    // Usuario invitado pero sin empresa asignada todavía
     redirect("/login?error=no_company");
   }
 
-  const supabase = await createClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: companyModules } = await (supabase as any)
-    .from("company_modules")
-    .select("module_key, is_active")
-    .eq("is_active", true);
+  // Resto de queries: tolerantes a fallos. Si una migración no está aplicada
+  // o un servicio externo cae, el layout se renderiza igualmente con valores
+  // neutros y el error queda solo en el área correspondiente.
+  let activeModuleKeys: string[] = [];
+  try {
+    const supabase = await createClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: companyModules } = await (supabase as any)
+      .from("company_modules")
+      .select("module_key, is_active")
+      .eq("is_active", true);
+    activeModuleKeys = ((companyModules ?? []) as Array<{ module_key: string }>).map(
+      (m) => m.module_key,
+    );
+  } catch {
+    /* fail-soft: sidebar no podrá filtrar por módulos activos */
+  }
 
-  const activeModuleKeys = ((companyModules ?? []) as Array<{ module_key: string }>).map(
-    (m) => m.module_key,
-  );
+  const [unread, chatUnread, seenOnboarding, moduleOverrides] = await Promise.all([
+    safe(getUnreadCount(), 0),
+    safe(getChatTotalUnread(), 0),
+    safe(hasSeenOnboarding(), true),
+    safe(getMyModuleOverrides(), {} as Record<string, boolean>),
+  ]);
 
-  const unread = await getUnreadCountSafe();
-  const chatUnread = await getChatTotalUnread().catch(() => 0);
-  const seenOnboarding = await hasSeenOnboarding().catch(() => true);
-  const onboardingSteps = getStepsForRoles(session.roles, session.is_superadmin);
-  const moduleOverrides = await getMyModuleOverrides().catch(() => ({}));
+  let onboardingSteps: ReturnType<typeof getStepsForRoles> = [];
+  try {
+    onboardingSteps = getStepsForRoles(session.roles, session.is_superadmin);
+  } catch {
+    /* fail-soft */
+  }
 
-  const ROLE_LABEL: Record<string, string> = {
-    company_admin: "Admin",
-    technical_director: "Director técnico",
-    commercial_director: "Director comercial",
-    telemarketing_director: "Director TMK",
-    installer: "Instalador",
-    sales_rep: "Comercial",
-    telemarketer: "Teleoperador",
-  };
   const primaryRole = session.is_superadmin
     ? "Superadmin"
     : (session.roles.find((r) => ROLE_LABEL[r]) ?? null);

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, X, Check } from "lucide-react";
+import * as Icons from "lucide-react";
+import { ChevronLeft, ChevronRight, X, Check, Square } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { markOnboardingDoneAction } from "./actions";
 import type { OnboardingStep } from "./steps";
@@ -53,7 +54,9 @@ export function OnboardingTour({ steps, enabled }: Props) {
   if (!enabled || !open) return null;
   const step = steps[index];
   if (!step) return null;
-  const Icon = step.icon;
+  const Icon =
+    (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[step.icon] ??
+    Square;
   const isLast = index === steps.length - 1;
 
   return (
