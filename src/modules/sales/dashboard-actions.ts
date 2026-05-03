@@ -78,20 +78,34 @@ export interface RankingRow {
 }
 
 
+const EMPTY_DASHBOARD: DashboardObjectivesResponse = {
+  level: 3,
+  department: null,
+  individual: [],
+  department_objectives: [],
+  scope_month_total_cents: 0,
+  company_month_total_cents: 0,
+};
+
 export async function getDashboardObjectives(
+  filterUserId?: string,
+  filterDepartment?: "tech" | "sales" | "tmk",
+): Promise<DashboardObjectivesResponse> {
+  try {
+    return await _getDashboardObjectives(filterUserId, filterDepartment);
+  } catch (err) {
+    console.error("[getDashboardObjectives]", err);
+    return EMPTY_DASHBOARD;
+  }
+}
+
+async function _getDashboardObjectives(
   filterUserId?: string,
   filterDepartment?: "tech" | "sales" | "tmk",
 ): Promise<DashboardObjectivesResponse> {
   const session = await requireSession();
   if (!session.company_id) {
-    return {
-      level: 3,
-      department: null,
-      individual: [],
-      department_objectives: [],
-      scope_month_total_cents: 0,
-      company_month_total_cents: 0,
-    };
+    return EMPTY_DASHBOARD;
   }
   const level = getUserLevel(session.roles, session.is_superadmin);
   const myDept = getUserDepartment(session.roles);

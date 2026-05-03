@@ -93,7 +93,7 @@ export default async function DashboardPage({
       .lte("recorded_at", lastYearEnd),
     supabase.from("leads").select("status").is("deleted_at", null),
     getDashboardObjectives(filterUser, filterDept),
-    getMonthRanking(filterDept),
+    getMonthRanking(filterDept).catch(() => []),
     listTeamMembers().catch(() => []),
   ]);
 
