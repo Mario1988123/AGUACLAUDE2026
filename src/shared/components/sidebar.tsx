@@ -137,11 +137,6 @@ export function Sidebar({
         </nav>
 
         <div className={cn("border-t border-sidebar-border", isCollapsed ? "p-2" : "p-4")}>
-          {!isCollapsed && fullName && (
-            <div className="mb-3 truncate px-3 text-xs font-semibold text-muted-foreground">
-              {fullName}
-            </div>
-          )}
           <form action="/logout" method="post">
             <button
               type="submit"

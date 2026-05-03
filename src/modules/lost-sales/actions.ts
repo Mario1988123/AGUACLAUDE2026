@@ -66,6 +66,11 @@ export async function reopenLostSaleAction(lostSaleId: string) {
       // reasigne al comercial que toque.
       assigned_user_id: null,
       assigned_at: null,
+      // Limpieza defensiva por si el lead había pasado por algún ciclo raro
+      converted_at: null,
+      converted_to_customer_id: null,
+      // Asegurar que no esté soft-deleted (algún flujo previo pudo marcarlo)
+      deleted_at: null,
       tags: nextTags,
     })
     .eq("id", row.lead_id);
