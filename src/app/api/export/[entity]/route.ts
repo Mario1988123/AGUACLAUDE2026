@@ -14,6 +14,7 @@ const ENTITIES = [
   "installations",
   "wallet",
   "audit",
+  "time-records",
 ] as const;
 type Entity = (typeof ENTITIES)[number];
 
@@ -260,6 +261,80 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
           r.actor_user_id ?? "",
           r.actor_user_id ? nameMap.get(r.actor_user_id) ?? "" : "Sistema",
           r.payload ? JSON.stringify(r.payload) : "",
+        ]),
+      );
+      break;
+    }
+    case "time-records": {
+      // Registro horario para inspección de trabajo: una fila por fichaje
+      // de los últimos 4 años (RD 8/2019 obliga a guardar 4 años).
+      const fourYearsAgo = new Date();
+      fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4);
+      const { data } = await supabase
+        .from("time_punches")
+        .select(
+          "id, user_id, punch_kind, punched_at, geo_latitude, geo_longitude, needs_geo_review, is_manual, manual_reason, auto_closed, edited_by_admin, edited_reason",
+        )
+        .eq("company_id", session.company_id)
+        .gte("punched_at", fourYearsAgo.toISOString())
+        .order("punched_at", { ascending: true })
+        .limit(200000);
+      type Row = {
+        id: string;
+        user_id: string;
+        punch_kind: string;
+        punched_at: string;
+        geo_latitude: number | null;
+        geo_longitude: number | null;
+        needs_geo_review: boolean;
+        is_manual: boolean;
+        manual_reason: string | null;
+        auto_closed: boolean;
+        edited_by_admin: string | null;
+        edited_reason: string | null;
+      };
+      const rows = (data ?? []) as Row[];
+      const uids = Array.from(new Set(rows.map((r) => r.user_id)));
+      const nameMap = new Map<string, string>();
+      if (uids.length > 0) {
+        const { data: profs } = await supabase
+          .from("user_profiles")
+          .select("user_id, full_name")
+          .in("user_id", uids);
+        for (const p of (profs ?? []) as Array<{ user_id: string; full_name: string | null }>) {
+          nameMap.set(p.user_id, p.full_name ?? "");
+        }
+      }
+      csv = toCsv(
+        [
+          "ID Fichaje",
+          "Empleado",
+          "ID Empleado",
+          "Tipo",
+          "Fecha y hora",
+          "Latitud",
+          "Longitud",
+          "Sin GPS",
+          "Manual",
+          "Motivo manual",
+          "Autocerrado",
+          "Editado por",
+          "Motivo edición",
+        ],
+        rows.map((r) => [
+          r.id,
+          nameMap.get(r.user_id) ?? "",
+          r.user_id,
+          r.punch_kind,
+          new Date(r.punched_at).toISOString(),
+          r.geo_latitude != null ? String(r.geo_latitude) : "",
+          r.geo_longitude != null ? String(r.geo_longitude) : "",
+          r.needs_geo_review ? "SI" : "",
+          r.is_manual ? "SI" : "",
+          r.manual_reason ?? "",
+          r.auto_closed ? "SI" : "",
+          r.edited_by_admin ?? "",
+          r.edited_reason ?? "",
         ]),
       );
       break;

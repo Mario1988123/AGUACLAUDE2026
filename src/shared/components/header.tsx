@@ -6,6 +6,7 @@ import { LogOut, User, ChevronDown, PlayCircle } from "lucide-react";
 import { NotificationsBell } from "./notifications-poller";
 import { GlobalSearchTrigger } from "@/modules/search/global-search";
 import { replayOnboardingAction } from "@/modules/onboarding/actions";
+import { TimeClockWidget } from "@/modules/time-tracking/time-clock-widget";
 
 interface HeaderProps {
   unreadCount?: number;
@@ -60,6 +61,7 @@ export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderPr
       </div>
 
       <div className="flex items-center gap-3">
+        <TimeClockWidget />
         <NotificationsBell initialCount={unreadCount} />
         <div ref={ref} className="relative">
           <button

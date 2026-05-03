@@ -15,6 +15,8 @@ const SECTIONS = [
   { href: "/configuracion/objetivos", label: "Objetivos", icon: "Target", desc: "Metas mensuales por dpto y usuario" },
   { href: "/configuracion/puntos", label: "Programa de puntos", icon: "Trophy", desc: "Puntos, hitos y comisiones €" },
   { href: "/configuracion/plantillas", label: "Plantillas", icon: "FileText", desc: "Mensajes WhatsApp/email base" },
+  { href: "/configuracion/horarios", label: "Horarios y vacaciones", icon: "Clock", desc: "Jornada laboral y días por usuario" },
+  { href: "/configuracion/festivos", label: "Calendario laboral", icon: "Calendar", desc: "Festivos nacionales y locales" },
   { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo, roles y permisos" },
 ];
 
