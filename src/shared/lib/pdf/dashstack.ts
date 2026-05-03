@@ -50,6 +50,159 @@ function newPage(d: DashDoc): void {
   d.cursorY = PAGE_H - MARGIN;
 }
 
+/**
+ * Página de portada. La pinta sobre la PRIMERA página existente y luego
+ * añade una nueva página vacía para que el contenido siguiente empiece en
+ * la página 2.
+ */
+export interface CoverData {
+  companyName: string;
+  documentTitle: string;        // "PROPUESTA COMERCIAL"
+  documentRef?: string | null;  // "P-2026-00042"
+  recipientName: string;
+  recipientLine?: string | null; // p.ej. "DNI 12345678X"
+  validUntil?: string | null;   // dd/mm/yyyy
+  dateLabel?: string | null;
+}
+
+export function drawCoverPage(d: DashDoc, c: CoverData): void {
+  const { page, font, bold } = d;
+  // Banda superior con color de marca
+  page.drawRectangle({
+    x: 0,
+    y: PAGE_H - 220,
+    width: PAGE_W,
+    height: 220,
+    color: TEAL,
+  });
+  // Nombre de la empresa
+  page.drawText(c.companyName.toUpperCase(), {
+    x: MARGIN,
+    y: PAGE_H - 90,
+    size: 28,
+    font: bold,
+    color: WHITE,
+  });
+  page.drawRectangle({
+    x: MARGIN,
+    y: PAGE_H - 110,
+    width: 60,
+    height: 3,
+    color: WHITE,
+  });
+  // Título documento
+  page.drawText(c.documentTitle.toUpperCase(), {
+    x: MARGIN,
+    y: PAGE_H - 160,
+    size: 18,
+    font,
+    color: WHITE,
+  });
+  if (c.documentRef) {
+    page.drawText(c.documentRef, {
+      x: MARGIN,
+      y: PAGE_H - 185,
+      size: 12,
+      font,
+      color: WHITE,
+    });
+  }
+
+  // Tarjeta destinatario centrada
+  const cardW = PAGE_W - 2 * MARGIN - 40;
+  const cardX = MARGIN + 20;
+  const cardY = PAGE_H - 380;
+  page.drawRectangle({
+    x: cardX,
+    y: cardY,
+    width: cardW,
+    height: 130,
+    color: WHITE,
+    borderColor: BORDER,
+    borderWidth: 1,
+  });
+  page.drawText("PRESENTADA A", {
+    x: cardX + 24,
+    y: cardY + 100,
+    size: 9,
+    font: bold,
+    color: MUTED,
+  });
+  page.drawText(c.recipientName, {
+    x: cardX + 24,
+    y: cardY + 70,
+    size: 22,
+    font: bold,
+    color: TEXT,
+  });
+  if (c.recipientLine) {
+    page.drawText(c.recipientLine, {
+      x: cardX + 24,
+      y: cardY + 50,
+      size: 11,
+      font,
+      color: MUTED,
+    });
+  }
+  if (c.dateLabel) {
+    page.drawText(`Fecha: ${c.dateLabel}`, {
+      x: cardX + 24,
+      y: cardY + 24,
+      size: 10,
+      font,
+      color: TEXT,
+    });
+  }
+
+  // Validez en bloque destacado
+  if (c.validUntil) {
+    const vy = cardY - 60;
+    page.drawRectangle({
+      x: cardX,
+      y: vy,
+      width: cardW,
+      height: 50,
+      color: BG,
+      borderColor: BORDER,
+      borderWidth: 1,
+    });
+    page.drawText("VÁLIDA HASTA", {
+      x: cardX + 24,
+      y: vy + 30,
+      size: 9,
+      font: bold,
+      color: MUTED,
+    });
+    page.drawText(c.validUntil, {
+      x: cardX + 24,
+      y: vy + 12,
+      size: 14,
+      font: bold,
+      color: TEAL,
+    });
+  }
+
+  // Pie de portada
+  page.drawText(c.companyName, {
+    x: MARGIN,
+    y: 50,
+    size: 9,
+    font,
+    color: MUTED,
+  });
+  page.drawText("Documento confidencial", {
+    x: PAGE_W - MARGIN - 110,
+    y: 50,
+    size: 9,
+    font,
+    color: MUTED,
+  });
+
+  // Cambia a una nueva página para que el contenido siguiente arranque
+  // en blanco en página 2.
+  newPage(d);
+}
+
 function ensure(d: DashDoc, needed: number): void {
   if (d.cursorY - needed < 60) newPage(d);
 }

@@ -4,6 +4,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
   newDashDoc,
+  drawCoverPage,
   drawDashHeader,
   drawTwoPartyCards,
   drawTiles,
@@ -114,6 +115,17 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
 
   const doc = await newDashDoc();
   const today = new Date();
+
+  // Portada (pinta sobre página 1, luego añade nueva página para el contenido)
+  drawCoverPage(doc, {
+    companyName: co.trade_name || co.legal_name || "Empresa",
+    documentTitle: "Propuesta comercial",
+    documentRef: proposal.reference_code ?? null,
+    recipientName: recipientRow ? partyName(recipientRow) : proposal.customer_or_lead_name,
+    recipientLine: recipientRow?.tax_id ? `DNI/CIF ${recipientRow.tax_id}` : null,
+    validUntil: proposal.validity_until ? fmtDateShort(proposal.validity_until) : null,
+    dateLabel: fmtDateLong(proposal.created_at ?? today),
+  });
 
   drawDashHeader(doc, {
     companyName: co.trade_name || co.legal_name || "Empresa",
