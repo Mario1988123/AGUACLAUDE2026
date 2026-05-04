@@ -5,8 +5,10 @@ import {
   getContractItems,
   getContractPayments,
 } from "@/modules/contracts/actions";
+import { listContractSignatures } from "@/modules/contracts/signatures-actions";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { listWarehouses } from "@/modules/warehouses/actions";
+import { getFiscalSettings } from "@/modules/config/fiscal/actions";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -20,6 +22,9 @@ import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
 import { ReassignContractButton } from "@/modules/contracts/reassign-button";
 import { Timeline } from "@/modules/events/timeline";
 import { ContractPhotosCard } from "@/modules/contracts/photo-uploader";
+import { SignaturesCard } from "@/modules/contracts/signature-pad";
+import { InstallPreference } from "@/modules/contracts/install-preference";
+import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -65,12 +70,14 @@ export default async function ContractDetailPage({
   } catch {
     notFound();
   }
-  const [items, payments, team, warehouses, session] = await Promise.all([
+  const [items, payments, team, warehouses, session, signatures, fiscal] = await Promise.all([
     getContractItems(id),
     getContractPayments(id),
     listTeamMembers(),
     listWarehouses().catch(() => []),
     requireSession(),
+    listContractSignatures(id),
+    getFiscalSettings().catch(() => null),
   ]);
   const installers = team;
   const canEditClauses =
@@ -78,11 +85,24 @@ export default async function ContractDetailPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clauses = ((contract as any).clauses_snapshot ?? []) as Array<{
+  const c = contract as any;
+  const clauses = (c.clauses_snapshot ?? []) as Array<{
     title: string;
     body: string;
     display_order: number;
   }>;
+  const customerSnap = (c.customer_snapshot ?? {}) as {
+    legal_name?: string | null;
+    trade_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    tax_id?: string | null;
+  };
+  const customerName =
+    customerSnap.trade_name ||
+    customerSnap.legal_name ||
+    `${customerSnap.first_name ?? ""} ${customerSnap.last_name ?? ""}`.trim() ||
+    "Cliente";
 
   // ¿hay instalación ya creada para este contrato?
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -95,11 +115,15 @@ export default async function ContractDetailPage({
   const hasInstallation = (instCount ?? 0) > 0;
   const isSignedOrActive = ["signed", "active"].includes(contract.status);
 
+  // ¿hay algún pago por transferencia? Si sí, mostramos el IBAN de la
+  // empresa para que el cliente pueda hacer el ingreso.
+  const hasTransferPayment = payments.some((p) => p.method === "transfer");
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">
               Contrato {contract.reference_code ?? "(sin código)"}
             </h1>
@@ -119,6 +143,7 @@ export default async function ContractDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <ViewA4Button contractId={contract.id} />
           {contract.status === "signed" && <InvoiceFromContractButton contractId={contract.id} />}
           <a
             href={`/api/pdf/contract/${contract.id}`}
@@ -126,7 +151,7 @@ export default async function ContractDetailPage({
             rel="noopener"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
           >
-            📄 Descargar PDF
+            📄 PDF
           </a>
           <Link href="/contratos" className="text-sm text-primary hover:underline">
             ← Volver
@@ -219,7 +244,7 @@ export default async function ContractDetailPage({
         <CardHeader>
           <CardTitle>Pagos</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           {payments.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin pagos definidos.</p>
           ) : (
@@ -249,26 +274,47 @@ export default async function ContractDetailPage({
                       </Badge>
                     </td>
                     <td className="py-2 text-right">
-                      <QuickCollectButton paymentId={p.id} status={p.status} />
+                      <QuickCollectButton
+                        paymentId={p.id}
+                        status={p.status}
+                        defaultMethod={p.method}
+                        amountLabel={formatCents(p.amount_cents) ?? undefined}
+                      />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Notas internas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ContractNotesEditor
-            contractId={id}
-            initial={contract.notes}
-            canEdit={canEditClauses}
-          />
+          {hasTransferPayment && fiscal?.fiscal_iban && (
+            <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 text-sm">
+              <div className="flex items-start gap-2">
+                <span className="font-bold text-blue-900">💳 Pagos por transferencia:</span>
+                <div className="flex-1">
+                  <code className="rounded bg-white px-2 py-1 font-mono text-xs">
+                    {fiscal.fiscal_iban}
+                  </code>
+                  {fiscal.fiscal_legal_name && (
+                    <span className="ml-2 text-xs text-blue-800">
+                      Titular: {fiscal.fiscal_legal_name}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-blue-800">
+                Este IBAN aparecerá en el PDF del contrato para que el cliente haga el ingreso.
+              </p>
+            </div>
+          )}
+          {hasTransferPayment && !fiscal?.fiscal_iban && (
+            <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              ⚠️ Hay pagos por transferencia pero la empresa no tiene IBAN configurado.{" "}
+              <Link href="/configuracion/fiscal" className="font-bold underline">
+                Configúralo aquí
+              </Link>{" "}
+              para que aparezca en el contrato.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -285,7 +331,51 @@ export default async function ContractDetailPage({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Firmas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SignaturesCard
+            contractId={id}
+            signatures={signatures}
+            defaultRepresentativeName={
+              session.full_name ?? session.email ?? "Representante"
+            }
+            defaultCustomerName={customerName}
+            defaultCustomerTaxId={customerSnap.tax_id ?? null}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Preferencia horaria de instalación</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <InstallPreference
+            contractId={id}
+            initialSlot={c.preferred_install_time_slot ?? null}
+            initialNotes={c.preferred_install_time_notes ?? null}
+            canEdit={canEditClauses || ["draft", "pending_data", "pending_signature"].includes(contract.status)}
+          />
+        </CardContent>
+      </Card>
+
       <ContractPhotosCard contractId={id} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notas internas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ContractNotesEditor
+            contractId={id}
+            initial={contract.notes}
+            canEdit={canEditClauses}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

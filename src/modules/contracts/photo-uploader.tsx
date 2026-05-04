@@ -17,7 +17,6 @@ import {
 const KIND_LABEL: Record<ContractPhotoKind, string> = {
   id_card: "DNI",
   iban: "IBAN",
-  signature: "Firma",
   other: "Otro",
 };
 
@@ -94,8 +93,8 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
         {photos.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-sm text-muted-foreground">
             <Plus className="h-8 w-8 opacity-50" />
-            Pulsa <strong>Cámara</strong> en el botón correspondiente para sacar foto del DNI,
-            IBAN o firma del cliente.
+            Pulsa <strong>Cámara</strong> en el botón correspondiente para sacar foto del DNI
+            o del IBAN del cliente. Las firmas se capturan en el bloque «Firmas» de abajo.
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">

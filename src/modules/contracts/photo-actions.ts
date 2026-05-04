@@ -6,7 +6,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 
 const BUCKET = "contract-photos";
 
-export type ContractPhotoKind = "id_card" | "iban" | "signature" | "other";
+export type ContractPhotoKind = "id_card" | "iban" | "other";
 
 export interface ContractPhoto {
   id: string;

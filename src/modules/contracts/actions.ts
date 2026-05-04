@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
@@ -74,7 +75,36 @@ export async function getContract(id: string): Promise<ContractDetail> {
     .is("deleted_at", null)
     .single();
   if (error) throw error;
-  return data as ContractDetail;
+  const c = data as ContractDetail & { company_id?: string };
+  // Backfill reference_code C-YYYY-NNNN si está vacío (one-shot por contrato)
+  if (!c.reference_code && c.company_id) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const year = new Date(c.created_at).getFullYear();
+      const yearPrefix = `C-${year}-`;
+      const { data: last } = await admin
+        .from("contracts")
+        .select("reference_code")
+        .eq("company_id", c.company_id)
+        .like("reference_code", `${yearPrefix}%`)
+        .order("reference_code", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let n = 1;
+      const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
+      if (lastCode) {
+        const m = lastCode.match(/-(\d+)$/);
+        if (m) n = parseInt(m[1]!, 10) + 1;
+      }
+      const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
+      await admin.from("contracts").update({ reference_code: code }).eq("id", id);
+      c.reference_code = code;
+    } catch {
+      /* fail-soft */
+    }
+  }
+  return c;
 }
 
 export async function getContractItems(contractId: string) {
@@ -255,12 +285,32 @@ export async function createContractFromProposal(proposalId: string) {
         : null;
   const durationMonths = p.chosen_duration_months;
 
+  // Generar reference_code C-YYYY-NNNN único por empresa+año
+  const year = new Date().getFullYear();
+  const yearPrefix = `C-${year}-`;
+  const { data: lastCoded } = await supaAny
+    .from("contracts")
+    .select("reference_code")
+    .eq("company_id", session.company_id)
+    .like("reference_code", `${yearPrefix}%`)
+    .order("reference_code", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let nextNum = 1;
+  const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
+  if (lastCode) {
+    const m = lastCode.match(/-(\d+)$/);
+    if (m) nextNum = parseInt(m[1]!, 10) + 1;
+  }
+  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+
   // Crear contract — defensivo ante columnas opcionales (snapshots,
   // pending_fields) que pueden no estar en producción.
   const fullContractPayload: Record<string, unknown> = {
     company_id: session.company_id,
     customer_id: p.customer_id,
     source_proposal_id: p.id,
+    reference_code: referenceCode,
     plan_type: planType,
     duration_months: durationMonths,
     permanence_months: planType === "rental" ? durationMonths : null,
@@ -286,6 +336,7 @@ export async function createContractFromProposal(proposalId: string) {
       const minimal: Record<string, unknown> = {
         company_id: session.company_id,
         customer_id: p.customer_id,
+        reference_code: referenceCode,
         plan_type: planType,
         duration_months: durationMonths,
         permanence_months: planType === "rental" ? durationMonths : null,
@@ -685,11 +736,21 @@ export async function updateContractClausesAction(
  * Quick-collect: marca el contract_payment como collected_pending_validation,
  * crea/actualiza el wallet_entry asociado y deja todo listo para validar.
  */
-export async function collectContractPaymentAction(paymentId: string): Promise<void> {
+export async function collectContractPaymentAction(
+  paymentId: string,
+  options?: {
+    when?: "now" | "on_installation";
+    method?: "cash" | "card" | "bizum" | "transfer";
+    notes?: string;
+  },
+): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  const when = options?.when ?? "now";
+  const newMethod = options?.method ?? null;
 
   const { data: pay } = await supabase
     .from("contract_payments")
@@ -708,14 +769,42 @@ export async function collectContractPaymentAction(paymentId: string): Promise<v
   };
   if (p.status !== "pending") throw new Error("El pago ya está procesado");
 
-  const newStatus = p.method === "cash" ? "pending_settlement" : "collected";
+  // Caso 1: cobro aplazado a la instalación → no se registra en wallet,
+  // solo se marca el momento del pago como on_installation y, si el
+  // usuario eligió método, se actualiza para que quede en el contrato.
+  if (when === "on_installation") {
+    const updates: Record<string, unknown> = {
+      moment: "on_installation",
+    };
+    if (newMethod) updates.method = newMethod;
+    if (options?.notes) updates.notes = options.notes;
+    await supabase.from("contract_payments").update(updates).eq("id", p.id);
+    await supabase.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "contract",
+      subject_id: p.contract_id,
+      kind: "contract_payment.deferred",
+      payload: { payment_id: p.id, method: newMethod ?? p.method, when: "on_installation" },
+      actor_user_id: session.user_id,
+    });
+    revalidatePath(`/contratos/${p.contract_id}`);
+    return;
+  }
+
+  // Caso 2: cobro ahora → cambia método si el usuario eligió otro,
+  // marca como collected_pending_validation y materializa wallet_entry.
+  const effectiveMethod = newMethod ?? p.method;
+  // Efectivo necesita liquidación posterior (pending_settlement);
+  // tarjeta/bizum/transferencia ya están en banco → collected.
+  const walletStatus = effectiveMethod === "cash" ? "pending_settlement" : "collected";
 
   let walletEntryId = p.wallet_entry_id;
   if (walletEntryId) {
     await supabase
       .from("wallet_entries")
       .update({
-        status: newStatus,
+        method: effectiveMethod,
+        status: walletStatus,
         collected_by_user_id: session.user_id,
         collected_at: new Date().toISOString(),
       })
@@ -729,8 +818,8 @@ export async function collectContractPaymentAction(paymentId: string): Promise<v
         contract_payment_id: p.id,
         concept: p.concept,
         amount_cents: p.amount_cents,
-        method: p.method,
-        status: newStatus,
+        method: effectiveMethod,
+        status: walletStatus,
         collected_by_user_id: session.user_id,
         collected_at: new Date().toISOString(),
       })
@@ -739,25 +828,50 @@ export async function collectContractPaymentAction(paymentId: string): Promise<v
     walletEntryId = (created as { id: string } | null)?.id ?? null;
   }
 
-  await supabase
-    .from("contract_payments")
-    .update({
-      status: "collected_pending_validation",
-      wallet_entry_id: walletEntryId,
-    })
-    .eq("id", p.id);
+  const cpUpdates: Record<string, unknown> = {
+    status: "collected_pending_validation",
+    method: effectiveMethod,
+    wallet_entry_id: walletEntryId,
+    collected_at: new Date().toISOString(),
+    collected_by_user_id: session.user_id,
+  };
+  if (options?.notes) cpUpdates.notes = options.notes;
+  await supabase.from("contract_payments").update(cpUpdates).eq("id", p.id);
 
   await supabase.from("events").insert({
     company_id: session.company_id,
     subject_type: "contract",
     subject_id: p.contract_id,
     kind: "wallet.payment_recorded",
-    payload: { payment_id: p.id, amount_cents: p.amount_cents, method: p.method },
+    payload: {
+      payment_id: p.id,
+      amount_cents: p.amount_cents,
+      method: effectiveMethod,
+    },
     actor_user_id: session.user_id,
   });
 
   revalidatePath(`/contratos/${p.contract_id}`);
   revalidatePath("/wallet");
+}
+
+export async function saveInstallPreferenceAction(
+  contractId: string,
+  slot: "morning" | "afternoon" | "any" | "custom",
+  notes: string | null,
+): Promise<void> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const r = await admin
+    .from("contracts")
+    .update({
+      preferred_install_time_slot: slot,
+      preferred_install_time_notes: notes,
+    })
+    .eq("id", contractId);
+  if (r.error) throw new Error(r.error.message);
+  revalidatePath(`/contratos/${contractId}`);
 }
 
 export async function markContractActive(id: string) {
