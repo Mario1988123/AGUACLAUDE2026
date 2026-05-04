@@ -93,7 +93,22 @@ export async function startInstallationAction(input: {
   ) {
     meters = haversineMeters(input.geo_lat, input.geo_lng, addrLat, addrLng);
   }
-  const far = meters != null && meters > 300;
+
+  // Tolerancia configurable en company_settings.installation_geo_tolerance_m
+  // (fallback 300 m si no hay setting).
+  let tolerance = 300;
+  try {
+    const { data: cs } = await admin
+      .from("company_settings")
+      .select("installation_geo_tolerance_m")
+      .eq("company_id", i.company_id)
+      .maybeSingle();
+    const t = (cs as { installation_geo_tolerance_m: number | null } | null)?.installation_geo_tolerance_m;
+    if (t && t > 0) tolerance = t;
+  } catch {
+    /* no-op, fallback 300 */
+  }
+  const far = meters != null && meters > tolerance;
 
   await admin
     .from("installations")
@@ -125,7 +140,7 @@ export async function startInstallationAction(input: {
           kind: "installation.started_far",
           severity: "warning",
           title: "Instalación iniciada lejos del cliente",
-          body: `${meters} m de distancia (límite 300 m)`,
+          body: `${meters} m de distancia (límite ${tolerance} m)`,
           subject_type: "installation",
           subject_id: i.id,
           action_url: `/instalaciones/${i.id}`,

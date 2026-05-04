@@ -5,6 +5,32 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { agendaCreateSchema } from "./schemas";
 
+/**
+ * Devuelve true si la fecha cae fuera del horario comercial configurado
+ * en company_settings.business_hours. Si no hay setting, fallback al
+ * antiguo 9-18 lun-vie.
+ *
+ * business_hours es un objeto { mon: { open: "09:00", close: "18:00" }, ... }
+ * con keys mon/tue/wed/thu/fri/sat/sun. Un null en una key = cerrado.
+ */
+function isOutsideBusinessHours(
+  d: Date,
+  bh: Record<string, { open: string; close: string } | null> | null,
+): boolean {
+  if (!bh) {
+    const day = d.getDay();
+    const hour = d.getHours();
+    return day === 0 || day === 6 || hour < 9 || hour > 18;
+  }
+  const KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+  const slot = bh[KEYS[d.getDay()]!];
+  if (!slot) return true;
+  const [oh, om] = slot.open.split(":").map(Number);
+  const [ch, cm] = slot.close.split(":").map(Number);
+  const minutes = d.getHours() * 60 + d.getMinutes();
+  return minutes < (oh ?? 0) * 60 + (om ?? 0) || minutes > (ch ?? 0) * 60 + (cm ?? 0);
+}
+
 export interface AgendaItem {
   id: string;
   kind: string;
@@ -124,13 +150,26 @@ export async function createAgendaEventAction(input: unknown) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  // Cargar business_hours configurado para calcular is_outside_hours
+  // (antes era hardcoded 9-18). Si no hay setting, fallback al 9-18.
+  let businessHours: Record<string, { open: string; close: string } | null> | null = null;
+  try {
+    const { data: cs } = await supabase
+      .from("company_settings")
+      .select("business_hours")
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    businessHours = (cs as { business_hours: typeof businessHours } | null)?.business_hours ?? null;
+  } catch {
+    /* no-op */
+  }
+
   const rows = [];
   for (let i = 0; i < occurrences; i++) {
     const s = bumpDate(baseStart, i);
     const e = baseEnd ? new Date(s.getTime() + durationMs) : null;
-    const day = s.getDay();
-    const hour = s.getHours();
-    const isOutsideHours = day === 0 || day === 6 || hour < 9 || hour > 18;
+    const isOutsideHours = isOutsideBusinessHours(s, businessHours);
     rows.push({
       company_id: session.company_id,
       kind: parsed.kind,
@@ -167,9 +206,18 @@ export async function rescheduleAgendaEventAction(
   const supabase = (await createClient()) as any;
 
   const newStart = new Date(newStartsAtIso);
-  const day = newStart.getDay();
-  const hour = newStart.getHours();
-  const isOutsideHours = day === 0 || day === 6 || hour < 9 || hour > 18;
+  let businessHours: Record<string, { open: string; close: string } | null> | null = null;
+  try {
+    const { data: cs } = await supabase
+      .from("company_settings")
+      .select("business_hours")
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    businessHours = (cs as { business_hours: typeof businessHours } | null)?.business_hours ?? null;
+  } catch {
+    /* no-op */
+  }
+  const isOutsideHours = isOutsideBusinessHours(newStart, businessHours);
 
   const { data: prev } = await supabase
     .from("agenda_events")
