@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FileText, Send } from "lucide-react";
+import { CheckCircle2, FileSignature, FileText, Send } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { markProposalAccepted, markProposalSent } from "./actions";
+import { createContractFromProposal } from "@/modules/contracts/actions";
 import type { ProposalListItem } from "./types";
 import { STATUS_LABEL, STATUS_VARIANT } from "./schemas";
 
@@ -58,6 +59,21 @@ export function ProposalsCard({
     });
   }
 
+  function generateContract(id: string) {
+    if (!confirm("¿Generar el contrato a partir de esta propuesta? Se creará en estado borrador para revisar y firmar.")) return;
+    startTransition(async () => {
+      try {
+        await createContractFromProposal(id);
+      } catch (err) {
+        if (err && typeof err === "object" && "digest" in err) {
+          const d = String((err as { digest?: unknown }).digest);
+          if (d.startsWith("NEXT_REDIRECT")) throw err;
+        }
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
   if (proposals.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-sm text-muted-foreground">
@@ -74,6 +90,7 @@ export function ProposalsCard({
       {proposals.map((p) => {
         const canSend = p.status === "draft";
         const canAccept = p.status === "draft" || p.status === "sent";
+        const canGenerateContract = p.status === "accepted" && scope === "customer";
         return (
           <li
             key={p.id}
@@ -115,6 +132,17 @@ export function ProposalsCard({
               >
                 <CheckCircle2 className="h-3 w-3" />
                 {scope === "lead" ? "Aceptar y convertir" : "Aceptar"}
+              </Button>
+            )}
+            {canGenerateContract && (
+              <Button
+                size="sm"
+                variant="success"
+                onClick={() => generateContract(p.id)}
+                disabled={pending}
+              >
+                <FileSignature className="h-3 w-3" />
+                Generar contrato
               </Button>
             )}
           </li>

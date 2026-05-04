@@ -105,7 +105,7 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
                   )}
                   {pendingIban && (
                     <Badge variant="warning">
-                      <Clock className="h-3 w-3" /> Pendiente firma
+                      <Clock className="h-3 w-3" /> IBAN pendiente
                     </Badge>
                   )}
                   {b.bank_name && <span className="text-sm font-semibold">{b.bank_name}</span>}
