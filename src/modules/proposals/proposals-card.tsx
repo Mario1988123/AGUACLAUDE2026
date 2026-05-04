@@ -90,7 +90,11 @@ export function ProposalsCard({
       {proposals.map((p) => {
         const canSend = p.status === "draft";
         const canAccept = p.status === "draft" || p.status === "sent";
-        const canGenerateContract = p.status === "accepted" && scope === "customer";
+        // Sólo mostrar "Generar contrato" si está aceptada Y todavía no
+        // tiene contrato asociado. Si ya lo tiene, mostramos en su lugar
+        // un atajo "Contrato ya generado" para no permitir duplicados.
+        const canGenerateContract =
+          p.status === "accepted" && scope === "customer" && !p.has_contract;
         return (
           <li
             key={p.id}
@@ -144,6 +148,11 @@ export function ProposalsCard({
                 <FileSignature className="h-3 w-3" />
                 Generar contrato
               </Button>
+            )}
+            {p.status === "accepted" && p.has_contract && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-700">
+                <FileSignature className="h-3 w-3" /> Contrato ya generado
+              </span>
             )}
           </li>
         );

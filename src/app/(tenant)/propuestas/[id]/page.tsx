@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProposal, getProposalItems } from "@/modules/proposals/actions";
+import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/proposals/schemas";
@@ -26,6 +27,21 @@ export default async function ProposalDetailPage({
   }
   const items = await getProposalItems(id);
   const session = await requireSession();
+
+  // Comprobamos si esta propuesta ya tiene un contrato asociado para
+  // ocultar/cambiar el botón "Pasar a contrato" y evitar duplicados.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = (await createClient()) as any;
+  const { data: existingContract } = await sb
+    .from("contracts")
+    .select("id")
+    .eq("source_proposal_id", id)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  const contractId =
+    (existingContract as { id: string } | null)?.id ?? null;
+
   const canApprove =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
@@ -118,6 +134,7 @@ export default async function ProposalDetailPage({
               status={proposal.status}
               canApprove={canApprove}
               hasLead={Boolean(proposal.lead_id)}
+              contractId={contractId}
             />
             {proposal.validity_until && (
               <p className="mt-4 text-xs text-muted-foreground">

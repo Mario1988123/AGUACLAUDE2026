@@ -365,13 +365,17 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     p_customer_id: customerId,
   });
 
-  await supabase
+  // Admin client para garantizar el UPDATE: la policy leads_update_by_scope
+  // puede dejar fuera al usuario actual según su rol/scope, y entonces el
+  // status quedaría sin actualizar (lead aparecería como NO convertido y se
+  // permitiría volver a "Convertir a cliente" duplicando datos).
+  await admin
     .from("leads")
     .update({
       status: "converted",
       converted_at: new Date().toISOString(),
       converted_to_customer_id: customerId,
-    } as never)
+    })
     .eq("id", l.id);
 
   await supabase.from("events").insert([

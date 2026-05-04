@@ -22,9 +22,17 @@ interface Props {
   canApprove: boolean;
   /** true si la propuesta es para un lead (sin cliente todavía) */
   hasLead: boolean;
+  /** id del contrato ya generado a partir de esta propuesta (si existe) */
+  contractId?: string | null;
 }
 
-export function ProposalActions({ proposalId, status, canApprove, hasLead }: Props) {
+export function ProposalActions({
+  proposalId,
+  status,
+  canApprove,
+  hasLead,
+  contractId,
+}: Props) {
   const [pending, startTransition] = useTransition();
   const [rejecting, setRejecting] = useState(false);
   const [rejectingApproval, setRejectingApproval] = useState(false);
@@ -187,6 +195,19 @@ export function ProposalActions({ proposalId, status, canApprove, hasLead }: Pro
 
   // === Estado: Aceptada ===
   if (status === "accepted") {
+    // Si ya hay un contrato generado a partir de esta propuesta, no
+    // permitimos volver a generarlo (creaba C-…-0002 duplicado). Sólo
+    // mostramos el atajo para abrir el contrato existente.
+    if (contractId) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-bold text-emerald-700">✓ Aceptada · contrato ya generado</p>
+          <Button asChild variant="success" className="w-full">
+            <a href={`/contratos/${contractId}`}>→ Ver contrato</a>
+          </Button>
+        </div>
+      );
+    }
     return (
       <div className="space-y-2">
         <p className="text-sm font-bold text-emerald-700">✓ Aceptada por el cliente</p>

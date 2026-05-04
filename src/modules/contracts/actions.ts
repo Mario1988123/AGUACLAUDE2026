@@ -160,6 +160,23 @@ export async function createContractFromProposal(proposalId: string) {
 
   const supabase = await createClient();
 
+  // Idempotencia: si ya existe un contrato no eliminado generado a partir
+  // de esta propuesta, redirigimos al existente en lugar de crear otro
+  // (antes "Generar contrato" creaba duplicados como C-2026-0002).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supaCheck = supabase as any;
+  const { data: existing } = await supaCheck
+    .from("contracts")
+    .select("id")
+    .eq("source_proposal_id", proposalId)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  const existingId = (existing as { id: string } | null)?.id;
+  if (existingId) {
+    redirect(`/contratos/${existingId}` as never);
+  }
+
   // Intentamos primero con los campos del overhaul (chosen_plan_type/
   // chosen_duration_months). Si la migración 20260503340000 no está
   // aplicada, retry con campos básicos para que el flujo no se rompa.

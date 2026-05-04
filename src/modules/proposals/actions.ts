@@ -749,9 +749,26 @@ export async function listProposalsByCustomer(customerId: string): Promise<Propo
     .eq("customer_id", customerId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
-  return ((data ?? []) as ProposalListItem[]).map((r) => ({
+  const rows = (data ?? []) as ProposalListItem[];
+  // Marcar propuestas que ya generaron contrato — para esconder "Generar contrato"
+  let withContract = new Set<string>();
+  if (rows.length > 0) {
+    const ids = rows.map((r) => r.id);
+    const { data: cs } = await supabase
+      .from("contracts")
+      .select("source_proposal_id")
+      .in("source_proposal_id", ids)
+      .is("deleted_at", null);
+    withContract = new Set(
+      ((cs ?? []) as { source_proposal_id: string | null }[])
+        .map((c) => c.source_proposal_id)
+        .filter(Boolean) as string[],
+    );
+  }
+  return rows.map((r) => ({
     ...r,
     customer_or_lead_name: "",
+    has_contract: withContract.has(r.id),
   }));
 }
 

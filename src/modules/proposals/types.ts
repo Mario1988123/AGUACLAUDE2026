@@ -11,6 +11,8 @@ export interface ProposalListItem {
   validity_until: string | null;
   created_at: string;
   version_number: number;
+  /** true si esta propuesta ya tiene un contrato generado (no borrado). */
+  has_contract?: boolean;
 }
 
 export interface ProposalDetail extends ProposalListItem {
