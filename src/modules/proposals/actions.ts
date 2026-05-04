@@ -538,9 +538,9 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
   });
 
   // Si la propuesta era para un lead, supersede las hermanas del MISMO lead
-  // pero NO convertimos a cliente todavía: eso pasa al pulsar
-  // "Pasar a contrato" como paso explícito posterior.
-  const customerId: string | null = p.customer_id;
+  // y CONVIERTE el lead en cliente directamente para que el flujo sea
+  // continuo (acepta → cliente con banner "Generar contrato").
+  let customerId: string | null = p.customer_id;
   if (p.lead_id) {
     // Admin: la policy bloquearía las hermanas en sent/pending_approval.
     await admin
@@ -555,6 +555,23 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
       .eq("lead_id", p.lead_id)
       .neq("id", id)
       .in("status", ["draft", "sent", "pending_approval"]);
+
+    // Conversión a cliente en el mismo paso. convertLeadToCustomerAction
+    // ya es idempotente: si el lead ya tenía customer, devuelve el id.
+    if (!customerId) {
+      try {
+        customerId = await convertLeadToCustomerAction(p.lead_id);
+        // Asegurar que esta propuesta queda vinculada al cliente
+        await admin
+          .from("proposals")
+          .update({ customer_id: customerId, lead_id: null })
+          .eq("id", id);
+      } catch {
+        // Si falla la conversión, dejamos la propuesta como aceptada y
+        // el usuario podrá convertir más tarde con el botón "Pasar a
+        // contrato". No queremos romper la aceptación por esto.
+      }
+    }
   }
 
   // Puntos: comercial + (si origen TMK) telemarketer

@@ -46,7 +46,8 @@ export function ProposalsCard({
 
   async function accept(id: string) {
     const ok = await ask({
-      message: "¿Aceptar esta propuesta? Si es de un lead se convertirá automáticamente en cliente.",
+      message:
+        "¿Aceptar esta propuesta? Si es de un lead se convertirá automáticamente en cliente y te llevaremos a su ficha para completar los datos antes del contrato.",
       confirmText: "Aceptar",
       variant: "success",
     });
@@ -55,8 +56,11 @@ export function ProposalsCard({
       try {
         const res = await markProposalAccepted(id);
         notify.success("Propuesta aceptada");
-        if (onAcceptedRedirect && res.customer_id) {
-          router.push(`/clientes/${res.customer_id}` as never);
+        // Flujo continuo: si hay cliente (existente o recién creado desde lead),
+        // ir a su ficha con ?from_proposal para que el banner muestre "Generar
+        // contrato" y se completen los datos pendientes en el mismo paso.
+        if (res.customer_id) {
+          router.push(`/clientes/${res.customer_id}?from_proposal=${id}` as never);
           return;
         }
         router.refresh();

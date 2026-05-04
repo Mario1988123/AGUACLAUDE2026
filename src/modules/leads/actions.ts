@@ -88,7 +88,13 @@ export async function listLeads(filters?: {
   // Cargar direcciones primarias de los leads listados
   const addrMap = new Map<
     string,
-    { city: string | null; province: string | null; lat: number | null; lng: number | null }
+    {
+      street: string | null;
+      city: string | null;
+      province: string | null;
+      lat: number | null;
+      lng: number | null;
+    }
   >();
   if (rows.length > 0) {
     const ids = rows.map((r) => r.id);
@@ -96,17 +102,22 @@ export async function listLeads(filters?: {
     const sb = supabase as any;
     const { data: addrs } = await sb
       .from("addresses")
-      .select("lead_id, city, province, latitude, longitude, is_primary")
+      .select("lead_id, street, street_number, city, province, latitude, longitude, is_primary")
       .in("lead_id", ids)
       .eq("is_primary", true);
     for (const a of (addrs ?? []) as Array<{
       lead_id: string;
+      street: string | null;
+      street_number: string | null;
       city: string | null;
       province: string | null;
       latitude: number | null;
       longitude: number | null;
     }>) {
       addrMap.set(a.lead_id, {
+        street: a.street
+          ? `${a.street}${a.street_number ? `, ${a.street_number}` : ""}`
+          : null,
         city: a.city,
         province: a.province,
         lat: a.latitude,
@@ -133,7 +144,9 @@ export async function listLeads(filters?: {
 
   const now = Date.now();
   return rows.map((r) => {
-    const addr = addrMap.get(r.id) ?? { city: null, province: null, lat: null, lng: null };
+    const addr =
+      addrMap.get(r.id) ??
+      { street: null, city: null, province: null, lat: null, lng: null };
     const isCompany = r.party_kind === "company";
     return {
       id: r.id,
@@ -141,6 +154,7 @@ export async function listLeads(filters?: {
       display_name: isCompany
         ? r.trade_name || r.legal_name || "Sin nombre"
         : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Sin nombre",
+      legal_name: r.legal_name,
       contact_name: isCompany
         ? `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || null
         : null,
@@ -153,6 +167,7 @@ export async function listLeads(filters?: {
       created_at: r.created_at,
       days_since_created: Math.floor((now - new Date(r.created_at).getTime()) / 86400000),
       tags: r.tags ?? [],
+      address_street: addr.street,
       address_city: addr.city,
       address_province: addr.province,
       address_lat: addr.lat,

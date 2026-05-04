@@ -33,7 +33,17 @@ export async function GET(req: NextRequest) {
     maintenance_tomorrow: 0,
     stock_low: 0,
     contracts_activated_today: 0,
+    punches_autoclosed: 0,
   };
+
+  // 0a) Autocierre de fichajes olvidados (también lo hace el cron horario,
+  // pero lo repetimos aquí por si el horario fallara o no estuviera activo)
+  try {
+    const { data: closed } = await admin.rpc("autoclose_stale_punches");
+    stats.punches_autoclosed = Number(closed) || 0;
+  } catch {
+    /* no-op */
+  }
 
   // 0) Contratos con service_start_date <= hoy y status=signed → activar y
   // programar mantenimientos. Cubre el caso "instalado hoy pero arranca el 1 del mes".

@@ -151,14 +151,16 @@ export function TimeClockWidget() {
     );
   }
 
-  // Estado: WORKING → cronómetro + pausa + terminar
+  // Estado: WORKING → cronómetro + pausa + terminar (un único contenedor
+  // con borde envolvente y divisores verticales internos para que NO
+  // parezca cortado).
   if (state.status === "working") {
     return (
-      <div className="hidden sm:flex items-center gap-1">
-        <div
-          className="inline-flex h-10 items-center gap-2 rounded-l-xl border-y-2 border-l-2 border-emerald-500 bg-emerald-50 px-3 text-sm font-bold text-emerald-700 min-w-[120px]"
-          title={`Jornada en curso desde ${state.since ? new Date(state.since).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : ""}`}
-        >
+      <div
+        className="hidden sm:inline-flex h-10 items-stretch overflow-hidden rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-700"
+        title={`Jornada en curso desde ${state.since ? new Date(state.since).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : ""}`}
+      >
+        <div className="inline-flex items-center gap-2 px-3 text-sm font-bold min-w-[120px]">
           <Clock className="h-4 w-4 shrink-0" />
           <span className="tabular-nums whitespace-nowrap">{elapsed}</span>
         </div>
@@ -166,7 +168,7 @@ export function TimeClockWidget() {
           type="button"
           onClick={() => doPunch("break_start")}
           disabled={pending}
-          className="inline-flex h-10 items-center justify-center border-y-2 border-emerald-500 bg-emerald-50 px-2 text-emerald-700 hover:bg-amber-100 hover:text-amber-700"
+          className="inline-flex items-center justify-center border-l-2 border-emerald-500 px-3 hover:bg-amber-100 hover:text-amber-700"
           title="Pausa / Descanso"
         >
           <Pause className="h-4 w-4 fill-current" />
@@ -175,7 +177,7 @@ export function TimeClockWidget() {
           type="button"
           onClick={endShift}
           disabled={pending}
-          className="inline-flex h-10 items-center justify-center rounded-r-xl border-2 border-emerald-500 bg-emerald-50 px-2 text-emerald-700 hover:bg-red-100 hover:text-red-700 hover:border-red-500"
+          className="inline-flex items-center justify-center border-l-2 border-emerald-500 px-3 hover:bg-red-100 hover:text-red-700"
           title="Terminar jornada"
         >
           <StopCircle className="h-4 w-4" />
@@ -186,11 +188,11 @@ export function TimeClockWidget() {
 
   // Estado: ON_BREAK → reanudar / terminar (con cronómetro de pausa)
   return (
-    <div className="hidden sm:flex items-center gap-1">
-      <div
-        className="inline-flex h-10 items-center gap-2 rounded-l-xl border-y-2 border-l-2 border-amber-500 bg-amber-50 px-3 text-sm font-bold text-amber-700 min-w-[120px]"
-        title={`En descanso desde ${state.since ? new Date(state.since).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : ""}`}
-      >
+    <div
+      className="hidden sm:inline-flex h-10 items-stretch overflow-hidden rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-700"
+      title={`En descanso desde ${state.since ? new Date(state.since).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : ""}`}
+    >
+      <div className="inline-flex items-center gap-2 px-3 text-sm font-bold min-w-[120px]">
         <Pause className="h-4 w-4 fill-current shrink-0" />
         <span className="tabular-nums whitespace-nowrap">{elapsed}</span>
       </div>
@@ -198,7 +200,7 @@ export function TimeClockWidget() {
         type="button"
         onClick={() => doPunch("break_end")}
         disabled={pending}
-        className="inline-flex h-10 items-center gap-1 border-y-2 border-amber-500 bg-amber-50 px-3 text-amber-700 hover:bg-emerald-100 hover:text-emerald-700"
+        className="inline-flex items-center gap-1 border-l-2 border-amber-500 px-3 hover:bg-emerald-100 hover:text-emerald-700"
         title="Reanudar jornada"
       >
         <Play className="h-4 w-4 fill-current" />
@@ -208,7 +210,7 @@ export function TimeClockWidget() {
         type="button"
         onClick={endShift}
         disabled={pending}
-        className="inline-flex h-10 items-center justify-center rounded-r-xl border-2 border-amber-500 bg-amber-50 px-2 text-amber-700 hover:bg-red-100 hover:text-red-700"
+        className="inline-flex items-center justify-center border-l-2 border-amber-500 px-3 hover:bg-red-100 hover:text-red-700"
         title="Terminar jornada"
       >
         <StopCircle className="h-4 w-4" />

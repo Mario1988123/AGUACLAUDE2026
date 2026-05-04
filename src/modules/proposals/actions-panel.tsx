@@ -54,8 +54,14 @@ export function ProposalActions({
   function accept() {
     startTransition(async () => {
       try {
-        await markProposalAccepted(proposalId);
-        notify.success("Propuesta aceptada por el cliente");
+        const res = await markProposalAccepted(proposalId);
+        notify.success("Propuesta aceptada");
+        // Flujo continuo: redirigimos al cliente con banner ?from_proposal=
+        // para completar datos y generar contrato en el mismo paso.
+        if (res.customer_id) {
+          router.push(`/clientes/${res.customer_id}?from_proposal=${proposalId}` as never);
+          return;
+        }
         router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
@@ -239,7 +245,7 @@ export function ProposalActions({
         </p>
       )}
       <Button onClick={accept} disabled={pending} className="w-full" variant="success">
-        ✓ Cliente la aceptó
+        ✓ Aceptada cliente
       </Button>
       {!rejecting ? (
         <Button

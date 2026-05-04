@@ -9,6 +9,8 @@ export interface LeadListItem {
   id: string;
   party_kind: PartyKind;
   display_name: string;
+  /** Razón social literal (puede no coincidir con display_name si tiene trade_name) */
+  legal_name: string | null;
   /** Si es empresa: nombre del contacto (first_name + last_name) bajo el nombre comercial */
   contact_name: string | null;
   email: string | null;
@@ -21,6 +23,7 @@ export interface LeadListItem {
   days_since_created: number;
   tags: string[];
   /** Dirección principal si está cargada */
+  address_street: string | null;
   address_city: string | null;
   address_province: string | null;
   address_lat: number | null;
