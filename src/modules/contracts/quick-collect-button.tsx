@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Coins, Banknote, CreditCard, Smartphone, Building2, Wrench, ArrowLeft } from "lucide-react";
+import { Coins, Banknote, CreditCard, Smartphone, Building2, Wrench, ArrowLeft, Pencil } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { collectContractPaymentAction } from "./actions";
@@ -45,7 +45,9 @@ export function QuickCollectButton({
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
-  if (status !== "pending") return null;
+  // Estados que aceptan acción: pending = cobrar, otros = editar cobro previo.
+  const isEdit = status !== "pending";
+  if (status === "rejected" || status === "cancelled") return null;
 
   function reset() {
     setOpen(false);
@@ -86,7 +88,15 @@ export function QuickCollectButton({
   return (
     <>
       <Button size="sm" variant="outline" onClick={() => setOpen(true)} disabled={pending}>
-        <Coins className="h-3 w-3" /> Cobrar
+        {isEdit ? (
+          <>
+            <Pencil className="h-3 w-3" /> Editar cobro
+          </>
+        ) : (
+          <>
+            <Coins className="h-3 w-3" /> Cobrar
+          </>
+        )}
       </Button>
 
       {open && (
@@ -110,9 +120,12 @@ export function QuickCollectButton({
                 </button>
               )}
               <h2 className="flex-1 text-base font-bold">
-                {step === 1 && "¿Cuándo se cobra?"}
-                {step === 2 && "¿Forma de pago?"}
-                {step === 3 && "Confirmar cobro"}
+                {isEdit && step === 1 && "Editar · ¿Cuándo se cobra?"}
+                {isEdit && step === 2 && "Editar · ¿Forma de pago?"}
+                {isEdit && step === 3 && "Editar cobro"}
+                {!isEdit && step === 1 && "¿Cuándo se cobra?"}
+                {!isEdit && step === 2 && "¿Forma de pago?"}
+                {!isEdit && step === 3 && "Confirmar cobro"}
               </h2>
               <span className="text-xs text-muted-foreground">Paso {step}/3</span>
             </div>
@@ -210,7 +223,11 @@ export function QuickCollectButton({
               </Button>
               {step === 3 && (
                 <Button onClick={confirm} disabled={pending} variant="success">
-                  {pending ? "Guardando…" : "Confirmar cobro"}
+                  {pending
+                    ? "Guardando…"
+                    : isEdit
+                      ? "Guardar cambios"
+                      : "Confirmar cobro"}
                 </Button>
               )}
             </div>

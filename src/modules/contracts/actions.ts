@@ -767,7 +767,10 @@ export async function collectContractPaymentAction(
     status: string;
     wallet_entry_id: string | null;
   };
-  if (p.status !== "pending") throw new Error("El pago ya está procesado");
+  // Permitimos editar incluso si ya está cobrado/validado (caso "me he
+  // equivocado de método o de momento"). Si había wallet_entry asociado
+  // y se cambia el método/momento, lo actualizamos.
+  const isEdit = p.status !== "pending";
 
   // Caso 1: cobro aplazado a la instalación → no se registra en wallet,
   // solo se marca el momento del pago como on_installation y, si el
@@ -775,19 +778,37 @@ export async function collectContractPaymentAction(
   if (when === "on_installation") {
     const updates: Record<string, unknown> = {
       moment: "on_installation",
+      // Vuelve a "pending" si lo estábamos editando: aún no se ha cobrado
+      status: "pending",
+      collected_at: null,
+      collected_by_user_id: null,
+      validated_at: null,
+      validated_by_user_id: null,
     };
     if (newMethod) updates.method = newMethod;
-    if (options?.notes) updates.notes = options.notes;
+    if (options?.notes !== undefined) updates.notes = options.notes;
     await supabase.from("contract_payments").update(updates).eq("id", p.id);
+    // Si había wallet_entry, la cancelamos: el cobro ya no es ahora
+    if (p.wallet_entry_id) {
+      await supabase
+        .from("wallet_entries")
+        .update({ status: "cancelled" })
+        .eq("id", p.wallet_entry_id);
+      await supabase
+        .from("contract_payments")
+        .update({ wallet_entry_id: null })
+        .eq("id", p.id);
+    }
     await supabase.from("events").insert({
       company_id: session.company_id,
       subject_type: "contract",
       subject_id: p.contract_id,
-      kind: "contract_payment.deferred",
+      kind: isEdit ? "contract_payment.edited" : "contract_payment.deferred",
       payload: { payment_id: p.id, method: newMethod ?? p.method, when: "on_installation" },
       actor_user_id: session.user_id,
     });
     revalidatePath(`/contratos/${p.contract_id}`);
+    revalidatePath("/wallet");
     return;
   }
 
@@ -829,20 +850,23 @@ export async function collectContractPaymentAction(
   }
 
   const cpUpdates: Record<string, unknown> = {
-    status: "collected_pending_validation",
+    // Si estábamos editando un cobro ya validado, mantenemos validated;
+    // si no, marca como collected_pending_validation
+    status: p.status === "validated" ? "validated" : "collected_pending_validation",
     method: effectiveMethod,
+    moment: "on_signature",
     wallet_entry_id: walletEntryId,
     collected_at: new Date().toISOString(),
     collected_by_user_id: session.user_id,
   };
-  if (options?.notes) cpUpdates.notes = options.notes;
+  if (options?.notes !== undefined) cpUpdates.notes = options.notes;
   await supabase.from("contract_payments").update(cpUpdates).eq("id", p.id);
 
   await supabase.from("events").insert({
     company_id: session.company_id,
     subject_type: "contract",
     subject_id: p.contract_id,
-    kind: "wallet.payment_recorded",
+    kind: isEdit ? "contract_payment.edited" : "wallet.payment_recorded",
     payload: {
       payment_id: p.id,
       amount_cents: p.amount_cents,
@@ -857,19 +881,38 @@ export async function collectContractPaymentAction(
 
 export async function saveInstallPreferenceAction(
   contractId: string,
-  slot: "morning" | "afternoon" | "any" | "custom",
-  notes: string | null,
+  input: {
+    slot: "morning" | "afternoon" | "any" | "custom" | null;
+    notes: string | null;
+    days_of_week: number[] | null;
+    day_of_month: number | null;
+  },
 ): Promise<void> {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const r = await admin
-    .from("contracts")
-    .update({
-      preferred_install_time_slot: slot,
-      preferred_install_time_notes: notes,
-    })
-    .eq("id", contractId);
+  const fullPayload: Record<string, unknown> = {
+    preferred_install_time_slot: input.slot,
+    preferred_install_time_notes: input.notes,
+    preferred_install_days_of_week: input.days_of_week,
+    preferred_install_day_of_month: input.day_of_month,
+  };
+  let r = await admin.from("contracts").update(fullPayload).eq("id", contractId);
+  // Retry sin columnas nuevas si la migración 20260504110000 no está aplicada
+  if (
+    r.error &&
+    /column .* does not exist|preferred_install_days_of_week|preferred_install_day_of_month/i.test(
+      r.error.message ?? "",
+    )
+  ) {
+    r = await admin
+      .from("contracts")
+      .update({
+        preferred_install_time_slot: input.slot,
+        preferred_install_time_notes: input.notes,
+      })
+      .eq("id", contractId);
+  }
   if (r.error) throw new Error(r.error.message);
   revalidatePath(`/contratos/${contractId}`);
 }

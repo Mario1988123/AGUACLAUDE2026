@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, User, Eraser, CheckCircle2 } from "lucide-react";
+import { Building2, User, Eraser, CheckCircle2, Pencil } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -12,13 +12,9 @@ import { saveContractSignatureAction, type ContractSignature } from "./signature
 type Role = "representative" | "customer";
 
 function SignatureCanvas({
-  value,
   onChange,
-  disabled,
 }: {
-  value: string | null;
   onChange: (v: string | null) => void;
-  disabled?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -28,7 +24,6 @@ function SignatureCanvas({
     if (!c) return;
     const ctx = c.getContext("2d");
     if (!ctx) return;
-    // Reset canvas size to match displayed size
     const dpr = window.devicePixelRatio || 1;
     const rect = c.getBoundingClientRect();
     c.width = rect.width * dpr;
@@ -38,12 +33,6 @@ function SignatureCanvas({
     ctx.lineJoin = "round";
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#0f172a";
-    if (value) {
-      const img = new window.Image();
-      img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
-      img.src = value;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -52,7 +41,6 @@ function SignatureCanvas({
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
   function start(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (disabled) return;
     drawing.current = true;
     const c = ref.current!;
     const ctx = c.getContext("2d")!;
@@ -92,10 +80,173 @@ function SignatureCanvas({
         onPointerLeave={end}
       />
       <div className="flex justify-end">
-        <Button type="button" size="sm" variant="ghost" onClick={clear} disabled={disabled}>
+        <Button type="button" size="sm" variant="ghost" onClick={clear}>
           <Eraser className="h-3 w-3" /> Limpiar
         </Button>
       </div>
+    </div>
+  );
+}
+
+function SignedView({ dataUrl }: { dataUrl: string | null }) {
+  if (!dataUrl) {
+    return (
+      <div className="flex h-40 items-center justify-center rounded-xl border-2 border-emerald-200 bg-emerald-50 text-xs text-emerald-700">
+        Firma guardada (sin imagen disponible)
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={dataUrl}
+        alt="Firma"
+        className="mx-auto h-36 object-contain"
+      />
+    </div>
+  );
+}
+
+function SignatureBlock({
+  role,
+  title,
+  icon: Icon,
+  signature,
+  defaultName,
+  defaultTaxId,
+  showTaxId,
+  contractId,
+  onSaved,
+}: {
+  role: Role;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  signature: ContractSignature | undefined;
+  defaultName: string;
+  defaultTaxId?: string | null;
+  showTaxId: boolean;
+  contractId: string;
+  onSaved: () => void;
+}) {
+  // Si ya está firmada, arrancamos en modo "ver". El usuario puede pulsar
+  // "Re-firmar" para volver a abrir el canvas.
+  const [editing, setEditing] = useState(!signature);
+  const [name, setName] = useState(signature?.signer_name ?? defaultName);
+  const [taxId, setTaxId] = useState(signature?.signer_tax_id ?? defaultTaxId ?? "");
+  const [data, setData] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save() {
+    if (!name.trim()) {
+      notify.warning("Falta el nombre del firmante");
+      return;
+    }
+    if (!data) {
+      notify.warning("Falta la firma — dibújala antes de validar");
+      return;
+    }
+    if (showTaxId && !taxId.trim()) {
+      notify.warning("Falta el DNI/CIF del cliente");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await saveContractSignatureAction({
+          contract_id: contractId,
+          signer_role: role,
+          signer_name: name.trim(),
+          signer_tax_id: showTaxId ? taxId.trim() : null,
+          signature_data_url: data,
+        });
+        notify.success(role === "representative" ? "Firma de empresa validada" : "Firma del cliente validada");
+        setEditing(false);
+        onSaved();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  return (
+    <div
+      className={`rounded-2xl border-2 p-4 ${
+        signature && !editing
+          ? "border-emerald-300 bg-emerald-50/40"
+          : "border-border bg-card"
+      }`}
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <Icon className="h-5 w-5 text-primary" />
+        <h3 className="font-bold">{title}</h3>
+        {signature && !editing && (
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
+            <CheckCircle2 className="h-3 w-3" /> Validada
+          </span>
+        )}
+      </div>
+
+      {/* Vista bloqueada (firma ya validada) */}
+      {signature && !editing && (
+        <div className="space-y-2">
+          <div className="text-sm">
+            <strong>{signature.signer_name}</strong>
+            {signature.signer_tax_id && ` · ${signature.signer_tax_id}`}
+          </div>
+          <SignedView dataUrl={signature.signature_data_url} />
+          <p className="text-xs text-muted-foreground">
+            Firmado el {new Date(signature.signed_at).toLocaleString("es-ES")}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="w-full">
+            <Pencil className="h-3 w-3" /> Re-firmar
+          </Button>
+        </div>
+      )}
+
+      {/* Modo edición (canvas activo) */}
+      {editing && (
+        <div className="space-y-3">
+          {showTaxId ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>Nombre</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label>DNI / CIF</Label>
+                <Input
+                  value={taxId}
+                  onChange={(e) => setTaxId(e.target.value.toUpperCase())}
+                  placeholder="00000000A"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Label>Representante</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+          )}
+          <SignatureCanvas onChange={setData} />
+          <div className="flex gap-2">
+            {signature && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditing(false)}
+                disabled={pending}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+            )}
+            <Button onClick={save} disabled={pending} className="flex-1">
+              <CheckCircle2 className="h-3 w-3" />
+              {pending ? "Validando…" : "Validar firma"}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -114,132 +265,32 @@ export function SignaturesCard({
   defaultCustomerTaxId?: string | null;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
   const repSig = signatures.find((s) => s.signer_role === "representative");
   const custSig = signatures.find((s) => s.signer_role === "customer");
 
-  const [repName, setRepName] = useState(repSig?.signer_name ?? defaultRepresentativeName ?? "");
-  const [repData, setRepData] = useState<string | null>(repSig?.signature_data_url ?? null);
-
-  const [custName, setCustName] = useState(custSig?.signer_name ?? defaultCustomerName ?? "");
-  const [custTaxId, setCustTaxId] = useState(
-    custSig?.signer_tax_id ?? defaultCustomerTaxId ?? "",
-  );
-  const [custData, setCustData] = useState<string | null>(custSig?.signature_data_url ?? null);
-
-  function save(role: Role) {
-    const name = role === "representative" ? repName : custName;
-    const data = role === "representative" ? repData : custData;
-    const taxId = role === "representative" ? null : custTaxId;
-    if (!name.trim()) {
-      notify.warning("Falta el nombre del firmante");
-      return;
-    }
-    if (!data) {
-      notify.warning("Falta la firma — dibújala antes de guardar");
-      return;
-    }
-    if (role === "customer" && !taxId?.trim()) {
-      notify.warning("Falta el DNI/CIF del cliente");
-      return;
-    }
-    startTransition(async () => {
-      try {
-        await saveContractSignatureAction({
-          contract_id: contractId,
-          signer_role: role,
-          signer_name: name.trim(),
-          signer_tax_id: taxId?.trim() || null,
-          signature_data_url: data,
-        });
-        notify.success(role === "representative" ? "Firma de empresa guardada" : "Firma del cliente guardada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
-      }
-    });
-  }
-
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {/* LA EMPRESA */}
-      <div className="rounded-2xl border-2 border-border bg-card p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <Building2 className="h-5 w-5 text-primary" />
-          <h3 className="font-bold">La Empresa</h3>
-          {repSig && (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-              <CheckCircle2 className="h-3 w-3" /> Firmado
-            </span>
-          )}
-        </div>
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <Label>Representante</Label>
-            <Input
-              value={repName}
-              onChange={(e) => setRepName(e.target.value)}
-              placeholder="Nombre y apellidos"
-            />
-          </div>
-          <SignatureCanvas value={repData} onChange={setRepData} disabled={Boolean(repSig)} />
-          {!repSig && (
-            <Button onClick={() => save("representative")} disabled={pending} className="w-full">
-              Guardar firma empresa
-            </Button>
-          )}
-          {repSig && (
-            <p className="text-xs text-muted-foreground">
-              Firmado el {new Date(repSig.signed_at).toLocaleString("es-ES")}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* EL CLIENTE */}
-      <div className="rounded-2xl border-2 border-border bg-card p-4">
-        <div className="mb-3 flex items-center gap-2">
-          <User className="h-5 w-5 text-primary" />
-          <h3 className="font-bold">El Cliente</h3>
-          {custSig && (
-            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-              <CheckCircle2 className="h-3 w-3" /> Firmado
-            </span>
-          )}
-        </div>
-        <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label>Nombre</Label>
-              <Input
-                value={custName}
-                onChange={(e) => setCustName(e.target.value)}
-                placeholder="Nombre y apellidos"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>DNI / CIF</Label>
-              <Input
-                value={custTaxId}
-                onChange={(e) => setCustTaxId(e.target.value.toUpperCase())}
-                placeholder="00000000A"
-              />
-            </div>
-          </div>
-          <SignatureCanvas value={custData} onChange={setCustData} disabled={Boolean(custSig)} />
-          {!custSig && (
-            <Button onClick={() => save("customer")} disabled={pending} className="w-full">
-              Guardar firma cliente
-            </Button>
-          )}
-          {custSig && (
-            <p className="text-xs text-muted-foreground">
-              Firmado el {new Date(custSig.signed_at).toLocaleString("es-ES")}
-            </p>
-          )}
-        </div>
-      </div>
+      <SignatureBlock
+        role="representative"
+        title="La Empresa"
+        icon={Building2}
+        signature={repSig}
+        defaultName={defaultRepresentativeName ?? ""}
+        showTaxId={false}
+        contractId={contractId}
+        onSaved={() => router.refresh()}
+      />
+      <SignatureBlock
+        role="customer"
+        title="El Cliente"
+        icon={User}
+        signature={custSig}
+        defaultName={defaultCustomerName ?? ""}
+        defaultTaxId={defaultCustomerTaxId}
+        showTaxId
+        contractId={contractId}
+        onSaved={() => router.refresh()}
+      />
     </div>
   );
 }
