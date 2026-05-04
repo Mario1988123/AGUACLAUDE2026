@@ -6,9 +6,22 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 /**
- * Cron horario (Vercel Cron). Tareas que necesitan ejecutarse varias veces
- * al día — actualmente sólo el autocierre de fichajes olvidados, pero aquí
- * iría cualquier tarea de menos-de-un-día.
+ * Endpoint de autocierre de fichajes olvidados. PERO ATENCIÓN:
+ *
+ * NO está registrado en vercel.json porque el plan Hobby de Vercel sólo
+ * permite UN cron diario por proyecto. Si en el futuro pasamos a Pro
+ * podemos volver a meterlo en vercel.json con `"15 * * * *"` o similar.
+ *
+ * Mientras tanto el autocierre se ejecuta UNA VEZ AL DÍA dentro del cron
+ * /api/cron/daily a las 22:00 UTC (00:00 hora peninsular). A esa hora
+ * todas las jornadas laborales del día ya han terminado +2h, así que la
+ * RPC autoclose_stale_punches cierra todo lo olvidado.
+ *
+ * Este endpoint sigue disponible y puede llamarse manualmente con
+ * cualquier scheduler externo (Cron-job.org, EasyCron, etc.) si quieres
+ * cierres más frecuentes sin pagar Vercel Pro:
+ *   GET https://aguaclaude2026.vercel.app/api/cron/hourly
+ *   Headers: x-cron-secret: <CRON_SECRET>
  */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
