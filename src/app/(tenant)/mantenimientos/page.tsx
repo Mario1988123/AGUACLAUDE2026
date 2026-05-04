@@ -3,6 +3,9 @@ import { listMaintenance } from "@/modules/maintenance/actions";
 import { STATUS_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
+import { listMaintenanceContracts } from "@/modules/maintenance-plans/actions";
+import { MaintenanceContractsTable } from "@/modules/maintenance-plans/contracts-table";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -50,14 +53,36 @@ export default async function MantenimientosPage({
   const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const period = sp.period && Object.prototype.hasOwnProperty.call(PERIOD_OPTIONS, sp.period) ? sp.period : "";
   const { fromDate, toDate } = periodToRange(period);
-  const jobs = await listMaintenance({ status, fromDate, toDate });
+  const [jobs, contracts, session] = await Promise.all([
+    listMaintenance({ status, fromDate, toDate }),
+    listMaintenanceContracts().catch(() => []),
+    requireSession(),
+  ]);
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Mantenimientos</h1>
-        <p className="text-sm text-muted-foreground">{jobs.length} trabajos</p>
+        <p className="text-sm text-muted-foreground">
+          {contracts.length} contratos · {jobs.length} trabajos
+        </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+            <span>Contratos de mantenimiento ({contracts.length})</span>
+            {isAdmin && (
+              <MaintenanceContractsTable.RemesaButton />
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MaintenanceContractsTable contracts={contracts} />
+        </CardContent>
+      </Card>
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">

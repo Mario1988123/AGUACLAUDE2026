@@ -16,6 +16,7 @@ import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
 import { InstallationWizard } from "@/modules/installations/installation-wizard";
 import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/modules/installations/client-actions";
+import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -78,6 +79,8 @@ export default async function InstallationDetailPage({
   }> = [];
   let customerName = "Cliente";
   let customerTaxId: string | null = null;
+  let customerId: string | null = null;
+  let contractIncludesMaintenance = false;
   if (i.contract_id) {
     const { data: ps } = await sb
       .from("contract_payments")
@@ -87,11 +90,18 @@ export default async function InstallationDetailPage({
     payments = (ps ?? []) as typeof payments;
     const { data: ct } = await sb
       .from("contracts")
-      .select("customer_id, customer_snapshot")
+      .select("customer_id, customer_snapshot, maintenance_included")
       .eq("id", i.contract_id)
       .single();
     if (ct) {
-      const cust = (ct as { customer_snapshot: Record<string, unknown> | null }).customer_snapshot;
+      const ctRow = ct as {
+        customer_id: string | null;
+        customer_snapshot: Record<string, unknown> | null;
+        maintenance_included: boolean | null;
+      };
+      customerId = ctRow.customer_id;
+      contractIncludesMaintenance = Boolean(ctRow.maintenance_included);
+      const cust = ctRow.customer_snapshot;
       if (cust) {
         const c = cust as {
           legal_name?: string | null;
@@ -144,6 +154,10 @@ export default async function InstallationDetailPage({
               customerName={customerName}
               customerTaxId={customerTaxId}
               representativeName={session.full_name ?? "Técnico"}
+              customerId={customerId}
+              contractId={i.contract_id}
+              maintenancePlans={await listMaintenancePlans().catch(() => [])}
+              contractIncludesMaintenance={contractIncludesMaintenance}
             />
           )}
           <a

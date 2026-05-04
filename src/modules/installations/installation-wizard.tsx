@@ -43,6 +43,8 @@ import {
   type InstallationSignature,
 } from "./client-actions";
 import { CollectInline } from "@/modules/contracts/quick-collect-inline";
+import { MaintenancePlanPicker } from "@/modules/maintenance-plans/plan-picker";
+import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
 
 interface PaymentRow {
   id: string;
@@ -66,6 +68,14 @@ interface Props {
   customerName: string;
   customerTaxId: string | null;
   representativeName: string;
+  /** ID del cliente para crear contrato de mantenimiento al final */
+  customerId: string | null;
+  /** ID del contrato principal asociado */
+  contractId: string | null;
+  /** Catálogo de planes de mantenimiento disponibles */
+  maintenancePlans: MaintenancePlan[];
+  /** true si el contrato principal YA incluye mantenimiento */
+  contractIncludesMaintenance: boolean;
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -124,7 +134,12 @@ export function InstallationWizard(props: Props) {
     customerName,
     customerTaxId,
     representativeName,
+    customerId,
+    contractId,
+    maintenancePlans,
+    contractIncludesMaintenance,
   } = props;
+  void representativeName;
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>(initialStatus === "scheduled" ? 1 : 2);
@@ -801,6 +816,31 @@ export function InstallationWizard(props: Props) {
                       placeholder="Observaciones generales del trabajo realizado…"
                     />
                   </div>
+                  {/* Mantenimiento: si el contrato principal NO incluye, se
+                      ofrece crear un contrato de mantenimiento independiente */}
+                  {!contractIncludesMaintenance &&
+                    customerId &&
+                    maintenancePlans.length > 0 && (
+                      <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
+                        <p className="text-sm font-bold text-amber-900">
+                          ¿Quieres ofrecerle un contrato de mantenimiento al cliente?
+                        </p>
+                        <p className="mt-1 text-xs text-amber-800">
+                          Tu contrato principal no incluye mantenimiento. Puedes
+                          generar ahora uno (Lite / Medium / Premium) con remesa
+                          mensual.
+                        </p>
+                        <div className="mt-2">
+                          <MaintenancePlanPicker
+                            customerId={customerId}
+                            plans={maintenancePlans}
+                            sourceInstallationId={installationId}
+                            sourceContractId={contractId}
+                          />
+                        </div>
+                      </div>
+                    )}
+
                   <Button
                     onClick={finish}
                     disabled={pending}

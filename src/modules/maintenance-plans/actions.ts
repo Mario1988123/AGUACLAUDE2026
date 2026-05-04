@@ -1,0 +1,310 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { createClient } from "@/shared/lib/supabase/server";
+import { requireSession } from "@/shared/lib/auth/session";
+
+export type Tier = "lite" | "medium" | "premium";
+
+export interface MaintenancePlan {
+  id: string;
+  tier: Tier;
+  name: string;
+  monthly_cents: number;
+  visits_per_year: number | null;
+  parts_discount_percent: number;
+  spare_equipment_included: boolean;
+  description: string | null;
+  is_active: boolean;
+}
+
+export interface MaintenanceContractRow {
+  id: string;
+  reference_code: string | null;
+  status: string;
+  customer_id: string;
+  customer_name: string;
+  tier_snapshot: string;
+  monthly_cents_snapshot: number;
+  visits_per_year_snapshot: number | null;
+  starts_on: string;
+  ends_on: string | null;
+  created_at: string;
+}
+
+export async function listMaintenancePlans(): Promise<MaintenancePlan[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("maintenance_plans")
+    .select(
+      "id, tier, name, monthly_cents, visits_per_year, parts_discount_percent, spare_equipment_included, description, is_active",
+    )
+    .eq("company_id", session.company_id)
+    .order("monthly_cents");
+  return ((data ?? []) as MaintenancePlan[]).filter((p) => p.is_active);
+}
+
+export async function listMaintenanceContracts(): Promise<MaintenanceContractRow[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("maintenance_contracts")
+    .select(
+      "id, reference_code, status, customer_id, tier_snapshot, monthly_cents_snapshot, visits_per_year_snapshot, starts_on, ends_on, created_at",
+    )
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  const rows = (data ?? []) as Array<Omit<MaintenanceContractRow, "customer_name">>;
+  if (rows.length === 0) return [];
+  const customerIds = Array.from(new Set(rows.map((r) => r.customer_id)));
+  const { data: cs } = await supabase
+    .from("customers")
+    .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+    .in("id", customerIds);
+  const map = new Map(
+    ((cs ?? []) as Array<{
+      id: string;
+      party_kind: "individual" | "company";
+      legal_name: string | null;
+      trade_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>).map((c) => [
+      c.id,
+      c.party_kind === "company"
+        ? c.trade_name || c.legal_name || "Sin nombre"
+        : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre",
+    ]),
+  );
+  return rows.map((r) => ({ ...r, customer_name: map.get(r.customer_id) ?? "Cliente" }));
+}
+
+/**
+ * Crea un contrato de mantenimiento. Toma snapshot del plan, IBAN
+ * principal del cliente, genera reference_code "M-YYYY-NNNN".
+ */
+export async function createMaintenanceContractAction(input: {
+  customer_id: string;
+  plan_id: string;
+  source_installation_id?: string | null;
+  source_contract_id?: string | null;
+  starts_on?: string;
+  ends_on?: string | null;
+}): Promise<{ id: string }> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Snapshot del plan
+  const { data: plan } = await admin
+    .from("maintenance_plans")
+    .select(
+      "id, tier, monthly_cents, visits_per_year, parts_discount_percent, spare_equipment_included",
+    )
+    .eq("id", input.plan_id)
+    .eq("company_id", session.company_id)
+    .single();
+  if (!plan) throw new Error("Plan no encontrado");
+  const p = plan as {
+    id: string;
+    tier: string;
+    monthly_cents: number;
+    visits_per_year: number | null;
+    parts_discount_percent: number;
+    spare_equipment_included: boolean;
+  };
+
+  // IBAN principal del cliente (puede ser ES00 placeholder)
+  const { data: bank } = await admin
+    .from("customer_bank_accounts")
+    .select("iban, account_holder_name")
+    .eq("customer_id", input.customer_id)
+    .eq("is_primary", true)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  const b = bank as { iban: string | null; account_holder_name: string | null } | null;
+
+  // reference_code M-YYYY-NNNN
+  const year = new Date().getFullYear();
+  const yearPrefix = `M-${year}-`;
+  const { data: last } = await admin
+    .from("maintenance_contracts")
+    .select("reference_code")
+    .eq("company_id", session.company_id)
+    .like("reference_code", `${yearPrefix}%`)
+    .order("reference_code", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let nextNum = 1;
+  const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
+  if (lastCode) {
+    const m = lastCode.match(/-(\d+)$/);
+    if (m) nextNum = parseInt(m[1]!, 10) + 1;
+  }
+  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+
+  const { data: created, error } = await admin
+    .from("maintenance_contracts")
+    .insert({
+      company_id: session.company_id,
+      customer_id: input.customer_id,
+      plan_id: p.id,
+      source_installation_id: input.source_installation_id ?? null,
+      source_contract_id: input.source_contract_id ?? null,
+      tier_snapshot: p.tier,
+      monthly_cents_snapshot: p.monthly_cents,
+      visits_per_year_snapshot: p.visits_per_year,
+      parts_discount_snapshot: p.parts_discount_percent,
+      spare_equipment_snapshot: p.spare_equipment_included,
+      iban_snapshot: b?.iban ?? null,
+      iban_holder_snapshot: b?.account_holder_name ?? null,
+      status: "active",
+      reference_code: referenceCode,
+      starts_on: input.starts_on ?? new Date().toISOString().slice(0, 10),
+      ends_on: input.ends_on ?? null,
+      created_by: session.user_id,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "maintenance_contract",
+    subject_id: (created as { id: string }).id,
+    kind: "maintenance_contract.created",
+    payload: { tier: p.tier, monthly_cents: p.monthly_cents },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath("/mantenimientos");
+  if (input.customer_id) revalidatePath(`/clientes/${input.customer_id}`);
+  return { id: (created as { id: string }).id };
+}
+
+/**
+ * Genera la remesa mensual: por cada maintenance_contract activo crea
+ * una factura del mes en curso (idempotente: si ya existe la factura
+ * de YYYY-MM no se duplica).
+ */
+export async function generateMonthlyMaintenanceInvoicesAction(): Promise<{
+  created: number;
+  skipped: number;
+}> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (
+    !session.is_superadmin &&
+    !session.roles.includes("company_admin")
+  ) {
+    throw new Error("Solo el admin de empresa puede lanzar la remesa");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const issueDate = now.toISOString().slice(0, 10);
+  // Fin de mes
+  const due = new Date(year, month, 0);
+  const dueDate = due.toISOString().slice(0, 10);
+
+  const { data: contracts } = await admin
+    .from("maintenance_contracts")
+    .select(
+      "id, customer_id, tier_snapshot, monthly_cents_snapshot, reference_code",
+    )
+    .eq("company_id", session.company_id)
+    .eq("status", "active")
+    .is("deleted_at", null);
+
+  const list = (contracts ?? []) as Array<{
+    id: string;
+    customer_id: string;
+    tier_snapshot: string;
+    monthly_cents_snapshot: number;
+    reference_code: string | null;
+  }>;
+
+  let created = 0;
+  let skipped = 0;
+  for (const mc of list) {
+    const concept = `Mantenimiento ${mc.tier_snapshot.toUpperCase()} ${monthKey} (${mc.reference_code ?? ""})`;
+    // Idempotencia: comprobar si ya existe factura con el mismo concepto
+    const { data: existing } = await admin
+      .from("invoices")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("customer_id", mc.customer_id)
+      .ilike("concept", `%${monthKey}%`)
+      .ilike("concept", `%${mc.reference_code ?? ""}%`)
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
+    try {
+      await admin.from("invoices").insert({
+        company_id: session.company_id,
+        customer_id: mc.customer_id,
+        concept,
+        issue_date: issueDate,
+        due_date: dueDate,
+        subtotal_cents: mc.monthly_cents_snapshot,
+        total_cents: mc.monthly_cents_snapshot,
+        status: "issued",
+        source: "maintenance_contract",
+        source_id: mc.id,
+      });
+      created += 1;
+    } catch {
+      // Si la tabla invoices no existe o el insert falla, contamos como skipped
+      skipped += 1;
+    }
+  }
+
+  revalidatePath("/facturas");
+  revalidatePath("/mantenimientos");
+  return { created, skipped };
+}
+
+/**
+ * Cancela un contrato de mantenimiento.
+ */
+export async function cancelMaintenanceContractAction(
+  id: string,
+  reason: string | null,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin
+    .from("maintenance_contracts")
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+      cancelled_reason: reason,
+    })
+    .eq("id", id);
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "maintenance_contract",
+    subject_id: id,
+    kind: "maintenance_contract.cancelled",
+    payload: { reason },
+    actor_user_id: session.user_id,
+  });
+  revalidatePath("/mantenimientos");
+}
