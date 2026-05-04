@@ -25,6 +25,8 @@ export interface LeadListItem {
   address_province: string | null;
   address_lat: number | null;
   address_lng: number | null;
+  /** true si el lead tiene al menos 1 propuesta asociada (no eliminada) */
+  has_proposals?: boolean;
 }
 
 export interface LeadDetail extends Omit<LeadListItem, "display_name" | "days_since_created"> {

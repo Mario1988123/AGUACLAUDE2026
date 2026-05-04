@@ -402,9 +402,13 @@ export async function approveProposalAction(id: string): Promise<void> {
     session.roles.includes("technical_director") ||
     session.roles.includes("telemarketing_director");
   if (!isUpper) throw new Error("Solo nivel 1 o 2 puede validar propuestas");
+  // Admin client: la policy proposals_update_draft sólo permite UPDATE
+  // cuando status='draft'. La propuesta está en pending_approval y el
+  // update fallaba silenciosamente — el toast salía pero el estado no
+  // cambiaba. Usamos service_role para bypassar RLS aquí.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("proposals")
     .update({
       status: "draft",
@@ -414,7 +418,8 @@ export async function approveProposalAction(id: string): Promise<void> {
     })
     .eq("id", id)
     .eq("status", "pending_approval");
-  await supabase.from("events").insert({
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
     subject_id: id,
@@ -435,9 +440,10 @@ export async function rejectApprovalAction(id: string, reason?: string): Promise
     session.roles.includes("commercial_director") ||
     session.roles.includes("telemarketing_director");
   if (!isUpper) throw new Error("Solo nivel 1 o 2 puede rechazar aprobaciones");
+  // Admin client por la misma razón que approveProposalAction.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("proposals")
     .update({
       status: "draft",
@@ -445,7 +451,8 @@ export async function rejectApprovalAction(id: string, reason?: string): Promise
     })
     .eq("id", id)
     .eq("status", "pending_approval");
-  await supabase.from("events").insert({
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
     subject_id: id,

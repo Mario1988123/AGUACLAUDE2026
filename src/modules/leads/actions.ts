@@ -115,6 +115,22 @@ export async function listLeads(filters?: {
     }
   }
 
+  // Marcar qué leads tienen propuestas (para mostrar "perdido" en lugar de
+  // "eliminar" en la lista de acciones).
+  const leadsWithProposals = new Set<string>();
+  if (rows.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = supabase as any;
+    const { data: props } = await sb
+      .from("proposals")
+      .select("lead_id")
+      .in("lead_id", rows.map((r) => r.id))
+      .is("deleted_at", null);
+    for (const p of (props ?? []) as { lead_id: string | null }[]) {
+      if (p.lead_id) leadsWithProposals.add(p.lead_id);
+    }
+  }
+
   const now = Date.now();
   return rows.map((r) => {
     const addr = addrMap.get(r.id) ?? { city: null, province: null, lat: null, lng: null };
@@ -141,6 +157,7 @@ export async function listLeads(filters?: {
       address_province: addr.province,
       address_lat: addr.lat,
       address_lng: addr.lng,
+      has_proposals: leadsWithProposals.has(r.id),
     };
   });
 }
@@ -528,6 +545,87 @@ export async function updateLeadAction(
   if (r.error) throw new Error(r.error.message);
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
+}
+
+/**
+ * Soft-delete de un lead que NO tiene propuestas. Si tiene propuestas
+ * usa markLeadAsLostAction en su lugar (rechaza propuestas + marca lost).
+ */
+export async function deleteLeadAction(leadId: string): Promise<void> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  // Comprobamos primero que no tiene propuestas vivas
+  const { data: props } = await admin
+    .from("proposals")
+    .select("id")
+    .eq("lead_id", leadId)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+  if (props) {
+    throw new Error(
+      "Este lead tiene propuestas. Usa «Marcar como venta perdida» en lugar de eliminarlo.",
+    );
+  }
+  const r = await admin
+    .from("leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", leadId);
+  if (r.error) throw new Error(r.error.message);
+  revalidatePath("/leads");
+}
+
+/**
+ * Marca un lead como venta perdida y rechaza automáticamente todas sus
+ * propuestas vivas. Para usar cuando el cliente final dice que no.
+ */
+export async function markLeadAsLostAction(
+  leadId: string,
+  reason: string | null,
+): Promise<void> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Rechazar todas las propuestas vivas del lead
+  await admin
+    .from("proposals")
+    .update({
+      status: "rejected",
+      rejected_at: new Date().toISOString(),
+      rejected_reason: reason
+        ? `Lead marcado como venta perdida: ${reason}`
+        : "Lead marcado como venta perdida",
+    })
+    .eq("lead_id", leadId)
+    .is("deleted_at", null)
+    .in("status", ["draft", "sent", "pending_approval", "accepted"]);
+
+  // Marcar el lead como perdido
+  const r = await admin
+    .from("leads")
+    .update({
+      status: "lost",
+      lost_at: new Date().toISOString(),
+      lost_reason: reason,
+    })
+    .eq("id", leadId);
+  if (r.error) throw new Error(r.error.message);
+
+  // Evento timeline
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "lead",
+    subject_id: leadId,
+    kind: "lead.status_changed",
+    payload: { to: "lost", reason: reason ?? null, propuestas_rechazadas: true },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/ventas-perdidas");
 }
 
 export async function updateLeadStatus(id: string, status: LeadStatus, lostReason?: string) {

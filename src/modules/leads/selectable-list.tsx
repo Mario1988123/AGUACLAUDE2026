@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
-import { Eye, FileText, MapPin, Mail, Phone } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, MapPin, Mail, Phone, Trash2, XCircle, X } from "lucide-react";
 import { LeadBulkToolbar } from "./bulk-toolbar";
 import { STATUS_LABEL, ORIGIN_LABEL } from "./schemas";
 import { StatusPill } from "@/shared/components/status-pill";
 import { Input } from "@/shared/ui/input";
+import { Button } from "@/shared/ui/button";
+import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
+import { deleteLeadAction, markLeadAsLostAction } from "./actions";
 import type { LeadListItem } from "./types";
 
 const LEAD_TONE: Record<
@@ -51,6 +56,50 @@ function rowBg(status: string): string {
 export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [cityFilter, setCityFilter] = useState("");
+  const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
+  const router = useRouter();
+  const [lostReasonOpen, setLostReasonOpen] = useState<{ id: string; name: string } | null>(null);
+  const [lostReason, setLostReason] = useState("");
+
+  async function onDelete(id: string, name: string) {
+    const ok = await ask({
+      title: "Eliminar lead",
+      message: `¿Eliminar el lead «${name}»? Esta acción es irreversible.`,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      try {
+        await deleteLeadAction(id);
+        notify.success("Lead eliminado");
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  function openLostModal(id: string, name: string) {
+    setLostReason("");
+    setLostReasonOpen({ id, name });
+  }
+
+  function confirmLost() {
+    if (!lostReasonOpen) return;
+    const { id } = lostReasonOpen;
+    startTransition(async () => {
+      try {
+        await markLeadAsLostAction(id, lostReason.trim() || null);
+        notify.success("Lead marcado como venta perdida — propuestas rechazadas");
+        setLostReasonOpen(null);
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -111,6 +160,59 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
         </span>
       </div>
 
+      {lostReasonOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setLostReasonOpen(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b p-4">
+              <div>
+                <h2 className="text-base font-bold">Marcar como venta perdida</h2>
+                <p className="text-xs text-muted-foreground">{lostReasonOpen.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLostReasonOpen(null)}
+                className="rounded-full p-2 hover:bg-muted"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3 p-4">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                ⚠ Todas las propuestas vivas de este lead se marcarán como
+                <strong> rechazadas</strong> automáticamente.
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                  Motivo (opcional)
+                </label>
+                <textarea
+                  rows={3}
+                  value={lostReason}
+                  onChange={(e) => setLostReason(e.target.value)}
+                  placeholder="Ej. precio, competencia, no le interesa…"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+              <Button variant="outline" onClick={() => setLostReasonOpen(null)} disabled={pending}>
+                Cancelar
+              </Button>
+              <Button onClick={confirmLost} disabled={pending} variant="destructive">
+                Marcar como perdida
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-lg border bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
@@ -165,7 +267,7 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                         />
                       </td>
                     )}
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">
                       <div className="space-y-0.5">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Link
@@ -174,6 +276,11 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                           >
                             {l.display_name}
                           </Link>
+                          {l.contact_name && (
+                            <span className="text-xs text-muted-foreground">
+                              · {l.contact_name}
+                            </span>
+                          )}
                           {l.status === "new" && !l.assigned_user_id && (
                             <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
                               Nuevo
@@ -185,26 +292,27 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                             </span>
                           )}
                         </div>
-                        {l.contact_name && (
-                          <div className="text-xs text-muted-foreground">{l.contact_name}</div>
-                        )}
-                        {l.phone_primary && (
-                          <a
-                            href={`tel:${l.phone_primary}`}
-                            className="flex items-center gap-1 text-xs text-foreground/80 hover:text-primary"
-                          >
-                            <Phone className="h-3 w-3" />
-                            {l.phone_primary}
-                          </a>
-                        )}
-                        {l.email && (
-                          <a
-                            href={`mailto:${l.email}`}
-                            className="flex items-center gap-1 text-xs text-foreground/80 hover:text-primary"
-                          >
-                            <Mail className="h-3 w-3" />
-                            <span className="truncate max-w-[180px]">{l.email}</span>
-                          </a>
+                        {(l.phone_primary || l.email) && (
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
+                            {l.phone_primary && (
+                              <a
+                                href={`tel:${l.phone_primary}`}
+                                className="inline-flex items-center gap-1 text-foreground/80 hover:text-primary"
+                              >
+                                <Phone className="h-3 w-3" />
+                                {l.phone_primary}
+                              </a>
+                            )}
+                            {l.email && (
+                              <a
+                                href={`mailto:${l.email}`}
+                                className="inline-flex items-center gap-1 text-foreground/80 hover:text-primary"
+                              >
+                                <Mail className="h-3 w-3" />
+                                <span className="truncate max-w-[200px]">{l.email}</span>
+                              </a>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -215,7 +323,7 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                         tone={LEAD_TONE[l.status] ?? "info"}
                       />
                     </td>
-                    <td className="px-3 py-2.5 text-xs">
+                    <td className="px-3 py-2 text-xs">
                       <div className="flex items-center gap-1.5">
                         {mapsUrl && (
                           <a
@@ -233,7 +341,7 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                             {l.address_city ?? "—"}
                           </div>
                           {l.address_province && (
-                            <div className="text-muted-foreground truncate">
+                            <div className="font-semibold text-foreground/90 truncate">
                               {l.address_province}
                             </div>
                           )}
@@ -245,22 +353,36 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                     >
                       {l.days_since_created}d
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
-                        <Link
-                          href={`/propuestas/nueva?lead=${l.id}` as never}
-                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                          title="Nueva propuesta"
-                        >
-                          <FileText className="h-4 w-4" />
-                        </Link>
                         <Link
                           href={`/leads/${l.id}` as never}
                           className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                          title="Abrir ficha"
+                          title="Ver ficha"
                         >
                           <Eye className="h-4 w-4" />
                         </Link>
+                        {l.has_proposals ? (
+                          <button
+                            type="button"
+                            onClick={() => openLostModal(l.id, l.display_name)}
+                            disabled={pending}
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                            title="Marcar como venta perdida (rechaza propuestas)"
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onDelete(l.id, l.display_name)}
+                            disabled={pending}
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title="Eliminar lead"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
