@@ -14,8 +14,11 @@ import { PhotoUploadPanel } from "@/modules/installations/photo-upload";
 import { SignaturesSection } from "@/modules/installations/signature-section";
 import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
+import { InstallationWizard } from "@/modules/installations/installation-wizard";
+import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/modules/installations/client-actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { listTeamMembers } from "@/modules/agenda/actions";
+import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -48,16 +51,64 @@ export default async function InstallationDetailPage({
     installer_user_id: string | null;
   };
 
-  const [items, photos, signatures, session, team] = await Promise.all([
-    getInstallationItems(id),
-    getInstallationPhotos(id),
-    getInstallationSignatures(id),
-    requireSession(),
-    listTeamMembers().catch(() => []),
-  ]);
+  const [items, photos, signatures, session, team, photosFull, signaturesFull] =
+    await Promise.all([
+      getInstallationItems(id),
+      getInstallationPhotos(id),
+      getInstallationSignatures(id),
+      requireSession(),
+      listTeamMembers().catch(() => []),
+      listInstallationPhotosFull(id),
+      listInstallationSignaturesFull(id),
+    ]);
   // Reasignar instalación restringido a admin de empresa (decisión usuario).
   const canReassign =
     session.is_superadmin || session.roles.includes("company_admin");
+
+  // Cargar cobros del contrato asociado para el wizard
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = (await createClient()) as any;
+  let payments: Array<{
+    id: string;
+    concept: string;
+    amount_cents: number;
+    method: string;
+    moment: string;
+    status: string;
+  }> = [];
+  let customerName = "Cliente";
+  let customerTaxId: string | null = null;
+  if (i.contract_id) {
+    const { data: ps } = await sb
+      .from("contract_payments")
+      .select("id, concept, amount_cents, method, moment, status")
+      .eq("contract_id", i.contract_id)
+      .order("display_order");
+    payments = (ps ?? []) as typeof payments;
+    const { data: ct } = await sb
+      .from("contracts")
+      .select("customer_id, customer_snapshot")
+      .eq("id", i.contract_id)
+      .single();
+    if (ct) {
+      const cust = (ct as { customer_snapshot: Record<string, unknown> | null }).customer_snapshot;
+      if (cust) {
+        const c = cust as {
+          legal_name?: string | null;
+          trade_name?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          tax_id?: string | null;
+        };
+        customerName =
+          c.trade_name ||
+          c.legal_name ||
+          `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() ||
+          "Cliente";
+        customerTaxId = c.tax_id ?? null;
+      }
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -78,7 +129,23 @@ export default async function InstallationDetailPage({
               : "Sin agendar"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {i.status !== "completed" && i.status !== "cancelled" && (
+            <InstallationWizard
+              installationId={i.id}
+              status={i.status}
+              startedAt={i.started_at}
+              hasPreviousDamage={i.has_previous_damage ?? false}
+              needsCountertopDrilling={i.needs_countertop_drilling ?? false}
+              items={items}
+              photos={photosFull}
+              signatures={signaturesFull}
+              payments={payments}
+              customerName={customerName}
+              customerTaxId={customerTaxId}
+              representativeName={session.full_name ?? "Técnico"}
+            />
+          )}
           <a
             href={`/api/pdf/work-report/${i.id}`}
             target="_blank"
