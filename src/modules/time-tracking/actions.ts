@@ -151,16 +151,25 @@ export async function getMyClockExtended(): Promise<ClockExtended> {
       }
     }
 
+    // Horario hoy (defensivo: si la tabla no existe, sin shift)
     const dow = (new Date().getDay() + 6) % 7;
-    const { data: sched } = await admin
-      .from("user_work_schedules")
-      .select("starts_at, ends_at")
-      .eq("user_id", session.user_id)
-      .eq("day_of_week", dow)
-      .maybeSingle();
-    const s = sched as { starts_at: string | null; ends_at: string | null } | null;
-    const shift =
-      s && s.starts_at && s.ends_at ? { starts_at: s.starts_at, ends_at: s.ends_at } : null;
+    let shift: { starts_at: string; ends_at: string } | null = null;
+    try {
+      const { data: sched, error: schedErr } = await admin
+        .from("user_work_schedules")
+        .select("starts_at, ends_at")
+        .eq("user_id", session.user_id)
+        .eq("day_of_week", dow)
+        .maybeSingle();
+      if (!schedErr) {
+        const s = sched as { starts_at: string | null; ends_at: string | null } | null;
+        if (s && s.starts_at && s.ends_at) {
+          shift = { starts_at: s.starts_at, ends_at: s.ends_at };
+        }
+      }
+    } catch {
+      /* tabla no aplicada todavía */
+    }
 
     let canPunch = true;
     let reason: string | undefined;
@@ -206,7 +215,10 @@ export async function punchKindAction(
     const admin = createAdminClient() as any;
     const noGeo = input.geo_latitude == null || input.geo_longitude == null;
     const nowIso = new Date().toISOString();
-    const { error: insertError } = await admin.from("time_punches").insert({
+    // INSERT con todos los campos. Si la migración 20260503320000 (que añade
+    // needs_geo_review/accuracy_meters) aún no se ha aplicado, reintentar
+    // con el set mínimo de columnas que sí existen desde el inicio.
+    const fullPayload: Record<string, unknown> = {
       company_id: session.company_id,
       user_id: session.user_id,
       punch_kind: kind,
@@ -216,7 +228,28 @@ export async function punchKindAction(
       accuracy_meters: input.accuracy_meters,
       needs_geo_review: noGeo,
       is_manual: false,
-    });
+    };
+    let insertError = (await admin.from("time_punches").insert(fullPayload))
+      .error as { message?: string } | null;
+    if (
+      insertError &&
+      /column .* does not exist|needs_geo_review|accuracy_meters/i.test(
+        insertError.message ?? "",
+      )
+    ) {
+      console.warn("[punchKindAction] retry sin columnas nuevas:", insertError.message);
+      const minimalPayload: Record<string, unknown> = {
+        company_id: session.company_id,
+        user_id: session.user_id,
+        punch_kind: kind,
+        punched_at: nowIso,
+        geo_latitude: input.geo_latitude,
+        geo_longitude: input.geo_longitude,
+        is_manual: false,
+      };
+      insertError = (await admin.from("time_punches").insert(minimalPayload))
+        .error as { message?: string } | null;
+    }
     if (insertError) {
       console.error("[punchKindAction insert]", insertError);
       throw new Error(insertError.message ?? "Error al insertar fichaje");
