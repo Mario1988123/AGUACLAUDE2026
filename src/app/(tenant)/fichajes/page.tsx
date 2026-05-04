@@ -48,12 +48,18 @@ export default async function FichajesPage() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-  const balance = await getMyHourBalance(monthStart, monthEnd);
-  const absences = await listAbsences();
+  const yearStart = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+  const todayStr = now.toISOString().slice(0, 10);
+  const [balance, accumulated, absences] = await Promise.all([
+    getMyHourBalance(monthStart, monthEnd),
+    getMyHourBalance(yearStart, todayStr),
+    listAbsences(),
+  ]);
 
   const totalWorked = balance.reduce((s, d) => s + d.worked_minutes, 0);
   const totalExpected = balance.reduce((s, d) => s + d.expected_minutes, 0);
   const totalBalance = totalWorked - totalExpected;
+  const accumulatedBalance = accumulated.reduce((s, d) => s + d.balance_minutes, 0);
 
   return (
     <div className="space-y-6">
@@ -75,10 +81,10 @@ export default async function FichajesPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Trabajado</CardTitle>
+            <CardTitle className="text-sm">Trabajado (mes)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-extrabold">{fmtMin(totalWorked)}</div>
@@ -86,7 +92,7 @@ export default async function FichajesPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Esperado</CardTitle>
+            <CardTitle className="text-sm">Esperado (mes)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-extrabold text-muted-foreground">
@@ -96,7 +102,7 @@ export default async function FichajesPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Saldo</CardTitle>
+            <CardTitle className="text-sm">Saldo (mes)</CardTitle>
           </CardHeader>
           <CardContent>
             <div
@@ -106,6 +112,23 @@ export default async function FichajesPage() {
             >
               {fmtMin(totalBalance)}
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Acumulado año</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`text-3xl font-extrabold ${
+                accumulatedBalance >= 0 ? "text-emerald-600" : "text-red-600"
+              }`}
+            >
+              {fmtMin(accumulatedBalance)}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {accumulatedBalance >= 0 ? "Horas de más" : "Horas de menos"} desde 1 ene
+            </p>
           </CardContent>
         </Card>
       </div>

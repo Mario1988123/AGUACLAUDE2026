@@ -36,7 +36,11 @@ export function TimeClockWidget() {
   }, []);
 
   useEffect(() => {
-    if (!state || state.status !== "working" || !state.since) {
+    if (
+      !state ||
+      (state.status !== "working" && state.status !== "on_break") ||
+      !state.since
+    ) {
       setElapsed("");
       return;
     }
@@ -45,7 +49,9 @@ export function TimeClockWidget() {
       const h = Math.floor(ms / 3600000);
       const m = Math.floor((ms % 3600000) / 60000);
       const s = Math.floor((ms % 60000) / 1000);
-      setElapsed(`${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+      setElapsed(
+        `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`,
+      );
     };
     tick();
     const id = setInterval(tick, 1000);
@@ -136,11 +142,11 @@ export function TimeClockWidget() {
     return (
       <div className="hidden sm:flex items-center gap-1">
         <div
-          className="inline-flex h-10 items-center gap-2 rounded-l-xl border-y-2 border-l-2 border-emerald-500 bg-emerald-50 px-3 text-sm font-bold text-emerald-700"
+          className="inline-flex h-10 items-center gap-2 rounded-l-xl border-y-2 border-l-2 border-emerald-500 bg-emerald-50 px-3 text-sm font-bold text-emerald-700 min-w-[120px]"
           title={`Jornada en curso desde ${state.since ? new Date(state.since).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : ""}`}
         >
-          <Clock className="h-4 w-4" />
-          <span className="tabular-nums">{elapsed}</span>
+          <Clock className="h-4 w-4 shrink-0" />
+          <span className="tabular-nums whitespace-nowrap">{elapsed}</span>
         </div>
         <button
           type="button"
@@ -166,15 +172,15 @@ export function TimeClockWidget() {
     );
   }
 
-  // Estado: ON_BREAK → reanudar / terminar
+  // Estado: ON_BREAK → reanudar / terminar (con cronómetro de pausa)
   return (
     <div className="hidden sm:flex items-center gap-1">
       <div
-        className="inline-flex h-10 items-center gap-2 rounded-l-xl border-y-2 border-l-2 border-amber-500 bg-amber-50 px-3 text-sm font-bold text-amber-700"
-        title="En descanso"
+        className="inline-flex h-10 items-center gap-2 rounded-l-xl border-y-2 border-l-2 border-amber-500 bg-amber-50 px-3 text-sm font-bold text-amber-700 min-w-[120px]"
+        title={`En descanso desde ${state.since ? new Date(state.since).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : ""}`}
       >
-        <Pause className="h-4 w-4 fill-current" />
-        <span>En pausa</span>
+        <Pause className="h-4 w-4 fill-current shrink-0" />
+        <span className="tabular-nums whitespace-nowrap">{elapsed}</span>
       </div>
       <button
         type="button"
