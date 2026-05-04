@@ -155,7 +155,12 @@ export async function installFreeTrialAction(id: string) {
   const expires = new Date(now);
   expires.setDate(expires.getDate() + t.duration_days);
 
-  await supabase
+  // Admin client: la policy ft_update sólo permite UPDATE si status NOT IN
+  // (accepted, rejected, expired, removed). Si el cron auto-expiró la
+  // prueba ANTES de que el técnico marcara como instalada → silent fail.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("free_trials")
     .update({
       status: "installed",
@@ -163,10 +168,7 @@ export async function installFreeTrialAction(id: string) {
       expires_at: expires.toISOString(),
     })
     .eq("id", id);
-
-  // Decrement stock outbound_trial del almacén del instalador
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
+  if (r.error) throw new Error(r.error.message);
   const installerId = t.assigned_installer_user_id;
   let warehouseId: string | null = null;
   if (installerId) {
@@ -228,9 +230,11 @@ export async function installFreeTrialAction(id: string) {
 
 export async function rejectFreeTrialAction(id: string, reason: string) {
   const session = await requireSession();
+  // Admin client: la policy ft_update bloquea si ya está
+  // accepted/rejected/expired/removed.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("free_trials")
     .update({
       status: "rejected",
@@ -239,7 +243,8 @@ export async function rejectFreeTrialAction(id: string, reason: string) {
       rejected_reason: reason,
     })
     .eq("id", id);
-  await supabase.from("events").insert({
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "free_trial",
     subject_id: id,
@@ -259,10 +264,11 @@ export async function markReturnedAction(id: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  await supabase
+  const r = await admin
     .from("free_trials")
     .update({ status: "removed", removed_at: new Date().toISOString() })
     .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
 
   // Re-incorporar stock como 'used' al almacén main
   const { data: wh } = await admin

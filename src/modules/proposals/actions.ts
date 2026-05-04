@@ -11,7 +11,7 @@ import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/act
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 export async function listProposals(filters?: { status?: string }): Promise<ProposalListItem[]> {
-  await requireSession();
+  const session = await requireSession();
   const supabase = await createClient();
   let query = supabase
     .from("proposals")
@@ -21,6 +21,19 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+  // Filtro de scope: nivel 3 (sales_rep / telemarketer) sólo ve sus
+  // propias propuestas. Niveles 1/2 (admin / directors) ven todas las
+  // de la empresa. La RLS también lo aplica pero filtrar arriba evita
+  // sorpresas y queries inútiles.
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director") ||
+    session.roles.includes("technical_director");
+  if (!isUpper) {
+    query = query.eq("created_by", session.user_id);
+  }
   if (filters?.status) query = query.eq("status", filters.status);
   const { data, error } = await query;
   if (error) throw error;

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { notifyByRoles } from "@/modules/notifications/notifier";
+import { completeInstallation } from "./actions";
 
 /** Distancia en metros (Haversine) entre dos coordenadas. */
 function haversineMeters(
@@ -301,9 +302,11 @@ export async function setInstallationInitialStateAction(input: {
 }
 
 /**
- * Cierra la instalación. Calcula duration_seconds, guarda encuesta de
- * satisfacción y anota timestamp final. La satisfacción es anónima para
- * el instalador (no se le muestra en su propio listado).
+ * Cierra la instalación desde el wizard. Delega en completeInstallation()
+ * (que ya tiene TODA la lógica side-effect: decrement stock, crear
+ * customer_equipment, activar contrato, programar mantenimientos, otorgar
+ * puntos, notificar) y AÑADE la encuesta de satisfacción anónima y
+ * comentario que vienen del wizard nuevo.
  */
 export async function finishInstallationAction(input: {
   installation_id: string;
@@ -311,50 +314,27 @@ export async function finishInstallationAction(input: {
   satisfaction_comment?: string | null;
   notes?: string | null;
 }): Promise<void> {
-  const session = await requireSession();
-  if (!session.company_id) throw new Error("Sin empresa");
+  await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { data: inst } = await admin
-    .from("installations")
-    .select("id, started_at, contract_id")
-    .eq("id", input.installation_id)
-    .single();
-  const i = inst as { id: string; started_at: string | null; contract_id: string | null } | null;
-  if (!i) throw new Error("Instalación no encontrada");
-
-  const now = new Date();
-  const dur =
-    i.started_at != null
-      ? Math.max(
-          0,
-          Math.round((now.getTime() - new Date(i.started_at).getTime()) / 1000),
-        )
-      : null;
-
+  // Persistimos satisfacción ANTES porque completeInstallation no la
+  // conoce (es campo del wizard nuevo, schema 20260504150000).
   await admin
     .from("installations")
     .update({
-      status: "completed",
-      completed_at: now.toISOString(),
-      duration_seconds: dur,
       satisfaction_score: input.satisfaction_score,
       satisfaction_comment: input.satisfaction_comment ?? null,
-      notes: input.notes ?? null,
     })
     .eq("id", input.installation_id);
 
-  await admin.from("events").insert({
-    company_id: session.company_id,
-    subject_type: "installation",
-    subject_id: input.installation_id,
-    kind: "installation.completed",
-    payload: {
-      duration_seconds: dur,
-      satisfaction: input.satisfaction_score,
-    },
-    actor_user_id: session.user_id,
+  // Delegamos en la lógica completa (idempotente: si ya estaba completed
+  // no se ejecuta dos veces porque service_start_date ya está set).
+  await completeInstallation({
+    id: input.installation_id,
+    notes: input.notes ?? null,
+    geo_lat: null,
+    geo_lng: null,
   });
 
   revalidatePath(`/instalaciones/${input.installation_id}`);

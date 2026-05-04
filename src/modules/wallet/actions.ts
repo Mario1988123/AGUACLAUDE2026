@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { walletEntryCreateSchema } from "./schemas";
 import { notifyPaymentPendingValidation } from "@/modules/notifications/notifier";
@@ -139,9 +140,27 @@ export async function validateWalletEntryAction(id: string) {
   ) {
     throw new Error("Solo admin/director puede validar");
   }
+  // Admin client + verificación de count: la policy we_update filtra por
+  // scope (admin / wallet:approve:dept / collected_by own). Si el director
+  // no es del scope correcto, el UPDATE silenciaría.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  const { error } = await supabase
+  const admin = createAdminClient() as any;
+  const { data: entry } = await admin
+    .from("wallet_entries")
+    .select("id, contract_id, collected_by_user_id, concept, amount_cents")
+    .eq("id", id)
+    .maybeSingle();
+  const e = entry as
+    | {
+        id: string;
+        contract_id: string | null;
+        collected_by_user_id: string | null;
+        concept: string;
+        amount_cents: number;
+      }
+    | null;
+  if (!e) throw new Error("Entrada no encontrada");
+  const r = await admin
     .from("wallet_entries")
     .update({
       status: "validated",
@@ -149,7 +168,33 @@ export async function validateWalletEntryAction(id: string) {
       validated_by_user_id: session.user_id,
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (r.error) throw new Error(r.error.message);
+  // Event timeline + notify al cobrador
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "wallet_entry",
+    subject_id: id,
+    kind: "wallet.payment_validated",
+    payload: { amount_cents: e.amount_cents },
+    actor_user_id: session.user_id,
+  });
+  if (e.collected_by_user_id && e.collected_by_user_id !== session.user_id) {
+    try {
+      await admin.from("notifications").insert({
+        company_id: session.company_id,
+        recipient_user_id: e.collected_by_user_id,
+        kind: "wallet.payment_validated",
+        severity: "success",
+        title: "Cobro validado",
+        body: e.concept,
+        subject_type: "wallet_entry",
+        subject_id: id,
+        action_url: "/wallet",
+      });
+    } catch {
+      /* no-op */
+    }
+  }
   revalidatePath("/wallet");
 }
 
@@ -163,8 +208,22 @@ export async function rejectWalletEntryAction(id: string, reason: string) {
     throw new Error("Solo admin/director puede rechazar");
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  const { error } = await supabase
+  const admin = createAdminClient() as any;
+  const { data: entry } = await admin
+    .from("wallet_entries")
+    .select("id, collected_by_user_id, concept, amount_cents")
+    .eq("id", id)
+    .maybeSingle();
+  const e = entry as
+    | {
+        id: string;
+        collected_by_user_id: string | null;
+        concept: string;
+        amount_cents: number;
+      }
+    | null;
+  if (!e) throw new Error("Entrada no encontrada");
+  const r = await admin
     .from("wallet_entries")
     .update({
       status: "rejected",
@@ -173,6 +232,31 @@ export async function rejectWalletEntryAction(id: string, reason: string) {
       validated_at: new Date().toISOString(),
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "wallet_entry",
+    subject_id: id,
+    kind: "wallet.payment_rejected",
+    payload: { reason, amount_cents: e.amount_cents },
+    actor_user_id: session.user_id,
+  });
+  if (e.collected_by_user_id && e.collected_by_user_id !== session.user_id) {
+    try {
+      await admin.from("notifications").insert({
+        company_id: session.company_id,
+        recipient_user_id: e.collected_by_user_id,
+        kind: "wallet.payment_rejected",
+        severity: "warning",
+        title: "Cobro rechazado",
+        body: `${e.concept}: ${reason}`,
+        subject_type: "wallet_entry",
+        subject_id: id,
+        action_url: "/wallet",
+      });
+    } catch {
+      /* no-op */
+    }
+  }
   revalidatePath("/wallet");
 }

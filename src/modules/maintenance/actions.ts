@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
@@ -52,13 +53,17 @@ export async function getMaintenance(id: string) {
 
 export async function startMaintenanceAction(id: string) {
   const session = await requireSession();
+  // Admin client: si el técnico_user_id de este job no coincide con el
+  // que está pulsando "Iniciar" (porque fue reasignado), la policy
+  // mant_update silenciaría el UPDATE.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("maintenance_jobs")
     .update({ status: "in_progress", started_at: new Date().toISOString() })
     .eq("id", id);
-  await supabase.from("events").insert({
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "maintenance",
     subject_id: id,
@@ -187,7 +192,10 @@ export async function completeMaintenanceAction(input: unknown) {
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
     : null;
 
-  await supabase
+  // Admin client por mismo motivo que startMaintenanceAction
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const updR = await admin
     .from("maintenance_jobs")
     .update({
       status: "completed",
@@ -196,6 +204,7 @@ export async function completeMaintenanceAction(input: unknown) {
       notes: parsed.notes ?? null,
     })
     .eq("id", parsed.id);
+  if (updR.error) throw new Error(updR.error.message);
 
   // Insertar items reemplazados + descontar stock del almacén del técnico
   if (parsed.replaced_items.length > 0) {

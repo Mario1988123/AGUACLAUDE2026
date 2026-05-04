@@ -32,14 +32,17 @@ export async function reassignInstallationAction(
     session.is_superadmin || session.roles.includes("company_admin");
   if (!isAdmin) throw new Error("Solo el admin de empresa puede reasignar");
 
+  // Admin client + verificación. Antes el UPDATE silenciaba si la policy
+  // inst_update bloqueaba por scope.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("installations")
     .update({ installer_user_id: installerUserId })
     .eq("id", installationId);
+  if (r.error) throw new Error(r.error.message);
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "installation",
     subject_id: installationId,
@@ -47,6 +50,26 @@ export async function reassignInstallationAction(
     payload: { to_user_id: installerUserId },
     actor_user_id: session.user_id,
   });
+
+  // Notificar al nuevo instalador
+  if (installerUserId) {
+    try {
+      const { notify } = await import("@/modules/notifications/notifier");
+      await notify({
+        company_id: session.company_id,
+        recipient_user_id: installerUserId,
+        kind: "installation.assigned",
+        severity: "info",
+        title: "Instalación asignada",
+        body: "Te han asignado una instalación. Revisa /instalaciones.",
+        subject_type: "installation",
+        subject_id: installationId,
+        action_url: `/instalaciones/${installationId}`,
+      });
+    } catch {
+      /* no-op */
+    }
+  }
 
   revalidatePath(`/instalaciones/${installationId}`);
   revalidatePath("/instalaciones");

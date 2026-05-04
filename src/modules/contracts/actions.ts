@@ -539,9 +539,16 @@ export async function createContractFromProposal(proposalId: string) {
 
 export async function markContractSigned(id: string) {
   const session = await requireSession();
+  // Admin client: la policy contracts_update_by_scope sólo permite UPDATE
+  // si status IN (draft, pending_data, pending_signature). Si por race
+  // condition o policy de scope el comercial no tiene permiso, el UPDATE
+  // silenciaría y NO se firmaría el contrato. Mismo patrón que ya hemos
+  // arreglado en otras acciones.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  await supabase
+  const r = await admin
     .from("contracts")
     .update({
       status: "signed",
@@ -549,6 +556,7 @@ export async function markContractSigned(id: string) {
       signed_by_user_id: session.user_id,
     })
     .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
 
   // Cuando se firma el contrato, el lead origen (si existía) ya cumplió
   // su ciclo: lo soft-deleteamos para que desaparezca de /leads.
@@ -694,6 +702,26 @@ export async function reassignContractAction(
     payload: { to_user_id: userId },
     actor_user_id: session.user_id,
   });
+
+  // Notificar al nuevo asignado
+  if (userId && session.company_id) {
+    try {
+      const { notify } = await import("@/modules/notifications/notifier");
+      await notify({
+        company_id: session.company_id,
+        recipient_user_id: userId,
+        kind: "contract.reassigned",
+        severity: "info",
+        title: "Contrato asignado",
+        body: `Te han asignado el contrato ${contractId.slice(0, 8)}`,
+        subject_type: "contract",
+        subject_id: contractId,
+        action_url: `/contratos/${contractId}`,
+      });
+    } catch {
+      /* no-op */
+    }
+  }
 
   revalidatePath(`/contratos/${contractId}`);
   revalidatePath("/contratos");

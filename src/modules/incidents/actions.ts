@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { notifyIncidentCreated } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
@@ -98,9 +99,16 @@ export async function getIncident(id: string) {
 
 export async function assignIncidentAction(id: string, userId: string) {
   const session = await requireSession();
+  // Admin client: la policy de incidents filtra por scope. Si el rol del
+  // que asigna no incluye el scope, UPDATE silencia.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const { data: incPrev } = await admin
+    .from("incidents")
+    .select("title, company_id")
+    .eq("id", id)
+    .maybeSingle();
+  const r = await admin
     .from("incidents")
     .update({
       assigned_user_id: userId || null,
@@ -108,22 +116,49 @@ export async function assignIncidentAction(id: string, userId: string) {
       status: userId ? "assigned" : "open",
     })
     .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "incident",
+    subject_id: id,
+    kind: "incident.assigned",
+    payload: { to_user_id: userId || null },
+    actor_user_id: session.user_id,
+  });
+  // Notify al nuevo asignado
+  if (userId && session.company_id) {
+    try {
+      await admin.from("notifications").insert({
+        company_id: session.company_id,
+        recipient_user_id: userId,
+        kind: "incident.assigned",
+        severity: "warning",
+        title: "Incidencia asignada",
+        body: (incPrev as { title?: string } | null)?.title ?? "Nueva incidencia",
+        subject_type: "incident",
+        subject_id: id,
+        action_url: `/incidencias/${id}`,
+      });
+    } catch {
+      /* no-op */
+    }
+  }
   revalidatePath(`/incidencias`);
-  void session;
+  revalidatePath(`/incidencias/${id}`);
 }
 
 export async function resolveIncidentAction(id: string, notes: string) {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
 
-  const { data: prev } = await supabase
+  const { data: prev } = await admin
     .from("incidents")
-    .select("assigned_user_id, company_id")
+    .select("assigned_user_id, company_id, title")
     .eq("id", id)
     .single();
 
-  await supabase
+  const r = await admin
     .from("incidents")
     .update({
       status: "resolved",
@@ -132,6 +167,15 @@ export async function resolveIncidentAction(id: string, notes: string) {
       resolution_notes: notes,
     })
     .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "incident",
+    subject_id: id,
+    kind: "incident.resolved",
+    payload: { notes },
+    actor_user_id: session.user_id,
+  });
 
   // Puntos al asignado (o resolutor si no había asignado)
   if (session.company_id) {
