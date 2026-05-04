@@ -891,27 +891,41 @@ export async function saveInstallPreferenceAction(
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const fullPayload: Record<string, unknown> = {
-    preferred_install_time_slot: input.slot,
-    preferred_install_time_notes: input.notes,
-    preferred_install_days_of_week: input.days_of_week,
-    preferred_install_dates: input.dates,
-  };
-  let r = await admin.from("contracts").update(fullPayload).eq("id", contractId);
-  // Retry quitando columnas que aún no existen en BD
-  if (
-    r.error &&
-    /column .* does not exist|preferred_install_days_of_week|preferred_install_dates/i.test(
-      r.error.message ?? "",
-    )
-  ) {
-    const minimal: Record<string, unknown> = {
-      preferred_install_time_slot: input.slot,
-      preferred_install_time_notes: input.notes,
-    };
-    r = await admin.from("contracts").update(minimal).eq("id", contractId);
+
+  // Estrategia ultra-defensiva: cada columna de migración reciente se
+  // actualiza por separado. Si una columna no existe en BD, esa UPDATE
+  // falla sin afectar al resto. Así el flujo nunca se rompe aunque sólo
+  // estén aplicadas algunas migraciones.
+  const updates: Array<[string, unknown]> = [
+    ["preferred_install_time_slot", input.slot],
+    ["preferred_install_time_notes", input.notes],
+    ["preferred_install_days_of_week", input.days_of_week],
+    ["preferred_install_dates", input.dates],
+  ];
+
+  let savedAny = false;
+  let lastNonColumnError: string | null = null;
+  for (const [col, val] of updates) {
+    const r = await admin.from("contracts").update({ [col]: val }).eq("id", contractId);
+    const errMsg = (r.error as { message?: string } | null)?.message ?? null;
+    if (!errMsg) {
+      savedAny = true;
+      continue;
+    }
+    // Ignoramos errores de "columna no existe" — la migración no está aplicada
+    if (/column .* does not exist|schema cache/i.test(errMsg)) continue;
+    lastNonColumnError = errMsg;
   }
-  if (r.error) throw new Error(r.error.message);
+
+  if (!savedAny && lastNonColumnError) {
+    throw new Error(lastNonColumnError);
+  }
+  if (!savedAny) {
+    throw new Error(
+      "No se pudo guardar la preferencia — aplica las migraciones recientes en Supabase",
+    );
+  }
+
   revalidatePath(`/contratos/${contractId}`);
 }
 
