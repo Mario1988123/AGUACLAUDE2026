@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { proposalCreateSchema } from "./schemas";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
@@ -93,7 +94,38 @@ export async function getProposal(id: string): Promise<ProposalDetail> {
     .is("deleted_at", null)
     .single();
   if (error) throw error;
-  const p = data as ProposalDetail & { customer_or_lead_name?: string };
+  const p = data as ProposalDetail & {
+    customer_or_lead_name?: string;
+    company_id?: string;
+  };
+  // Backfill: si no tiene reference_code, generarlo ahora (one-shot)
+  if (!p.reference_code && p.company_id) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const year = new Date(p.created_at).getFullYear();
+      const yearPrefix = `P-${year}-`;
+      const { data: last } = await admin
+        .from("proposals")
+        .select("reference_code")
+        .eq("company_id", p.company_id)
+        .like("reference_code", `${yearPrefix}%`)
+        .order("reference_code", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let n = 1;
+      const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
+      if (lastCode) {
+        const m = lastCode.match(/-(\d+)$/);
+        if (m) n = parseInt(m[1]!, 10) + 1;
+      }
+      const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
+      await admin.from("proposals").update({ reference_code: code }).eq("id", id);
+      p.reference_code = code;
+    } catch {
+      /* fail-soft */
+    }
+  }
   // Resolver nombre
   let name = "—";
   if (p.customer_id) {
@@ -116,11 +148,58 @@ export async function getProposal(id: string): Promise<ProposalDetail> {
           : `${cc.first_name ?? ""} ${cc.last_name ?? ""}`.trim() || "Sin nombre";
     }
   } else if (p.lead_id) {
-    const { data: l } = await supabase
+    // Self-healing: si el lead ya fue convertido a cliente, mover esta
+    // propuesta al cliente (la policy proposals_update_draft bloquea esto
+    // si el status no es draft, así que usamos admin client).
+    const { data: leadConv } = await supabase
       .from("leads")
-      .select("party_kind, legal_name, trade_name, first_name, last_name")
+      .select("converted_to_customer_id, party_kind, legal_name, trade_name, first_name, last_name")
       .eq("id", p.lead_id)
       .single();
+    const lc = leadConv as
+      | {
+          converted_to_customer_id: string | null;
+          party_kind: "individual" | "company";
+          legal_name: string | null;
+          trade_name: string | null;
+          first_name: string | null;
+          last_name: string | null;
+        }
+      | null;
+    if (lc?.converted_to_customer_id) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const admin = createAdminClient() as any;
+        await admin
+          .from("proposals")
+          .update({ customer_id: lc.converted_to_customer_id, lead_id: null })
+          .eq("id", id);
+        p.customer_id = lc.converted_to_customer_id;
+        p.lead_id = null;
+        const { data: c } = await supabase
+          .from("customers")
+          .select("party_kind, legal_name, trade_name, first_name, last_name")
+          .eq("id", lc.converted_to_customer_id)
+          .single();
+        if (c) {
+          const cc = c as {
+            party_kind: "individual" | "company";
+            legal_name: string | null;
+            trade_name: string | null;
+            first_name: string | null;
+            last_name: string | null;
+          };
+          name =
+            cc.party_kind === "company"
+              ? cc.trade_name || cc.legal_name || "Sin nombre"
+              : `${cc.first_name ?? ""} ${cc.last_name ?? ""}`.trim() || "Sin nombre";
+        }
+        return { ...p, customer_or_lead_name: name };
+      } catch {
+        /* fall through to lead label */
+      }
+    }
+    const l = lc;
     if (l) {
       const ll = l as {
         party_kind: "individual" | "company";
@@ -210,10 +289,33 @@ export async function createProposalAction(input: unknown) {
   const isRenting = parsed.chosen_plan_type === "renting";
   const isRental = parsed.chosen_plan_type === "rental";
 
+  // Generar reference_code "P-YYYY-NNNN" único por empresa+año.
+  // Lo hacemos en código porque la migración no creó trigger todavía.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supaAny = supabase as any;
+  const year = new Date().getFullYear();
+  const yearPrefix = `P-${year}-`;
+  const { data: lastCoded } = await supaAny
+    .from("proposals")
+    .select("reference_code")
+    .eq("company_id", session.company_id)
+    .like("reference_code", `${yearPrefix}%`)
+    .order("reference_code", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let nextNum = 1;
+  const last = (lastCoded as { reference_code: string | null } | null)?.reference_code;
+  if (last) {
+    const m = last.match(/-(\d+)$/);
+    if (m) nextNum = parseInt(m[1]!, 10) + 1;
+  }
+  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+
   const insertPayload: Record<string, unknown> = {
     company_id: session.company_id,
     customer_id: parsed.customer_id || null,
     lead_id: parsed.lead_id || null,
+    reference_code: referenceCode,
     status: requiresApproval ? "pending_approval" : "draft",
     validity_until: parsed.validity_until || null,
     chosen_plan_type: parsed.chosen_plan_type,
@@ -605,9 +707,14 @@ export async function convertAcceptedProposalToCustomerAction(
       .maybeSingle();
     const existing = (lead as { converted_to_customer_id: string | null } | null)
       ?.converted_to_customer_id;
+    // Admin client: la policy proposals_update_draft bloquea updates a
+    // propuestas en estado accepted, así que el move lead→customer falla
+    // silenciosamente con el cliente de usuario.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
     if (existing) {
       customerId = existing;
-      await supabase
+      await admin
         .from("proposals")
         .update({ customer_id: customerId, lead_id: null })
         .eq("id", proposalId);
@@ -615,7 +722,7 @@ export async function convertAcceptedProposalToCustomerAction(
       customerId = await convertLeadToCustomerAction(p.lead_id);
       // convertLeadToCustomerAction ya mueve TODAS las propuestas del lead;
       // confirmamos que la nuestra quedó vinculada
-      await supabase
+      await admin
         .from("proposals")
         .update({ customer_id: customerId, lead_id: null })
         .eq("id", proposalId);

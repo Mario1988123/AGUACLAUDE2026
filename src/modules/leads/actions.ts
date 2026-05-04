@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { leadCreateSchema } from "./schemas";
 import type { LeadDetail, LeadListItem, LeadStatus } from "./types";
@@ -314,9 +315,12 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
   };
   // Si ya estaba convertido, devolver el customer_id existente sin tirar
   if (l.converted_to_customer_id) {
-    // Asegurar que las propuestas del lead apuntan al cliente (por si en
-    // versiones anteriores quedaron con lead_id huérfano)
-    await supabase
+    // Asegurar que las propuestas del lead apuntan al cliente. Usamos admin
+    // porque la policy proposals_update_draft sólo permite updates si
+    // status='draft' — y aquí pueden estar en accepted/sent.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    await admin
       .from("proposals")
       .update({ customer_id: l.converted_to_customer_id, lead_id: null })
       .eq("lead_id", l.id);
@@ -346,8 +350,12 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
   if (e2) throw new Error(e2.message);
   const customerId = (created as { id: string }).id;
 
-  // Mover TODAS las propuestas del lead al nuevo cliente
-  await supabase
+  // Mover TODAS las propuestas del lead al nuevo cliente. Admin client
+  // porque la policy proposals_update_draft bloquea updates a propuestas
+  // que ya estén en accepted/sent.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin
     .from("proposals")
     .update({ customer_id: customerId, lead_id: null })
     .eq("lead_id", l.id);
