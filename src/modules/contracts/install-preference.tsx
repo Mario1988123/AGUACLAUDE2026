@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, CalendarClock, Save, Calendar } from "lucide-react";
+import { Sun, Moon, CalendarClock, Save, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { notify } from "@/shared/hooks/use-toast";
@@ -27,25 +27,136 @@ const DOWS: Array<{ value: number; short: string; full: string }> = [
   { value: 7, short: "D", full: "Domingo" },
 ];
 
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+function toISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function MultiDateCalendar({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+  disabled?: boolean;
+}) {
+  const today = new Date();
+  const [cursor, setCursor] = useState<{ y: number; m: number }>({
+    y: today.getFullYear(),
+    m: today.getMonth(),
+  });
+  const first = new Date(cursor.y, cursor.m, 1);
+  const last = new Date(cursor.y, cursor.m + 1, 0);
+  // Lunes=0
+  const startDow = (first.getDay() + 6) % 7;
+  const cells: Array<Date | null> = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= last.getDate(); d++) cells.push(new Date(cursor.y, cursor.m, d));
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const todayIso = toISO(today);
+
+  function toggle(d: Date) {
+    if (disabled) return;
+    const iso = toISO(d);
+    if (value.includes(iso)) onChange(value.filter((x) => x !== iso));
+    else onChange([...value, iso].sort());
+  }
+
+  return (
+    <div className="rounded-xl border-2 border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() =>
+            setCursor((c) => ({
+              y: c.m === 0 ? c.y - 1 : c.y,
+              m: c.m === 0 ? 11 : c.m - 1,
+            }))
+          }
+          disabled={disabled}
+          className="rounded-lg p-1 hover:bg-muted disabled:opacity-40"
+          aria-label="Mes anterior"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="text-sm font-bold">
+          {MONTH_NAMES[cursor.m]} {cursor.y}
+        </span>
+        <button
+          type="button"
+          onClick={() =>
+            setCursor((c) => ({
+              y: c.m === 11 ? c.y + 1 : c.y,
+              m: c.m === 11 ? 0 : c.m + 1,
+            }))
+          }
+          disabled={disabled}
+          className="rounded-lg p-1 hover:bg-muted disabled:opacity-40"
+          aria-label="Mes siguiente"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 text-center text-xs">
+        {DOWS.map((d) => (
+          <span key={d.value} className="py-1 font-bold text-muted-foreground">
+            {d.short}
+          </span>
+        ))}
+        {cells.map((d, i) => {
+          if (!d) return <span key={i} />;
+          const iso = toISO(d);
+          const selected = value.includes(iso);
+          const isToday = iso === todayIso;
+          const isPast = iso < todayIso;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => toggle(d)}
+              disabled={disabled}
+              className={`h-9 rounded-lg text-sm transition ${
+                selected
+                  ? "bg-primary font-bold text-primary-foreground"
+                  : isToday
+                    ? "border-2 border-primary"
+                    : "hover:bg-muted"
+              } ${isPast && !selected ? "text-muted-foreground/50" : ""} disabled:opacity-50`}
+            >
+              {d.getDate()}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function InstallPreference({
   contractId,
   initialSlot,
   initialNotes,
   initialDaysOfWeek,
-  initialDayOfMonth,
+  initialDates,
   canEdit,
 }: {
   contractId: string;
   initialSlot: Slot | null;
   initialNotes: string | null;
   initialDaysOfWeek: number[] | null;
-  initialDayOfMonth: number | null;
+  initialDates: string[] | null;
   canEdit: boolean;
 }) {
   const [slot, setSlot] = useState<Slot | null>(initialSlot);
   const [notes, setNotes] = useState(initialNotes ?? "");
   const [dows, setDows] = useState<number[]>(initialDaysOfWeek ?? []);
-  const [dom, setDom] = useState<string>(initialDayOfMonth ? String(initialDayOfMonth) : "");
+  const [dates, setDates] = useState<string[]>(initialDates ?? []);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -55,22 +166,13 @@ export function InstallPreference({
   }
 
   function save() {
-    if (!slot && dows.length === 0 && !dom) {
-      notify.warning("Indica al menos una preferencia (franja, día semana o día del mes)");
+    if (!slot && dows.length === 0 && dates.length === 0 && !notes.trim()) {
+      notify.warning("Indica al menos una preferencia");
       return;
     }
     if (slot === "custom" && !notes.trim()) {
       notify.warning("Indica el horario preferido en el campo de texto");
       return;
-    }
-    let domNum: number | null = null;
-    if (dom) {
-      const n = parseInt(dom, 10);
-      if (isNaN(n) || n < 1 || n > 31) {
-        notify.warning("El día del mes debe estar entre 1 y 31");
-        return;
-      }
-      domNum = n;
     }
     startTransition(async () => {
       try {
@@ -78,7 +180,7 @@ export function InstallPreference({
           slot,
           notes: notes || null,
           days_of_week: dows.length > 0 ? dows : null,
-          day_of_month: domNum,
+          dates: dates.length > 0 ? dates : null,
         });
         notify.success("Preferencia guardada");
         router.refresh();
@@ -147,25 +249,42 @@ export function InstallPreference({
         </div>
       </div>
 
-      {/* Día del mes */}
+      {/* Fechas concretas (calendario) */}
       <div className="space-y-2">
         <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Día concreto del mes (opcional)
+          Fechas concretas (opcional · informativo)
         </p>
-        <div className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <Input
-            type="number"
-            min={1}
-            max={31}
-            value={dom}
-            onChange={(e) => setDom(e.target.value)}
-            disabled={!canEdit}
-            placeholder="Ej. 15"
-            className="w-24"
-          />
-          <span className="text-xs text-muted-foreground">de cada mes</span>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Pulsa los días que prefiere el cliente. Pueden ser uno o varios. Solo es
+          informativo para que el técnico tenga referencia al agendar.
+        </p>
+        <MultiDateCalendar value={dates} onChange={setDates} disabled={!canEdit} />
+        {dates.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {dates.map((d) => (
+              <span
+                key={d}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary"
+              >
+                {new Date(d).toLocaleDateString("es-ES", {
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                })}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setDates((c) => c.filter((x) => x !== d))}
+                    className="hover:opacity-70"
+                    aria-label="Quitar fecha"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Notas */}

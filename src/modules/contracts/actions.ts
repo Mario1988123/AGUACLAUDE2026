@@ -885,7 +885,7 @@ export async function saveInstallPreferenceAction(
     slot: "morning" | "afternoon" | "any" | "custom" | null;
     notes: string | null;
     days_of_week: number[] | null;
-    day_of_month: number | null;
+    dates: string[] | null;
   },
 ): Promise<void> {
   await requireSession();
@@ -895,23 +895,21 @@ export async function saveInstallPreferenceAction(
     preferred_install_time_slot: input.slot,
     preferred_install_time_notes: input.notes,
     preferred_install_days_of_week: input.days_of_week,
-    preferred_install_day_of_month: input.day_of_month,
+    preferred_install_dates: input.dates,
   };
   let r = await admin.from("contracts").update(fullPayload).eq("id", contractId);
-  // Retry sin columnas nuevas si la migración 20260504110000 no está aplicada
+  // Retry quitando columnas que aún no existen en BD
   if (
     r.error &&
-    /column .* does not exist|preferred_install_days_of_week|preferred_install_day_of_month/i.test(
+    /column .* does not exist|preferred_install_days_of_week|preferred_install_dates/i.test(
       r.error.message ?? "",
     )
   ) {
-    r = await admin
-      .from("contracts")
-      .update({
-        preferred_install_time_slot: input.slot,
-        preferred_install_time_notes: input.notes,
-      })
-      .eq("id", contractId);
+    const minimal: Record<string, unknown> = {
+      preferred_install_time_slot: input.slot,
+      preferred_install_time_notes: input.notes,
+    };
+    r = await admin.from("contracts").update(minimal).eq("id", contractId);
   }
   if (r.error) throw new Error(r.error.message);
   revalidatePath(`/contratos/${contractId}`);

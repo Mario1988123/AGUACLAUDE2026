@@ -32,7 +32,85 @@ export const EVENT_LABEL: Record<string, string> = {
   "customer.merged": "Clientes fusionados",
   "customer.purged": "Cliente borrado definitivamente",
   "customer.anonymized": "Cliente anonimizado (RGPD)",
+  "proposal.approved": "Propuesta validada",
+  "proposal.approval_rejected": "Aprobación rechazada",
+  "proposal.superseded": "Propuesta sustituida",
+  "contract_payment.deferred": "Cobro aplazado a la instalación",
+  "contract_payment.edited": "Cobro editado",
+  "contract.signature_added": "Firma añadida",
+  "contract.install_pref_updated": "Preferencia de instalación actualizada",
+  "free_trial.created": "Prueba gratuita creada",
+  "free_trial.completed": "Prueba gratuita completada",
+  "lead.dedupe_warning": "Posible duplicado",
+  "lead.assigned": "Lead asignado",
+  "user.created": "Usuario creado",
+  "user.role_changed": "Rol cambiado",
+  "incident.commented": "Comentario en incidencia",
+  "wallet.settled": "Liquidación wallet",
+  "wallet.payment_validated": "Pago validado",
+  "wallet.payment_rejected": "Pago rechazado",
 };
+
+/**
+ * Devuelve un label en español para un kind no listado, intentando traducir
+ * tokens comunes (created, updated, deleted...) y formateando bonito.
+ */
+function fallbackLabel(kind: string): string {
+  const TOKENS: Record<string, string> = {
+    created: "creado",
+    updated: "actualizado",
+    deleted: "eliminado",
+    accepted: "aceptado",
+    rejected: "rechazado",
+    completed: "completado",
+    started: "iniciado",
+    cancelled: "cancelado",
+    sent: "enviado",
+    signed: "firmado",
+    approved: "aprobado",
+    activated: "activado",
+    reassigned: "reasignado",
+    converted: "convertido",
+    paid: "cobrado",
+    recorded: "registrado",
+    scheduled: "programado",
+    edited: "editado",
+    deferred: "aplazado",
+    validated: "validado",
+    settled: "liquidado",
+    merged: "fusionado",
+    anonymized: "anonimizado",
+    purged: "borrado",
+    expired: "caducado",
+    contacted: "contactado",
+    resolved: "resuelto",
+    commented: "comentado",
+    tampered: "modificado",
+    superseded: "sustituido",
+  };
+  const SUBJECTS: Record<string, string> = {
+    lead: "Lead",
+    customer: "Cliente",
+    proposal: "Propuesta",
+    contract: "Contrato",
+    contract_payment: "Cobro",
+    installation: "Instalación",
+    maintenance: "Mantenimiento",
+    incident: "Incidencia",
+    wallet: "Wallet",
+    invoice: "Factura",
+    product: "Producto",
+    user: "Usuario",
+    free_trial: "Prueba gratuita",
+  };
+  const [subj, ...verbParts] = kind.split(".");
+  const verbKey = verbParts.join("_");
+  const subject = subj ? SUBJECTS[subj] ?? subj : kind;
+  if (verbKey && TOKENS[verbKey]) return `${subject} ${TOKENS[verbKey]}`;
+  // Como último recurso devolvemos el subject + verbo bonito
+  if (verbKey) return `${subject} · ${verbKey.replace(/_/g, " ")}`;
+  return kind;
+}
 
 export const SUBJECT_TYPE_LABEL: Record<string, string> = {
   lead: "Lead",
@@ -74,5 +152,5 @@ export function subjectLink(subject_type: string, subject_id: string): string | 
 }
 
 export function eventLabel(kind: string): string {
-  return EVENT_LABEL[kind] ?? kind;
+  return EVENT_LABEL[kind] ?? fallbackLabel(kind);
 }

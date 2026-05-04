@@ -26,6 +26,7 @@ import { SignaturesCard } from "@/modules/contracts/signature-pad";
 import { InstallPreference } from "@/modules/contracts/install-preference";
 import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { ContractPreviewButton } from "@/modules/contracts/preview-modal-button";
+import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -144,6 +145,55 @@ export default async function ContractDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          <ContractCompleteWizard
+            contractId={contract.id}
+            payments={payments.map((p) => ({
+              id: p.id,
+              concept: p.concept,
+              amount_cents: p.amount_cents,
+              method: p.method,
+              moment: p.moment,
+              status: p.status,
+            }))}
+            signatures={signatures}
+            initialPreference={{
+              slot: c.preferred_install_time_slot ?? null,
+              notes: c.preferred_install_time_notes ?? null,
+              days_of_week: c.preferred_install_days_of_week ?? null,
+              dates: c.preferred_install_dates ?? null,
+            }}
+            defaultRepresentativeName={session.full_name ?? session.email ?? "Representante"}
+            defaultCustomerName={customerName}
+            defaultCustomerTaxId={customerSnap.tax_id ?? null}
+            canEdit={canEditClauses || ["draft", "pending_data", "pending_signature"].includes(contract.status)}
+            preview={{
+              contractRef: contract.reference_code ?? "(sin código)",
+              customerName,
+              customerTaxId: customerSnap.tax_id ?? null,
+              planLabel: PLAN_TYPE_LABEL[contract.plan_type] ?? contract.plan_type,
+              durationMonths: contract.duration_months,
+              totalCash: contract.total_cash_cents,
+              monthly: contract.monthly_cents,
+              items: items.map((it) => ({
+                product_name_snapshot: it.product_name_snapshot,
+                quantity: it.quantity,
+                unit_price_cents: it.unit_price_cents,
+              })),
+              payments: payments.map((p) => ({
+                id: p.id,
+                concept: p.concept,
+                amount_cents: p.amount_cents,
+                method: p.method,
+                moment: p.moment,
+                status: p.status,
+              })),
+              clauses,
+              signatures,
+              companyIban: fiscal?.fiscal_iban ?? null,
+              companyName: fiscal?.fiscal_legal_name ?? null,
+              preferredSlotLabel: null,
+            }}
+          />
           <ContractPreviewButton
             contractRef={contract.reference_code ?? "(sin código)"}
             customerName={customerName}
@@ -184,7 +234,19 @@ export default async function ContractDetailPage({
                 const map = ["", "L", "M", "X", "J", "V", "S", "D"];
                 parts.push(`Días: ${dows.map((d) => map[d]).join(", ")}`);
               }
-              if (c.preferred_install_day_of_month) parts.push(`Día ${c.preferred_install_day_of_month} de cada mes`);
+              const dates = c.preferred_install_dates as string[] | null;
+              if (dates && dates.length > 0) {
+                parts.push(
+                  `Fechas: ${dates
+                    .map((d) =>
+                      new Date(d).toLocaleDateString("es-ES", {
+                        day: "numeric",
+                        month: "short",
+                      }),
+                    )
+                    .join(", ")}`,
+                );
+              }
               return parts.length > 0 ? parts.join(" · ") : null;
             })()}
           />
@@ -293,32 +355,37 @@ export default async function ContractDetailPage({
           {payments.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin pagos definidos.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            <table className="w-full border-separate border-spacing-x-3 border-spacing-y-1 text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
-                  <th className="py-2 text-left">Concepto</th>
-                  <th className="py-2 text-right">Importe</th>
-                  <th className="py-2 text-left">Método</th>
-                  <th className="py-2 text-left">Momento</th>
-                  <th className="py-2 text-left">Estado</th>
-                  <th className="py-2 text-right">Acción</th>
+                  <th className="px-2 py-2 text-left">Concepto</th>
+                  <th className="px-2 py-2 text-right">Importe</th>
+                  <th className="px-2 py-2 text-left">Método</th>
+                  <th className="px-2 py-2 text-left">Momento</th>
+                  <th className="px-2 py-2 text-left">Estado</th>
+                  <th className="px-2 py-2 text-right">Acción</th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody>
                 {payments.map((p) => (
-                  <tr key={p.id}>
-                    <td className="py-2">{p.concept}</td>
-                    <td className="py-2 text-right tabular-nums">
+                  <tr key={p.id} className="border-b border-border">
+                    <td className="px-2 py-2">{p.concept}</td>
+                    <td className="px-2 py-2 text-right tabular-nums">
                       {formatCents(p.amount_cents)}
                     </td>
-                    <td className="py-2 text-xs">{PAYMENT_METHOD_LABEL[p.method] ?? p.method}</td>
-                    <td className="py-2 text-xs">{PAYMENT_MOMENT_LABEL[p.moment] ?? p.moment}</td>
-                    <td className="py-2">
+                    <td className="px-2 py-2 text-xs">
+                      {PAYMENT_METHOD_LABEL[p.method] ?? p.method}
+                    </td>
+                    <td className="px-2 py-2 text-xs">
+                      {PAYMENT_MOMENT_LABEL[p.moment] ?? p.moment}
+                    </td>
+                    <td className="px-2 py-2">
                       <Badge variant={p.status === "validated" ? "success" : "secondary"}>
                         {PAYMENT_STATUS_LABEL[p.status] ?? p.status}
                       </Badge>
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="px-2 py-2 text-right">
                       <QuickCollectButton
                         paymentId={p.id}
                         status={p.status}
@@ -330,6 +397,12 @@ export default async function ContractDetailPage({
                 ))}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-muted-foreground">
+              💡 Cada línea (equipo, instalación, fianza, cuota…) se cobra de forma
+              independiente: puedes elegir momento (ahora / instalación) y método de
+              pago distinto para cada una.
+            </p>
+            </>
           )}
           {hasTransferPayment && fiscal?.fiscal_iban && (
             <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 text-sm">
@@ -403,7 +476,7 @@ export default async function ContractDetailPage({
             initialSlot={c.preferred_install_time_slot ?? null}
             initialNotes={c.preferred_install_time_notes ?? null}
             initialDaysOfWeek={c.preferred_install_days_of_week ?? null}
-            initialDayOfMonth={c.preferred_install_day_of_month ?? null}
+            initialDates={c.preferred_install_dates ?? null}
             canEdit={canEditClauses || ["draft", "pending_data", "pending_signature"].includes(contract.status)}
           />
         </CardContent>
