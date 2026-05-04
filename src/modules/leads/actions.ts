@@ -447,9 +447,14 @@ const STATUS_ORDER: Record<LeadStatus, number> = {
 export async function bumpLeadStatus(leadId: string, target: LeadStatus): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) return;
+  // Admin client: la policy leads_update_by_scope filtra por scope (admin /
+  // sales+tmk department / assigned+created_by own). Si el lead no es
+  // del usuario que ejecuta (típico en bumps automáticos disparados desde
+  // markProposalSent etc.), el UPDATE silente fallaba y el embudo se
+  // quedaba congelado.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  const { data } = await supabase
+  const admin = createAdminClient() as any;
+  const { data } = await admin
     .from("leads")
     .select("status")
     .eq("id", leadId)
@@ -459,8 +464,8 @@ export async function bumpLeadStatus(leadId: string, target: LeadStatus): Promis
   if (STATUS_ORDER[current] >= 99) return; // terminal
   if (STATUS_ORDER[target] <= STATUS_ORDER[current]) return;
 
-  await supabase.from("leads").update({ status: target }).eq("id", leadId);
-  await supabase.from("events").insert({
+  await admin.from("leads").update({ status: target }).eq("id", leadId);
+  await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "lead",
     subject_id: leadId,
@@ -630,6 +635,11 @@ export async function markLeadAsLostAction(
 
 export async function updateLeadStatus(id: string, status: LeadStatus, lostReason?: string) {
   const session = await requireSession();
+  // Admin client: la policy leads_update_by_scope filtra por scope. Si el
+  // usuario no es del scope del lead (típico en cambios de status hechos
+  // por managers o en flujos automáticos), el UPDATE silente fallaba.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
@@ -639,7 +649,7 @@ export async function updateLeadStatus(id: string, status: LeadStatus, lostReaso
     if (lostReason) update.lost_reason = lostReason;
   }
 
-  const { error } = await supabase.from("leads").update(update).eq("id", id);
+  const { error } = await admin.from("leads").update(update).eq("id", id);
   if (error) throw error;
 
   // Si pierde, registrar en lost_sales (idempotente: sólo si no existe ya)

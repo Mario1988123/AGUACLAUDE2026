@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { customerCreateSchema } from "./schemas";
 import type { CustomerDetail, CustomerListItem } from "./types";
@@ -129,15 +130,20 @@ export async function createCustomerAction(formData: FormData) {
   if (error) throw error;
   const newId = (data as { id: string }).id;
 
-  // Si viene de lead, marcar el lead como convertido + migrar direcciones
+  // Si viene de lead, marcar el lead como convertido + migrar direcciones.
+  // Admin client para el UPDATE leads: la policy leads_update_by_scope
+  // puede dejar fuera al usuario actual y ya nos ha mordido en
+  // convertLeadToCustomerAction.
   if (parsed.source_lead_id) {
-    await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    await admin
       .from("leads")
       .update({
         status: "converted",
         converted_at: new Date().toISOString(),
         converted_to_customer_id: newId,
-      } as never)
+      })
       .eq("id", parsed.source_lead_id);
     // Mover direcciones del lead al customer (función helper en BD)
     await supabase.rpc("promote_lead_to_customer" as never, {

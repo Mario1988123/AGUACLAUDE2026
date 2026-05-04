@@ -672,17 +672,21 @@ export async function reassignContractAction(
     session.roles.includes("commercial_director");
   if (!isUpper) throw new Error("Solo admin o director comercial");
 
+  // Admin client: la policy contracts_update_by_scope filtra por status IN
+  // (draft, pending_data, pending_signature). Reasignar contratos firmados
+  // o activos fallaría silente con cliente RLS-bound.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("contracts")
     .update({
       assigned_user_id: userId,
       assigned_at: userId ? new Date().toISOString() : null,
     })
     .eq("id", contractId);
+  if (r.error) throw new Error(r.error.message);
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "contract",
     subject_id: contractId,
@@ -805,9 +809,15 @@ export async function collectContractPaymentAction(
     if (newMethod) updates.method = newMethod;
     if (options?.notes !== undefined) updates.notes = options.notes;
     await supabase.from("contract_payments").update(updates).eq("id", p.id);
-    // Si había wallet_entry, la cancelamos: el cobro ya no es ahora
+    // Si había wallet_entry, la cancelamos: el cobro ya no es ahora.
+    // Admin client: la policy we_update filtra por scope (admin / wallet
+    // approver / collected_by_user_id own). Si el comercial que difiere
+    // no es quien la cobró originalmente, el UPDATE silente fallaría y
+    // la wallet_entry seguiría activa.
     if (p.wallet_entry_id) {
-      await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      await admin
         .from("wallet_entries")
         .update({ status: "cancelled" })
         .eq("id", p.wallet_entry_id);
@@ -948,19 +958,24 @@ export async function saveInstallPreferenceAction(
 
 export async function markContractActive(id: string) {
   const session = await requireSession();
-  const supabase = await createClient();
-  await supabase
+  // Admin client: la policy contracts_update_by_scope sólo permite UPDATE
+  // cuando status IN (draft, pending_data, pending_signature). El contrato
+  // ya está en 'signed' cuando lo activamos → silent fail con RLS-bound.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("contracts")
-    .update({ status: "active" } as never)
+    .update({ status: "active" })
     .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
   const scheduledJobs = await autoScheduleMaintenanceForContract(id);
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
     subject_id: id,
     kind: "contract.activated",
     payload: { maintenance_jobs_scheduled: scheduledJobs },
     actor_user_id: session.user_id,
-  } as never);
+  });
   revalidatePath(`/contratos/${id}`);
 }

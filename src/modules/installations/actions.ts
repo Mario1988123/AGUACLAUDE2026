@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
   installationCreateFromContractSchema,
@@ -505,7 +506,14 @@ export async function completeInstallation(input: unknown) {
     const update: Record<string, unknown> = { service_start_date: startIso };
     if (!isFuture) update.status = "active";
 
-    const { data: updated } = await supabase
+    // Admin client: la policy contracts_update_by_scope sólo permite UPDATE
+    // si status IN (draft, pending_data, pending_signature). Aquí el
+    // contrato está en 'signed' (o 'active'), bloquearía silenciosamente
+    // → la instalación se completaba pero el contrato seguía en 'signed'
+    // y los mantenimientos no se programaban.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: updated } = await admin
       .from("contracts")
       .update(update)
       .eq("id", i.contract_id)

@@ -465,18 +465,22 @@ export async function rejectApprovalAction(id: string, reason?: string): Promise
 
 export async function markProposalSent(id: string) {
   const session = await requireSession();
+  // Admin client: la policy proposals_update_draft sólo permite UPDATE
+  // cuando status='draft'. Si el flujo se reabre desde sent o pending,
+  // o si hay race entre dos comerciales, el UPDATE silente falla.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  const { data: prop } = await supabase
+  const admin = createAdminClient() as any;
+  const { data: prop } = await admin
     .from("proposals")
     .select("lead_id")
     .eq("id", id)
     .single();
-  await supabase
+  const r = await admin
     .from("proposals")
     .update({ status: "sent", sent_at: new Date().toISOString() })
     .eq("id", id);
-  await supabase.from("events").insert({
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
     subject_id: id,
@@ -498,6 +502,11 @@ export async function markProposalSent(id: string) {
  */
 export async function markProposalAccepted(id: string): Promise<{ customer_id: string | null }> {
   const session = await requireSession();
+  // Admin client: la policy proposals_update_draft sólo permite UPDATE si
+  // status='draft'. La propuesta arranca en 'sent' o 'pending_approval' →
+  // el UPDATE silente fallaba y el toast salía OK pero seguía sin aceptar.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
@@ -513,12 +522,13 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
     customer_id: string | null;
   };
 
-  await supabase
+  const r1 = await admin
     .from("proposals")
     .update({ status: "accepted", accepted_at: new Date().toISOString() })
     .eq("id", id);
+  if (r1.error) throw new Error(r1.error.message);
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
     subject_id: id,
@@ -532,7 +542,8 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
   // "Pasar a contrato" como paso explícito posterior.
   const customerId: string | null = p.customer_id;
   if (p.lead_id) {
-    await supabase
+    // Admin: la policy bloquearía las hermanas en sent/pending_approval.
+    await admin
       .from("proposals")
       .update({
         status: "rejected",
@@ -802,22 +813,27 @@ export async function listProposalsByLead(leadId: string): Promise<ProposalListI
 
 export async function markProposalRejected(id: string, reason?: string) {
   const session = await requireSession();
-  const supabase = await createClient();
-  await supabase
+  // Admin client: la policy proposals_update_draft sólo permite UPDATE si
+  // status='draft'. La propuesta puede estar en 'sent' o 'pending_approval'
+  // cuando se rechaza → silent fail con cliente RLS-bound.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const r = await admin
     .from("proposals")
     .update({
       status: "rejected",
       rejected_at: new Date().toISOString(),
       rejected_reason: reason ?? null,
-    } as never)
+    })
     .eq("id", id);
-  await supabase.from("events").insert({
+  if (r.error) throw new Error(r.error.message);
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
     subject_id: id,
     kind: "proposal.rejected",
     payload: { reason: reason ?? null },
     actor_user_id: session.user_id,
-  } as never);
+  });
   revalidatePath(`/propuestas/${id}`);
 }
