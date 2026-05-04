@@ -110,7 +110,19 @@ async function renderDashboard({
     ranking,
     teamMembers,
   ] = await Promise.all([
-    supabase.from("leads").select("id", { count: "exact", head: true }).is("deleted_at", null),
+    // Sólo leads activos (no convertidos / no perdidos / no caducados): el
+    // lead convertido vive ahora como cliente y no debe contabilizarse aquí.
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .is("deleted_at", null)
+      .in("status", [
+        "new",
+        "contacted",
+        "free_trial_proposed",
+        "proposal_created",
+        "proposal_sent",
+      ]),
     supabase
       .from("customers")
       .select("id", { count: "exact", head: true })

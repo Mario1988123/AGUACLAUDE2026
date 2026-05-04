@@ -42,17 +42,16 @@ export async function listLeads(filters?: {
     query = query.eq("assigned_user_id", session.user_id);
   }
 
-  // Estados visibles en /leads (excluye terminales lost/expired pero incluye
-  // converted para que se vea el embudo completo). Filtro explícito en lugar
-  // de NOT IN para evitar ambigüedades de sintaxis PostgREST que dejaban el
-  // listado vacío en algunos casos (bug del lead reabierto).
+  // Estados visibles en /leads. Excluimos:
+  //   - lost / expired: terminales sin más recorrido
+  //   - converted: el lead ya pasó a cliente, vive en /clientes — no debe
+  //     mantenerse como "lead convertido" en el listado de leads.
   const VALID_STATUSES: LeadStatus[] = [
     "new",
     "contacted",
     "free_trial_proposed",
     "proposal_created",
     "proposal_sent",
-    "converted",
   ];
   if (filters?.status) {
     query = query.eq("status", filters.status);
