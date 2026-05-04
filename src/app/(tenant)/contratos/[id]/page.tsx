@@ -145,6 +145,7 @@ export default async function ContractDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {!["signed", "active", "completed", "cancelled"].includes(contract.status) && (
           <ContractCompleteWizard
             contractId={contract.id}
             payments={payments.map((p) => ({
@@ -194,6 +195,7 @@ export default async function ContractDetailPage({
               preferredSlotLabel: null,
             }}
           />
+          )}
           <ContractPreviewButton
             contractRef={contract.reference_code ?? "(sin código)"}
             customerName={customerName}
@@ -338,8 +340,17 @@ export default async function ContractDetailPage({
                 <CreateInstallationButton
                   contractId={contract.id}
                   installers={installers}
-                  warehouses={warehouses.map((w) => ({ id: w.id, name: w.name }))}
+                  warehouses={warehouses.map((w) => ({
+                    id: w.id,
+                    name: w.name,
+                    kind: w.kind,
+                    assigned_user_id: w.assigned_user_id,
+                  }))}
                   hasInstallation={hasInstallation}
+                  preferredSlot={c.preferred_install_time_slot ?? null}
+                  preferredNotes={c.preferred_install_time_notes ?? null}
+                  preferredDaysOfWeek={c.preferred_install_days_of_week ?? null}
+                  preferredDates={c.preferred_install_dates ?? null}
                 />
               </div>
             )}

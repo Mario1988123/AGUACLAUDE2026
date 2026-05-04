@@ -157,13 +157,32 @@ export async function getInstallationItems(installationId: string) {
     .from("installation_items")
     .select("id, product_id, quantity, serial_number, notes")
     .eq("installation_id", installationId);
-  return (data ?? []) as Array<{
+  type Row = {
     id: string;
     product_id: string;
     quantity: number;
     serial_number: string | null;
     notes: string | null;
-  }>;
+  };
+  const rows = (data ?? []) as Row[];
+  // Resolver nombres reales de los productos (antes mostrábamos los 8
+  // primeros chars del UUID — confuso para el técnico que esperaba ver
+  // "Senda" o "Brisa").
+  let nameMap = new Map<string, string>();
+  if (rows.length > 0) {
+    const ids = Array.from(new Set(rows.map((r) => r.product_id)));
+    const { data: prods } = await supabase
+      .from("products")
+      .select("id, name")
+      .in("id", ids);
+    nameMap = new Map(
+      ((prods ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]),
+    );
+  }
+  return rows.map((r) => ({
+    ...r,
+    product_name: nameMap.get(r.product_id) ?? "Producto sin nombre",
+  })) as Array<Row & { product_name: string }>;
 }
 
 export async function getInstallationPhotos(installationId: string) {

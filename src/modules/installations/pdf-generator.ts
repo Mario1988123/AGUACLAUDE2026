@@ -229,19 +229,29 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
     notes: string | null;
   }>;
   if (list.length > 0) {
+    // Resolver nombres de productos (no mostrar UUIDs en el PDF del parte)
+    const productIds = Array.from(new Set(list.map((it) => it.product_id)));
+    const { data: prods } = await supabase
+      .from("products")
+      .select("id, name")
+      .in("id", productIds);
+    const nameMap = new Map(
+      ((prods ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]),
+    );
+
     drawSection(doc, "Equipos instalados");
     drawTable(
       doc,
-      ["Producto (id)", "Cant.", "S/N", "Notas"],
+      ["Producto", "Cant.", "S/N", "Notas"],
       list.map((it) => ({
         cells: [
-          it.product_id.slice(0, 12),
+          nameMap.get(it.product_id) ?? "—",
           String(it.quantity),
           it.serial_number ?? "—",
           it.notes ?? "—",
         ],
       })),
-      [120, 50, 130, 200],
+      [200, 50, 100, 150],
     );
   }
 

@@ -108,7 +108,7 @@ export default async function InstallationDetailPage({
                   {items.map((it) => (
                     <li key={it.id} className="flex items-center justify-between py-3">
                       <div>
-                        <div className="font-medium">{it.product_id.slice(0, 8)}</div>
+                        <div className="font-medium">{it.product_name}</div>
                         {it.serial_number && (
                           <div className="text-xs text-muted-foreground">
                             S/N: {it.serial_number}
