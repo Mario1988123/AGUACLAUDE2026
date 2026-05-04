@@ -41,13 +41,34 @@ export async function startInstallationAction(input: {
   // Cargar la dirección de la instalación para calcular distancia
   const { data: inst } = await admin
     .from("installations")
-    .select("id, company_id, address_id, customer_id")
+    .select("id, company_id, address_id, customer_id, scheduled_at, status")
     .eq("id", input.installation_id)
     .single();
   const i = inst as
-    | { id: string; company_id: string; address_id: string | null; customer_id: string | null }
+    | {
+        id: string;
+        company_id: string;
+        address_id: string | null;
+        customer_id: string | null;
+        scheduled_at: string | null;
+        status: string;
+      }
     | null;
   if (!i) throw new Error("Instalación no encontrada");
+
+  // No se puede iniciar una instalación programada para el FUTURO. Si la
+  // fecha programada es posterior a hoy hay que reagendarla primero. Las
+  // de hoy o atrasadas sí se pueden iniciar.
+  if (i.scheduled_at) {
+    const sched = new Date(i.scheduled_at);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (sched > today) {
+      throw new Error(
+        "Esta instalación está programada para un día futuro. Reagéndala a hoy antes de iniciar el parte.",
+      );
+    }
+  }
 
   let meters: number | null = null;
   let addrLat: number | null = null;

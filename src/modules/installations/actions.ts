@@ -146,7 +146,41 @@ export async function getInstallation(id: string) {
     .is("deleted_at", null)
     .single();
   if (error) throw error;
-  return data as Record<string, unknown>;
+  const inst = data as Record<string, unknown> & {
+    id: string;
+    company_id?: string;
+    reference_code?: string | null;
+    created_at: string;
+  };
+  // Backfill I-YYYY-NNNN si no tiene código
+  if (!inst.reference_code && inst.company_id) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const year = new Date(inst.created_at).getFullYear();
+      const yearPrefix = `I-${year}-`;
+      const { data: last } = await admin
+        .from("installations")
+        .select("reference_code")
+        .eq("company_id", inst.company_id)
+        .like("reference_code", `${yearPrefix}%`)
+        .order("reference_code", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let n = 1;
+      const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
+      if (lastCode) {
+        const m = lastCode.match(/-(\d+)$/);
+        if (m) n = parseInt(m[1]!, 10) + 1;
+      }
+      const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
+      await admin.from("installations").update({ reference_code: code }).eq("id", id);
+      inst.reference_code = code;
+    } catch {
+      /* fail-soft */
+    }
+  }
+  return inst;
 }
 
 export async function getInstallationItems(installationId: string) {
@@ -251,6 +285,27 @@ export async function createInstallationFromContract(input: unknown) {
     .is("deleted_at", null);
   if ((count ?? 0) > 0) throw new Error("Ya existe una instalación para este contrato");
 
+  // Generar reference_code I-YYYY-NNNN
+  const year = new Date().getFullYear();
+  const yearPrefix = `I-${year}-`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supaAny = supabase as any;
+  const { data: lastCoded } = await supaAny
+    .from("installations")
+    .select("reference_code")
+    .eq("company_id", session.company_id)
+    .like("reference_code", `${yearPrefix}%`)
+    .order("reference_code", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let nextNum = 1;
+  const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
+  if (lastCode) {
+    const m = lastCode.match(/-(\d+)$/);
+    if (m) nextNum = parseInt(m[1]!, 10) + 1;
+  }
+  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+
   const { data: created, error } = await supabase
     .from("installations")
     .insert({
@@ -259,6 +314,7 @@ export async function createInstallationFromContract(input: unknown) {
       status: parsed.scheduled_at ? "scheduled" : "unscheduled",
       contract_id: c.id,
       customer_id: c.customer_id,
+      reference_code: referenceCode,
       scheduled_at: parsed.scheduled_at || null,
       installer_user_id: parsed.installer_user_id || null,
       source_warehouse_id: parsed.source_warehouse_id || null,

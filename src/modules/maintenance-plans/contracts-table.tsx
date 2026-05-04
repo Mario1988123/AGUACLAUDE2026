@@ -94,7 +94,7 @@ export function MaintenanceContractsTable({
   );
 }
 
-function RemesaButton() {
+export function MaintenanceRemesaButton() {
   const [pending, startTransition] = useTransition();
   const ask = useConfirm();
   const router = useRouter();
@@ -104,7 +104,7 @@ function RemesaButton() {
       const ok = await ask({
         title: "Lanzar remesa mensual",
         message:
-          "Se generará una factura del mes en curso por cada contrato de mantenimiento activo. Si la factura del mes ya existe, se omite (no duplica).",
+          "Se generará una factura del mes en curso por cada contrato de mantenimiento activo. Si la factura del mes ya existe, se omite.",
         confirmText: "Generar facturas",
         variant: "success",
       });
@@ -133,5 +133,3 @@ function RemesaButton() {
     </Button>
   );
 }
-
-MaintenanceContractsTable.RemesaButton = RemesaButton;

@@ -9,9 +9,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
-import { InstallationWorkReport } from "@/modules/installations/work-report";
-import { PhotoUploadPanel } from "@/modules/installations/photo-upload";
-import { SignaturesSection } from "@/modules/installations/signature-section";
+// Eliminados InstallationWorkReport / PhotoUploadPanel / SignaturesSection
+// — todo se gestiona ahora desde InstallationWizard (un único flujo).
 import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
 import { InstallationWizard } from "@/modules/installations/installation-wizard";
@@ -35,7 +34,7 @@ export default async function InstallationDetailPage({
   } catch {
     notFound();
   }
-  const i = inst as {
+  const i = inst as unknown as {
     id: string;
     reference_code: string | null;
     status: string;
@@ -203,16 +202,66 @@ export default async function InstallationDetailPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Fotos ({photos.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <PhotoUploadPanel installationId={i.id} existingPhotos={photos} />
-            </CardContent>
-          </Card>
+          {/* Fotos y firmas se gestionan desde el wizard de instalación.
+              Aquí solo mostramos las que ya existen como vista de solo lectura. */}
+          {photos.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Fotos ({photos.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {photosFull.map((p) => (
+                    <div
+                      key={p.id}
+                      className="relative aspect-square overflow-hidden rounded-lg border"
+                    >
+                      {p.signed_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.signed_url}
+                          alt={p.category}
+                          className="h-full w-full object-cover"
+                        />
+                      )}
+                      <span className="absolute top-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
+                        {p.category}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-          <SignaturesSection installationId={i.id} existingSignatures={signatures} />
+          {signatures.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Firmas ({signatures.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2 text-sm">
+                  {signatures.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center justify-between rounded-xl border bg-card p-2"
+                    >
+                      <div>
+                        <div className="font-bold">
+                          {s.signer_role === "customer" ? "Cliente" : "Empresa"} ·{" "}
+                          {s.signer_name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(s.signed_at).toLocaleString("es-ES")}
+                          {s.context ? ` · ${s.context}` : ""}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
 
           {i.completed_at && (
             <Card>
@@ -244,15 +293,37 @@ export default async function InstallationDetailPage({
         </div>
 
         <div className="space-y-4">
-          <InstallationWorkReport
-            installationId={i.id}
-            status={i.status}
-            startedAt={i.started_at}
-            hasPreviousDamage={i.has_previous_damage}
-            needsCountertopDrilling={i.needs_countertop_drilling}
-            geoDistanceM={i.geo_distance_to_address_m}
-            contractId={i.contract_id}
-          />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Datos del parte</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {i.scheduled_at && (
+                <div>
+                  <strong>Programada:</strong>{" "}
+                  {new Date(i.scheduled_at).toLocaleString("es-ES")}
+                </div>
+              )}
+              <div>
+                <strong>Daños previos:</strong>{" "}
+                {i.has_previous_damage ? "Sí" : "No"}
+              </div>
+              <div>
+                <strong>Agujero encimera:</strong>{" "}
+                {i.needs_countertop_drilling ? "Sí" : "No"}
+              </div>
+              {i.geo_distance_to_address_m != null && (
+                <div>
+                  <strong>Distancia GPS:</strong>{" "}
+                  {Math.round(i.geo_distance_to_address_m)} m
+                </div>
+              )}
+              <p className="mt-3 text-xs text-muted-foreground">
+                Para iniciar/continuar el parte usa «Abrir parte de instalación»
+                en la cabecera.
+              </p>
+            </CardContent>
+          </Card>
           {canReassign && (
             <Card>
               <CardHeader>

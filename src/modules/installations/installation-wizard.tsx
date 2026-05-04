@@ -419,8 +419,8 @@ export function InstallationWizard(props: Props) {
       </Button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-2 sm:p-6">
-          <div className="my-4 flex w-full max-w-3xl flex-col rounded-2xl bg-card shadow-2xl">
+        <div className="fixed inset-0 z-50 flex flex-col bg-background">
+          <div className="flex h-full w-full flex-col bg-card">
             {/* Header */}
             <div className="flex items-center justify-between gap-2 border-b p-4">
               <div className="min-w-0 flex-1">
@@ -501,7 +501,7 @@ export function InstallationWizard(props: Props) {
             </div>
 
             {/* Body */}
-            <div className="max-h-[60vh] flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4">
               {/* PASO 1 — Iniciar parte */}
               {step === 1 && (
                 <div className="space-y-3">

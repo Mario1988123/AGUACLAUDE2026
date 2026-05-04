@@ -4,7 +4,10 @@ import { STATUS_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
 import { listMaintenanceContracts } from "@/modules/maintenance-plans/actions";
-import { MaintenanceContractsTable } from "@/modules/maintenance-plans/contracts-table";
+import {
+  MaintenanceContractsTable,
+  MaintenanceRemesaButton,
+} from "@/modules/maintenance-plans/contracts-table";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -74,9 +77,7 @@ export default async function MantenimientosPage({
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
             <span>Contratos de mantenimiento ({contracts.length})</span>
-            {isAdmin && (
-              <MaintenanceContractsTable.RemesaButton />
-            )}
+            {isAdmin && <MaintenanceRemesaButton />}
           </CardTitle>
         </CardHeader>
         <CardContent>
