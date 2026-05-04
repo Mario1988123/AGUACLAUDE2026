@@ -4,7 +4,8 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Play, Pause, StopCircle } from "lucide-react";
 import { notify } from "@/shared/hooks/use-toast";
-import { punchKindAction, getMyClockExtended, type ClockExtended } from "./actions";
+import { punchKindAction, getMyClockExtended } from "./actions";
+import type { ClockExtended } from "./types";
 
 /**
  * Widget de fichaje en el header. Tres botones según estado:
