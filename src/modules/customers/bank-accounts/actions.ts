@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { validateIBAN } from "@/shared/lib/validations/spanish";
+import { isPendingIban } from "@/shared/lib/validations/iban-partial";
 
 export interface BankAccountRow {
   id: string;
@@ -20,7 +21,15 @@ export interface BankAccountRow {
 
 const bankCreateSchema = z.object({
   customer_id: z.string().uuid(),
-  iban: z.string().refine((v) => validateIBAN(v.replace(/\s/g, "")), { message: "IBAN no válido" }),
+  iban: z
+    .string()
+    .refine(
+      (v) => {
+        const clean = v.replace(/\s/g, "");
+        return validateIBAN(clean) || isPendingIban(clean);
+      },
+      { message: "IBAN no válido" },
+    ),
   account_holder_name: z.string().optional().default(""),
   bic: z.string().optional().default(""),
   bank_name: z.string().optional().default(""),
@@ -69,15 +78,16 @@ export async function createBankAccountAction(input: unknown) {
       .is("deleted_at", null);
   }
 
+  const isPending = isPendingIban(iban);
   const { error } = await supabase.from("customer_bank_accounts").insert({
     company_id: session.company_id,
     customer_id: parsed.customer_id,
     account_holder_name: parsed.account_holder_name || null,
-    iban,
+    iban: isPending ? "ES00" : iban,
     bic: parsed.bic || null,
     bank_name: parsed.bank_name || null,
     is_primary: parsed.is_primary,
-    is_validated: true,
+    is_validated: !isPending,
     created_by: session.user_id,
   });
   if (error) throw new Error(error.message);

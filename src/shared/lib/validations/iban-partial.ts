@@ -1,39 +1,50 @@
 import { validateIBAN } from "./spanish";
 
 /**
- * Valida un IBAN parcial: si tiene >= 6 caracteres (ES + 2 DC + arranque),
- * comprueba que los dígitos de control (posiciones 3-4) sean coherentes con
- * el resto introducido hasta ese momento. Para IBAN español devolvemos:
- *   - { state: "incomplete" }   si aún no hay 24 chars
- *   - { state: "valid" }        si los 24 chars validan mod 97
- *   - { state: "invalid_dc" }   si los DC no son ES00 ni cuadran con BBAN
- *   - { state: "invalid" }      si formato roto
- *
- * Política UI según indicación: si los 4 primeros NO son ES00 (es decir, el
- * usuario ha tecleado los DC reales), comprobar mod 97 cuando esté completo.
+ * Valida un IBAN parcial. Estados:
+ *   - incomplete : aún no hay 24 chars
+ *   - valid      : 24 chars y mod 97 OK
+ *   - pending    : el usuario ha dejado "ES00" (placeholder pendiente, se
+ *                  guarda y permite avanzar; el IBAN real se completa
+ *                  antes/durante la firma del contrato)
+ *   - invalid_dc : DC introducido no cuadra con BBAN
+ *   - invalid    : formato roto
  */
 export type IbanCheck =
   | { state: "incomplete" }
   | { state: "valid" }
+  | { state: "pending" }
   | { state: "invalid_dc"; expected: string }
   | { state: "invalid" };
+
+const PENDING_PLACEHOLDER = "ES00";
+
+export function isPendingIban(value: string): boolean {
+  const v = value?.trim().toUpperCase().replace(/[\s-]/g, "");
+  if (!v) return false;
+  // Aceptamos "ES00" pelado o ES00 + ceros/espacios — todo equivale a
+  // "todavía no tengo el IBAN, lo daré antes de firmar".
+  if (v === PENDING_PLACEHOLDER) return true;
+  if (v.startsWith(PENDING_PLACEHOLDER) && /^ES0+$/.test(v)) return true;
+  return false;
+}
 
 export function checkIbanLive(value: string): IbanCheck {
   const v = value?.trim().toUpperCase().replace(/[\s-]/g, "");
   if (!v || v.length < 4) return { state: "incomplete" };
   if (!/^[A-Z]{2}\d{2}/.test(v)) return { state: "invalid" };
 
-  // ES debe tener 24 chars
+  // Placeholder ES00 → estado especial "pending" (se podrá guardar)
+  if (isPendingIban(v)) return { state: "pending" };
+
   const fullLen = v.startsWith("ES") ? 24 : 0;
   if (fullLen && v.length < fullLen) return { state: "incomplete" };
 
-  // Si los DC son "00", el usuario los está dejando como placeholder
-  // → no comprobamos hasta tener BBAN completo y ofrecemos calcular
   const dc = v.slice(2, 4);
 
   if (fullLen && v.length === fullLen) {
     if (validateIBAN(v)) return { state: "valid" };
-    // Calcular DC esperado
+    // Calcular DC esperado para mostrarlo al usuario
     const country = v.slice(0, 2);
     const bban = v.slice(4);
     const rearranged = bban + country + "00";

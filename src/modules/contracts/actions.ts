@@ -174,12 +174,16 @@ export async function createContractFromProposal(proposalId: string) {
   const supaAny = supabase as any;
   const { data: hasBank } = await supaAny
     .from("customer_bank_accounts")
-    .select("id")
+    .select("id, is_validated, iban")
     .eq("customer_id", p.customer_id)
     .is("deleted_at", null)
     .limit(1)
     .maybeSingle();
-  if (!hasBank) pending.push("iban");
+  // IBAN se considera pendiente si no hay cuenta o si la única cuenta es
+  // un placeholder ES00 (is_validated=false). En ambos casos el contrato
+  // se podrá firmar pero queda marcado como pendiente de número de cuenta.
+  const bankRow = hasBank as { is_validated: boolean | null; iban: string | null } | null;
+  if (!bankRow || bankRow.is_validated === false) pending.push("iban");
   // Dirección
   const { data: hasAddr } = await supaAny
     .from("addresses")

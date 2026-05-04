@@ -71,10 +71,14 @@ export default async function CustomerDetailPage({
   }
 
   // Pendientes para el banner si venimos desde una propuesta aceptada
+  // IBAN cuenta como "completo" si hay al menos una cuenta validada (no
+  // placeholder ES00). Las cuentas pendientes permiten firmar pero el
+  // banner sigue avisando para que el comercial pida el IBAN real.
+  const hasValidatedBank = bankAccounts.some((b) => b.is_validated);
   const pendingFromProposal = fromProposal
     ? {
         dni: !customer.tax_id,
-        iban: bankAccounts.length === 0,
+        iban: !hasValidatedBank,
         address: addresses.length === 0,
       }
     : null;
@@ -150,7 +154,11 @@ export default async function CustomerDetailPage({
           </CardHeader>
           <CardContent>
             {canSeeBank ? (
-              <BankAccountList customerId={id} accounts={bankAccounts} />
+              <BankAccountList
+                customerId={id}
+                accounts={bankAccounts}
+                defaultHolderName={displayName}
+              />
             ) : (
               <p className="text-sm text-muted-foreground">
                 🔒 Solo el administrador de la empresa puede ver los datos bancarios.

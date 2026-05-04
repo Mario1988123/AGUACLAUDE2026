@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Eye, EyeOff, Plus, Trash2, Star } from "lucide-react";
+import { Eye, EyeOff, Plus, Trash2, Star, Clock } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -9,11 +9,13 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { createBankAccountAction, deleteBankAccountAction, type BankAccountRow } from "./actions";
 import { IbanInput } from "@/shared/components/iban-input";
-import { checkIbanLive } from "@/shared/lib/validations/iban-partial";
+import { checkIbanLive, isPendingIban } from "@/shared/lib/validations/iban-partial";
 
 interface Props {
   customerId: string;
   accounts: BankAccountRow[];
+  /** Nombre por defecto del titular (suele ser el del propio cliente). */
+  defaultHolderName?: string;
 }
 
 function maskIban(iban: string) {
@@ -21,13 +23,13 @@ function maskIban(iban: string) {
   return `${iban.slice(0, 4)} **** **** **** ${iban.slice(-4)}`;
 }
 
-export function BankAccountList({ customerId, accounts }: Props) {
+export function BankAccountList({ customerId, accounts, defaultHolderName }: Props) {
   const [showFull, setShowFull] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
     iban: "",
-    account_holder_name: "",
+    account_holder_name: defaultHolderName ?? "",
     bic: "",
     bank_name: "",
     is_primary: true,
@@ -36,15 +38,25 @@ export function BankAccountList({ customerId, accounts }: Props) {
   function add(e: React.FormEvent) {
     e.preventDefault();
     const check = checkIbanLive(form.iban);
-    if (check.state !== "valid") {
-      notify.warning("IBAN no válido — corrige el dígito de control antes de guardar");
+    if (check.state !== "valid" && check.state !== "pending") {
+      notify.warning("IBAN no válido — corrige el dígito de control o usa ES00 como pendiente");
       return;
     }
     startTransition(async () => {
       try {
         await createBankAccountAction({ customer_id: customerId, ...form });
-        notify.success("IBAN añadido");
-        setForm({ iban: "", account_holder_name: "", bic: "", bank_name: "", is_primary: true });
+        notify.success(
+          check.state === "pending"
+            ? "IBAN guardado como pendiente — recuerda completarlo antes de la firma"
+            : "IBAN añadido",
+        );
+        setForm({
+          iban: "",
+          account_holder_name: defaultHolderName ?? "",
+          bic: "",
+          bank_name: "",
+          is_primary: true,
+        });
         setAdding(false);
         location.reload();
       } catch (err) {
@@ -74,43 +86,66 @@ export function BankAccountList({ customerId, accounts }: Props) {
         </div>
       )}
 
-      {accounts.map((b) => (
-        <div key={b.id} className="rounded-xl border border-border bg-card p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                {b.is_primary && (
-                  <Badge variant="success">
-                    <Star className="h-3 w-3 fill-current" /> Principal
-                  </Badge>
-                )}
-                {b.bank_name && <span className="text-sm font-semibold">{b.bank_name}</span>}
-              </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                  {showFull[b.id] ? b.iban : maskIban(b.iban)}
-                </code>
-                <button
-                  type="button"
-                  onClick={() => setShowFull((s) => ({ ...s, [b.id]: !s[b.id] }))}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label="Mostrar IBAN"
-                >
-                  {showFull[b.id] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {b.account_holder_name && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Titular: {b.account_holder_name}
+      {accounts.map((b) => {
+        const pendingIban = isPendingIban(b.iban) || !b.is_validated;
+        return (
+          <div
+            key={b.id}
+            className={`rounded-xl border p-4 ${
+              pendingIban ? "border-amber-300 bg-amber-50" : "border-border bg-card"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  {b.is_primary && (
+                    <Badge variant="success">
+                      <Star className="h-3 w-3 fill-current" /> Principal
+                    </Badge>
+                  )}
+                  {pendingIban && (
+                    <Badge variant="warning">
+                      <Clock className="h-3 w-3" /> Pendiente firma
+                    </Badge>
+                  )}
+                  {b.bank_name && <span className="text-sm font-semibold">{b.bank_name}</span>}
                 </div>
-              )}
+                <div className="mt-1.5 flex items-center gap-2">
+                  <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
+                    {pendingIban
+                      ? "ES00 · pendiente"
+                      : showFull[b.id]
+                        ? b.iban
+                        : maskIban(b.iban)}
+                  </code>
+                  {!pendingIban && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFull((s) => ({ ...s, [b.id]: !s[b.id] }))}
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      aria-label="Mostrar IBAN"
+                    >
+                      {showFull[b.id] ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                {b.account_holder_name && (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Titular: {b.account_holder_name}
+                  </div>
+                )}
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => remove(b.id)} disabled={pending}>
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => remove(b.id)} disabled={pending}>
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {adding ? (
         <form onSubmit={add} className="space-y-3 rounded-xl border border-border bg-card p-4">
@@ -122,6 +157,10 @@ export function BankAccountList({ customerId, accounts }: Props) {
               value={form.iban}
               onChange={(v) => setForm({ ...form, iban: v })}
             />
+            <p className="text-xs text-muted-foreground">
+              Si aún no tienes el IBAN del cliente, escribe <code className="font-mono">ES00</code>{" "}
+              y el contrato se podrá firmar quedando como «pendiente de número de cuenta».
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -129,7 +168,14 @@ export function BankAccountList({ customerId, accounts }: Props) {
               <Input
                 value={form.account_holder_name}
                 onChange={(e) => setForm({ ...form, account_holder_name: e.target.value })}
+                placeholder={defaultHolderName ?? ""}
               />
+              {defaultHolderName && (
+                <p className="text-xs text-muted-foreground">
+                  Por defecto el del cliente. Puedes cambiarlo si el titular es la pareja, otra
+                  persona u otra empresa.
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Banco</Label>
