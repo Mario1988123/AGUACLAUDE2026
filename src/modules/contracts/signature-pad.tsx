@@ -88,26 +88,6 @@ function SignatureCanvas({
   );
 }
 
-function SignedView({ dataUrl }: { dataUrl: string | null }) {
-  if (!dataUrl) {
-    return (
-      <div className="flex h-40 items-center justify-center rounded-xl border-2 border-emerald-200 bg-emerald-50 text-xs text-emerald-700">
-        Firma guardada (sin imagen disponible)
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-2">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={dataUrl}
-        alt="Firma"
-        className="mx-auto h-36 object-contain"
-      />
-    </div>
-  );
-}
-
 function SignatureBlock({
   role,
   title,
@@ -170,36 +150,56 @@ function SignatureBlock({
 
   return (
     <div
-      className={`rounded-2xl border-2 p-4 ${
+      className={`rounded-2xl border-2 ${
         signature && !editing
-          ? "border-emerald-300 bg-emerald-50/40"
-          : "border-border bg-card"
+          ? "border-emerald-300 bg-emerald-50/40 p-3"
+          : "border-border bg-card p-4"
       }`}
     >
-      <div className="mb-3 flex items-center gap-2">
-        <Icon className="h-5 w-5 text-primary" />
-        <h3 className="font-bold">{title}</h3>
-        {signature && !editing && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-            <CheckCircle2 className="h-3 w-3" /> Validada
-          </span>
-        )}
-      </div>
-
-      {/* Vista bloqueada (firma ya validada) */}
-      {signature && !editing && (
-        <div className="space-y-2">
-          <div className="text-sm">
-            <strong>{signature.signer_name}</strong>
-            {signature.signer_tax_id && ` · ${signature.signer_tax_id}`}
+      {/* Vista MINIMIZADA — sólo cuando la firma de ESTE bloque está validada */}
+      {signature && !editing ? (
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+            <CheckCircle2 className="h-6 w-6" />
           </div>
-          <SignedView dataUrl={signature.signature_data_url} />
-          <p className="text-xs text-muted-foreground">
-            Firmado el {new Date(signature.signed_at).toLocaleString("es-ES")}
-          </p>
-          <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="w-full">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Icon className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="truncate text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                {title}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                Validada
+              </span>
+            </div>
+            <div className="truncate text-sm font-bold">
+              {signature.signer_name}
+              {signature.signer_tax_id && (
+                <span className="ml-1 font-normal text-muted-foreground">
+                  · {signature.signer_tax_id}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {new Date(signature.signed_at).toLocaleString("es-ES")}
+            </p>
+          </div>
+          {signature.signature_data_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={signature.signature_data_url}
+              alt=""
+              className="hidden h-12 w-24 rounded border border-emerald-200 bg-white object-contain sm:block"
+            />
+          )}
+          <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
             <Pencil className="h-3 w-3" /> Re-firmar
           </Button>
+        </div>
+      ) : (
+        <div className="mb-3 flex items-center gap-2">
+          <Icon className="h-5 w-5 text-primary" />
+          <h3 className="font-bold">{title}</h3>
         </div>
       )}
 
