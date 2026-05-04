@@ -130,13 +130,35 @@ export async function createContractFromProposal(proposalId: string) {
 
   const supabase = await createClient();
 
-  const { data: proposal, error: pErr } = await supabase
-    .from("proposals")
-    .select(
-      "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents, chosen_plan_type, chosen_duration_months",
-    )
-    .eq("id", proposalId)
-    .single();
+  // Intentamos primero con los campos del overhaul (chosen_plan_type/
+  // chosen_duration_months). Si la migración 20260503340000 no está
+  // aplicada, retry con campos básicos para que el flujo no se rompa.
+  let proposal: unknown = null;
+  let pErr: { message?: string } | null = null;
+  {
+    const r = await supabase
+      .from("proposals")
+      .select(
+        "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents, chosen_plan_type, chosen_duration_months",
+      )
+      .eq("id", proposalId)
+      .single();
+    proposal = r.data;
+    pErr = r.error as { message?: string } | null;
+    if (pErr && /column .* does not exist|chosen_plan_type|chosen_duration_months/i.test(pErr.message ?? "")) {
+      const r2 = await supabase
+        .from("proposals")
+        .select(
+          "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents",
+        )
+        .eq("id", proposalId)
+        .single();
+      proposal = r2.data
+        ? { ...(r2.data as object), chosen_plan_type: null, chosen_duration_months: null }
+        : null;
+      pErr = r2.error as { message?: string } | null;
+    }
+  }
   if (pErr) throw pErr;
   const p = proposal as {
     id: string;
@@ -233,38 +255,98 @@ export async function createContractFromProposal(proposalId: string) {
         : null;
   const durationMonths = p.chosen_duration_months;
 
-  // Crear contract
-  const { data: created, error: cErr } = await supabase
-    .from("contracts")
-    .insert({
-      company_id: session.company_id,
-      customer_id: p.customer_id,
-      source_proposal_id: p.id,
-      plan_type: planType,
-      duration_months: durationMonths,
-      permanence_months: planType === "rental" ? durationMonths : null,
-      total_cash_cents: totalCashCents,
-      monthly_cents: monthlyCents,
-      status: has_provisional_data ? "pending_data" : "pending_signature",
-      has_provisional_data,
-      customer_snapshot: cust,
-      clauses_snapshot: clausesSnapshot,
-      pending_fields: pending,
-      created_by: session.user_id,
-    } as never)
-    .select("id")
-    .single();
-  if (cErr) throw cErr;
-  const contractId = (created as { id: string }).id;
+  // Crear contract — defensivo ante columnas opcionales (snapshots,
+  // pending_fields) que pueden no estar en producción.
+  const fullContractPayload: Record<string, unknown> = {
+    company_id: session.company_id,
+    customer_id: p.customer_id,
+    source_proposal_id: p.id,
+    plan_type: planType,
+    duration_months: durationMonths,
+    permanence_months: planType === "rental" ? durationMonths : null,
+    total_cash_cents: totalCashCents,
+    monthly_cents: monthlyCents,
+    status: has_provisional_data ? "pending_data" : "pending_signature",
+    has_provisional_data,
+    customer_snapshot: cust,
+    clauses_snapshot: clausesSnapshot,
+    pending_fields: pending,
+    created_by: session.user_id,
+  };
+  let createdRow: { id: string } | null = null;
+  {
+    const r = await supabase
+      .from("contracts")
+      .insert(fullContractPayload as never)
+      .select("id")
+      .single();
+    const cErr = r.error as { message?: string } | null;
+    if (cErr && /column .* does not exist|has_provisional_data|customer_snapshot|clauses_snapshot|pending_fields|source_proposal_id/i.test(cErr.message ?? "")) {
+      // Retry con payload mínimo (sin snapshots)
+      const minimal: Record<string, unknown> = {
+        company_id: session.company_id,
+        customer_id: p.customer_id,
+        plan_type: planType,
+        duration_months: durationMonths,
+        permanence_months: planType === "rental" ? durationMonths : null,
+        total_cash_cents: totalCashCents,
+        monthly_cents: monthlyCents,
+        status: has_provisional_data ? "pending_data" : "pending_signature",
+        created_by: session.user_id,
+      };
+      const r2 = await supabase
+        .from("contracts")
+        .insert(minimal as never)
+        .select("id")
+        .single();
+      if (r2.error) throw r2.error;
+      createdRow = r2.data as { id: string };
+    } else if (cErr) {
+      throw cErr;
+    } else {
+      createdRow = r.data as { id: string };
+    }
+  }
+  if (!createdRow) throw new Error("No se pudo crear el contrato");
+  const contractId = createdRow.id;
 
-  // Copiar items desde proposal_items con TODA la configuración de la propuesta
-  const { data: items } = await supabase
-    .from("proposal_items")
-    .select(
-      "product_id, product_name_snapshot, quantity, unit_price_cash_cents, display_order, installation_included, installation_price_cents, maintenance_included, maintenance_until_date, maintenance_price_cents, maintenance_periodicity_months, deposit_cents, charge_first_payment_now",
-    )
-    .eq("proposal_id", p.id)
-    .order("display_order");
+  // Copiar items desde proposal_items con TODA la configuración de la propuesta.
+  // Mismo patrón defensivo que arriba: si la migración 20260503340000 no
+  // está aplicada en BD, retry con columnas básicas.
+  let items: unknown[] | null = null;
+  {
+    const r = await supabase
+      .from("proposal_items")
+      .select(
+        "product_id, product_name_snapshot, quantity, unit_price_cash_cents, display_order, installation_included, installation_price_cents, maintenance_included, maintenance_until_date, maintenance_price_cents, maintenance_periodicity_months, deposit_cents, charge_first_payment_now",
+      )
+      .eq("proposal_id", p.id)
+      .order("display_order");
+    const itemsErr = r.error as { message?: string } | null;
+    if (itemsErr && /column .* does not exist|installation_included|maintenance_included|deposit_cents|charge_first_payment_now/i.test(itemsErr.message ?? "")) {
+      const r2 = await supabase
+        .from("proposal_items")
+        .select(
+          "product_id, product_name_snapshot, quantity, unit_price_cash_cents, display_order",
+        )
+        .eq("proposal_id", p.id)
+        .order("display_order");
+      // Hidratar con valores por defecto (instalación incluida, sin mantenimiento)
+      items = ((r2.data ?? []) as Array<Record<string, unknown>>).map((it) => ({
+        ...it,
+        installation_included: true,
+        installation_price_cents: null,
+        maintenance_included: false,
+        maintenance_until_date: null,
+        maintenance_price_cents: null,
+        maintenance_periodicity_months: null,
+        deposit_cents: null,
+        charge_first_payment_now: false,
+      }));
+    } else {
+      items = r.data as unknown[] | null;
+    }
+  }
   type PI = {
     product_id: string;
     product_name_snapshot: string;

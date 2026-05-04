@@ -79,11 +79,15 @@ export async function createBankAccountAction(input: unknown) {
   }
 
   const isPending = isPendingIban(iban);
+  // Constraint en BD: length(iban) between 15 and 34. Para el placeholder
+  // pendiente guardamos ES00 + 20 ceros (24 chars, IBAN español canónico
+  // todo a cero) y dejamos is_validated=false como marca real de pendiente.
+  const PENDING_IBAN_FULL = "ES00" + "0".repeat(20);
   const { error } = await supabase.from("customer_bank_accounts").insert({
     company_id: session.company_id,
     customer_id: parsed.customer_id,
     account_holder_name: parsed.account_holder_name || null,
-    iban: isPending ? "ES00" : iban,
+    iban: isPending ? PENDING_IBAN_FULL : iban,
     bic: parsed.bic || null,
     bank_name: parsed.bank_name || null,
     is_primary: parsed.is_primary,
