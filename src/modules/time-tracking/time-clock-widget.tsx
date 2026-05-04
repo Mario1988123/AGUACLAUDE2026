@@ -86,7 +86,8 @@ export function TimeClockWidget() {
     }
     startTransition(async () => {
       try {
-        await punchKindAction(kind, {
+        // punchKindAction ahora devuelve el estado actualizado tras el INSERT
+        const fresh = await punchKindAction(kind, {
           geo_latitude: geo.lat,
           geo_longitude: geo.lng,
           accuracy_meters: geo.acc,
@@ -98,7 +99,7 @@ export function TimeClockWidget() {
           break_end: "Reanudado",
         };
         notify.success(labels[kind]);
-        reload();
+        setState(fresh);
         router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));

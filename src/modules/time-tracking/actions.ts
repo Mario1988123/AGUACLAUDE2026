@@ -220,8 +220,9 @@ export async function getMyClockExtended(): Promise<ClockExtended> {
 }
 
 /**
- * Inserta un fichaje específico (clock_in/out, break_start/end). El
- * frontend del widget pasa el tipo concreto.
+ * Inserta un fichaje específico (clock_in/out, break_start/end) y devuelve
+ * el estado actualizado para que el widget refleje el cambio inmediatamente
+ * sin necesidad de un round-trip extra a getMyClockExtended.
  */
 export async function punchKindAction(
   kind: PunchKind,
@@ -230,13 +231,13 @@ export async function punchKindAction(
     geo_longitude: number | null;
     accuracy_meters: number | null;
   },
-): Promise<void> {
+): Promise<ClockExtended> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const noGeo = input.geo_latitude == null || input.geo_longitude == null;
-  await admin.from("time_punches").insert({
+  const { error: insertError } = await admin.from("time_punches").insert({
     company_id: session.company_id,
     user_id: session.user_id,
     punch_kind: kind,
@@ -247,6 +248,8 @@ export async function punchKindAction(
     needs_geo_review: noGeo,
     is_manual: false,
   });
+  if (insertError) throw new Error(insertError.message);
+
   if (noGeo) {
     try {
       await admin.from("incidents").insert({
@@ -263,7 +266,8 @@ export async function punchKindAction(
     }
   }
   revalidatePath("/fichajes");
-  revalidatePath("/", "layout");
+  // Devolver estado fresco directamente
+  return await getMyClockExtended();
 }
 
 /** Estado actual del usuario: ¿tiene un clock_in abierto hoy? */
