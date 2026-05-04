@@ -666,11 +666,11 @@ export async function reassignContractAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  const isUpper =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director");
-  if (!isUpper) throw new Error("Solo admin o director comercial");
+  // Reasignación de contrato restringida a admin de empresa (decisión
+  // del usuario): los directores ya no pueden reasignar.
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
+  if (!isAdmin) throw new Error("Solo el admin de empresa puede reasignar");
 
   // Admin client: la policy contracts_update_by_scope filtra por status IN
   // (draft, pending_data, pending_signature). Reasignar contratos firmados

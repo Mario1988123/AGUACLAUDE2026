@@ -99,7 +99,13 @@ export default async function CustomersPage({
         />
       </form>
 
-      <SelectableCustomersTable customers={customers} team={team} canBulkReassign={isUpperLevel} />
+      <SelectableCustomersTable
+        customers={customers}
+        team={team}
+        canBulkReassign={
+          session.is_superadmin || session.roles.includes("company_admin")
+        }
+      />
     </div>
   );
 }

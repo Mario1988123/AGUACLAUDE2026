@@ -325,7 +325,10 @@ export default async function ContractDetailPage({
               status={contract.status}
               hasProvisional={contract.has_provisional_data}
             />
-            {canEditClauses && (
+            {/* Reasignar comercial: SOLO superadmin / company_admin. Antes
+                lo veían también directores comerciales/técnicos via
+                canEditClauses. El user pidió restringir a admin. */}
+            {(session.is_superadmin || session.roles.includes("company_admin")) && (
               <div className="border-t pt-4">
                 <ReassignContractButton
                   contractId={contract.id}

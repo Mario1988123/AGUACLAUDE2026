@@ -17,12 +17,10 @@ const reassignSchema = z.object({
 export async function bulkReassignLeadsAction(input: unknown): Promise<number> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  const isUpper =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director") ||
-    session.roles.includes("telemarketing_director");
-  if (!isUpper) throw new Error("Solo admin o director");
+  // Reasignación de leads restringida a admin de empresa (decisión usuario).
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
+  if (!isAdmin) throw new Error("Solo el admin de empresa puede reasignar");
 
   const parsed = reassignSchema.parse(input);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

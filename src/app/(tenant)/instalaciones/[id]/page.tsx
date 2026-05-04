@@ -55,10 +55,9 @@ export default async function InstallationDetailPage({
     requireSession(),
     listTeamMembers().catch(() => []),
   ]);
+  // Reasignar instalación restringido a admin de empresa (decisión usuario).
   const canReassign =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("technical_director");
+    session.is_superadmin || session.roles.includes("company_admin");
 
   return (
     <div className="space-y-6">

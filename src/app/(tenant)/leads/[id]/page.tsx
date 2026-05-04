@@ -45,11 +45,10 @@ export default async function LeadDetailPage({
     requireSession(),
     listTeamMembers().catch(() => []),
   ]);
+  // Reasignar lead/contrato/instalación restringido a admin de empresa
+  // (decisión usuario): los directores ya no pueden reasignar.
   const canReassign =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director") ||
-    session.roles.includes("telemarketing_director");
+    session.is_superadmin || session.roles.includes("company_admin");
   const hasProposals = proposals.length > 0;
   const isConverted = lead.status === "converted";
 

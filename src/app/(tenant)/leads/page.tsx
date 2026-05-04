@@ -106,7 +106,13 @@ export default async function LeadsPage({
         </Button>
       </form>
 
-      <SelectableLeadsTable leads={leads} team={team} canBulkReassign={isUpperLevel} />
+      <SelectableLeadsTable
+        leads={leads}
+        team={team}
+        canBulkReassign={
+          session.is_superadmin || session.roles.includes("company_admin")
+        }
+      />
     </div>
   );
 }

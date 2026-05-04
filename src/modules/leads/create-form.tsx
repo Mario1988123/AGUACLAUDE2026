@@ -57,7 +57,7 @@ export function LeadCreateForm() {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
 
-  async function fillFromCoords(lat: number, lng: number) {
+  async function fillFromCoords(lat: number, lng: number, force = false) {
     setLatitude(lat);
     setLongitude(lng);
     const rev = await reverseGeocode(lat, lng);
@@ -68,11 +68,17 @@ export function LeadCreateForm() {
     if (STREET_TYPE.includes(rev.street_type as StreetType)) {
       setStreetType(rev.street_type as StreetType);
     }
-    if (!street) setStreet(rev.street ?? "");
-    if (!streetNumber && rev.street_number) setStreetNumber(rev.street_number);
-    if (!postal && rev.postal_code) setPostal(rev.postal_code);
-    if (!city && rev.city) setCity(rev.city);
-    if (!province && rev.province) setProvince(rev.province);
+    // Functional updaters: leen el valor actual, no el del cierre. Evita
+    // que el "if (!street)" use el closure inicial (siempre vacío) y
+    // termine pisando el campo después aunque ya hubiera contenido —
+    // o, peor, no actualice nada si el closure venía con basura.
+    setStreet((cur) => (force || !cur ? rev.street ?? cur : cur));
+    setStreetNumber((cur) =>
+      (force || !cur) && rev.street_number ? rev.street_number : cur,
+    );
+    setPostal((cur) => ((force || !cur) && rev.postal_code ? rev.postal_code : cur));
+    setCity((cur) => ((force || !cur) && rev.city ? rev.city : cur));
+    setProvince((cur) => ((force || !cur) && rev.province ? rev.province : cur));
     notify.success("Dirección autorrellenada");
   }
 
@@ -106,14 +112,16 @@ export function LeadCreateForm() {
     }
     setGeoLoading(true);
     const result = await forwardGeocode(parts.join(", "));
-    setGeoLoading(false);
     if (!result) {
+      setGeoLoading(false);
       notify.warning("No se encontró la dirección");
       return;
     }
-    setLatitude(result.lat);
-    setLongitude(result.lng);
-    notify.success("Localizado en el mapa");
+    // Tras encontrar las coordenadas, hacemos reverse-geocode para
+    // completar/corregir los campos vacíos (ej. si solo escribió la
+    // calle, ahora le rellenamos CP, ciudad y provincia).
+    await fillFromCoords(result.lat, result.lng);
+    setGeoLoading(false);
   }
 
   const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });

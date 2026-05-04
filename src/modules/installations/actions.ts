@@ -26,11 +26,11 @@ export async function reassignInstallationAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  const isUpper =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("technical_director");
-  if (!isUpper) throw new Error("Solo admin o director técnico");
+  // Reasignación restringida a admin de empresa (decisión usuario):
+  // los directores técnicos ya no pueden reasignar instalaciones.
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
+  if (!isAdmin) throw new Error("Solo el admin de empresa puede reasignar");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
