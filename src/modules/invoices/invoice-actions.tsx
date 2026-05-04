@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   markInvoiceIssuedAction,
   markInvoicePaidAction,
@@ -34,7 +35,10 @@ export function InvoiceActions({
   const [pending, startTransition] = useTransition();
   const [paying, setPaying] = useState(false);
   const [amount, setAmount] = useState((pendingCents / 100).toFixed(2));
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const router = useRouter();
+  const ask = useConfirm();
 
   function issue() {
     startTransition(async () => {
@@ -66,13 +70,14 @@ export function InvoiceActions({
     });
   }
 
-  function cancel() {
-    const reason = prompt("Motivo de la cancelación (opcional):") ?? "";
-    if (!confirm("¿Cancelar esta factura?")) return;
+  function confirmCancel() {
+    const reason = cancelReason.trim();
     startTransition(async () => {
       try {
         await cancelInvoiceAction(invoiceId, reason);
         notify.success("Factura cancelada");
+        setCancelOpen(false);
+        setCancelReason("");
         router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
@@ -80,13 +85,14 @@ export function InvoiceActions({
     });
   }
 
-  function rectify() {
-    if (
-      !confirm(
+  async function rectify() {
+    const ok = await ask({
+      message:
         "Crear factura rectificativa que anula esta. Las líneas se copiarán en negativo. ¿Continuar?",
-      )
-    )
-      return;
+      confirmText: "Crear rectificativa",
+      variant: "warning",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         const newId = await createCreditNoteAction(invoiceId);
@@ -142,9 +148,63 @@ export function InvoiceActions({
         </Button>
       )}
       {status !== "cancelled" && status !== "paid" && (
-        <Button onClick={cancel} disabled={pending} variant="ghost" className="w-full gap-2 text-destructive">
+        <Button
+          onClick={() => setCancelOpen(true)}
+          disabled={pending}
+          variant="ghost"
+          className="w-full gap-2 text-destructive"
+        >
           <Ban className="h-4 w-4" /> Cancelar
         </Button>
+      )}
+
+      {cancelOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => {
+            if (!pending) {
+              setCancelOpen(false);
+              setCancelReason("");
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="space-y-3 p-5">
+              <h2 className="text-base font-bold">Cancelar factura</h2>
+              <p className="text-sm text-muted-foreground">
+                Indica el motivo (opcional). Esta acción no se puede deshacer.
+              </p>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="Motivo de la cancelación…"
+                className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+            </div>
+            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setCancelOpen(false);
+                  setCancelReason("");
+                }}
+                disabled={pending}
+              >
+                Volver
+              </Button>
+              <Button variant="destructive" onClick={confirmCancel} disabled={pending}>
+                Cancelar factura
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import { Pencil, Ban, RotateCcw } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { setUserStatus, updateUserRoles } from "./actions";
 import { ROLE_KEYS, type RoleKey } from "./schemas";
 import { UserPermissionsButton } from "./permissions-dialog";
@@ -31,6 +32,7 @@ export function UserRowActions({
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [roles, setRoles] = useState<string[]>(currentRoles);
+  const ask = useConfirm();
 
   function toggleRole(r: string) {
     setRoles((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
@@ -49,8 +51,13 @@ export function UserRowActions({
     });
   }
 
-  function suspend() {
-    if (!confirm("¿Suspender este usuario?")) return;
+  async function suspend() {
+    const ok = await ask({
+      message: "¿Suspender este usuario?",
+      confirmText: "Suspender",
+      variant: "warning",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await setUserStatus(userId, "suspended");

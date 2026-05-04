@@ -6,6 +6,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { Copy, Check, KeyRound, UserPlus } from "lucide-react";
 import {
   createCompanyAdminAction,
@@ -23,6 +24,7 @@ export function CompanyAdminPanel({ companyId, admin }: Props) {
   const [showCreate, setShowCreate] = useState(false);
   const [credentials, setCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const ask = useConfirm();
 
   const [form, setForm] = useState({ email: "", full_name: "" });
 
@@ -55,9 +57,14 @@ export function CompanyAdminPanel({ companyId, admin }: Props) {
     });
   }
 
-  function handleReset() {
+  async function handleReset() {
     if (!admin) return;
-    if (!confirm(`¿Resetear contraseña de ${admin.email}? Se generará una nueva.`)) return;
+    const ok = await ask({
+      message: `¿Resetear contraseña de ${admin.email}? Se generará una nueva.`,
+      confirmText: "Resetear",
+      variant: "warning",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         const r = await resetCompanyAdminPassword(admin.user_id);

@@ -8,6 +8,7 @@ import { Input } from "@/shared/ui/input";
 import { Badge } from "@/shared/ui/badge";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   addHolidayAction,
   deleteHolidayAction,
@@ -28,6 +29,7 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
   const [newName, setNewName] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
 
   function saveRegion() {
     startTransition(async () => {
@@ -55,8 +57,13 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
     });
   }
 
-  function remove(id: string) {
-    if (!confirm("¿Eliminar este festivo? (los nacionales no se pueden borrar)")) return;
+  async function remove(id: string) {
+    const ok = await ask({
+      message: "¿Eliminar este festivo? (los nacionales no se pueden borrar)",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteHolidayAction(id);

@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Play, Pause, StopCircle } from "lucide-react";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { punchKindAction, getMyClockExtended } from "./actions";
 import type { ClockExtended } from "./types";
 
@@ -19,6 +20,7 @@ export function TimeClockWidget() {
   const [pending, startTransition] = useTransition();
   const [elapsed, setElapsed] = useState("");
   const router = useRouter();
+  const ask = useConfirm();
 
   function reload() {
     getMyClockExtended()
@@ -86,9 +88,12 @@ export function TimeClockWidget() {
   async function doPunch(kind: "clock_in" | "clock_out" | "break_start" | "break_end") {
     const geo = await getGeo();
     if (geo.lat == null) {
-      const ok = confirm(
-        "No se ha obtenido tu GPS. El fichaje quedará marcado para revisión y se generará una incidencia. ¿Continuar?",
-      );
+      const ok = await ask({
+        message:
+          "No se ha obtenido tu GPS. El fichaje quedará marcado para revisión y se generará una incidencia. ¿Continuar?",
+        confirmText: "Continuar",
+        variant: "warning",
+      });
       if (!ok) return;
     }
     startTransition(async () => {
@@ -112,6 +117,15 @@ export function TimeClockWidget() {
         notify.error("Error", err instanceof Error ? err.message : String(err));
       }
     });
+  }
+
+  async function endShift() {
+    const ok = await ask({
+      message: "¿Terminar jornada?",
+      confirmText: "Terminar jornada",
+      variant: "destructive",
+    });
+    if (ok) doPunch("clock_out");
   }
 
   if (!state) return null;
@@ -159,9 +173,7 @@ export function TimeClockWidget() {
         </button>
         <button
           type="button"
-          onClick={() => {
-            if (confirm("¿Terminar jornada?")) doPunch("clock_out");
-          }}
+          onClick={endShift}
           disabled={pending}
           className="inline-flex h-10 items-center justify-center rounded-r-xl border-2 border-emerald-500 bg-emerald-50 px-2 text-emerald-700 hover:bg-red-100 hover:text-red-700 hover:border-red-500"
           title="Terminar jornada"
@@ -194,9 +206,7 @@ export function TimeClockWidget() {
       </button>
       <button
         type="button"
-        onClick={() => {
-          if (confirm("¿Terminar jornada?")) doPunch("clock_out");
-        }}
+        onClick={endShift}
         disabled={pending}
         className="inline-flex h-10 items-center justify-center rounded-r-xl border-2 border-amber-500 bg-amber-50 px-2 text-amber-700 hover:bg-red-100 hover:text-red-700"
         title="Terminar jornada"

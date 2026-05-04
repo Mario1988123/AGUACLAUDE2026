@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { markContractSigned } from "./actions";
 import type { ContractStatus } from "./schemas";
 
@@ -20,12 +21,16 @@ interface Props {
  */
 export function ContractStatusActions({ contractId, status, hasProvisional }: Props) {
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
-  function sign() {
+  async function sign() {
     if (hasProvisional) {
-      const ok = confirm(
-        "El contrato tiene datos provisionales (DNI/CIF/IBAN). ¿Firmar igualmente?",
-      );
+      const ok = await ask({
+        message:
+          "El contrato tiene datos provisionales (DNI/CIF/IBAN). ¿Firmar igualmente?",
+        confirmText: "Firmar",
+        variant: "warning",
+      });
       if (!ok) return;
     }
     startTransition(async () => {

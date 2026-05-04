@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { mergeCustomersAction, type DuplicateCustomerGroup } from "./merge-actions";
 
 const FIELD_LABEL = {
@@ -38,18 +39,20 @@ function DuplicateGroupCard({ group }: { group: DuplicateCustomerGroup }) {
   const [primaryId, setPrimaryId] = useState<string>(group.customers[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
 
-  function mergeOne(secondaryId: string) {
+  async function mergeOne(secondaryId: string) {
     if (!primaryId) {
       notify.warning("Elige el cliente principal primero");
       return;
     }
-    if (
-      !confirm(
+    const ok = await ask({
+      message:
         "¿Fusionar este cliente en el principal? Se moverán contratos, instalaciones, propuestas, wallet y direcciones. El secundario se marcará eliminado.",
-      )
-    )
-      return;
+      confirmText: "Fusionar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await mergeCustomersAction(primaryId, secondaryId);

@@ -6,6 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   setProductAttributeValue,
   deleteProductAttributeValue,
@@ -72,6 +73,7 @@ export function AttributesPanel({ productId, attributes, values }: Props) {
 
 function ValueRow({ value, productId }: { value: ProductAttrValue; productId: string }) {
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
   function toggle(field: "is_visible" | "is_featured") {
     startTransition(async () => {
@@ -92,8 +94,13 @@ function ValueRow({ value, productId }: { value: ProductAttrValue; productId: st
     });
   }
 
-  function remove() {
-    if (!confirm("¿Quitar este atributo del producto?")) return;
+  async function remove() {
+    const ok = await ask({
+      message: "¿Quitar este atributo del producto?",
+      confirmText: "Quitar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteProductAttributeValue(value.id, productId);

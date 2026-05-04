@@ -7,6 +7,7 @@ import { CheckCircle2, FileSignature, FileText, Send } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { markProposalAccepted, markProposalSent } from "./actions";
 import { createContractFromProposal } from "@/modules/contracts/actions";
 import type { ProposalListItem } from "./types";
@@ -29,6 +30,7 @@ export function ProposalsCard({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
   function send(id: string) {
     startTransition(async () => {
@@ -42,8 +44,13 @@ export function ProposalsCard({
     });
   }
 
-  function accept(id: string) {
-    if (!confirm("¿Aceptar esta propuesta? Si es de un lead se convertirá automáticamente en cliente.")) return;
+  async function accept(id: string) {
+    const ok = await ask({
+      message: "¿Aceptar esta propuesta? Si es de un lead se convertirá automáticamente en cliente.",
+      confirmText: "Aceptar",
+      variant: "success",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         const res = await markProposalAccepted(id);
@@ -59,8 +66,14 @@ export function ProposalsCard({
     });
   }
 
-  function generateContract(id: string) {
-    if (!confirm("¿Generar el contrato a partir de esta propuesta? Se creará en estado borrador para revisar y firmar.")) return;
+  async function generateContract(id: string) {
+    const ok = await ask({
+      message:
+        "¿Generar el contrato a partir de esta propuesta? Se creará en estado borrador para revisar y firmar.",
+      confirmText: "Generar",
+      variant: "success",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await createContractFromProposal(id);

@@ -9,6 +9,7 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   upsertMessageTemplateAction,
   deleteMessageTemplateAction,
@@ -54,9 +55,15 @@ function TemplateRow({
 }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
 
-  function remove() {
-    if (!confirm(`¿Eliminar plantilla "${item.label}"?`)) return;
+  async function remove() {
+    const ok = await ask({
+      message: `¿Eliminar plantilla "${item.label}"?`,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteMessageTemplateAction(item.id);

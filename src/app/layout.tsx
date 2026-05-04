@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito_Sans } from "next/font/google";
 import { ToastProvider } from "@/shared/components/toast-provider";
+import { ConfirmDialogProvider } from "@/shared/components/confirm-dialog";
 import { ServiceWorkerRegister } from "@/shared/components/sw-register";
 import "./globals.css";
 
@@ -41,7 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${nunito.variable} font-sans antialiased`}>
-        {children}
+        <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
         <ToastProvider />
         <ServiceWorkerRegister />
       </body>

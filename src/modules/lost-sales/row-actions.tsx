@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Undo2, UserPlus, CheckCircle2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   assignRecoveryAction,
   markRecoveredAction,
@@ -25,6 +26,7 @@ export function LostSaleRowActions({
 }) {
   const [pending, startTransition] = useTransition();
   const [assignTo, setAssignTo] = useState(assignedUserId ?? "");
+  const ask = useConfirm();
 
   if (isRecovered) {
     return <span className="text-xs text-success">✓ Recuperada</span>;
@@ -41,8 +43,13 @@ export function LostSaleRowActions({
     });
   }
 
-  function reopen() {
-    if (!confirm("¿Reabrir el lead asociado y mover esta venta a recuperada?")) return;
+  async function reopen() {
+    const ok = await ask({
+      message: "¿Reabrir el lead asociado y mover esta venta a recuperada?",
+      confirmText: "Reabrir",
+      variant: "warning",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await reopenLostSaleAction(lostSaleId);

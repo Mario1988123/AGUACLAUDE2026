@@ -8,6 +8,7 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { upsertObjectiveAction, deleteObjectiveAction } from "./objectives-actions";
 
 interface Objective {
@@ -37,9 +38,15 @@ export function ObjectivesManager({ objectives, team }: Props) {
   const [adding, setAdding] = useState(false);
   const now = new Date();
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
-  function remove(id: string) {
-    if (!confirm("¿Eliminar objetivo?")) return;
+  async function remove(id: string) {
+    const ok = await ask({
+      message: "¿Eliminar objetivo?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteObjectiveAction(id);

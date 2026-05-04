@@ -8,6 +8,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { addUnitAction, deleteUnitAction, type UnitRow } from "./actions";
 
 export function UnitsManager({ units }: { units: UnitRow[] }) {
@@ -15,6 +16,7 @@ export function UnitsManager({ units }: { units: UnitRow[] }) {
   const [label, setLabel] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
 
   function add() {
     if (!code.trim() || !label.trim()) {
@@ -34,8 +36,13 @@ export function UnitsManager({ units }: { units: UnitRow[] }) {
     });
   }
 
-  function remove(id: string) {
-    if (!confirm("¿Quitar esta unidad de tu catálogo? (Las globales no se pueden borrar)")) return;
+  async function remove(id: string) {
+    const ok = await ask({
+      message: "¿Quitar esta unidad de tu catálogo? (Las globales no se pueden borrar)",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteUnitAction(id);

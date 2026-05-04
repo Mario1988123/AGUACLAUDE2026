@@ -8,6 +8,7 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   upsertClauseTemplateAction,
   deleteClauseTemplateAction,
@@ -122,8 +123,14 @@ function ClauseRow({
   onMove: (dir: "up" | "down") => void;
 }) {
   const [pending, startTransition] = useTransition();
-  function remove() {
-    if (!confirm(`¿Eliminar cláusula "${clause.title}"? (solo afecta a contratos futuros)`)) return;
+  const ask = useConfirm();
+  async function remove() {
+    const ok = await ask({
+      message: `¿Eliminar cláusula "${clause.title}"? (solo afecta a contratos futuros)`,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteClauseTemplateAction(clause.id);

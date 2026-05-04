@@ -8,6 +8,7 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { upsertWarehouseAction, deleteWarehouseAction, type WarehouseRow } from "./actions";
 import { KIND_LABEL } from "./constants";
 
@@ -19,9 +20,15 @@ interface Props {
 export function WarehousesManager({ warehouses, teamMembers = [] }: Props) {
   const [editing, setEditing] = useState<WarehouseRow | "new" | null>(null);
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
-  function remove(id: string) {
-    if (!confirm("¿Eliminar este almacén?")) return;
+  async function remove(id: string) {
+    const ok = await ask({
+      message: "¿Eliminar este almacén?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteWarehouseAction(id);

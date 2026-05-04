@@ -9,6 +9,7 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   upsertGlobalCategoryAction,
   deleteGlobalCategoryAction,
@@ -75,6 +76,24 @@ function CategoryRow({ item }: { item: GlobalCategory }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
+  async function handleDelete() {
+    const ok = await ask({
+      message: `¿Desactivar "${item.name_es}"?`,
+      confirmText: "Desactivar",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      try {
+        await deleteGlobalCategoryAction(item.id);
+        notify.success("Desactivada");
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
   if (editing) return <CategoryForm initial={item} onDone={() => setEditing(false)} />;
   return (
     <li
@@ -96,23 +115,7 @@ function CategoryRow({ item }: { item: GlobalCategory }) {
       <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
         <Pencil className="h-4 w-4" />
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => {
-          if (!confirm(`¿Desactivar "${item.name_es}"?`)) return;
-          startTransition(async () => {
-            try {
-              await deleteGlobalCategoryAction(item.id);
-              notify.success("Desactivada");
-              router.refresh();
-            } catch (err) {
-              notify.error("Error", err instanceof Error ? err.message : String(err));
-            }
-          });
-        }}
-        disabled={pending}
-      >
+      <Button size="sm" variant="ghost" onClick={handleDelete} disabled={pending}>
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>
     </li>
@@ -254,6 +257,24 @@ function AttributeRow({
   const [catOpen, setCatOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
+  async function handleDelete() {
+    const ok = await ask({
+      message: `¿Eliminar "${item.name_es}"?`,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      try {
+        await deleteGlobalAttributeAction(item.id);
+        notify.success("Eliminado");
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
   if (editing) return <AttributeForm initial={item} onDone={() => setEditing(false)} />;
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
@@ -276,23 +297,7 @@ function AttributeRow({
       <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
         <Pencil className="h-4 w-4" />
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => {
-          if (!confirm(`¿Eliminar "${item.name_es}"?`)) return;
-          startTransition(async () => {
-            try {
-              await deleteGlobalAttributeAction(item.id);
-              notify.success("Eliminado");
-              router.refresh();
-            } catch (err) {
-              notify.error("Error", err instanceof Error ? err.message : String(err));
-            }
-          });
-        }}
-        disabled={pending}
-      >
+      <Button size="sm" variant="ghost" onClick={handleDelete} disabled={pending}>
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>
       <AttributeCategoriesDialog
@@ -529,6 +534,24 @@ function ExternalModelRow({ item }: { item: GlobalExternalModel }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
+  async function handleDelete() {
+    const ok = await ask({
+      message: `¿Eliminar "${item.brand} ${item.model}"?`,
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
+    startTransition(async () => {
+      try {
+        await deleteExternalModelAction(item.id);
+        notify.success("Eliminado");
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
   if (editing) return <ExternalModelForm initial={item} onDone={() => setEditing(false)} />;
   return (
     <li className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
@@ -543,23 +566,7 @@ function ExternalModelRow({ item }: { item: GlobalExternalModel }) {
       <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
         <Pencil className="h-4 w-4" />
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => {
-          if (!confirm(`¿Eliminar "${item.brand} ${item.model}"?`)) return;
-          startTransition(async () => {
-            try {
-              await deleteExternalModelAction(item.id);
-              notify.success("Eliminado");
-              router.refresh();
-            } catch (err) {
-              notify.error("Error", err instanceof Error ? err.message : String(err));
-            }
-          });
-        }}
-        disabled={pending}
-      >
+      <Button size="sm" variant="ghost" onClick={handleDelete} disabled={pending}>
         <Trash2 className="h-4 w-4 text-destructive" />
       </Button>
     </li>

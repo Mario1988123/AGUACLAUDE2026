@@ -7,6 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   upsertPricingPlanAction,
   deletePricingPlanAction,
@@ -117,8 +118,14 @@ export function PricingPlansPanel({ productId, plans }: Props) {
 
 function PlanRow({ plan, productId }: { plan: PricingPlan; productId: string }) {
   const [pending, startTransition] = useTransition();
-  function remove() {
-    if (!confirm("¿Eliminar este plan?")) return;
+  const ask = useConfirm();
+  async function remove() {
+    const ok = await ask({
+      message: "¿Eliminar este plan?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deletePricingPlanAction(plan.id, productId);

@@ -7,6 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { createBankAccountAction, deleteBankAccountAction, type BankAccountRow } from "./actions";
 import { IbanInput } from "@/shared/components/iban-input";
 import { checkIbanLive, isPendingIban } from "@/shared/lib/validations/iban-partial";
@@ -27,6 +28,7 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
   const [showFull, setShowFull] = useState<Record<string, boolean>>({});
   const [adding, setAdding] = useState(false);
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
   const [form, setForm] = useState({
     iban: "",
     account_holder_name: defaultHolderName ?? "",
@@ -65,8 +67,13 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
     });
   }
 
-  function remove(id: string) {
-    if (!confirm("¿Eliminar este IBAN?")) return;
+  async function remove(id: string) {
+    const ok = await ask({
+      message: "¿Eliminar este IBAN?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteBankAccountAction(id, customerId);

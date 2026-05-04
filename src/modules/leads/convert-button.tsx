@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { convertLeadToCustomerAction } from "./actions";
 
 export function ConvertLeadButton({ leadId, alreadyConverted }: { leadId: string; alreadyConverted: boolean }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
 
   if (alreadyConverted) {
     return (
@@ -17,8 +19,13 @@ export function ConvertLeadButton({ leadId, alreadyConverted }: { leadId: string
     );
   }
 
-  function convert() {
-    if (!confirm("¿Convertir este lead en cliente? Sus direcciones se moverán al cliente.")) return;
+  async function convert() {
+    const ok = await ask({
+      message: "¿Convertir este lead en cliente? Sus direcciones se moverán al cliente.",
+      confirmText: "Convertir",
+      variant: "success",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         const customerId = await convertLeadToCustomerAction(leadId);

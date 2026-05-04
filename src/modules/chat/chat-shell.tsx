@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { cn } from "@/shared/lib/utils";
 import {
   getChatMessages,
@@ -344,6 +345,7 @@ function ChatMessageItem({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(message.body);
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
   function save() {
     if (!draft.trim() || draft.trim() === message.body) {
@@ -361,8 +363,13 @@ function ChatMessageItem({
     });
   }
 
-  function remove() {
-    if (!confirm("¿Eliminar este mensaje?")) return;
+  async function remove() {
+    const ok = await ask({
+      message: "¿Eliminar este mensaje?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteChatMessageAction(message.id);

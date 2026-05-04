@@ -6,6 +6,7 @@ import { MapPin, Pencil, Trash2, Plus, Star } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { AddressForm } from "./address-form";
 import { deleteAddressAction, type AddressRow } from "./actions";
 import { KIND_LABEL, STREET_TYPE_LABEL } from "./schemas";
@@ -20,6 +21,7 @@ export function AddressList({ customerId, leadId, addresses }: Props) {
   const sp = useSearchParams();
   const [editing, setEditing] = useState<AddressRow | "new" | null>(null);
   const [pending, startTransition] = useTransition();
+  const ask = useConfirm();
 
   // Auto-abrir el formulario cuando viene ?address=open (típico al crear lead)
   useEffect(() => {
@@ -28,8 +30,13 @@ export function AddressList({ customerId, leadId, addresses }: Props) {
     }
   }, [sp, addresses.length]);
 
-  function handleDelete(id: string) {
-    if (!confirm("¿Eliminar esta dirección?")) return;
+  async function handleDelete(id: string) {
+    const ok = await ask({
+      message: "¿Eliminar esta dirección?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteAddressAction(id);

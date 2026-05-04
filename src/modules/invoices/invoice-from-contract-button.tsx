@@ -5,13 +5,20 @@ import { useRouter } from "next/navigation";
 import { Receipt } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { createInvoiceFromContractAction } from "./actions";
 
 export function InvoiceFromContractButton({ contractId }: { contractId: string }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
-  function go() {
-    if (!confirm("¿Generar factura desde este contrato?")) return;
+  const ask = useConfirm();
+  async function go() {
+    const ok = await ask({
+      message: "¿Generar factura desde este contrato?",
+      confirmText: "Generar",
+      variant: "success",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         const id = await createInvoiceFromContractAction(contractId);

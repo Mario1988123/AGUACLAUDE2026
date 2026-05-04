@@ -6,6 +6,7 @@ import { Camera, Trash2, Plus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   uploadContractPhotoAction,
   listContractPhotos,
@@ -24,6 +25,7 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
   const [pending, startTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [pickedKind, setPickedKind] = useState<ContractPhotoKind>("id_card");
+  const ask = useConfirm();
 
   useEffect(() => {
     listContractPhotos(contractId)
@@ -55,8 +57,13 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
     e.target.value = "";
   }
 
-  function remove(id: string) {
-    if (!confirm("¿Eliminar esta foto?")) return;
+  async function remove(id: string) {
+    const ok = await ask({
+      message: "¿Eliminar esta foto?",
+      confirmText: "Eliminar",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
       try {
         await deleteContractPhotoAction(id);
