@@ -31,16 +31,23 @@ function formatCents(cents: number | null) {
 }
 
 const RENTING_DURATIONS = [12, 24, 36, 48, 60] as const;
+const RENTAL_DURATIONS = [12, 24, 36, 48, 60] as const;
 
 export function PricingPlansPanel({ productId, plans }: Props) {
   const [adding, setAdding] = useState<null | "cash" | "renting" | "rental">(null);
   const [rentingDuration, setRentingDuration] = useState<number | null>(null);
+  const [rentalDuration, setRentalDuration] = useState<number | null>(null);
 
   const existingRentingDurations = new Set(
     plans.filter((p) => p.plan_type === "renting").map((p) => p.duration_months),
   );
+  // Para alquiler usamos la permanencia como "duración" del plan: cada
+  // permanencia distinta es un plan distinto (la cuota suele variar según
+  // el compromiso del cliente).
+  const existingRentalDurations = new Set(
+    plans.filter((p) => p.plan_type === "rental").map((p) => p.permanence_months ?? p.duration_months),
+  );
   const hasCash = plans.some((p) => p.plan_type === "cash");
-  const hasRental = plans.some((p) => p.plan_type === "rental");
 
   return (
     <div className="space-y-4">
@@ -58,10 +65,17 @@ export function PricingPlansPanel({ productId, plans }: Props) {
         <PlanForm
           productId={productId}
           planType={adding}
-          fixedDuration={adding === "renting" ? rentingDuration : null}
+          fixedDuration={
+            adding === "renting"
+              ? rentingDuration
+              : adding === "rental"
+                ? rentalDuration
+                : null
+          }
           onDone={() => {
             setAdding(null);
             setRentingDuration(null);
+            setRentalDuration(null);
           }}
         />
       )}
@@ -74,16 +88,45 @@ export function PricingPlansPanel({ productId, plans }: Props) {
                 <Plus className="h-4 w-4" /> Contado
               </Button>
             )}
-            {!hasRental && (
-              <Button variant="outline" size="sm" onClick={() => setAdding("rental")}>
-                <Plus className="h-4 w-4" /> Alquiler
-              </Button>
-            )}
           </div>
 
           <div className="rounded-xl border bg-muted/20 p-3">
             <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Renting · selecciona duración
+              Alquiler · selecciona permanencia (puedes añadir varias)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {RENTAL_DURATIONS.map((m) => {
+                const exists = existingRentalDurations.has(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      if (exists) return;
+                      setRentalDuration(m);
+                      setAdding("rental");
+                    }}
+                    disabled={exists}
+                    className={`inline-flex h-10 items-center justify-center rounded-xl border-2 px-3 text-sm font-bold transition-colors ${
+                      exists
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 cursor-default"
+                        : "border-border bg-card text-foreground hover:border-primary hover:bg-primary/10"
+                    }`}
+                  >
+                    {m}m{exists && " ✓"}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              La cuota mensual puede cambiar según la permanencia. Crea un plan por cada
+              permanencia que quieras ofertar.
+            </p>
+          </div>
+
+          <div className="rounded-xl border bg-muted/20 p-3">
+            <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Renting · selecciona duración (puedes añadir varias)
             </div>
             <div className="flex flex-wrap gap-2">
               {RENTING_DURATIONS.map((m) => {
@@ -204,7 +247,9 @@ function PlanForm({
     total_euros: "",
     /** % comisión que retiene la financiera del total cliente (0-100). */
     financier_fee_percent: planType === "renting" ? "5" : "",
-    permanence_months: planType === "rental" ? "12" : "",
+    // Para alquiler la permanencia = duración elegida en el grid (la
+    // permanencia es lo que distingue cada plan de alquiler).
+    permanence_months: planType === "rental" ? String(fixedDuration ?? 12) : "",
     min_authorized_euros: "",
     absolute_min_euros: "",
   });
@@ -283,7 +328,9 @@ function PlanForm({
               type="number"
               min={1}
               required
-              readOnly={planType === "renting" && fixedDuration != null}
+              readOnly={
+                (planType === "renting" || planType === "rental") && fixedDuration != null
+              }
               value={form.duration_months}
               onChange={(e) => setForm({ ...form, duration_months: e.target.value })}
               onBlur={calc}

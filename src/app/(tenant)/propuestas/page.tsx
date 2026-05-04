@@ -81,14 +81,13 @@ export default async function PropuestasPage({
               <th className="px-4 py-3 text-left">Estado</th>
               <th className="px-4 py-3 text-right">Total contado</th>
               <th className="px-4 py-3 text-left">Validez</th>
-              <th className="px-4 py-3 text-right">v</th>
               <th className="px-4 py-3 text-right">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {proposals.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={6} className="p-8 text-center text-muted-foreground">
                   No hay propuestas. Crea una desde la ficha de un cliente o desde aquí.
                 </td>
               </tr>
@@ -115,9 +114,6 @@ export default async function PropuestasPage({
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     {p.validity_until ?? "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right text-xs text-muted-foreground">
-                    v{p.version_number}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link

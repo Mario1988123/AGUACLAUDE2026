@@ -5,6 +5,7 @@ import { Plus, Trash2, AlertTriangle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { MoneyInput } from "@/shared/components/money-input";
 import { notify } from "@/shared/hooks/use-toast";
 import { createProposalAction } from "./actions";
 import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
@@ -410,14 +411,9 @@ function ItemEditor({
         </div>
         <div className="space-y-1 sm:col-span-2">
           <Label className="text-xs">{cuotaLabel}</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min={0}
-            value={(item.unit_price_cents / 100).toFixed(2)}
-            onChange={(e) =>
-              onChange({ unit_price_cents: Math.round(Number(e.target.value) * 100) })
-            }
+          <MoneyInput
+            valueCents={item.unit_price_cents}
+            onChangeCents={(c) => onChange({ unit_price_cents: c })}
             className={belowMin ? "border-amber-400 focus-visible:ring-amber-400" : ""}
           />
           {belowMin && (
@@ -441,16 +437,9 @@ function ItemEditor({
         {!item.installation_included && (
           <div className="mt-2 space-y-1">
             <Label className="text-xs">Precio instalación aparte (€)</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min={0}
-              value={(item.installation_price_cents ?? 0) / 100}
-              onChange={(e) =>
-                onChange({
-                  installation_price_cents: Math.round(Number(e.target.value) * 100),
-                })
-              }
+            <MoneyInput
+              valueCents={item.installation_price_cents ?? 0}
+              onChangeCents={(c) => onChange({ installation_price_cents: c })}
               className="max-w-[200px]"
             />
           </div>
@@ -484,16 +473,9 @@ function ItemEditor({
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">Precio mantenimiento (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                value={(item.maintenance_price_cents ?? 0) / 100}
-                onChange={(e) =>
-                  onChange({
-                    maintenance_price_cents: Math.round(Number(e.target.value) * 100),
-                  })
-                }
+              <MoneyInput
+                valueCents={item.maintenance_price_cents ?? 0}
+                onChangeCents={(c) => onChange({ maintenance_price_cents: c })}
               />
             </div>
             <div className="space-y-1">
@@ -521,14 +503,9 @@ function ItemEditor({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">Fianza (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                value={(item.deposit_cents ?? 0) / 100}
-                onChange={(e) =>
-                  onChange({ deposit_cents: Math.round(Number(e.target.value) * 100) })
-                }
+              <MoneyInput
+                valueCents={item.deposit_cents ?? 0}
+                onChangeCents={(c) => onChange({ deposit_cents: c })}
               />
               <p className="text-[10px] text-muted-foreground">Por producto. Puede ser 0.</p>
             </div>

@@ -56,7 +56,6 @@ export default async function ProposalDetailPage({
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">Propuesta {proposal.reference_code ?? "(sin código)"}</h1>
             <Badge variant={STATUS_VARIANT[proposal.status]}>{STATUS_LABEL[proposal.status]}</Badge>
-            <Badge variant="outline">v{proposal.version_number}</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Para: <strong>{proposal.customer_or_lead_name}</strong>

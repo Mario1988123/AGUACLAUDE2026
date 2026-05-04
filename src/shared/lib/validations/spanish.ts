@@ -33,33 +33,23 @@ export function validateDNIorNIE(value: string): { valid: boolean; expectedLette
   return validateDNI(v);
 }
 
-/** Valida CIF (letra + 7 dígitos + dígito control). */
+/**
+ * Valida CIF/NIF de empresa de forma LAXA: comprueba sólo formato
+ * (letra inicial válida según tipo de entidad + 7 dígitos + carácter
+ * final dígito o letra). NO valida el dígito de control porque hay
+ * empresas reales (SL, SA, CB, OE, etc.) que el algoritmo flagea
+ * como inválidas y bloquean innecesariamente al comercial.
+ *
+ * Letras válidas iniciales:
+ *   A: SA · B: SL · C: SCol · D: SCom · E: CB · F: SCoop
+ *   G: Asociación · H: Comuni. propietarios · J: SC
+ *   N: extranjera · P: corp. local · Q: organismo público
+ *   R: religiosa · S: órgano admón. · U: UTE · V: otras
+ *   W: estab. permanente extranjero
+ */
 export function validateCIF(value: string): boolean {
   const v = value?.trim().toUpperCase().replace(/[\s-]/g, "");
-  if (!/^[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J]$/.test(v)) return false;
-
-  const digits = v.slice(1, 8);
-  let evenSum = 0;
-  let oddSum = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = parseInt(digits[i]!, 10);
-    if ((i + 1) % 2 === 0) {
-      evenSum += d;
-    } else {
-      const x = d * 2;
-      oddSum += x > 9 ? Math.floor(x / 10) + (x % 10) : x;
-    }
-  }
-  const total = evenSum + oddSum;
-  const controlDigit = (10 - (total % 10)) % 10;
-  const controlLetter = "JABCDEFGHI"[controlDigit]!;
-  const provided = v[8]!;
-  const firstLetter = v[0]!;
-
-  // Letras que requieren dígito numérico, otras requieren letra, otras admiten ambos
-  if ("KPQS".includes(firstLetter)) return provided === controlLetter;
-  if ("ABEH".includes(firstLetter)) return provided === String(controlDigit);
-  return provided === String(controlDigit) || provided === controlLetter;
+  return /^[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J]$/.test(v);
 }
 
 /** Valida IBAN español (ES + 22 dígitos) y otros IBAN europeos. */

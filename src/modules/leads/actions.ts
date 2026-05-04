@@ -221,12 +221,17 @@ export async function createLeadAction(formData: FormData) {
       lead_id: newId,
       kind: parsed.party_kind === "company" ? "office" : "home",
       is_primary: true,
-      street_type: "calle",
+      street_type: parsed.address_street_type || "calle",
       street: parsed.address_street,
       street_number: parsed.address_street_number || null,
+      portal: parsed.address_portal || null,
+      floor: parsed.address_floor || null,
+      door: parsed.address_door || null,
       postal_code: parsed.address_postal_code,
       city: parsed.address_city || null,
       province: parsed.address_province || null,
+      latitude: parsed.address_latitude ?? null,
+      longitude: parsed.address_longitude ?? null,
     } as never);
   }
 
@@ -490,6 +495,39 @@ export async function logLeadContactAction(
 
   await bumpLeadStatus(leadId, "contacted");
   revalidatePath(`/leads/${leadId}`);
+}
+
+/**
+ * Actualiza datos básicos del lead (nombre, contacto, notas, potencial,
+ * tax_id…). NO toca status ni converted_at — para eso hay otras actions.
+ */
+export async function updateLeadAction(
+  leadId: string,
+  input: {
+    party_kind?: "individual" | "company";
+    legal_name?: string | null;
+    trade_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    phone_primary?: string | null;
+    phone_company?: string | null;
+    tax_id?: string | null;
+    notes?: string | null;
+    potential?: "unknown" | "A" | "B" | "C";
+  },
+): Promise<void> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const payload: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(input)) {
+    payload[k] = v === "" ? null : v;
+  }
+  const r = await admin.from("leads").update(payload).eq("id", leadId);
+  if (r.error) throw new Error(r.error.message);
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/leads");
 }
 
 export async function updateLeadStatus(id: string, status: LeadStatus, lostReason?: string) {

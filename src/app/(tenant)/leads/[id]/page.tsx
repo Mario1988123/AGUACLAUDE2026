@@ -11,6 +11,7 @@ import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, ORIGIN_LABEL } from "@/modules/leads/schemas";
 import { LeadStatusActions } from "@/modules/leads/status-actions";
 import { ConvertLeadButton } from "@/modules/leads/convert-button";
+import { EditLeadButton } from "@/modules/leads/edit-lead-button";
 import { LeadContactButtons } from "@/modules/leads/contact-buttons";
 import { ReassignLeadButton } from "@/modules/leads/reassign-button";
 import { Plus, MapPin } from "lucide-react";
@@ -87,9 +88,29 @@ export default async function LeadDetailPage({
             )}
           </div>
         </div>
-        <Link href="/leads" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <div className="flex items-center gap-3">
+          {!isConverted && (
+            <EditLeadButton
+              leadId={lead.id}
+              initial={{
+                party_kind: lead.party_kind,
+                legal_name: lead.legal_name,
+                trade_name: lead.trade_name,
+                first_name: lead.first_name,
+                last_name: lead.last_name,
+                email: lead.email,
+                phone_primary: lead.phone_primary,
+                phone_company: lead.phone_company,
+                tax_id: lead.tax_id,
+                notes: lead.notes,
+                potential: lead.potential,
+              }}
+            />
+          )}
+          <Link href="/leads" className="text-sm text-primary hover:underline">
+            ← Volver
+          </Link>
+        </div>
       </div>
 
       <LeadContactButtons

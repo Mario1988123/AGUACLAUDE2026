@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, MapPin, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, Check, Crosshair, Search } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -13,6 +13,8 @@ import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
+import { STREET_TYPE, STREET_TYPE_LABEL, type StreetType } from "@/modules/addresses/schemas";
+import { reverseGeocode, forwardGeocode } from "@/shared/lib/geocoding/nominatim";
 
 /**
  * Wizard 3 pasos en lugar de scroll vertical largo. Tablet-first.
@@ -40,12 +42,79 @@ export function LeadCreateForm() {
   const [potential, setPotential] = useState("unknown");
   const [notes, setNotes] = useState("");
 
-  // Paso 3
+  // Paso 3 — dirección con geolocalización + campos de portal/piso/puerta
+  const [streetType, setStreetType] = useState<StreetType>("calle");
   const [street, setStreet] = useState("");
   const [streetNumber, setStreetNumber] = useState("");
+  const [portal, setPortal] = useState("");
+  const [floor, setFloor] = useState("");
+  const [door, setDoor] = useState("");
   const [postal, setPostal] = useState("");
   const [city, setCity] = useState("");
   const [province, setProvince] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [geoLoading, setGeoLoading] = useState(false);
+
+  async function fillFromCoords(lat: number, lng: number) {
+    setLatitude(lat);
+    setLongitude(lng);
+    const rev = await reverseGeocode(lat, lng);
+    if (!rev) {
+      notify.warning("Coordenadas capturadas pero no se pudo identificar la calle");
+      return;
+    }
+    if (STREET_TYPE.includes(rev.street_type as StreetType)) {
+      setStreetType(rev.street_type as StreetType);
+    }
+    if (!street) setStreet(rev.street ?? "");
+    if (!streetNumber && rev.street_number) setStreetNumber(rev.street_number);
+    if (!postal && rev.postal_code) setPostal(rev.postal_code);
+    if (!city && rev.city) setCity(rev.city);
+    if (!province && rev.province) setProvince(rev.province);
+    notify.success("Dirección autorrellenada");
+  }
+
+  function captureMyLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      notify.warning("Geolocalización no disponible en este dispositivo");
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        await fillFromCoords(pos.coords.latitude, pos.coords.longitude);
+        setGpsLoading(false);
+      },
+      (err) => {
+        setGpsLoading(false);
+        notify.error(
+          "No se pudo obtener ubicación",
+          err.code === 1 ? "Permiso denegado" : "Sin señal GPS",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 },
+    );
+  }
+
+  async function searchByAddress() {
+    const parts = [street, streetNumber, postal, city, province, "España"].filter(Boolean);
+    if (parts.length < 2) {
+      notify.warning("Escribe al menos calle y población");
+      return;
+    }
+    setGeoLoading(true);
+    const result = await forwardGeocode(parts.join(", "));
+    setGeoLoading(false);
+    if (!result) {
+      notify.warning("No se encontró la dirección");
+      return;
+    }
+    setLatitude(result.lat);
+    setLongitude(result.lng);
+    notify.success("Localizado en el mapa");
+  }
 
   const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });
 
@@ -99,11 +168,17 @@ export function LeadCreateForm() {
     fd.set("origin", origin);
     fd.set("potential", potential);
     fd.set("notes", notes);
+    fd.set("address_street_type", streetType);
     fd.set("address_street", street);
     fd.set("address_street_number", streetNumber);
+    fd.set("address_portal", portal);
+    fd.set("address_floor", floor);
+    fd.set("address_door", door);
     fd.set("address_postal_code", postal);
     fd.set("address_city", city);
     fd.set("address_province", province);
+    if (latitude != null) fd.set("address_latitude", String(latitude));
+    if (longitude != null) fd.set("address_longitude", String(longitude));
     startTransition(async () => {
       try {
         await createLeadAction(fd);
@@ -301,18 +376,83 @@ export function LeadCreateForm() {
         <div className="space-y-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MapPin className="h-4 w-4 text-primary" />
-            Dirección principal (opcional). Puedes añadirla después con mapa desde la ficha.
+            Dirección principal (opcional). Puedes usar tu ubicación o buscar por dirección.
           </div>
-          <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
+
+          {/* Botones de geolocalización */}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={captureMyLocation}
+              disabled={gpsLoading}
+            >
+              <Crosshair className="h-4 w-4" />
+              {gpsLoading ? "Buscando GPS…" : "Usar mi ubicación"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={searchByAddress}
+              disabled={geoLoading}
+            >
+              <Search className="h-4 w-4" />
+              {geoLoading ? "Buscando…" : "Buscar por dirección"}
+            </Button>
+            {latitude != null && longitude != null && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-success/10 px-2 py-1 text-xs font-bold text-success">
+                <MapPin className="h-3 w-3" /> Ubicación capturada
+              </span>
+            )}
+          </div>
+
+          {/* Vía + número */}
+          <div className="grid gap-4 sm:grid-cols-[180px_1fr_140px]">
             <div className="space-y-2">
-              <Label>Calle</Label>
-              <Input value={street} onChange={(e) => setStreet(e.target.value)} placeholder="Gran Vía" />
+              <Label>Vía</Label>
+              <select
+                value={streetType}
+                onChange={(e) => setStreetType(e.target.value as StreetType)}
+                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+              >
+                {STREET_TYPE.map((s) => (
+                  <option key={s} value={s}>
+                    {STREET_TYPE_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Nombre</Label>
+              <Input
+                value={street}
+                onChange={(e) => setStreet(e.target.value)}
+                placeholder="Gran Vía"
+              />
             </div>
             <div className="space-y-2">
               <Label>Número</Label>
               <Input value={streetNumber} onChange={(e) => setStreetNumber(e.target.value)} />
             </div>
           </div>
+
+          {/* Portal / Piso / Puerta */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label>Portal</Label>
+              <Input value={portal} onChange={(e) => setPortal(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Piso</Label>
+              <Input value={floor} onChange={(e) => setFloor(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Puerta</Label>
+              <Input value={door} onChange={(e) => setDoor(e.target.value)} />
+            </div>
+          </div>
+
+          {/* CP / Población / Provincia */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>CP</Label>

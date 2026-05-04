@@ -123,7 +123,6 @@ export function ProposalsCard({
               >
                 {p.reference_code ?? `#${p.id.slice(0, 8)}`}
               </Link>
-              <span className="ml-2 text-xs text-muted-foreground">v{p.version_number}</span>
               <div className="text-xs text-muted-foreground">
                 {fmtEur(p.total_cash_cents)} ·{" "}
                 {new Date(p.created_at).toLocaleDateString("es-ES")}
