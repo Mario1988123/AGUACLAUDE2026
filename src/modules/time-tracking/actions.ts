@@ -199,42 +199,73 @@ export async function punchKindAction(
     accuracy_meters: number | null;
   },
 ): Promise<ClockExtended> {
-  const session = await requireSession();
-  if (!session.company_id) throw new Error("Sin empresa");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const noGeo = input.geo_latitude == null || input.geo_longitude == null;
-  const { error: insertError } = await admin.from("time_punches").insert({
-    company_id: session.company_id,
-    user_id: session.user_id,
-    punch_kind: kind,
-    punched_at: new Date().toISOString(),
-    geo_latitude: input.geo_latitude,
-    geo_longitude: input.geo_longitude,
-    accuracy_meters: input.accuracy_meters,
-    needs_geo_review: noGeo,
-    is_manual: false,
-  });
-  if (insertError) throw new Error(insertError.message);
+  try {
+    const session = await requireSession();
+    if (!session.company_id) throw new Error("Sin empresa");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const noGeo = input.geo_latitude == null || input.geo_longitude == null;
+    const nowIso = new Date().toISOString();
+    const { error: insertError } = await admin.from("time_punches").insert({
+      company_id: session.company_id,
+      user_id: session.user_id,
+      punch_kind: kind,
+      punched_at: nowIso,
+      geo_latitude: input.geo_latitude,
+      geo_longitude: input.geo_longitude,
+      accuracy_meters: input.accuracy_meters,
+      needs_geo_review: noGeo,
+      is_manual: false,
+    });
+    if (insertError) {
+      console.error("[punchKindAction insert]", insertError);
+      throw new Error(insertError.message ?? "Error al insertar fichaje");
+    }
 
-  if (noGeo) {
+    if (noGeo) {
+      try {
+        await admin.from("incidents").insert({
+          company_id: session.company_id,
+          title: `Fichaje sin geolocalización (${kind})`,
+          description: `${session.full_name ?? session.email ?? session.user_id} ha fichado sin permitir geolocalización.`,
+          origin: "other",
+          priority: "medium",
+          status: "open",
+          created_by: session.user_id,
+        });
+      } catch {
+        /* no-op */
+      }
+    }
     try {
-      await admin.from("incidents").insert({
-        company_id: session.company_id,
-        title: `Fichaje sin geolocalización (${kind})`,
-        description: `${session.full_name ?? session.email ?? session.user_id} ha fichado sin permitir geolocalización.`,
-        origin: "other",
-        priority: "medium",
-        status: "open",
-        created_by: session.user_id,
-      });
+      revalidatePath("/fichajes");
     } catch {
       /* no-op */
     }
+
+    // Devolver estado fresco. Si getMyClockExtended falla por algún motivo
+    // (tabla user_work_schedules no existe aún, etc.) construir uno mínimo
+    // basado en el INSERT recién hecho para que el widget refleje el cambio.
+    try {
+      return await getMyClockExtended();
+    } catch (err) {
+      console.error("[punchKindAction getMyClockExtended]", err);
+      const status =
+        kind === "clock_in" || kind === "break_end"
+          ? ("working" as const)
+          : kind === "break_start"
+            ? ("on_break" as const)
+            : ("stopped" as const);
+      return {
+        status,
+        since: status === "working" || status === "on_break" ? nowIso : undefined,
+        canPunch: true,
+      };
+    }
+  } catch (err) {
+    console.error("[punchKindAction outer]", err);
+    throw err instanceof Error ? err : new Error("Error desconocido al fichar");
   }
-  revalidatePath("/fichajes");
-  // Devolver estado fresco directamente
-  return await getMyClockExtended();
 }
 
 /** Estado actual del usuario: ¿tiene un clock_in abierto hoy? */
