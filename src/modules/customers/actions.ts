@@ -170,6 +170,67 @@ export async function createCustomerAction(formData: FormData) {
 /**
  * Registra contacto (call/whatsapp/email) en agenda + timeline para un cliente.
  */
+/**
+ * Actualiza los datos básicos del cliente. Comprueba dedupe de DNI/CIF
+ * antes de guardar (con admin para no chocar con RLS).
+ */
+export async function updateCustomerAction(
+  customerId: string,
+  patch: {
+    legal_name?: string | null;
+    trade_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    phone_primary?: string | null;
+    phone_secondary?: string | null;
+    tax_id?: string | null;
+    notes?: string | null;
+  },
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+
+  // Dedupe de tax_id si se está cambiando: validar que no choque con
+  // otro cliente de la misma empresa.
+  if (patch.tax_id) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dup = createAdminClient() as any;
+    const { data: collision } = await dup
+      .from("customers")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("tax_id", patch.tax_id)
+      .neq("id", customerId)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (collision) {
+      throw new Error("Ya existe otro cliente con ese DNI/CIF");
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    cleaned[k] = v === "" ? null : v;
+  }
+  const r = await admin.from("customers").update(cleaned).eq("id", customerId);
+  if (r.error) throw new Error(r.error.message);
+
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "customer",
+    subject_id: customerId,
+    kind: "customer.updated",
+    payload: Object.keys(patch),
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath(`/clientes/${customerId}`);
+}
+
 export async function logCustomerContactAction(
   customerId: string,
   channel: "call" | "whatsapp" | "email",
