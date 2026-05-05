@@ -5,6 +5,7 @@ import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { AgendaCalendar } from "@/modules/agenda/calendar";
 import { DraggableAgendaList } from "@/modules/agenda/draggable-list";
 import { AgendaWeekView } from "@/modules/agenda/week-view";
+import { requireSession } from "@/shared/lib/auth/session";
 import { Calendar, ListTodo, CalendarDays } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -24,11 +25,19 @@ export default async function AgendaPage({
     sp.view === "list" ? "list" : sp.view === "week" ? "week" : "calendar";
 
   const now = new Date();
-  const [events, monthEvents, team] = await Promise.all([
+  const [events, monthEvents, team, session] = await Promise.all([
     listAgenda(14, { user_id: userFilter, kind: kindFilter }),
     listAgendaMonth(now.getFullYear(), now.getMonth()),
     listTeamMembers(),
+    requireSession(),
   ]);
+  // Reasignar tareas: nivel 1 (admin) y nivel 2 (directors).
+  const canReassign =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
 
   function buildHref(extra: Record<string, string | undefined>): string {
     const params = new URLSearchParams();
@@ -134,22 +143,24 @@ export default async function AgendaPage({
 
       {view === "calendar" && (
         <>
-          <AgendaCalendar events={monthEvents} />
+          <AgendaCalendar events={monthEvents} team={team} canReassign={canReassign} />
           <div className="space-y-3">
             <div className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
               Próximos 14 días ({events.length})
             </div>
-            <DraggableAgendaList events={events} />
+            <DraggableAgendaList events={events} team={team} canReassign={canReassign} />
           </div>
         </>
       )}
-      {view === "week" && <AgendaWeekView events={events} />}
+      {view === "week" && (
+        <AgendaWeekView events={events} team={team} canReassign={canReassign} />
+      )}
       {view === "list" && (
         <div className="space-y-3">
           <div className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
             Listado próximos 14 días ({events.length})
           </div>
-          <DraggableAgendaList events={events} />
+          <DraggableAgendaList events={events} team={team} canReassign={canReassign} />
         </div>
       )}
     </div>

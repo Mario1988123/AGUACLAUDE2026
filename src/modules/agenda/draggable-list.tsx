@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { GripVertical } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -13,6 +13,8 @@ import { MoveEventDialog } from "./move-event-dialog";
 
 interface Props {
   events: AgendaItem[];
+  team?: { user_id: string; full_name: string }[];
+  canReassign?: boolean;
 }
 
 /**
@@ -28,13 +30,17 @@ function localDateKey(d: Date): string {
  * arrastrar tarjetas de un día a otro. Conserva la hora original; si quieres
  * cambiar la hora, edita el evento.
  */
-export function DraggableAgendaList({ events: initial }: Props) {
+export function DraggableAgendaList({ events: initial, team = [], canReassign = false }: Props) {
   const [events, setEvents] = useState(initial);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overDay, setOverDay] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<AgendaItem | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
+  const userNameMap = useMemo(
+    () => new Map(team.map((u) => [u.user_id, u.full_name])),
+    [team],
+  );
 
   const byDay = events.reduce<Record<string, AgendaItem[]>>((acc, ev) => {
     const day = localDateKey(new Date(ev.starts_at));
@@ -198,9 +204,10 @@ export function DraggableAgendaList({ events: initial }: Props) {
           onOpenChange={(o) => {
             if (!o) setMoveTarget(null);
           }}
-          eventId={moveTarget.id}
-          currentStartsAt={moveTarget.starts_at}
-          eventTitle={moveTarget.title}
+          event={moveTarget}
+          team={team}
+          canReassign={canReassign}
+          userNameMap={userNameMap}
         />
       )}
     </div>

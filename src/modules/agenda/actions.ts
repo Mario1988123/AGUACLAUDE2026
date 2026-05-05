@@ -414,8 +414,80 @@ export async function updateAgendaStatus(
 ) {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  const { error } = await supabase.from("agenda_events").update({ status }).eq("id", id);
+  const admin = createAdminClient() as any;
+  const { error } = await admin.from("agenda_events").update({ status }).eq("id", id);
   if (error) throw new Error(error.message);
+  revalidatePath("/agenda");
+}
+
+/**
+ * Reasigna una tarea de agenda a otro usuario. Sólo nivel 1 / nivel 2.
+ * Recalcula is_outside_hours con el horario del nuevo asignado.
+ * Notifica al nuevo asignado.
+ */
+export async function reassignAgendaEventAction(
+  eventId: string,
+  newUserId: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+  if (!isUpper) throw new Error("Solo nivel 1 o 2 puede reasignar tareas");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: ev } = await admin
+    .from("agenda_events")
+    .select("starts_at, title")
+    .eq("id", eventId)
+    .single();
+  const e = ev as { starts_at: string; title: string } | null;
+  if (!e) throw new Error("Evento no encontrado");
+
+  const newOutside = await computeIsOutsideHours(
+    new Date(e.starts_at),
+    session.company_id,
+    newUserId,
+  );
+
+  const r = await admin
+    .from("agenda_events")
+    .update({
+      assigned_user_id: newUserId,
+      is_outside_hours: newOutside,
+    })
+    .eq("id", eventId);
+  if (r.error) throw new Error(r.error.message);
+
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "user",
+    subject_id: newUserId,
+    kind: "agenda.reassigned",
+    payload: { event_id: eventId, from: session.user_id, to: newUserId },
+    actor_user_id: session.user_id,
+  });
+
+  // Notify
+  try {
+    const { notify } = await import("@/modules/notifications/notifier");
+    await notify({
+      company_id: session.company_id,
+      recipient_user_id: newUserId,
+      kind: "agenda.assigned",
+      severity: "info",
+      title: "Tarea asignada",
+      body: e.title,
+      action_url: "/agenda",
+    });
+  } catch {
+    /* no-op */
+  }
+
   revalidatePath("/agenda");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -11,6 +11,8 @@ import { MoveEventDialog } from "./move-event-dialog";
 
 interface Props {
   events: AgendaItem[];
+  team?: { user_id: string; full_name: string }[];
+  canReassign?: boolean;
 }
 
 const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
@@ -52,7 +54,11 @@ const KIND_COLOR: Record<string, string> = {
   meeting: "bg-[#d8f0ff] text-[#0891b2]", // cyan
 };
 
-export function AgendaCalendar({ events }: Props) {
+export function AgendaCalendar({ events, team = [], canReassign = false }: Props) {
+  const userNameMap = useMemo(
+    () => new Map(team.map((u) => [u.user_id, u.full_name])),
+    [team],
+  );
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -197,9 +203,10 @@ export function AgendaCalendar({ events }: Props) {
           onOpenChange={(o) => {
             if (!o) setMoveTarget(null);
           }}
-          eventId={moveTarget.id}
-          currentStartsAt={moveTarget.starts_at}
-          eventTitle={moveTarget.title}
+          event={moveTarget}
+          team={team}
+          canReassign={canReassign}
+          userNameMap={userNameMap}
         />
       )}
     </div>
