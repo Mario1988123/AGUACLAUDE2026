@@ -7,6 +7,7 @@ import { listBankAccounts } from "@/modules/customers/bank-accounts/actions";
 import { BankAccountList } from "@/modules/customers/bank-accounts/bank-list";
 import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
+import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
 import { listContractsByCustomer, listInstallationsByCustomer } from "@/modules/customers/actions";
@@ -50,6 +51,16 @@ export default async function CustomerDetailPage({
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
+
+  // Productos del catálogo para el botón "Añadir equipo"
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sbProds = (await (await import("@/shared/lib/supabase/server")).createClient()) as any;
+  const { data: prodList } = await sbProds
+    .from("products")
+    .select("id, name")
+    .is("deleted_at", null)
+    .order("name");
+  const ownProductsForEquipment = ((prodList ?? []) as Array<{ id: string; name: string }>);
   const customerProposals = await listProposalsByCustomer(id).catch(() => []);
   const contracts = await listContractsByCustomer(id).catch(() => []);
   const installations = await listInstallationsByCustomer(id).catch(() => []);
@@ -83,10 +94,34 @@ export default async function CustomerDetailPage({
       }
     : null;
 
+  // Aviso informativo persistente de datos del cliente que faltan.
+  // No bloquea nada, solo recuerda al comercial qué pedirle al cliente
+  // para no encontrarse el problema cuando llegue el contrato/firma.
+  const missingFields: string[] = [];
+  if (!customer.tax_id) missingFields.push("DNI/CIF");
+  if (!customer.email) missingFields.push("email");
+  if (!hasValidatedBank) missingFields.push("IBAN validado");
+  if (addresses.length === 0) missingFields.push("dirección");
+
   return (
     <div className="space-y-6">
       {fromProposal && pendingFromProposal && (
         <FromProposalBanner proposalId={fromProposal} pending={pendingFromProposal} />
+      )}
+      {missingFields.length > 0 && !fromProposal && (
+        <div className="flex items-start gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-200 text-amber-900">
+            ℹ
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-amber-900">Datos del cliente incompletos</h3>
+            <p className="mt-0.5 text-sm text-amber-800">
+              Faltan: <strong>{missingFields.join(", ")}</strong>. Es informativo —
+              no bloquea, pero conviene completarlo antes de generar contrato o
+              lanzar remesa.
+            </p>
+          </div>
+        </div>
       )}
       <div className="flex items-start justify-between">
         <div>
@@ -169,7 +204,13 @@ export default async function CustomerDetailPage({
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Equipos instalados ({equipment.length})</CardTitle>
+            <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+              <span>Equipos instalados ({equipment.length})</span>
+              <AddEquipmentButton
+                customerId={id}
+                ownProducts={ownProductsForEquipment}
+              />
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <CustomerEquipmentList equipment={equipment} />
