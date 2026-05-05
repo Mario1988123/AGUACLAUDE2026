@@ -40,11 +40,23 @@ export async function startInstallationAction(input: {
   const admin = createAdminClient() as any;
 
   // Cargar la dirección de la instalación para calcular distancia
-  const { data: inst } = await admin
-    .from("installations")
-    .select("id, company_id, address_id, customer_id, scheduled_at, status")
-    .eq("id", input.installation_id)
-    .single();
+  let inst: unknown = null;
+  let instErr: string | null = null;
+  try {
+    const r = await admin
+      .from("installations")
+      .select("id, company_id, address_id, customer_id, scheduled_at, status")
+      .eq("id", input.installation_id)
+      .maybeSingle();
+    inst = r.data;
+    instErr = (r.error as { message?: string } | null)?.message ?? null;
+  } catch (e) {
+    instErr = e instanceof Error ? e.message : String(e);
+  }
+  if (instErr) {
+    console.error("[startInstallation] SELECT installations failed:", instErr);
+    throw new Error(`No se pudo leer la instalación: ${instErr}`);
+  }
   const i = inst as
     | {
         id: string;
@@ -57,17 +69,19 @@ export async function startInstallationAction(input: {
     | null;
   if (!i) throw new Error("Instalación no encontrada");
 
-  // No se puede iniciar una instalación programada para el FUTURO. Si la
-  // fecha programada es posterior a hoy hay que reagendarla primero. Las
-  // de hoy o atrasadas sí se pueden iniciar.
+  // Si la instalación está programada para un día FUTURO pero el técnico
+  // está iniciando el parte ahora, auto-reagendamos a NOW (la realidad
+  // manda) en lugar de bloquear. Antes lanzábamos un Error que en
+  // producción se mostraba como digest "Server Components render" opaco.
+  let autoRescheduledFromFuture = false;
   if (i.scheduled_at) {
     const sched = new Date(i.scheduled_at);
     const today = new Date();
     today.setHours(23, 59, 59, 999);
     if (sched > today) {
-      throw new Error(
-        "Esta instalación está programada para un día futuro. Reagéndala a hoy antes de iniciar el parte.",
-      );
+      autoRescheduledFromFuture = true;
+      // El UPDATE de scheduled_at se hace en el bucle de columnas más
+      // abajo añadiendo la entrada correspondiente.
     }
   }
 
@@ -75,14 +89,24 @@ export async function startInstallationAction(input: {
   let addrLat: number | null = null;
   let addrLng: number | null = null;
   if (i.address_id) {
-    const { data: addr } = await admin
-      .from("addresses")
-      .select("latitude, longitude")
-      .eq("id", i.address_id)
-      .maybeSingle();
-    if (addr) {
-      addrLat = (addr as { latitude: number | null }).latitude;
-      addrLng = (addr as { longitude: number | null }).longitude;
+    try {
+      const { data: addr, error: addrErr } = await admin
+        .from("addresses")
+        .select("latitude, longitude")
+        .eq("id", i.address_id)
+        .maybeSingle();
+      if (addrErr) {
+        console.error(
+          "[startInstallation] addresses SELECT failed:",
+          addrErr.message,
+        );
+      }
+      if (addr) {
+        addrLat = (addr as { latitude: number | null }).latitude;
+        addrLng = (addr as { longitude: number | null }).longitude;
+      }
+    } catch (e) {
+      console.error("[startInstallation] addresses SELECT threw:", e);
     }
   }
   if (
@@ -114,14 +138,18 @@ export async function startInstallationAction(input: {
   // añade started_geo_lat/lng + started_far_from_address. Si en producción
   // no está aplicada, esos UPDATE explotaban con digest "Server Components
   // render" sin mensaje útil. Iteramos columna a columna.
+  const nowIso = new Date().toISOString();
   const updates: Array<[string, unknown]> = [
     ["status", "in_progress"],
-    ["started_at", new Date().toISOString()],
+    ["started_at", nowIso],
     ["geo_distance_to_address_m", meters],
     ["started_geo_lat", input.geo_lat],
     ["started_geo_lng", input.geo_lng],
     ["started_far_from_address", far],
   ];
+  if (autoRescheduledFromFuture) {
+    updates.push(["scheduled_at", nowIso]);
+  }
   for (const [col, val] of updates) {
     const r = await admin
       .from("installations")
@@ -140,14 +168,31 @@ export async function startInstallationAction(input: {
     throw new Error(m);
   }
 
-  await admin.from("events").insert({
-    company_id: i.company_id,
-    subject_type: "installation",
-    subject_id: i.id,
-    kind: "installation.started",
-    payload: { meters, far },
-    actor_user_id: session.user_id,
-  });
+  // Insert event defensivo: si la tabla `events` tiene CHECK constraint
+  // sobre `kind` que no incluye "installation.started" o cualquier otro
+  // fallo, no debe tumbar el inicio del parte.
+  try {
+    const { error: evErr } = await admin.from("events").insert({
+      company_id: i.company_id,
+      subject_type: "installation",
+      subject_id: i.id,
+      kind: "installation.started",
+      payload: {
+        meters,
+        far,
+        auto_rescheduled_from_future: autoRescheduledFromFuture,
+      },
+      actor_user_id: session.user_id,
+    });
+    if (evErr) {
+      console.error(
+        "[startInstallation] events insert installation.started failed:",
+        evErr.message,
+      );
+    }
+  } catch (e) {
+    console.error("[startInstallation] events insert threw:", e);
+  }
 
   if (far) {
     try {
