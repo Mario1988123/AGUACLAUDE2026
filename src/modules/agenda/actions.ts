@@ -2,33 +2,94 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { agendaCreateSchema } from "./schemas";
 
 /**
- * Devuelve true si la fecha cae fuera del horario comercial configurado
- * en company_settings.business_hours. Si no hay setting, fallback al
- * antiguo 9-18 lun-vie.
+ * Decide si una fecha cae fuera del horario laboral. Prioridad:
  *
- * business_hours es un objeto { mon: { open: "09:00", close: "18:00" }, ... }
- * con keys mon/tue/wed/thu/fri/sat/sun. Un null en una key = cerrado.
+ *  1. Si el evento tiene asignado un usuario y ese usuario tiene
+ *     user_work_schedules para el día → usar SU horario.
+ *  2. Si no, usar company_settings.business_hours.
+ *  3. Si no hay ninguno → fallback hardcoded 9-18 lun-vie.
+ *
+ * Esto evita el bug "una tarea de Mario a las 10:20 sale como fuera de
+ * horario" cuando el horario corporativo decía cerrado pero el horario
+ * de Mario es 9-18.
+ *
+ * `user_work_schedules.day_of_week`: 0=Lunes ... 6=Domingo (definición
+ * de la migración 20260503320000).
+ *
+ * `Date.getDay()` (JS): 0=Sun ... 6=Sat. Convertir: jsToIsoDow.
  */
-function isOutsideBusinessHours(
+async function computeIsOutsideHours(
   d: Date,
-  bh: Record<string, { open: string; close: string } | null> | null,
-): boolean {
-  if (!bh) {
-    const day = d.getDay();
-    const hour = d.getHours();
-    return day === 0 || day === 6 || hour < 9 || hour > 18;
+  companyId: string,
+  assignedUserId: string | null,
+): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // 1) Horario del usuario asignado (si lo hay)
+  if (assignedUserId) {
+    try {
+      // JS getDay → ISO day of week (lunes=0...domingo=6)
+      const isoDow = (d.getDay() + 6) % 7;
+      const { data: sched } = await admin
+        .from("user_work_schedules")
+        .select("starts_at, ends_at")
+        .eq("user_id", assignedUserId)
+        .eq("day_of_week", isoDow)
+        .maybeSingle();
+      const s = sched as { starts_at: string | null; ends_at: string | null } | null;
+      if (s && s.starts_at && s.ends_at) {
+        return inTimeRange(d, s.starts_at, s.ends_at) ? false : true;
+      }
+      // Si el usuario tiene un row para ese día pero starts_at/ends_at son
+      // null → día libre. Y si NO tiene row → fallback al horario empresa.
+      if (s && (s.starts_at == null || s.ends_at == null)) return true;
+    } catch {
+      /* fallback */
+    }
   }
-  const KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
-  const slot = bh[KEYS[d.getDay()]!];
-  if (!slot) return true;
-  const [oh, om] = slot.open.split(":").map(Number);
-  const [ch, cm] = slot.close.split(":").map(Number);
+
+  // 2) Horario corporativo
+  let bh: Record<string, { open: string; close: string } | null> | null = null;
+  try {
+    const { data: cs } = await admin
+      .from("company_settings")
+      .select("business_hours")
+      .eq("company_id", companyId)
+      .maybeSingle();
+    bh = (cs as { business_hours: typeof bh } | null)?.business_hours ?? null;
+  } catch {
+    /* no-op */
+  }
+  if (bh) {
+    const KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+    const slot = (bh as Record<string, { open: string; close: string } | null>)[
+      KEYS[d.getDay()]!
+    ];
+    if (!slot) return true;
+    return inTimeRange(d, slot.open, slot.close) ? false : true;
+  }
+
+  // 3) Fallback 9-18 lun-vie
+  const day = d.getDay();
+  const hour = d.getHours();
+  return day === 0 || day === 6 || hour < 9 || hour > 18;
+}
+
+/** Acepta "HH:MM" o "HH:MM:SS" y comprueba si la hora local de d cae dentro. */
+function inTimeRange(d: Date, openHHMM: string, closeHHMM: string): boolean {
+  const [oh, om] = openHHMM.split(":").map(Number);
+  const [ch, cm] = closeHHMM.split(":").map(Number);
   const minutes = d.getHours() * 60 + d.getMinutes();
-  return minutes < (oh ?? 0) * 60 + (om ?? 0) || minutes > (ch ?? 0) * 60 + (cm ?? 0);
+  return (
+    minutes >= (oh ?? 0) * 60 + (om ?? 0) &&
+    minutes <= (ch ?? 23) * 60 + (cm ?? 59)
+  );
 }
 
 export interface AgendaItem {
@@ -71,7 +132,10 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
   }
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as AgendaItem[];
+  return await recomputeOutsideHoursForList(
+    (data ?? []) as AgendaItem[],
+    session.company_id,
+  );
 }
 
 export async function listAgenda(
@@ -112,7 +176,97 @@ export async function listAgenda(
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as AgendaItem[];
+  return await recomputeOutsideHoursForList(
+    (data ?? []) as AgendaItem[],
+    session.company_id,
+  );
+}
+
+/**
+ * Recalcula is_outside_hours para una lista de eventos. Esto evita que
+ * los eventos guardados con la lógica antigua (hardcoded 9-18 o sólo
+ * business_hours sin user_work_schedules) se vean mal en el listado.
+ *
+ * Hace UNA query a user_work_schedules por usuario único y UNA a
+ * company_settings.business_hours, así que es eficiente.
+ */
+async function recomputeOutsideHoursForList(
+  events: AgendaItem[],
+  companyId: string | null,
+): Promise<AgendaItem[]> {
+  if (!companyId || events.length === 0) return events;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Cargar todos los user_work_schedules de los usuarios asignados
+  const userIds = Array.from(
+    new Set(events.map((e) => e.assigned_user_id).filter((x): x is string => Boolean(x))),
+  );
+  type Sched = { user_id: string; day_of_week: number; starts_at: string | null; ends_at: string | null };
+  let schedRows: Sched[] = [];
+  if (userIds.length > 0) {
+    const { data } = await admin
+      .from("user_work_schedules")
+      .select("user_id, day_of_week, starts_at, ends_at")
+      .in("user_id", userIds);
+    schedRows = (data ?? []) as Sched[];
+  }
+  const schedMap = new Map<string, Sched>();
+  for (const s of schedRows) {
+    schedMap.set(`${s.user_id}-${s.day_of_week}`, s);
+  }
+
+  // Cargar business_hours de la empresa (fallback)
+  let bh: Record<string, { open: string; close: string } | null> | null = null;
+  try {
+    const { data: cs } = await admin
+      .from("company_settings")
+      .select("business_hours")
+      .eq("company_id", companyId)
+      .maybeSingle();
+    bh = (cs as { business_hours: typeof bh } | null)?.business_hours ?? null;
+  } catch {
+    /* no-op */
+  }
+
+  return events.map((ev) => {
+    const d = new Date(ev.starts_at);
+    let outside = false;
+    let resolved = false;
+    // 1) horario del usuario
+    if (ev.assigned_user_id) {
+      const isoDow = (d.getDay() + 6) % 7;
+      const sched = schedMap.get(`${ev.assigned_user_id}-${isoDow}`);
+      if (sched) {
+        if (sched.starts_at && sched.ends_at) {
+          outside = !inTimeRange(d, sched.starts_at, sched.ends_at);
+        } else {
+          outside = true; // día libre del usuario
+        }
+        resolved = true;
+      }
+    }
+    // 2) horario corporativo
+    if (!resolved && bh) {
+      const KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+      const slot = (bh as Record<string, { open: string; close: string } | null>)[
+        KEYS[d.getDay()]!
+      ];
+      if (!slot) {
+        outside = true;
+      } else {
+        outside = !inTimeRange(d, slot.open, slot.close);
+      }
+      resolved = true;
+    }
+    // 3) fallback 9-18 lun-vie
+    if (!resolved) {
+      const day = d.getDay();
+      const hour = d.getHours();
+      outside = day === 0 || day === 6 || hour < 9 || hour > 18;
+    }
+    return { ...ev, is_outside_hours: outside };
+  });
 }
 
 export async function listTeamMembers(): Promise<{ user_id: string; full_name: string }[]> {
@@ -151,25 +305,18 @@ export async function createAgendaEventAction(input: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
-  // Cargar business_hours configurado para calcular is_outside_hours
-  // (antes era hardcoded 9-18). Si no hay setting, fallback al 9-18.
-  let businessHours: Record<string, { open: string; close: string } | null> | null = null;
-  try {
-    const { data: cs } = await supabase
-      .from("company_settings")
-      .select("business_hours")
-      .eq("company_id", session.company_id)
-      .maybeSingle();
-    businessHours = (cs as { business_hours: typeof businessHours } | null)?.business_hours ?? null;
-  } catch {
-    /* no-op */
-  }
+  // Determinar usuario asignado para usar SU horario (user_work_schedules)
+  const assignedUserId = parsed.assigned_user_id || session.user_id;
 
   const rows = [];
   for (let i = 0; i < occurrences; i++) {
     const s = bumpDate(baseStart, i);
     const e = baseEnd ? new Date(s.getTime() + durationMs) : null;
-    const isOutsideHours = isOutsideBusinessHours(s, businessHours);
+    const isOutsideHours = await computeIsOutsideHours(
+      s,
+      session.company_id,
+      assignedUserId,
+    );
     rows.push({
       company_id: session.company_id,
       kind: parsed.kind,
@@ -206,18 +353,20 @@ export async function rescheduleAgendaEventAction(
   const supabase = (await createClient()) as any;
 
   const newStart = new Date(newStartsAtIso);
-  let businessHours: Record<string, { open: string; close: string } | null> | null = null;
-  try {
-    const { data: cs } = await supabase
-      .from("company_settings")
-      .select("business_hours")
-      .eq("company_id", session.company_id)
-      .maybeSingle();
-    businessHours = (cs as { business_hours: typeof businessHours } | null)?.business_hours ?? null;
-  } catch {
-    /* no-op */
-  }
-  const isOutsideHours = isOutsideBusinessHours(newStart, businessHours);
+  // Cargar el usuario asignado actual del evento para calcular is_outside
+  // según SU horario (no el de empresa, ni el del actor que reagenda).
+  const { data: prevAssign } = await supabase
+    .from("agenda_events")
+    .select("assigned_user_id")
+    .eq("id", eventId)
+    .maybeSingle();
+  const assignedUserId =
+    (prevAssign as { assigned_user_id: string | null } | null)?.assigned_user_id ?? null;
+  const isOutsideHours = await computeIsOutsideHours(
+    newStart,
+    session.company_id,
+    assignedUserId,
+  );
 
   const { data: prev } = await supabase
     .from("agenda_events")
