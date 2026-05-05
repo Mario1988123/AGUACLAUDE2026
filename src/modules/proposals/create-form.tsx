@@ -19,6 +19,11 @@ interface Props {
   products: ProductForProposal[];
   defaultCustomerId?: string;
   defaultLeadId?: string;
+  /**
+   * Si true, al guardar se acepta la propuesta y se crea contrato
+   * en el mismo paso (Escenario B - cliente acepta de palabra).
+   */
+  directMode?: boolean;
 }
 
 interface ItemRow {
@@ -77,6 +82,7 @@ export function ProposalCreateForm({
   products,
   defaultCustomerId,
   defaultLeadId,
+  directMode = false,
 }: Props) {
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [validityUntil, setValidityUntil] = useState("");
@@ -185,6 +191,7 @@ export function ProposalCreateForm({
           validity_until: validityUntil || undefined,
           notes,
           items,
+          auto_accept: directMode,
         });
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {

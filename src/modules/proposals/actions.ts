@@ -398,6 +398,71 @@ export async function createProposalAction(input: unknown) {
     await bumpLeadStatus(parsed.lead_id, "proposal_created");
   }
 
+  // Modo "Contrato directo" (Escenario B): el cliente aceptó las
+  // condiciones de palabra. Se acepta la propuesta y se genera el
+  // contrato en el mismo paso, saltando aprobación si aplica.
+  if (parsed.auto_accept) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    // Si requiere aprobación, lo flag-eamos como aprobado por nivel 1-2
+    // si el actor lo es; si no es nivel 1-2, dejamos en pending_approval
+    // y avisamos sin redirigir al contrato.
+    const isUpper =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("commercial_director") ||
+      session.roles.includes("telemarketing_director") ||
+      session.roles.includes("technical_director");
+    if (requiresApproval && !isUpper) {
+      // Comercial nivel 3 con precio bajo mínimo. NO podemos saltarnos.
+      revalidatePath("/propuestas");
+      redirect(`/propuestas/${proposalId}` as never);
+    }
+    await admin
+      .from("proposals")
+      .update({
+        status: "accepted",
+        accepted_at: new Date().toISOString(),
+        ...(requiresApproval
+          ? {
+              requires_approval: false,
+              approved_by: session.user_id,
+              approved_at: new Date().toISOString(),
+            }
+          : {}),
+      })
+      .eq("id", proposalId);
+    await admin.from("events").insert({
+      company_id: session.company_id!,
+      subject_type: "proposal",
+      subject_id: proposalId,
+      kind: "proposal.accepted",
+      payload: { auto_accept: true },
+      actor_user_id: session.user_id,
+    });
+    // Si la propuesta venía de lead, convertir lead → cliente y mover
+    // proposals (mismo flujo que markProposalAccepted).
+    let customerIdForContract: string | null = parsed.customer_id ?? null;
+    if (parsed.lead_id && !customerIdForContract) {
+      try {
+        customerIdForContract = await convertLeadToCustomerAction(parsed.lead_id);
+        await admin
+          .from("proposals")
+          .update({ customer_id: customerIdForContract, lead_id: null })
+          .eq("id", proposalId);
+      } catch {
+        /* fall through — el contrato no se podrá generar sin cliente */
+      }
+    }
+    if (customerIdForContract) {
+      // Generar contrato. createContractFromProposal hace redirect al
+      // detalle del contrato cuando termina, así que no necesitamos otro.
+      const { createContractFromProposal } = await import("@/modules/contracts/actions");
+      await createContractFromProposal(proposalId);
+      // No alcanzamos esta línea — redirect interno
+    }
+  }
+
   revalidatePath("/propuestas");
   redirect(`/propuestas/${proposalId}` as never);
 }

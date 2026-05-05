@@ -143,9 +143,24 @@ export default async function CustomerDetailPage({
             )}
           </div>
         </div>
-        <Link href="/clientes" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Link
+            href={`/propuestas/nueva?customer_id=${id}` as never}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            <Plus className="h-4 w-4" /> Nueva propuesta
+          </Link>
+          <Link
+            href={`/propuestas/nueva?customer_id=${id}&direct=1` as never}
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-500 px-3 text-sm font-bold text-white hover:bg-amber-600"
+            title="El cliente acepta de palabra — crea propuesta+contrato en un paso"
+          >
+            ⚡ Contrato directo
+          </Link>
+          <Link href="/clientes" className="text-sm text-primary hover:underline">
+            ← Volver
+          </Link>
+        </div>
       </div>
 
       <CustomerContactButtons

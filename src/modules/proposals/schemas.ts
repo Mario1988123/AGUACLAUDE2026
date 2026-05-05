@@ -69,6 +69,11 @@ export const proposalCreateSchema = z
     validity_until: z.string().optional().default(""),
     notes: z.string().optional().default(""),
     items: z.array(proposalItemSchema).min(1, "Añade al menos un producto"),
+    /**
+     * Si true, la propuesta se acepta automáticamente y se genera el
+     * contrato. Caso "cliente acepta de palabra sin propuesta formal".
+     */
+    auto_accept: z.coerce.boolean().default(false),
   })
   .refine((v) => Boolean(v.customer_id) !== Boolean(v.lead_id), {
     message: "La propuesta debe estar asociada a un cliente o a un lead, no ambos",
