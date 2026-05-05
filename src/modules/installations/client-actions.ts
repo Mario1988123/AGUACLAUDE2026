@@ -197,13 +197,41 @@ export async function saveInstallationSignatureAction(input: {
     signed_at: new Date().toISOString(),
   };
 
-  let r = await admin.from("installation_signatures").insert(payload);
-  if (r.error && /signature_data_url/i.test(r.error.message ?? "")) {
-    delete payload.signature_data_url;
-    r = await admin.from("installation_signatures").insert(payload);
+  // Intentos con fallbacks defensivos:
+  //  1) Tal cual.
+  //  2) Si signature_data_url no existe → quitar.
+  //  3) Si CHECK constraint sobre context rechaza el valor → context=null.
+  //  4) Si CHECK persiste → quitar context del payload.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const r = await admin.from("installation_signatures").insert(payload);
+    if (!r.error) {
+      revalidatePath(`/instalaciones/${input.installation_id}`);
+      return;
+    }
+    const msg = r.error.message ?? "";
+    if (/signature_data_url/i.test(msg) && "signature_data_url" in payload) {
+      console.error("[saveSignature] signature_data_url col missing, retrying without");
+      delete payload.signature_data_url;
+      continue;
+    }
+    if (/installation_signatures_context_check|context_check|violates check constraint/i.test(msg)) {
+      if (payload.context !== null) {
+        console.error(
+          "[saveSignature] context value rejected by CHECK, retrying with null:",
+          payload.context,
+        );
+        payload.context = null;
+        continue;
+      }
+      // Ya estamos con null y aún rechaza → quitar la columna entera
+      console.error("[saveSignature] context col rejected even null, dropping column");
+      delete payload.context;
+      continue;
+    }
+    console.error("[saveSignature] insert failed:", msg);
+    throw new Error(msg);
   }
-  if (r.error) throw new Error(r.error.message);
-  revalidatePath(`/instalaciones/${input.installation_id}`);
+  throw new Error("No se pudo guardar la firma tras varios reintentos");
 }
 
 /**

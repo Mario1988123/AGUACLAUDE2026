@@ -716,6 +716,22 @@ export function InstallationWizard(props: Props) {
                   <p className="text-sm text-muted-foreground">
                     Foto de cada equipo, foto de la conexión y nº de serie opcional.
                   </p>
+                  {!step4Done && (
+                    <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+                      <strong>⚠ Fotos obligatorias:</strong>{" "}
+                      {!photos.some((p) => p.category === "equipment") &&
+                        !photos.some((p) => p.category === "connection")
+                        ? "falta 1 foto de equipo y 1 de conexión."
+                        : !photos.some((p) => p.category === "equipment")
+                          ? "falta al menos 1 foto del equipo."
+                          : "falta al menos 1 foto de la conexión."}
+                    </div>
+                  )}
+                  {step4Done && (
+                    <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">
+                      ✓ Fotos mínimas subidas (equipo + conexión).
+                    </div>
+                  )}
 
                   {/* Items con S/N */}
                   <div className="space-y-2">
@@ -792,7 +808,11 @@ export function InstallationWizard(props: Props) {
                     )}
                   </div>
 
-                  <Button onClick={saveSerials} disabled={pending} className="w-full">
+                  <Button
+                    onClick={saveSerials}
+                    disabled={pending || !step4Done}
+                    className="w-full"
+                  >
                     Guardar y continuar <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
