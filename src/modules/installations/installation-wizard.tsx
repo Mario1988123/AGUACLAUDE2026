@@ -290,13 +290,27 @@ export function InstallationWizard(props: Props) {
         });
         setStatus("in_progress");
         startedAtRef.current = new Date().toISOString();
-        if (r.far) {
+        // Feedback GPS detallado y siempre visible:
+        //  - Sin GPS del técnico
+        //  - Con GPS pero sin coordenadas del cliente para validar
+        //  - Con GPS + coords cliente: distancia + estado válido/aviso
+        if (lat == null || lng == null) {
+          notify.success("Parte iniciado", "Sin GPS del dispositivo");
+        } else if (r.meters == null) {
+          notify.success(
+            "Parte iniciado",
+            "Cliente sin coordenadas — no se pudo validar la posición",
+          );
+        } else if (r.far) {
           notify.warning(
-            `A ${r.meters} m del cliente`,
+            `⚠ A ${r.meters} m del cliente (fuera de rango)`,
             "Aviso enviado a admin/director técnico",
           );
         } else {
-          notify.success("Parte iniciado");
+          notify.success(
+            `✓ Posición válida (${r.meters} m del cliente)`,
+            "Parte iniciado",
+          );
         }
         setStep(2);
       } catch (err) {

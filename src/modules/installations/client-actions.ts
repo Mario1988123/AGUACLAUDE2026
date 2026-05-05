@@ -58,11 +58,17 @@ export async function uploadInstallationPhotoAction(
   const path = `${session.company_id}/${installationId}/${category}-${ts}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
 
-  // Asegurar bucket (si no existe lo creamos privado, fail-soft)
+  // Asegurar bucket: si no existe lo creamos. Si falla la creación
+  // por permisos pero el bucket existe, el upload funcionará igual.
   try {
-    await admin.storage.createBucket(PHOTO_BUCKET, { public: false });
-  } catch {
-    /* ya existe o sin permiso, ignoramos */
+    const { error: ceErr } = await admin.storage.createBucket(PHOTO_BUCKET, {
+      public: false,
+    });
+    if (ceErr && !/already exists|duplicate/i.test(ceErr.message ?? "")) {
+      console.error("[uploadInstallationPhoto] createBucket warn:", ceErr.message);
+    }
+  } catch (e) {
+    console.error("[uploadInstallationPhoto] createBucket threw:", e);
   }
 
   const { error: upErr } = await admin.storage
@@ -72,38 +78,92 @@ export async function uploadInstallationPhotoAction(
       upsert: false,
       cacheControl: "3600",
     });
-  if (upErr) throw new Error(upErr.message);
+  if (upErr) {
+    console.error("[uploadInstallationPhoto] storage upload failed:", upErr.message);
+    throw new Error(`Storage: ${upErr.message}`);
+  }
 
-  const { data: row, error: rowErr } = await admin
-    .from("installation_photos")
-    .insert({
-      company_id: session.company_id,
-      installation_id: installationId,
-      category,
-      storage_path: path,
-      mime_type: file.type,
-      size_bytes: file.size,
-      uploaded_by: session.user_id,
-    })
-    .select("id, storage_path, category, caption, taken_at")
-    .single();
-  if (rowErr) throw new Error(rowErr.message);
+  // Insert defensivo: si alguna columna opcional no existe en BD
+  // (mime_type, size_bytes, uploaded_by) reintentamos quitándola.
+  // Las columnas mínimas que SIEMPRE deben existir son
+  // company_id, installation_id, category, storage_path.
+  const fullPayload: Record<string, unknown> = {
+    company_id: session.company_id,
+    installation_id: installationId,
+    category,
+    storage_path: path,
+    mime_type: file.type,
+    size_bytes: file.size,
+    uploaded_by: session.user_id,
+  };
+  let row: {
+    id: string;
+    storage_path: string;
+    category: string;
+    caption: string | null;
+    taken_at: string;
+  } | null = null;
+  let lastErr: string | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const r = await admin
+      .from("installation_photos")
+      .insert(fullPayload)
+      .select("id, storage_path, category, caption, taken_at")
+      .single();
+    if (!r.error) {
+      row = r.data as typeof row;
+      break;
+    }
+    const m = (r.error as { message?: string } | null)?.message ?? "";
+    lastErr = m;
+    // Detectar columna inexistente y eliminarla del payload
+    const missing = m.match(/column "?([a-z_]+)"? .* does not exist/i);
+    if (missing && missing[1] && missing[1] in fullPayload) {
+      console.error(
+        `[uploadInstallationPhoto] column ${missing[1]} missing, retrying without it`,
+      );
+      delete fullPayload[missing[1]];
+      continue;
+    }
+    // Detectar columna en schema cache
+    const cache = m.match(/'([a-z_]+)' column .* schema cache/i);
+    if (cache && cache[1] && cache[1] in fullPayload) {
+      console.error(
+        `[uploadInstallationPhoto] column ${cache[1]} not in schema cache, retrying without it`,
+      );
+      delete fullPayload[cache[1]];
+      continue;
+    }
+    // Otro tipo de error → no reintentamos
+    break;
+  }
+  if (!row) {
+    console.error("[uploadInstallationPhoto] insert installation_photos failed:", lastErr);
+    throw new Error(`BD: ${lastErr ?? "no se pudo guardar la foto"}`);
+  }
 
-  const { data: signed } = await admin.storage
-    .from(PHOTO_BUCKET)
-    .createSignedUrl(path, 3600);
+  let signedUrl: string | null = null;
+  try {
+    const { data: signed, error: sErr } = await admin.storage
+      .from(PHOTO_BUCKET)
+      .createSignedUrl(path, 3600);
+    if (sErr) {
+      console.error("[uploadInstallationPhoto] createSignedUrl failed:", sErr.message);
+    }
+    signedUrl = (signed as { signedUrl: string } | null)?.signedUrl ?? null;
+  } catch (e) {
+    console.error("[uploadInstallationPhoto] createSignedUrl threw:", e);
+  }
 
   revalidatePath(`/instalaciones/${installationId}`);
-  return {
-    ...(row as {
-      id: string;
-      storage_path: string;
-      category: string;
-      caption: string | null;
-      taken_at: string;
-    }),
-    signed_url: (signed as { signedUrl: string } | null)?.signedUrl ?? null,
+  const r = row as {
+    id: string;
+    storage_path: string;
+    category: string;
+    caption: string | null;
+    taken_at: string;
   };
+  return { ...r, signed_url: signedUrl };
 }
 
 /**
