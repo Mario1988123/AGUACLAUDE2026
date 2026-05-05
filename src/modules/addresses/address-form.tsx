@@ -17,7 +17,7 @@ import {
 } from "./schemas";
 import { upsertAddressAction } from "./actions";
 import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
-import { reverseGeocode, forwardGeocode } from "@/shared/lib/geocoding/nominatim";
+import { reverseGeocodeAction as reverseGeocode, forwardGeocodeAction as forwardGeocode } from "@/shared/lib/geocoding/actions";
 import type { AddressRow } from "./actions";
 
 interface Props {

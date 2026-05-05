@@ -145,11 +145,13 @@ export async function createCustomerAction(formData: FormData) {
         converted_to_customer_id: newId,
       })
       .eq("id", parsed.source_lead_id);
-    // Mover direcciones del lead al customer (función helper en BD)
-    await supabase.rpc("promote_lead_to_customer" as never, {
-      p_lead_id: parsed.source_lead_id,
-      p_customer_id: newId,
-    } as never);
+    // Mover direcciones del lead al customer (UPDATE directo con admin —
+    // el RPC vive en schema `app` y no siempre es accesible vía REST).
+    await admin
+      .from("addresses")
+      .update({ customer_id: newId, lead_id: null })
+      .eq("lead_id", parsed.source_lead_id)
+      .is("deleted_at", null);
   }
 
   await supabase.from("events").insert({

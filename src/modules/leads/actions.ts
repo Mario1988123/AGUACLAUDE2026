@@ -396,11 +396,15 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     .update({ customer_id: customerId, lead_id: null })
     .eq("lead_id", l.id);
 
-  // Mover direcciones via RPC (security definer + tenant check)
-  await supabase.rpc("promote_lead_to_customer", {
-    p_lead_id: l.id,
-    p_customer_id: customerId,
-  });
+  // Mover direcciones del lead → cliente. Usamos admin client con UPDATE
+  // directo en vez del RPC promote_lead_to_customer (que vive en schema
+  // `app` y a veces no es accesible via supabase.rpc desde JS porque el
+  // PostgREST API solo expone schemas en `db_schema_search_path`).
+  await admin
+    .from("addresses")
+    .update({ customer_id: customerId, lead_id: null })
+    .eq("lead_id", l.id)
+    .is("deleted_at", null);
 
   // Admin client para garantizar el UPDATE: la policy leads_update_by_scope
   // puede dejar fuera al usuario actual según su rol/scope, y entonces el

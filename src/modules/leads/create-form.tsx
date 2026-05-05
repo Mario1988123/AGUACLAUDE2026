@@ -14,7 +14,7 @@ import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
 import { STREET_TYPE, STREET_TYPE_LABEL, type StreetType } from "@/modules/addresses/schemas";
-import { reverseGeocode, forwardGeocode } from "@/shared/lib/geocoding/nominatim";
+import { reverseGeocodeAction, forwardGeocodeAction } from "@/shared/lib/geocoding/actions";
 
 /**
  * Wizard 3 pasos en lugar de scroll vertical largo. Tablet-first.
@@ -60,26 +60,56 @@ export function LeadCreateForm() {
   async function fillFromCoords(lat: number, lng: number, force = false) {
     setLatitude(lat);
     setLongitude(lng);
-    const rev = await reverseGeocode(lat, lng);
+    const rev = await reverseGeocodeAction(lat, lng);
     if (!rev) {
-      notify.warning("Coordenadas capturadas pero no se pudo identificar la calle");
+      notify.warning(
+        "Coordenadas capturadas",
+        "El servicio de mapas no respondió. Rellena la calle a mano.",
+      );
       return;
     }
     if (STREET_TYPE.includes(rev.street_type as StreetType)) {
       setStreetType(rev.street_type as StreetType);
     }
-    // Functional updaters: leen el valor actual, no el del cierre. Evita
-    // que el "if (!street)" use el closure inicial (siempre vacío) y
-    // termine pisando el campo después aunque ya hubiera contenido —
-    // o, peor, no actualice nada si el closure venía con basura.
-    setStreet((cur) => (force || !cur ? rev.street ?? cur : cur));
-    setStreetNumber((cur) =>
-      (force || !cur) && rev.street_number ? rev.street_number : cur,
-    );
-    setPostal((cur) => ((force || !cur) && rev.postal_code ? rev.postal_code : cur));
-    setCity((cur) => ((force || !cur) && rev.city ? rev.city : cur));
-    setProvince((cur) => ((force || !cur) && rev.province ? rev.province : cur));
-    notify.success("Dirección autorrellenada");
+    const filled: string[] = [];
+    // Functional updaters: leen el valor actual real, no el del cierre.
+    // Solo machaca si force=true. Solo aplica si rev.X existe (no
+    // sobreescribe lo escrito con un undefined).
+    if (rev.street) {
+      setStreet((cur) => (force || !cur ? rev.street : cur));
+      filled.push("calle");
+    }
+    if (rev.street_number) {
+      setStreetNumber((cur) =>
+        force || !cur ? (rev.street_number as string) : cur,
+      );
+      filled.push("nº");
+    }
+    if (rev.postal_code) {
+      setPostal((cur) => (force || !cur ? (rev.postal_code as string) : cur));
+      filled.push("CP");
+    }
+    if (rev.city) {
+      setCity((cur) => (force || !cur ? (rev.city as string) : cur));
+      filled.push("ciudad");
+    }
+    if (rev.province) {
+      setProvince((cur) => (force || !cur ? (rev.province as string) : cur));
+      filled.push("provincia");
+    }
+    if (filled.length === 0) {
+      notify.warning(
+        "Coordenadas capturadas",
+        "No se pudo identificar la dirección. Escríbela a mano.",
+      );
+    } else if (!rev.street) {
+      notify.success(
+        "Dirección parcial",
+        `Rellenado ${filled.join(", ")}. La calle no está disponible — escríbela a mano.`,
+      );
+    } else {
+      notify.success("Dirección autorrellenada");
+    }
   }
 
   function captureMyLocation() {
@@ -111,7 +141,7 @@ export function LeadCreateForm() {
       return;
     }
     setGeoLoading(true);
-    const result = await forwardGeocode(parts.join(", "));
+    const result = await forwardGeocodeAction(parts.join(", "));
     if (!result) {
       setGeoLoading(false);
       notify.warning("No se encontró la dirección");
