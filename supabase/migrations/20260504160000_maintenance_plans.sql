@@ -89,6 +89,7 @@ create index if not exists idx_maint_contracts_customer
 create index if not exists idx_maint_contracts_status
   on public.maintenance_contracts(company_id, status) where deleted_at is null;
 
+drop trigger if exists trg_maint_contracts_updated on public.maintenance_contracts;
 create trigger trg_maint_contracts_updated
   before update on public.maintenance_contracts
   for each row execute function app.set_updated_at();
