@@ -636,6 +636,90 @@ export async function markContractSigned(id: string) {
     /* fail-soft: no bloquea la firma si la generación falla */
   }
 
+  // AUTO-CREAR INSTALACIÓN PENDIENTE: si todavía no hay instalación
+  // para este contrato, la creamos en estado 'unscheduled' con los
+  // items copiados. Así el comercial NO tiene que pulsar "Generar
+  // instalación" — la instalación aparece directamente en /instalaciones
+  // y se podrá programar fecha+instalador desde ahí.
+  let installationCreated = false;
+  try {
+    const { count: instCount } = await admin
+      .from("installations")
+      .select("id", { count: "exact", head: true })
+      .eq("contract_id", id)
+      .is("deleted_at", null);
+    if ((instCount ?? 0) === 0) {
+      // Generar reference_code I-YYYY-NNNN
+      const year = new Date().getFullYear();
+      const yearPrefix = `I-${year}-`;
+      const { data: lastCoded } = await admin
+        .from("installations")
+        .select("reference_code")
+        .eq("company_id", session.company_id!)
+        .like("reference_code", `${yearPrefix}%`)
+        .order("reference_code", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      let nextNum = 1;
+      const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
+      if (lastCode) {
+        const m = lastCode.match(/-(\d+)$/);
+        if (m) nextNum = parseInt(m[1]!, 10) + 1;
+      }
+      const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+
+      const { data: contractFull } = await admin
+        .from("contracts")
+        .select("customer_id")
+        .eq("id", id)
+        .single();
+      const cFull = contractFull as { customer_id: string | null } | null;
+
+      const { data: instCreated } = await admin
+        .from("installations")
+        .insert({
+          company_id: session.company_id!,
+          kind: "normal",
+          status: "unscheduled",
+          contract_id: id,
+          customer_id: cFull?.customer_id ?? null,
+          reference_code: referenceCode,
+          created_by: session.user_id,
+        })
+        .select("id")
+        .single();
+      const newInstId = (instCreated as { id: string } | null)?.id;
+      if (newInstId) {
+        // Copiar items del contrato
+        const { data: items } = await admin
+          .from("contract_items")
+          .select("product_id, quantity, display_order, notes")
+          .eq("contract_id", id);
+        const list = (items ?? []) as Array<{
+          product_id: string;
+          quantity: number;
+          display_order: number;
+          notes: string | null;
+        }>;
+        if (list.length > 0) {
+          await admin.from("installation_items").insert(
+            list.map((it) => ({
+              installation_id: newInstId,
+              company_id: session.company_id!,
+              product_id: it.product_id,
+              quantity: it.quantity,
+              display_order: it.display_order,
+              notes: it.notes,
+            })),
+          );
+        }
+        installationCreated = true;
+      }
+    }
+  } catch {
+    /* fail-soft: la firma no se rompe por esto */
+  }
+
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
@@ -644,6 +728,7 @@ export async function markContractSigned(id: string) {
     payload: {
       wallet_entries_created: list.length,
       maintenance_jobs_scheduled: scheduledCount,
+      installation_auto_created: installationCreated,
     },
     actor_user_id: session.user_id,
   });

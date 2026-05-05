@@ -394,6 +394,12 @@ export async function createInstallationFromContract(input: unknown) {
     actor_user_id: session.user_id,
   });
 
+  // Si se crea ya programada (fecha + installer), comprobar stock y
+  // avisar a admin/director técnico si falta material.
+  if (parsed.scheduled_at && parsed.installer_user_id) {
+    await checkStockAndNotifyIfShort(installationId);
+  }
+
   revalidatePath("/instalaciones");
   revalidatePath(`/contratos/${c.id}`);
   redirect(`/instalaciones/${installationId}` as never);
@@ -418,7 +424,134 @@ export async function updateInstallationAction(input: unknown) {
 
   const { error } = await supabase.from("installations").update(update).eq("id", parsed.id);
   if (error) throw new Error(error.message);
+
+  // Si pasó a estado scheduled (fecha + instalador), comprobar stock y
+  // notificar a admin si falta material para esa instalación.
+  if (update.status === "scheduled") {
+    await checkStockAndNotifyIfShort(parsed.id);
+  }
+
   revalidatePath(`/instalaciones/${parsed.id}`);
+}
+
+/**
+ * Comprueba stock disponible para los items de la instalación. Si en
+ * el almacén origen (o en cualquier almacén si no hay origen asignado)
+ * falta material, notifica a admin y director técnico para que generen
+ * orden de carga / pedido.
+ *
+ * No bloquea la programación — sólo avisa. Es informativo.
+ */
+async function checkStockAndNotifyIfShort(installationId: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const { data: inst } = await admin
+    .from("installations")
+    .select(
+      "id, company_id, reference_code, source_warehouse_id, scheduled_at, customer_id",
+    )
+    .eq("id", installationId)
+    .single();
+  const i = inst as
+    | {
+        id: string;
+        company_id: string;
+        reference_code: string | null;
+        source_warehouse_id: string | null;
+        scheduled_at: string | null;
+        customer_id: string | null;
+      }
+    | null;
+  if (!i) return;
+
+  // Items requeridos
+  const { data: items } = await admin
+    .from("installation_items")
+    .select("product_id, quantity")
+    .eq("installation_id", installationId);
+  type IT = { product_id: string; quantity: number };
+  const list = (items ?? []) as IT[];
+  if (list.length === 0) return;
+
+  const productIds = Array.from(new Set(list.map((it) => it.product_id)));
+
+  // Stock total (todos los almacenes activos) o sólo del origen si está asignado
+  let stockQuery = admin
+    .from("warehouse_stock")
+    .select("product_id, quantity, warehouse_id")
+    .in("product_id", productIds);
+  if (i.source_warehouse_id) {
+    stockQuery = stockQuery.eq("warehouse_id", i.source_warehouse_id);
+  }
+  const { data: stockRows } = await stockQuery;
+  type SR = { product_id: string; quantity: number; warehouse_id: string };
+  const stockMap = new Map<string, number>();
+  for (const s of (stockRows ?? []) as SR[]) {
+    stockMap.set(s.product_id, (stockMap.get(s.product_id) ?? 0) + (s.quantity ?? 0));
+  }
+
+  // Detectar shortages
+  const shortages: Array<{ product_id: string; required: number; available: number }> = [];
+  for (const it of list) {
+    const have = stockMap.get(it.product_id) ?? 0;
+    if (have < it.quantity) {
+      shortages.push({
+        product_id: it.product_id,
+        required: it.quantity,
+        available: have,
+      });
+    }
+  }
+  if (shortages.length === 0) return;
+
+  // Resolver nombres de productos
+  const { data: prods } = await admin
+    .from("products")
+    .select("id, name")
+    .in(
+      "id",
+      shortages.map((s) => s.product_id),
+    );
+  const nameMap = new Map(
+    ((prods ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]),
+  );
+
+  const lines = shortages.map(
+    (s) =>
+      `${nameMap.get(s.product_id) ?? s.product_id}: faltan ${s.required - s.available} (req ${s.required}, hay ${s.available})`,
+  );
+  const body = lines.join(" · ");
+
+  // Event timeline
+  await admin.from("events").insert({
+    company_id: i.company_id,
+    subject_type: "installation",
+    subject_id: installationId,
+    kind: "installation.stock_shortage",
+    payload: { shortages, scheduled_at: i.scheduled_at, source_warehouse_id: i.source_warehouse_id },
+    actor_user_id: null,
+  });
+
+  // Notificar a admin y director técnico
+  try {
+    const { notifyByRoles } = await import("@/modules/notifications/notifier");
+    await notifyByRoles(
+      i.company_id,
+      ["company_admin", "technical_director"],
+      {
+        kind: "installation.stock_shortage",
+        severity: "warning",
+        title: "⚠ Stock insuficiente para instalación programada",
+        body: `${i.reference_code ?? "Instalación"}: ${body}`,
+        subject_type: "installation",
+        subject_id: installationId,
+        action_url: `/instalaciones/${installationId}`,
+      },
+    );
+  } catch {
+    /* no-op */
+  }
 }
 
 export async function startInstallation(input: unknown) {
