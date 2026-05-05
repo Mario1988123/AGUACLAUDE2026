@@ -405,6 +405,38 @@ export async function createInstallationFromContract(input: unknown) {
   redirect(`/instalaciones/${installationId}` as never);
 }
 
+/**
+ * Devuelve por día cuántas instalaciones tiene programadas un instalador
+ * (o el conjunto de instaladores si no se filtra). Usado por el calendario
+ * de "Programar instalación" para mostrar disponibilidad antes de fijar
+ * la fecha. Devuelve un mapa "YYYY-MM-DD" → count.
+ */
+export async function getInstallerAvailabilityAction(
+  installerUserId: string | null,
+  fromDate: string, // "YYYY-MM-DD"
+  toDate: string, // "YYYY-MM-DD"
+): Promise<Record<string, number>> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  let q = admin
+    .from("installations")
+    .select("scheduled_at, installer_user_id")
+    .gte("scheduled_at", `${fromDate}T00:00:00`)
+    .lte("scheduled_at", `${toDate}T23:59:59`)
+    .not("status", "in", "(cancelled,completed)")
+    .is("deleted_at", null);
+  if (installerUserId) q = q.eq("installer_user_id", installerUserId);
+  const { data } = await q;
+  const map: Record<string, number> = {};
+  for (const row of (data ?? []) as Array<{ scheduled_at: string }>) {
+    const d = new Date(row.scheduled_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    map[key] = (map[key] ?? 0) + 1;
+  }
+  return map;
+}
+
 export async function updateInstallationAction(input: unknown) {
   const session = await requireSession();
   const parsed = installationUpdateSchema.parse(input);
