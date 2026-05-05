@@ -2,12 +2,22 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, CreditCard, Smartphone, Building2, Wrench, Coins, CheckCircle2, Pencil } from "lucide-react";
+import {
+  Banknote,
+  CreditCard,
+  Smartphone,
+  Building2,
+  Wrench,
+  Coins,
+  CheckCircle2,
+  Pencil,
+  Briefcase,
+} from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { collectContractPaymentAction } from "./actions";
 
-type When = "now" | "on_installation";
+type When = "now" | "on_installation" | "at_office";
 type Method = "cash" | "card" | "bizum" | "transfer";
 
 const METHOD_LABEL: Record<Method, string> = {
@@ -51,12 +61,24 @@ export function CollectInline({
   function confirm() {
     startTransition(async () => {
       try {
-        await collectContractPaymentAction(paymentId, { when, method });
-        notify.success(
-          when === "on_installation"
-            ? "Cobro aplazado a la instalación"
-            : "Cobrado · pendiente de validar",
-        );
+        if (when === "at_office") {
+          // Reusa el flujo "diferido" pero deja anotado que el cobro es
+          // en oficina — no materializa wallet entry hasta que el
+          // comercial lo confirme cuando reciba el dinero.
+          await collectContractPaymentAction(paymentId, {
+            when: "on_installation",
+            method,
+            notes: "Pago en oficina · pendiente de cobro real",
+          });
+          notify.success("Marcado: pago en oficina pendiente");
+        } else {
+          await collectContractPaymentAction(paymentId, { when, method });
+          notify.success(
+            when === "on_installation"
+              ? "Cobro aplazado a la instalación"
+              : "Cobrado · pendiente de validar",
+          );
+        }
         setOpen(false);
         router.refresh();
       } catch (err) {
@@ -92,11 +114,11 @@ export function CollectInline({
         <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
           ¿Cuándo?
         </p>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => setWhen("now")}
-            className={`flex items-center gap-2 rounded-xl border-2 p-2 text-xs font-bold ${
+            className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-bold ${
               when === "now"
                 ? "border-emerald-500 bg-emerald-50 text-emerald-700"
                 : "border-border bg-card hover:border-emerald-300"
@@ -106,8 +128,19 @@ export function CollectInline({
           </button>
           <button
             type="button"
+            onClick={() => setWhen("at_office")}
+            className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-bold ${
+              when === "at_office"
+                ? "border-blue-500 bg-blue-50 text-blue-700"
+                : "border-border bg-card hover:border-blue-300"
+            }`}
+          >
+            <Briefcase className="h-4 w-4" /> En oficina
+          </button>
+          <button
+            type="button"
             onClick={() => setWhen("on_installation")}
-            className={`flex items-center gap-2 rounded-xl border-2 p-2 text-xs font-bold ${
+            className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-bold ${
               when === "on_installation"
                 ? "border-amber-500 bg-amber-50 text-amber-700"
                 : "border-border bg-card hover:border-amber-300"
@@ -117,6 +150,12 @@ export function CollectInline({
           </button>
         </div>
       </div>
+      {when === "at_office" && (
+        <p className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-800">
+          ℹ El cliente pagará en oficina. Queda registrado como pendiente — el
+          comercial validará el cobro cuando reciba el dinero.
+        </p>
+      )}
       <div>
         <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
           Método

@@ -219,7 +219,14 @@ export function InstallationWizard(props: Props) {
     status === "in_progress" || status === "paused" || status === "completed";
   const step2Done =
     !(hasPreviousDamage || needsCountertopDrilling) || Boolean(initialStateSig);
-  const step3Done = true; // cobros opcionales
+  // Cobros obligatorios: cada contract_payment debe estar gestionado.
+  // Aceptamos:
+  //   - status != "pending" (cobrado / validado / pago "ahora")
+  //   - O moment === "on_installation" (diferido a este momento o
+  //     marcado como "en oficina" — vía at_office reusa este moment).
+  const step3Done = payments.every(
+    (p) => p.status !== "pending" || p.moment === "on_installation",
+  );
   const step4Done =
     photos.some((p) => p.category === "equipment") &&
     photos.some((p) => p.category === "connection");
@@ -650,8 +657,9 @@ export function InstallationWizard(props: Props) {
               {step === 3 && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
-                    Cobros del contrato. Puedes cobrar ahora o aplazarlo. Si sales sin
-                    cobrar, los pendientes seguirán visibles.
+                    <strong>Obligatorio:</strong> marca cómo se cobra cada línea
+                    (ahora, en oficina o en la instalación). No se permite
+                    avanzar mientras quede algún cobro sin gestionar.
                   </p>
                   {payments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Sin cobros pendientes.</p>

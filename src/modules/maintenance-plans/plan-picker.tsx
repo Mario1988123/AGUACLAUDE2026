@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Sparkles, Wrench, Crown, Check, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -48,7 +47,6 @@ export function MaintenancePlanPicker({
   const [open, setOpen] = useState(false);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const router = useRouter();
 
   function generate() {
     if (!selectedPlanId) {
@@ -63,9 +61,17 @@ export function MaintenancePlanPicker({
           source_installation_id: sourceInstallationId ?? null,
           source_contract_id: sourceContractId ?? null,
         });
-        notify.success("Contrato de mantenimiento creado");
+        notify.success(
+          "Contrato de mantenimiento creado",
+          "Aparecerá en /mantenimientos. La remesa mensual se lanza desde ahí.",
+        );
+        // NO router.refresh() aquí: si este picker está embebido en otro
+        // modal (ej. wizard de instalación), refrescar el árbol de la
+        // página padre lo desmontaría y cerraría el modal contenedor.
+        // El revalidatePath del server action ya invalida el cache para
+        // la próxima navegación del usuario a /mantenimientos.
         setOpen(false);
-        router.refresh();
+        setSelectedPlanId(null);
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
       }
