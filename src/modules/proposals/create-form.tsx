@@ -332,15 +332,24 @@ export function ProposalCreateForm({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label>Validez hasta</Label>
-          <Input
-            type="date"
-            value={validityUntil}
-            onChange={(e) => setValidityUntil(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2 sm:col-span-2">
+        {/* "Validez hasta" sólo tiene sentido en propuesta formal —
+            indica hasta cuándo el cliente puede aceptarla. En modo
+            contrato directo NO se muestra: la aceptación es inmediata. */}
+        {!directMode && (
+          <div className="space-y-2">
+            <Label>Validez hasta</Label>
+            <Input
+              type="date"
+              value={validityUntil}
+              onChange={(e) => setValidityUntil(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Hasta cuándo el cliente puede aceptar la propuesta. Pasada
+              esta fecha, la propuesta caduca automáticamente.
+            </p>
+          </div>
+        )}
+        <div className={`space-y-2 ${directMode ? "sm:col-span-2" : "sm:col-span-2"}`}>
           <Label>Notas (opcional)</Label>
           <textarea
             value={notes}
