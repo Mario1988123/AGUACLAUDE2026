@@ -204,6 +204,57 @@ export function InstallationWizard(props: Props) {
     setIncidentOpen(false);
   }
 
+  // === GATING DE PASOS (obligatorios en orden) ===
+  // 1. Parte iniciado (status=in_progress/paused/completed).
+  // 2. Estado inicial guardado (toggles + firma si daño/agujero).
+  // 3. Cobros: opcional — el comercial puede cobrar luego en oficina.
+  // 4. Fotos: AL MENOS 1 de equipo + 1 de conexión.
+  // 5. Firma del cliente + encuesta de satisfacción contestada.
+  // 6. Cerrar: sólo accesible si 1..5 están OK; permite volver atrás.
+  const custSig = signatures.find((s) => s.signer_role === "customer" && s.context === "final");
+  const initialStateSig = signatures.find(
+    (s) => s.signer_role === "customer" && s.context === "initial_state",
+  );
+  const step1Done =
+    status === "in_progress" || status === "paused" || status === "completed";
+  const step2Done =
+    !(hasPreviousDamage || needsCountertopDrilling) || Boolean(initialStateSig);
+  const step3Done = true; // cobros opcionales
+  const step4Done =
+    photos.some((p) => p.category === "equipment") &&
+    photos.some((p) => p.category === "connection");
+  const step5Done = Boolean(custSig);
+
+  function canGoTo(target: Step): boolean {
+    // Siempre puedes ir hacia atrás libremente.
+    if (target <= step) return true;
+    // Para avanzar, todos los pasos previos deben estar OK.
+    if (target === 2) return step1Done;
+    if (target === 3) return step1Done && step2Done;
+    if (target === 4) return step1Done && step2Done && step3Done;
+    if (target === 5)
+      return step1Done && step2Done && step3Done && step4Done;
+    if (target === 6)
+      return step1Done && step2Done && step3Done && step4Done && step5Done;
+    return false;
+  }
+
+  function tryGoTo(target: Step) {
+    if (canGoTo(target)) {
+      setStep(target);
+      return;
+    }
+    const reasons: string[] = [];
+    if (!step1Done) reasons.push("inicia el parte (paso 1)");
+    if (!step2Done) reasons.push("firma el estado inicial (paso 2)");
+    if (!step4Done && target >= 4) reasons.push("sube foto del equipo y de la conexión (paso 4)");
+    if (!step5Done && target >= 5) reasons.push("firma cliente + encuesta (paso 5)");
+    notify.warning(
+      "Paso bloqueado",
+      reasons.length ? `Antes: ${reasons.join("; ")}` : "Completa los pasos previos",
+    );
+  }
+
   // === HANDLERS ===
 
   function startParte() {
@@ -474,18 +525,27 @@ export function InstallationWizard(props: Props) {
               {STEPS.map((s, i) => {
                 const Icon = s.icon;
                 const active = step === s.n;
-                const done = step > s.n;
+                const isComplete =
+                  (s.n === 1 && step1Done) ||
+                  (s.n === 2 && step2Done) ||
+                  (s.n === 3 && step3Done) ||
+                  (s.n === 4 && step4Done) ||
+                  (s.n === 5 && step5Done);
+                const reachable = canGoTo(s.n);
                 return (
                   <div key={s.n} className="flex flex-1 min-w-0 items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setStep(s.n)}
+                      onClick={() => tryGoTo(s.n)}
+                      disabled={!reachable}
                       className={`flex flex-1 items-center justify-center gap-2 rounded-xl border-2 px-3 py-2 text-xs font-bold transition ${
                         active
                           ? "border-primary bg-primary text-primary-foreground"
-                          : done
+                          : isComplete
                             ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                            : "border-border bg-card text-muted-foreground"
+                            : reachable
+                              ? "border-border bg-card text-muted-foreground"
+                              : "border-border bg-muted/40 text-muted-foreground/40 cursor-not-allowed"
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -752,28 +812,37 @@ export function InstallationWizard(props: Props) {
                     <p className="text-xs text-blue-800">
                       Encuesta anónima — el instalador NO ve tu respuesta.
                     </p>
-                    <div className="grid grid-cols-5 gap-2">
-                      {FACES.map((f) => (
-                        <button
-                          key={f.v}
-                          type="button"
-                          onClick={() => setSatisfaction(f.v)}
-                          className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 ${
-                            satisfaction === f.v
-                              ? "border-primary bg-primary/10 scale-110"
-                              : "border-border bg-card hover:border-primary/40"
-                          }`}
-                        >
-                          <span className="text-3xl">{f.emoji}</span>
-                          <span className="text-[10px] font-bold">{f.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <Input
-                      placeholder="Comentario opcional"
-                      value={satisfactionComment}
-                      onChange={(e) => setSatisfactionComment(e.target.value)}
-                    />
+                    {satisfaction == null ? (
+                      <div className="grid grid-cols-5 gap-2">
+                        {FACES.map((f) => (
+                          <button
+                            key={f.v}
+                            type="button"
+                            onClick={() => setSatisfaction(f.v)}
+                            className="flex flex-col items-center gap-1 rounded-xl border-2 border-border bg-card p-2 hover:border-primary/40"
+                          >
+                            <span className="text-3xl">{f.emoji}</span>
+                            <span className="text-[10px] font-bold">{f.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3 text-center">
+                        <p className="text-sm font-bold text-emerald-900">
+                          ✓ Gracias por tu valoración
+                        </p>
+                        <p className="text-xs text-emerald-800">
+                          Respuesta guardada de forma anónima.
+                        </p>
+                      </div>
+                    )}
+                    {satisfaction != null && (
+                      <Input
+                        placeholder="Comentario opcional (también anónimo)"
+                        value={satisfactionComment}
+                        onChange={(e) => setSatisfactionComment(e.target.value)}
+                      />
+                    )}
                   </div>
 
                   <Button
@@ -867,7 +936,11 @@ export function InstallationWizard(props: Props) {
               </Button>
               <span className="text-xs text-muted-foreground">Paso {step} de 6</span>
               {step < 6 ? (
-                <Button size="sm" onClick={() => setStep((s) => ((s + 1) as Step))}>
+                <Button
+                  size="sm"
+                  onClick={() => tryGoTo(((step + 1) as Step))}
+                  disabled={!canGoTo((step + 1) as Step)}
+                >
                   Siguiente <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (

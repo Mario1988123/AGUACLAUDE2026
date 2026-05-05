@@ -110,17 +110,29 @@ export async function startInstallationAction(input: {
   }
   const far = meters != null && meters > tolerance;
 
-  await admin
-    .from("installations")
-    .update({
-      status: "in_progress",
-      started_at: new Date().toISOString(),
-      started_geo_lat: input.geo_lat,
-      started_geo_lng: input.geo_lng,
-      started_far_from_address: far,
-      geo_distance_to_address_m: meters,
-    })
-    .eq("id", input.installation_id);
+  // Defensivo ante migraciones no aplicadas: la migración 20260504150000
+  // añade started_geo_lat/lng + started_far_from_address. Si en producción
+  // no está aplicada, esos UPDATE explotaban con digest "Server Components
+  // render" sin mensaje útil. Iteramos columna a columna.
+  const updates: Array<[string, unknown]> = [
+    ["status", "in_progress"],
+    ["started_at", new Date().toISOString()],
+    ["geo_distance_to_address_m", meters],
+    ["started_geo_lat", input.geo_lat],
+    ["started_geo_lng", input.geo_lng],
+    ["started_far_from_address", far],
+  ];
+  for (const [col, val] of updates) {
+    const r = await admin
+      .from("installations")
+      .update({ [col]: val })
+      .eq("id", input.installation_id);
+    const m = (r.error as { message?: string } | null)?.message ?? null;
+    if (!m) continue;
+    if (/column .* does not exist|schema cache/i.test(m)) continue;
+    // Si es un error real (RLS, etc.) lo lanzamos
+    throw new Error(m);
+  }
 
   await admin.from("events").insert({
     company_id: i.company_id,
@@ -166,15 +178,29 @@ export async function pauseInstallationAction(input: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { error } = await admin.from("installation_pauses").insert({
-    company_id: session.company_id,
-    installation_id: input.installation_id,
-    reason: input.reason,
-    reason_notes: input.reason_notes ?? null,
-    scheduled_resume_at: input.scheduled_resume_at ?? null,
-    paused_by_user_id: session.user_id,
-  });
-  if (error) throw new Error(error.message);
+  // Defensivo: la tabla installation_pauses la añade la migración
+  // 20260504150000. Si no está aplicada, ignoramos el insert pero seguimos
+  // marcando el status en la instalación para que el flujo no se rompa.
+  try {
+    const { error } = await admin.from("installation_pauses").insert({
+      company_id: session.company_id,
+      installation_id: input.installation_id,
+      reason: input.reason,
+      reason_notes: input.reason_notes ?? null,
+      scheduled_resume_at: input.scheduled_resume_at ?? null,
+      paused_by_user_id: session.user_id,
+    });
+    if (
+      error &&
+      !/relation .* does not exist|schema cache/i.test(error.message ?? "")
+    ) {
+      throw new Error(error.message);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!/relation .* does not exist|schema cache/i.test(msg)) throw e;
+    /* tabla aún no migrada — continuamos con el cambio de status */
+  }
 
   await admin
     .from("installations")
@@ -199,20 +225,24 @@ export async function resumeInstallationAction(installationId: string): Promise<
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // Cerramos la última pausa abierta
-  const { data: openPause } = await admin
-    .from("installation_pauses")
-    .select("id")
-    .eq("installation_id", installationId)
-    .is("resumed_at", null)
-    .order("paused_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (openPause) {
-    await admin
+  // Cerramos la última pausa abierta — defensivo si la tabla no existe
+  try {
+    const { data: openPause } = await admin
       .from("installation_pauses")
-      .update({ resumed_at: new Date().toISOString() })
-      .eq("id", (openPause as { id: string }).id);
+      .select("id")
+      .eq("installation_id", installationId)
+      .is("resumed_at", null)
+      .order("paused_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (openPause) {
+      await admin
+        .from("installation_pauses")
+        .update({ resumed_at: new Date().toISOString() })
+        .eq("id", (openPause as { id: string }).id);
+    }
+  } catch {
+    /* tabla aún no migrada */
   }
   await admin
     .from("installations")
@@ -239,14 +269,43 @@ export async function reportInstallationIncidentAction(input: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { error } = await admin.from("installation_incidents").insert({
-    company_id: session.company_id,
-    installation_id: input.installation_id,
-    kind: input.kind,
-    description: input.description ?? null,
-    reported_by: session.user_id,
-  });
-  if (error) throw new Error(error.message);
+  // Defensivo: tabla installation_incidents añadida en migración
+  // 20260504150000. Si no está aplicada, registramos la incidencia
+  // genérica en la tabla `incidents` (existe desde el inicio).
+  let inserted = false;
+  try {
+    const { error } = await admin.from("installation_incidents").insert({
+      company_id: session.company_id,
+      installation_id: input.installation_id,
+      kind: input.kind,
+      description: input.description ?? null,
+      reported_by: session.user_id,
+    });
+    if (!error) inserted = true;
+    else if (!/relation .* does not exist|schema cache/i.test(error.message ?? "")) {
+      throw new Error(error.message);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!/relation .* does not exist|schema cache/i.test(msg)) throw e;
+  }
+  if (!inserted) {
+    // Fallback: insertar como incidencia genérica
+    try {
+      await admin.from("incidents").insert({
+        company_id: session.company_id,
+        title: `Incidencia instalación: ${input.kind}`,
+        description: input.description ?? null,
+        installation_id: input.installation_id,
+        priority: "high",
+        status: "open",
+        origin: "installer_reported",
+        created_by: session.user_id,
+      });
+    } catch {
+      /* fail-soft */
+    }
+  }
 
   // Notificar a nivel 1 y nivel 2
   try {
@@ -334,14 +393,21 @@ export async function finishInstallationAction(input: {
   const admin = createAdminClient() as any;
 
   // Persistimos satisfacción ANTES porque completeInstallation no la
-  // conoce (es campo del wizard nuevo, schema 20260504150000).
-  await admin
-    .from("installations")
-    .update({
-      satisfaction_score: input.satisfaction_score,
-      satisfaction_comment: input.satisfaction_comment ?? null,
-    })
-    .eq("id", input.installation_id);
+  // conoce. Defensivo column-by-column (migración 20260504150000 puede
+  // no estar aplicada → silent fail aceptado).
+  for (const [col, val] of [
+    ["satisfaction_score", input.satisfaction_score],
+    ["satisfaction_comment", input.satisfaction_comment ?? null],
+  ] as Array<[string, unknown]>) {
+    const r = await admin
+      .from("installations")
+      .update({ [col]: val })
+      .eq("id", input.installation_id);
+    const m = (r.error as { message?: string } | null)?.message ?? null;
+    if (m && !/column .* does not exist|schema cache/i.test(m)) {
+      throw new Error(m);
+    }
+  }
 
   // Delegamos en la lógica completa (idempotente: si ya estaba completed
   // no se ejecuta dos veces porque service_start_date ya está set).
