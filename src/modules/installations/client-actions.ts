@@ -182,31 +182,42 @@ export async function listInstallationSignaturesFull(
 export async function listInstallationPhotosFull(
   installationId: string,
 ): Promise<InstallationPhoto[]> {
-  await requireSession();
+  try {
+    await requireSession();
+  } catch {
+    return [];
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data } = await admin
-    .from("installation_photos")
-    .select("id, storage_path, category, caption, taken_at")
-    .eq("installation_id", installationId)
-    .order("taken_at", { ascending: false });
-  type R = {
+  let rows: Array<{
     id: string;
     storage_path: string;
     category: string;
     caption: string | null;
     taken_at: string;
-  };
-  const rows = (data ?? []) as R[];
+  }> = [];
+  try {
+    const { data } = await admin
+      .from("installation_photos")
+      .select("id, storage_path, category, caption, taken_at")
+      .eq("installation_id", installationId)
+      .order("taken_at", { ascending: false });
+    rows = (data ?? []) as typeof rows;
+  } catch {
+    return [];
+  }
   const out: InstallationPhoto[] = [];
   for (const r of rows) {
-    const { data: signed } = await admin.storage
-      .from(PHOTO_BUCKET)
-      .createSignedUrl(r.storage_path, 3600);
-    out.push({
-      ...r,
-      signed_url: (signed as { signedUrl: string } | null)?.signedUrl ?? null,
-    });
+    let signedUrl: string | null = null;
+    try {
+      const { data } = await admin.storage
+        .from(PHOTO_BUCKET)
+        .createSignedUrl(r.storage_path, 3600);
+      signedUrl = (data as { signedUrl: string } | null)?.signedUrl ?? null;
+    } catch {
+      /* bucket puede no existir → signedUrl queda null */
+    }
+    out.push({ ...r, signed_url: signedUrl });
   }
   return out;
 }

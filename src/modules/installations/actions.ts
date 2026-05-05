@@ -474,7 +474,20 @@ export async function updateInstallationAction(input: unknown) {
  *
  * No bloquea la programación — sólo avisa. Es informativo.
  */
+/**
+ * Wrapper público — nunca lanza. Si algo falla (tabla, bucket, permisos),
+ * silenciamos para que el flujo de programación no se rompa por un
+ * efecto secundario informativo.
+ */
 async function checkStockAndNotifyIfShort(installationId: string): Promise<void> {
+  try {
+    await checkStockAndNotifyIfShortInner(installationId);
+  } catch {
+    /* no-op */
+  }
+}
+
+async function checkStockAndNotifyIfShortInner(installationId: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

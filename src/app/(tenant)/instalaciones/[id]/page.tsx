@@ -53,13 +53,13 @@ export default async function InstallationDetailPage({
 
   const [items, photos, signatures, session, team, photosFull, signaturesFull] =
     await Promise.all([
-      getInstallationItems(id),
-      getInstallationPhotos(id),
-      getInstallationSignatures(id),
+      getInstallationItems(id).catch(() => []),
+      getInstallationPhotos(id).catch(() => []),
+      getInstallationSignatures(id).catch(() => []),
       requireSession(),
       listTeamMembers().catch(() => []),
-      listInstallationPhotosFull(id),
-      listInstallationSignaturesFull(id),
+      listInstallationPhotosFull(id).catch(() => []),
+      listInstallationSignaturesFull(id).catch(() => []),
     ]);
   // Reasignar instalación restringido a admin de empresa (decisión usuario).
   const canReassign =
