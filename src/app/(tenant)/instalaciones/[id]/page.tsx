@@ -31,7 +31,8 @@ export default async function InstallationDetailPage({
   let inst;
   try {
     inst = await getInstallation(id);
-  } catch {
+  } catch (e) {
+    console.error("[install/page] getInstallation failed:", e);
     notFound();
   }
   const i = inst as unknown as {
@@ -81,42 +82,59 @@ export default async function InstallationDetailPage({
   let customerId: string | null = null;
   let contractIncludesMaintenance = false;
   if (i.contract_id) {
-    const { data: ps } = await sb
-      .from("contract_payments")
-      .select("id, concept, amount_cents, method, moment, status")
-      .eq("contract_id", i.contract_id)
-      .order("display_order");
-    payments = (ps ?? []) as typeof payments;
-    const { data: ct } = await sb
-      .from("contracts")
-      .select("customer_id, customer_snapshot, maintenance_included")
-      .eq("id", i.contract_id)
-      .single();
-    if (ct) {
-      const ctRow = ct as {
-        customer_id: string | null;
-        customer_snapshot: Record<string, unknown> | null;
-        maintenance_included: boolean | null;
-      };
-      customerId = ctRow.customer_id;
-      contractIncludesMaintenance = Boolean(ctRow.maintenance_included);
-      const cust = ctRow.customer_snapshot;
-      if (cust) {
-        const c = cust as {
-          legal_name?: string | null;
-          trade_name?: string | null;
-          first_name?: string | null;
-          last_name?: string | null;
-          tax_id?: string | null;
-        };
-        customerName =
-          c.trade_name ||
-          c.legal_name ||
-          `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() ||
-          "Cliente";
-        customerTaxId = c.tax_id ?? null;
-      }
+    try {
+      const { data: ps } = await sb
+        .from("contract_payments")
+        .select("id, concept, amount_cents, method, moment, status")
+        .eq("contract_id", i.contract_id)
+        .order("display_order");
+      payments = (ps ?? []) as typeof payments;
+    } catch (e) {
+      console.error("[install/page] contract_payments load failed:", e);
     }
+    try {
+      const { data: ct } = await sb
+        .from("contracts")
+        .select("customer_id, customer_snapshot, maintenance_included")
+        .eq("id", i.contract_id)
+        .single();
+      if (ct) {
+        const ctRow = ct as {
+          customer_id: string | null;
+          customer_snapshot: Record<string, unknown> | null;
+          maintenance_included: boolean | null;
+        };
+        customerId = ctRow.customer_id;
+        contractIncludesMaintenance = Boolean(ctRow.maintenance_included);
+        const cust = ctRow.customer_snapshot;
+        if (cust) {
+          const c = cust as {
+            legal_name?: string | null;
+            trade_name?: string | null;
+            first_name?: string | null;
+            last_name?: string | null;
+            tax_id?: string | null;
+          };
+          customerName =
+            c.trade_name ||
+            c.legal_name ||
+            `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() ||
+            "Cliente";
+          customerTaxId = c.tax_id ?? null;
+        }
+      }
+    } catch (e) {
+      console.error("[install/page] contracts load failed:", e);
+    }
+  }
+
+  // Carga de planes de mantenimiento — si maintenance_plans no está
+  // migrado, el wizard simplemente no muestra el CTA al final.
+  let maintenancePlans: Awaited<ReturnType<typeof listMaintenancePlans>> = [];
+  try {
+    maintenancePlans = await listMaintenancePlans();
+  } catch (e) {
+    console.error("[install/page] listMaintenancePlans failed:", e);
   }
 
   return (
@@ -155,7 +173,7 @@ export default async function InstallationDetailPage({
               representativeName={session.full_name ?? "Técnico"}
               customerId={customerId}
               contractId={i.contract_id}
-              maintenancePlans={await listMaintenancePlans().catch(() => [])}
+              maintenancePlans={maintenancePlans}
               contractIncludesMaintenance={contractIncludesMaintenance}
             />
           )}

@@ -130,7 +130,13 @@ export async function startInstallationAction(input: {
     const m = (r.error as { message?: string } | null)?.message ?? null;
     if (!m) continue;
     if (/column .* does not exist|schema cache/i.test(m)) continue;
-    // Si es un error real (RLS, etc.) lo lanzamos
+    // Logging para diagnosticar errores reales (RLS, constraints, etc.)
+    console.error(
+      `[startInstallation] UPDATE col=${col} failed:`,
+      m,
+      "value:",
+      val,
+    );
     throw new Error(m);
   }
 
