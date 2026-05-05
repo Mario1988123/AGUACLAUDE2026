@@ -49,6 +49,32 @@ export const EVENT_LABEL: Record<string, string> = {
   "wallet.settled": "Liquidación wallet",
   "wallet.payment_validated": "Pago validado",
   "wallet.payment_rejected": "Pago rechazado",
+  // === Instalación: kinds añadidos por el wizard nuevo ===
+  "installation.paused": "Instalación en pausa",
+  "installation.resumed": "Instalación reanudada",
+  "installation.incident": "Incidencia durante la instalación",
+  "installation.assigned": "Instalación asignada",
+  "installation.reassigned": "Instalación reasignada",
+  "installation.started_far": "Parte iniciado lejos del cliente",
+  "installation.stock_shortage": "Stock insuficiente para la instalación",
+  // === Cliente / equipo ===
+  "customer.equipment_added": "Equipo añadido al cliente",
+  // === Mantenimiento ===
+  "maintenance.scheduled": "Mantenimiento programado",
+  "maintenance.in_progress": "Mantenimiento en curso",
+  "maintenance.cancelled": "Mantenimiento cancelado",
+  "maintenance_contract.created": "Contrato de mantenimiento creado",
+  "maintenance_contract.cancelled": "Contrato de mantenimiento cancelado",
+  // === Agenda ===
+  "agenda.created": "Tarea creada",
+  "agenda.rescheduled": "Tarea reagendada",
+  "agenda.assigned": "Tarea asignada",
+  "agenda.reassigned": "Tarea reasignada",
+  "agenda.completed": "Tarea completada",
+  "agenda.cancelled": "Tarea cancelada",
+  // === Time-tracking ===
+  "time_tracking.autoclose": "Fichaje autocerrado",
+  "time_tracking.manual_edit": "Fichaje editado manualmente",
 };
 
 /**
@@ -87,6 +113,28 @@ function fallbackLabel(kind: string): string {
     commented: "comentado",
     tampered: "modificado",
     superseded: "sustituido",
+    paused: "en pausa",
+    resumed: "reanudado",
+    assigned: "asignado",
+    incident: "incidencia",
+    rescheduled: "reagendado",
+    autoclose: "autocerrado",
+    autoclosed: "autocerrado",
+    equipment_added: "equipo añadido",
+    stock_shortage: "stock insuficiente",
+    started_far: "iniciado lejos del cliente",
+    payment_validated: "pago validado",
+    payment_rejected: "pago rechazado",
+    payment_recorded: "pago registrado",
+    in_progress: "en curso",
+    role_changed: "rol cambiado",
+    status_changed: "cambio de estado",
+    dedupe_warning: "posible duplicado",
+    reopened_from_lost: "reabierto desde venta perdida",
+    install_pref_updated: "preferencia de instalación actualizada",
+    signature_added: "firma añadida",
+    variant_created: "variante creada",
+    approval_rejected: "aprobación rechazada",
   };
   const SUBJECTS: Record<string, string> = {
     lead: "Lead",
@@ -96,12 +144,19 @@ function fallbackLabel(kind: string): string {
     contract_payment: "Cobro",
     installation: "Instalación",
     maintenance: "Mantenimiento",
+    maintenance_contract: "Contrato mantenimiento",
     incident: "Incidencia",
     wallet: "Wallet",
+    wallet_entry: "Wallet",
     invoice: "Factura",
     product: "Producto",
     user: "Usuario",
     free_trial: "Prueba gratuita",
+    agenda: "Tarea",
+    time_tracking: "Fichaje",
+    points: "Puntos",
+    notification: "Notificación",
+    document: "Documento",
   };
   const [subj, ...verbParts] = kind.split(".");
   const verbKey = verbParts.join("_");
