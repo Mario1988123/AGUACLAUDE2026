@@ -14,6 +14,17 @@ interface Props {
 }
 
 const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
+
+/**
+ * Devuelve "YYYY-MM-DD" en HORA LOCAL del navegador. NO usar
+ * toISOString().slice(0,10) — convierte a UTC y desfasa el día cuando
+ * la hora está cerca de medianoche (España UTC+1/+2 → un evento del 5
+ * mayo a las 01:00h local sale como 4 mayo en UTC, así que el calendario
+ * lo pintaba un día antes).
+ */
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 const MONTHS = [
   "Enero",
   "Febrero",
@@ -58,12 +69,13 @@ export function AgendaCalendar({ events }: Props) {
 
   const eventsByDay: Record<string, AgendaItem[]> = {};
   for (const ev of events) {
-    const d = ev.starts_at.slice(0, 10);
+    // Convertimos el ISO UTC a fecha local antes de extraer YYYY-MM-DD
+    const d = localDateKey(new Date(ev.starts_at));
     (eventsByDay[d] = eventsByDay[d] ?? []).push(ev);
   }
 
   const today = new Date();
-  const todayKey = today.toISOString().slice(0, 10);
+  const todayKey = localDateKey(today);
 
   function prev() {
     setCursor(new Date(year, month - 1, 1));
@@ -109,7 +121,7 @@ export function AgendaCalendar({ events }: Props) {
             const dayNum = i - offset + 1;
             const inMonth = dayNum >= 1 && dayNum <= lastDay.getDate();
             const date = inMonth ? new Date(year, month, dayNum) : null;
-            const key = date ? date.toISOString().slice(0, 10) : "";
+            const key = date ? localDateKey(date) : "";
             const dayEvents = key ? eventsByDay[key] ?? [] : [];
             const isToday = key === todayKey;
 

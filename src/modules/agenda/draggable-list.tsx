@@ -16,6 +16,14 @@ interface Props {
 }
 
 /**
+ * "YYYY-MM-DD" en HORA LOCAL. NO usar slice(0,10) sobre el ISO UTC porque
+ * desfasa el día cuando la hora cae cerca de medianoche (España UTC+1/+2).
+ */
+function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Lista de agenda agrupada por día con drag-and-drop nativo HTML5 para
  * arrastrar tarjetas de un día a otro. Conserva la hora original; si quieres
  * cambiar la hora, edita el evento.
@@ -29,7 +37,7 @@ export function DraggableAgendaList({ events: initial }: Props) {
   const router = useRouter();
 
   const byDay = events.reduce<Record<string, AgendaItem[]>>((acc, ev) => {
-    const day = ev.starts_at.slice(0, 10);
+    const day = localDateKey(new Date(ev.starts_at));
     (acc[day] = acc[day] ?? []).push(ev);
     return acc;
   }, {});
@@ -59,7 +67,7 @@ export function DraggableAgendaList({ events: initial }: Props) {
     if (!id) return;
     const ev = events.find((x) => x.id === id);
     if (!ev) return;
-    const currentDay = ev.starts_at.slice(0, 10);
+    const currentDay = localDateKey(new Date(ev.starts_at));
     if (currentDay === day) {
       setOverDay(null);
       return;
