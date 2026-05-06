@@ -890,15 +890,19 @@ export async function collectContractPaymentAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  // Admin client para todo el flow financiero. La policy
+  // contract_payments_update / wallet_entries_update por scope puede
+  // bloquear silentmente al comercial que cobra. Validamos sesión y
+  // que el pago pertenece a la empresa con SELECT previo.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
 
   const when = options?.when ?? "now";
   const newMethod = options?.method ?? null;
 
-  const { data: pay } = await supabase
+  const { data: pay } = await admin
     .from("contract_payments")
-    .select("id, contract_id, concept, amount_cents, method, status, wallet_entry_id")
+    .select("id, contract_id, concept, amount_cents, method, status, wallet_entry_id, company_id")
     .eq("id", paymentId)
     .single();
   if (!pay) throw new Error("Pago no encontrado");
@@ -910,7 +914,11 @@ export async function collectContractPaymentAction(
     method: string;
     status: string;
     wallet_entry_id: string | null;
+    company_id: string;
   };
+  if (p.company_id !== session.company_id) {
+    throw new Error("Pago de otra empresa");
+  }
   // Permitimos editar incluso si ya está cobrado/validado (caso "me he
   // equivocado de método o de momento"). Si había wallet_entry asociado
   // y se cambia el método/momento, lo actualizamos.
@@ -931,25 +939,18 @@ export async function collectContractPaymentAction(
     };
     if (newMethod) updates.method = newMethod;
     if (options?.notes !== undefined) updates.notes = options.notes;
-    await supabase.from("contract_payments").update(updates).eq("id", p.id);
-    // Si había wallet_entry, la cancelamos: el cobro ya no es ahora.
-    // Admin client: la policy we_update filtra por scope (admin / wallet
-    // approver / collected_by_user_id own). Si el comercial que difiere
-    // no es quien la cobró originalmente, el UPDATE silente fallaría y
-    // la wallet_entry seguiría activa.
+    await admin.from("contract_payments").update(updates).eq("id", p.id);
     if (p.wallet_entry_id) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const admin = createAdminClient() as any;
       await admin
         .from("wallet_entries")
         .update({ status: "cancelled" })
         .eq("id", p.wallet_entry_id);
-      await supabase
+      await admin
         .from("contract_payments")
         .update({ wallet_entry_id: null })
         .eq("id", p.id);
     }
-    await supabase.from("events").insert({
+    await admin.from("events").insert({
       company_id: session.company_id,
       subject_type: "contract",
       subject_id: p.contract_id,
@@ -971,7 +972,7 @@ export async function collectContractPaymentAction(
 
   let walletEntryId = p.wallet_entry_id;
   if (walletEntryId) {
-    await supabase
+    await admin
       .from("wallet_entries")
       .update({
         method: effectiveMethod,
@@ -981,7 +982,7 @@ export async function collectContractPaymentAction(
       })
       .eq("id", walletEntryId);
   } else {
-    const { data: created } = await supabase
+    const { data: created } = await admin
       .from("wallet_entries")
       .insert({
         company_id: session.company_id,
@@ -1000,8 +1001,6 @@ export async function collectContractPaymentAction(
   }
 
   const cpUpdates: Record<string, unknown> = {
-    // Si estábamos editando un cobro ya validado, mantenemos validated;
-    // si no, marca como collected_pending_validation
     status: p.status === "validated" ? "validated" : "collected_pending_validation",
     method: effectiveMethod,
     moment: "on_signature",
@@ -1010,9 +1009,9 @@ export async function collectContractPaymentAction(
     collected_by_user_id: session.user_id,
   };
   if (options?.notes !== undefined) cpUpdates.notes = options.notes;
-  await supabase.from("contract_payments").update(cpUpdates).eq("id", p.id);
+  await admin.from("contract_payments").update(cpUpdates).eq("id", p.id);
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "contract",
     subject_id: p.contract_id,

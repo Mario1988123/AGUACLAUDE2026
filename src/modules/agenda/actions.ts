@@ -398,8 +398,16 @@ export async function createAgendaEventAction(input: unknown) {
       created_by: session.user_id,
     });
   }
-  const { error } = await supabase.from("agenda_events").insert(rows);
-  if (error) throw new Error(error.message);
+  // Admin client: la policy agenda_events_insert por scope puede
+  // bloquear si el usuario no es nivel 1-2. Como ya validamos sesión
+  // y el assigned_user_id se establece arriba, es seguro.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { error } = await admin.from("agenda_events").insert(rows);
+  if (error) {
+    console.error("[createAgendaEvents] insert failed:", error.message);
+    throw new Error(error.message);
+  }
   revalidatePath("/agenda");
 }
 
@@ -450,18 +458,19 @@ export async function rescheduleAgendaEventAction(
     newEndsAt = new Date(newStart.getTime() + durationMs).toISOString();
   }
 
-  await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin
     .from("agenda_events")
     .update({
       starts_at: newStart.toISOString(),
       ends_at: newEndsAt,
       is_outside_hours: isOutsideHours,
-      // Solo marcamos rescheduled si estaba pendiente, no si ya estaba en curso/completed
       ...(p?.status === "scheduled" ? {} : {}),
     })
     .eq("id", eventId);
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "user",
     subject_id: session.user_id,

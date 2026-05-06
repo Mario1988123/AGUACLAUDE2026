@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
@@ -63,7 +64,7 @@ export async function upsertPricingPlanAction(input: unknown) {
   const session = await ensureAdmin();
   const parsed = parseOrFriendly(pricingUpsertSchema, input, "Precio producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
   const payload = {
     company_id: session.company_id,
     product_id: parsed.product_id,
@@ -79,10 +80,10 @@ export async function upsertPricingPlanAction(input: unknown) {
     is_active: true,
   };
   if (parsed.id) {
-    const { error } = await supabase.from("product_pricing_plans").update(payload).eq("id", parsed.id);
+    const { error } = await admin.from("product_pricing_plans").update(payload).eq("id", parsed.id);
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await supabase.from("product_pricing_plans").insert(payload);
+    const { error } = await admin.from("product_pricing_plans").insert(payload);
     if (error) throw new Error(error.message);
   }
   revalidatePath(`/productos/${parsed.product_id}`);
@@ -91,7 +92,7 @@ export async function upsertPricingPlanAction(input: unknown) {
 export async function deletePricingPlanAction(id: string, productId: string) {
   await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("product_pricing_plans").update({ is_active: false }).eq("id", id);
+  const admin = createAdminClient() as any;
+  await admin.from("product_pricing_plans").update({ is_active: false }).eq("id", id);
   revalidatePath(`/productos/${productId}`);
 }

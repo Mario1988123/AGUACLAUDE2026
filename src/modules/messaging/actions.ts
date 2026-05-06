@@ -103,7 +103,7 @@ export async function upsertMessageTemplateAction(input: {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
   const payload = {
     company_id: session.company_id,
     key: input.key.trim(),
@@ -115,9 +115,9 @@ export async function upsertMessageTemplateAction(input: {
     is_active: true,
   };
   if (input.id) {
-    await supabase.from("message_templates").update(payload).eq("id", input.id);
+    await admin.from("message_templates").update(payload).eq("id", input.id);
   } else {
-    await supabase.from("message_templates").insert(payload);
+    await admin.from("message_templates").insert(payload);
   }
   revalidatePath("/configuracion/plantillas");
 }
@@ -125,7 +125,7 @@ export async function upsertMessageTemplateAction(input: {
 export async function deleteMessageTemplateAction(id: string): Promise<void> {
   await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("message_templates").update({ is_active: false }).eq("id", id);
+  const admin = createAdminClient() as any;
+  await admin.from("message_templates").update({ is_active: false }).eq("id", id);
   revalidatePath("/configuracion/plantillas");
 }

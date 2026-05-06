@@ -40,15 +40,14 @@ export async function uploadInstallationPhoto(input: unknown) {
 
   const path = `${session.company_id}/installations/${parsed.installation_id}/${Date.now()}-${parsed.category}.${ext}`;
 
-  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   const { error: upErr } = await admin.storage
     .from("documents")
     .upload(path, buffer, { contentType: mime, upsert: false });
   if (upErr) throw new Error(`Upload: ${upErr.message}`);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("installation_photos").insert({
+  await admin.from("installation_photos").insert({
     installation_id: parsed.installation_id,
     company_id: session.company_id,
     storage_path: path,
@@ -68,15 +67,14 @@ export async function uploadInstallationSignature(input: unknown) {
 
   const path = `${session.company_id}/installations/${parsed.installation_id}/signature-${parsed.context}-${Date.now()}.${ext}`;
 
-  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   const { error: upErr } = await admin.storage
     .from("documents")
     .upload(path, buffer, { contentType: mime, upsert: false });
   if (upErr) throw new Error(`Upload firma: ${upErr.message}`);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("installation_signatures").insert({
+  await admin.from("installation_signatures").insert({
     installation_id: parsed.installation_id,
     company_id: session.company_id,
     signer_role: parsed.signer_role,

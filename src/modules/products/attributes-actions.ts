@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
@@ -127,7 +128,7 @@ export async function upsertAttributeAction(input: unknown) {
   const session = await ensureAdmin();
   const parsed = parseOrFriendly(attributeUpsertSchema, input, "Atributo producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
   const payload = {
     company_id: session.company_id,
     category_id: parsed.category_id ?? null,
@@ -140,9 +141,9 @@ export async function upsertAttributeAction(input: unknown) {
     sort_order: parsed.sort_order,
   };
   if (parsed.id) {
-    await supabase.from("product_attributes").update(payload).eq("id", parsed.id);
+    await admin.from("product_attributes").update(payload).eq("id", parsed.id);
   } else {
-    await supabase.from("product_attributes").insert(payload);
+    await admin.from("product_attributes").insert(payload);
   }
   revalidatePath("/configuracion/productos");
 }
@@ -151,11 +152,11 @@ export async function setProductAttributeValue(input: unknown) {
   const session = await ensureAdmin();
   const parsed = parseOrFriendly(valueUpsertSchema, input, "Valor atributo");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
 
   // Validar máx 5 destacados (decisión prompt)
   if (parsed.is_featured) {
-    const { count } = await supabase
+    const { count } = await admin
       .from("product_attribute_values")
       .select("id", { count: "exact", head: true })
       .eq("product_id", parsed.product_id)
@@ -165,7 +166,7 @@ export async function setProductAttributeValue(input: unknown) {
       throw new Error("Máximo 5 atributos destacados por producto");
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await admin
     .from("product_attribute_values")
     .select("id")
     .eq("product_id", parsed.product_id)
@@ -184,12 +185,12 @@ export async function setProductAttributeValue(input: unknown) {
     display_order: parsed.display_order,
   };
   if (existing) {
-    await supabase
+    await admin
       .from("product_attribute_values")
       .update(payload)
       .eq("id", (existing as { id: string }).id);
   } else {
-    await supabase.from("product_attribute_values").insert(payload);
+    await admin.from("product_attribute_values").insert(payload);
   }
   revalidatePath(`/productos/${parsed.product_id}`);
 }
@@ -197,7 +198,7 @@ export async function setProductAttributeValue(input: unknown) {
 export async function deleteProductAttributeValue(id: string, productId: string) {
   await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("product_attribute_values").delete().eq("id", id);
+  const admin = createAdminClient() as any;
+  await admin.from("product_attribute_values").delete().eq("id", id);
   revalidatePath(`/productos/${productId}`);
 }

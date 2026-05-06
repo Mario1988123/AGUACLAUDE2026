@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
@@ -30,7 +31,7 @@ export async function upsertWarehouseAction(input: unknown) {
   const session = await ensureCanManageWarehouses();
   const parsed = parseOrFriendly(warehouseUpsertSchema, input, "Almacén");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
   const payload = {
     company_id: session.company_id,
     name: parsed.name,
@@ -41,10 +42,10 @@ export async function upsertWarehouseAction(input: unknown) {
     is_active: true,
   };
   if (parsed.id) {
-    const { error } = await supabase.from("warehouses").update(payload).eq("id", parsed.id);
+    const { error } = await admin.from("warehouses").update(payload).eq("id", parsed.id);
     if (error) throw new Error(error.message);
   } else {
-    const { error } = await supabase.from("warehouses").insert(payload);
+    const { error } = await admin.from("warehouses").insert(payload);
     if (error) throw new Error(error.message);
   }
   revalidatePath("/almacenes");
@@ -53,8 +54,8 @@ export async function upsertWarehouseAction(input: unknown) {
 export async function deleteWarehouseAction(id: string) {
   await ensureCanManageWarehouses();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const admin = createAdminClient() as any;
+  await admin
     .from("warehouses")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);

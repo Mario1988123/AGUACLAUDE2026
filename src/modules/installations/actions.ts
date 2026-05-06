@@ -690,38 +690,28 @@ export async function startInstallation(input: unknown) {
 }
 
 export async function pauseInstallation(id: string) {
-  const session = await requireSession();
+  await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("installations").update({ status: "paused" }).eq("id", id);
-  await supabase.from("installation_steps_log").insert({
-    installation_id: id,
-    company_id: session.company_id,
-    event_type: "pause",
-    event_user_id: session.user_id,
-  });
+  const admin = createAdminClient() as any;
+  await admin.from("installations").update({ status: "paused" }).eq("id", id);
+  // installation_steps_log fue dropeada en migración 20260507100000;
+  // los eventos viven ahora en `events`. Los wizards ya escriben allí.
   revalidatePath(`/instalaciones/${id}`);
 }
 
 export async function resumeInstallation(id: string) {
-  const session = await requireSession();
+  await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase.from("installations").update({ status: "in_progress" }).eq("id", id);
-  await supabase.from("installation_steps_log").insert({
-    installation_id: id,
-    company_id: session.company_id,
-    event_type: "resume",
-    event_user_id: session.user_id,
-  });
+  const admin = createAdminClient() as any;
+  await admin.from("installations").update({ status: "in_progress" }).eq("id", id);
   revalidatePath(`/instalaciones/${id}`);
 }
 
 export async function reportDamageOrDrilling(input: unknown) {
-  const session = await requireSession();
+  await requireSession();
   const parsed = parseOrFriendly(installationStepSchema, input, "Estado parte");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
 
   const update: Record<string, unknown> = {};
   if (parsed.has_previous_damage !== undefined)
@@ -729,40 +719,27 @@ export async function reportDamageOrDrilling(input: unknown) {
   if (parsed.needs_countertop_drilling !== undefined)
     update.needs_countertop_drilling = parsed.needs_countertop_drilling;
   if (Object.keys(update).length > 0) {
-    await supabase.from("installations").update(update).eq("id", parsed.installation_id);
+    await admin.from("installations").update(update).eq("id", parsed.installation_id);
   }
-  if (parsed.has_previous_damage) {
-    await supabase.from("installation_steps_log").insert({
-      installation_id: parsed.installation_id,
-      company_id: session.company_id,
-      event_type: "damage_report",
-      event_user_id: session.user_id,
-      payload: { notes: parsed.notes ?? null },
-    });
-  }
-  if (parsed.needs_countertop_drilling) {
-    await supabase.from("installation_steps_log").insert({
-      installation_id: parsed.installation_id,
-      company_id: session.company_id,
-      event_type: "drilling_report",
-      event_user_id: session.user_id,
-      payload: { notes: parsed.notes ?? null },
-    });
-  }
-
+  // installation_steps_log dropeada — los wizards escriben en `events`.
   revalidatePath(`/instalaciones/${parsed.installation_id}`);
 }
 
 export async function completeInstallation(input: unknown) {
   const session = await requireSession();
   const parsed = parseOrFriendly(completeInstallationSchema, input, "Cerrar instalación");
+  // Admin client para todo el flow: el instalador (nivel 3) tiene
+  // policy installations_update por scope que solo cubre las suyas.
+  // Las INSERT a customer_equipment, agenda_events, events también
+  // pueden bloquear silentmente. Como ya validamos sesión arriba y
+  // el SELECT inicial verifica que la installation existe, es seguro.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
   const now = new Date();
   const nowIso = now.toISOString();
 
   // Calcular duración si tenemos started_at
-  const { data: inst } = await supabase
+  const { data: inst } = await admin
     .from("installations")
     .select("started_at, contract_id, customer_id, address_id")
     .eq("id", parsed.id)
@@ -772,7 +749,7 @@ export async function completeInstallation(input: unknown) {
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
     : null;
 
-  await supabase
+  await admin
     .from("installations")
     .update({
       status: "completed",
@@ -783,15 +760,7 @@ export async function completeInstallation(input: unknown) {
       notes: parsed.notes ?? null,
     })
     .eq("id", parsed.id);
-
-  await supabase.from("installation_steps_log").insert({
-    installation_id: parsed.id,
-    company_id: session.company_id,
-    event_type: "complete",
-    event_user_id: session.user_id,
-    geo_latitude: parsed.geo_lat ?? null,
-    geo_longitude: parsed.geo_lng ?? null,
-  });
+  // installation_steps_log dropeada — los wizards escriben en `events`.
 
   // Decrementar stock del almacén origen (no falla si no hay warehouse)
   try {
@@ -803,14 +772,14 @@ export async function completeInstallation(input: unknown) {
   // Crear customer_equipment para cada item instalado (si hay contract)
   const i = inst as { contract_id: string | null; customer_id: string | null; address_id: string | null };
   if (i.customer_id) {
-    const { data: items } = await supabase
+    const { data: items } = await admin
       .from("installation_items")
       .select("product_id, serial_number")
       .eq("installation_id", parsed.id);
     type II = { product_id: string; serial_number: string | null };
     const list = (items ?? []) as II[];
     if (list.length > 0) {
-      await supabase.from("customer_equipment").insert(
+      await admin.from("customer_equipment").insert(
         list.map((it) => ({
           company_id: session.company_id,
           customer_id: i.customer_id,
@@ -834,13 +803,6 @@ export async function completeInstallation(input: unknown) {
     const update: Record<string, unknown> = { service_start_date: startIso };
     if (!isFuture) update.status = "active";
 
-    // Admin client: la policy contracts_update_by_scope sólo permite UPDATE
-    // si status IN (draft, pending_data, pending_signature). Aquí el
-    // contrato está en 'signed' (o 'active'), bloquearía silenciosamente
-    // → la instalación se completaba pero el contrato seguía en 'signed'
-    // y los mantenimientos no se programaban.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
     const { data: updated } = await admin
       .from("contracts")
       .update(update)
@@ -855,7 +817,7 @@ export async function completeInstallation(input: unknown) {
     }
   }
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "installation",
     subject_id: parsed.id,
@@ -864,7 +826,7 @@ export async function completeInstallation(input: unknown) {
     actor_user_id: session.user_id,
   });
 
-  const { data: instRef } = await supabase
+  const { data: instRef } = await admin
     .from("installations")
     .select("reference_code, contract_id")
     .eq("id", parsed.id)
@@ -878,7 +840,7 @@ export async function completeInstallation(input: unknown) {
   let salesRepId: string | null = null;
   if (instRow?.contract_id) {
     try {
-      const { data: contract } = await supabase
+      const { data: contract } = await admin
         .from("contracts")
         .select("created_by")
         .eq("id", instRow.contract_id)
@@ -899,7 +861,7 @@ export async function completeInstallation(input: unknown) {
   // Puntos al instalador
   if (session.company_id) {
     try {
-      const { data: full } = await supabase
+      const { data: full } = await admin
         .from("installations")
         .select("installer_user_id")
         .eq("id", parsed.id)

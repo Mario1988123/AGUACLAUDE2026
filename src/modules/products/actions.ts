@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { productCreateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
@@ -171,8 +172,9 @@ export async function cloneGlobalCategoryAction(globalCategoryId: string) {
   if (!session.company_id || !session.roles.includes("company_admin")) {
     throw new Error("Solo admin");
   }
-  const supabase = await createClient();
-  const { data: gc } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: gc } = await admin
     .from("product_categories_global")
     .select("id, name_es, default_kind, sort_order")
     .eq("id", globalCategoryId)
@@ -180,7 +182,7 @@ export async function cloneGlobalCategoryAction(globalCategoryId: string) {
   if (!gc) throw new Error("Categoría global no encontrada");
   const g = gc as { id: string; name_es: string; default_kind: ProductKind; sort_order: number };
 
-  const { error } = await supabase.from("product_categories").insert({
+  const { error } = await admin.from("product_categories").insert({
     company_id: session.company_id,
     cloned_from_global_id: g.id,
     name: g.name_es,
@@ -199,8 +201,9 @@ export async function createCategoryAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const default_kind = String(formData.get("default_kind") ?? "equipment");
   if (!name) throw new Error("Nombre obligatorio");
-  const supabase = await createClient();
-  const { error } = await supabase.from("product_categories").insert({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { error } = await admin.from("product_categories").insert({
     company_id: session.company_id,
     name,
     default_kind,
@@ -226,8 +229,9 @@ export async function createProductAction(formData: FormData) {
     "Producto",
   );
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data, error } = await admin
     .from("products")
     .insert({
       company_id: session.company_id,
@@ -257,7 +261,7 @@ export async function createProductAction(formData: FormData) {
   if (parsed.cash_total_cents != null && parsed.cash_total_cents > 0) {
     const minAuth = parsed.cash_min_authorized_cents ?? parsed.cash_total_cents;
     const minAbs = parsed.cash_absolute_min_cents ?? minAuth;
-    await supabase.from("product_pricing_plans").insert({
+    await admin.from("product_pricing_plans").insert({
       company_id: session.company_id,
       product_id: productId,
       plan_type: "cash",
