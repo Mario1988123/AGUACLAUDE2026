@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { agendaCreateSchema } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 /**
  * Decide si una fecha cae fuera del horario laboral. Prioridad:
@@ -285,7 +286,7 @@ export async function listTeamMembers(): Promise<{ user_id: string; full_name: s
 export async function createAgendaEventAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = agendaCreateSchema.parse(input);
+  const parsed = parseOrFriendly(agendaCreateSchema, input, "Agenda");
 
   // Calcular fechas de la serie según recurrencia
   const baseStart = new Date(parsed.starts_at);

@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { validateIBAN } from "@/shared/lib/validations/spanish";
 import { isPendingIban } from "@/shared/lib/validations/iban-partial";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 export interface BankAccountRow {
   id: string;
@@ -65,7 +66,7 @@ export async function listBankAccounts(customerId: string): Promise<BankAccountR
 
 export async function createBankAccountAction(input: unknown) {
   const session = await ensureAdminOrSuper();
-  const parsed = bankCreateSchema.parse(input);
+  const parsed = parseOrFriendly(bankCreateSchema, input, "Cuenta bancaria");
   const iban = parsed.iban.replace(/\s/g, "").toUpperCase();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;

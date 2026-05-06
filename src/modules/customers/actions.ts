@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { customerCreateSchema, customerUpdateSchema } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 
@@ -82,7 +83,7 @@ export async function createCustomerAction(formData: FormData) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const raw = Object.fromEntries(formData.entries());
-  const parsed = customerCreateSchema.parse(raw);
+  const parsed = parseOrFriendly(customerCreateSchema, raw, "Cliente");
 
   // Anti-duplicado server-side. Si viene de lead, excluimos al propio lead
   // (porque sus datos siguen ahí hasta que actualizamos su estado).

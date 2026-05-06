@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { walletEntryCreateSchema } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { notifyPaymentPendingValidation } from "@/modules/notifications/notifier";
 
 export interface WalletEntryRow {
@@ -85,7 +86,7 @@ export async function getWalletSummary() {
 export async function createWalletEntryAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = walletEntryCreateSchema.parse(input);
+  const parsed = parseOrFriendly(walletEntryCreateSchema, input, "Cobro");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;

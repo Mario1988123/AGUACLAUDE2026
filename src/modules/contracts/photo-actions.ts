@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
+import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
 
 const BUCKET = "contract-photos";
 
@@ -42,17 +42,27 @@ export async function uploadContractPhotoAction(
   const ok = await ensureBucket(admin, BUCKET);
   if (!ok) throw new Error("No se pudo preparar el bucket de fotos del contrato");
 
-  const ext =
-    file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  // pickImageExt soporta HEIC/HEIF del iPhone (antes el contentType era
+  // heic pero la extensión .jpg, fallaba al renderizar).
+  const ext = pickImageExt({
+    name: (file as Blob & { name?: string }).name,
+    type: file.type,
+  });
   const ts = Date.now();
   const path = `${session.company_id}/${contractId}/${kind}-${ts}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
+  const contentType =
+    file.type ||
+    (ext === "heic" ? "image/heic" : ext === "heif" ? "image/heif" : "image/jpeg");
   const { error } = await admin.storage.from(BUCKET).upload(path, buf, {
-    contentType: file.type || "image/jpeg",
+    contentType,
     upsert: false,
     cacheControl: "3600",
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[uploadContractPhoto] upload failed:", error.message);
+    throw new Error(`Storage: ${error.message}`);
+  }
 
   const { data: row, error: e2 } = await admin
     .from("contract_photos")

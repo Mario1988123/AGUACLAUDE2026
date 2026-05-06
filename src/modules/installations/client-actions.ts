@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
+import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
 
 const PHOTO_BUCKET = "installation-photos";
 const SIG_BUCKET = "installation-signatures";
@@ -53,8 +53,12 @@ export async function uploadInstallationPhotoAction(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const ext =
-    file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  // Derivar extensión soportando HEIC/HEIF del iPhone (antes se forzaba
+  // a .jpg con contentType heic, archivo subía pero no se renderizaba).
+  const ext = pickImageExt({
+    name: (file as Blob & { name?: string }).name,
+    type: file.type,
+  });
   const ts = Date.now();
   const path = `${session.company_id}/${installationId}/${category}-${ts}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
@@ -63,10 +67,15 @@ export async function uploadInstallationPhotoAction(
   // createBucket si falta). Antes podía dar `Bucket not found` en prod.
   await ensureBucket(admin, PHOTO_BUCKET);
 
+  // contentType: si el browser no envía MIME (Android viejo, ciertas
+  // apps), inferimos por extensión. HEIC/HEIF se respeta tal cual.
+  const contentType =
+    file.type ||
+    (ext === "heic" ? "image/heic" : ext === "heif" ? "image/heif" : "image/jpeg");
   const { error: upErr } = await admin.storage
     .from(PHOTO_BUCKET)
     .upload(path, buf, {
-      contentType: file.type || "image/jpeg",
+      contentType,
       upsert: false,
       cacheControl: "3600",
     });

@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { proposalCreateSchema } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
@@ -246,7 +247,7 @@ export async function getProposalItems(proposalId: string): Promise<ProposalItem
 export async function createProposalAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = proposalCreateSchema.parse(input);
+  const parsed = parseOrFriendly(proposalCreateSchema, input, "Propuesta");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;

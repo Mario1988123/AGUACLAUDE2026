@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { leadCreateSchema } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { LeadDetail, LeadListItem, LeadStatus } from "./types";
 import { notifyLeadCreated } from "@/modules/notifications/notifier";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
@@ -195,7 +196,7 @@ export async function createLeadAction(formData: FormData) {
   if (!session.company_id) throw new Error("Usuario sin empresa");
 
   const raw = Object.fromEntries(formData.entries());
-  const parsed = leadCreateSchema.parse(raw);
+  const parsed = parseOrFriendly(leadCreateSchema, raw, "Lead");
 
   // Dirección obligatoria — el wizard front-end ya valida esto pero
   // duplicamos en server por si alguien crea por API directa. Antes el

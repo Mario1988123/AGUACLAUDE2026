@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const uploadSchema = z.object({
   installation_id: z.string().uuid(),
@@ -34,7 +35,7 @@ function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mime: string; ext: 
 export async function uploadInstallationPhoto(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = uploadSchema.parse(input);
+  const parsed = parseOrFriendly(uploadSchema, input, "Foto instalación");
   const { buffer, mime, ext } = dataUrlToBuffer(parsed.data_url);
 
   const path = `${session.company_id}/installations/${parsed.installation_id}/${Date.now()}-${parsed.category}.${ext}`;
@@ -62,7 +63,7 @@ export async function uploadInstallationPhoto(input: unknown) {
 export async function uploadInstallationSignature(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = signatureSchema.parse(input);
+  const parsed = parseOrFriendly(signatureSchema, input, "Firma instalación");
   const { buffer, mime, ext } = dataUrlToBuffer(parsed.data_url);
 
   const path = `${session.company_id}/installations/${parsed.installation_id}/signature-${parsed.context}-${Date.now()}.${ext}`;

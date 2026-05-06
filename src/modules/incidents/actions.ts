@@ -7,6 +7,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { notifyIncidentCreated } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const incidentCreateSchema = z.object({
   title: z.string().min(2),
@@ -31,7 +32,7 @@ const incidentCreateSchema = z.object({
 export async function createIncidentAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = incidentCreateSchema.parse(input);
+  const parsed = parseOrFriendly(incidentCreateSchema, input, "Incidencia");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data: created, error } = await supabase

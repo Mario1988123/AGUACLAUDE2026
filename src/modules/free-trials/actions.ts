@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const createSchema = z.object({
   customer_id: z.string().uuid().optional(),
@@ -83,7 +84,7 @@ export async function getFreeTrial(id: string): Promise<FreeTrialRow & { items: 
 export async function createFreeTrialAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  const parsed = createSchema.parse(input);
+  const parsed = parseOrFriendly(createSchema, input, "Prueba gratuita");
   if (!parsed.customer_id && !parsed.lead_id) {
     throw new Error("Debe especificarse cliente o lead");
   }

@@ -31,6 +31,31 @@ export const STORAGE_BUCKETS = {
 export type BucketName = keyof typeof STORAGE_BUCKETS;
 
 /**
+ * Deriva la extensión correcta del archivo. Antes el código miraba
+ * solo `file.type === "image/png" | "image/webp"` y por defecto ponía
+ * "jpg" — esto rompía con HEIC del iPhone (el archivo se subía pero
+ * con extensión .jpg y contentType heic, y luego no se renderizaba).
+ *
+ * Estrategia:
+ *   1. Si `file.name` tiene extensión legible (heic, heif, png, webp,
+ *      jpg, jpeg, gif), la usamos.
+ *   2. Si no, miramos el MIME type del file.
+ *   3. Fallback: jpg.
+ */
+export function pickImageExt(file: { name?: string; type?: string }): string {
+  const fromName = file.name?.toLowerCase().match(/\.(heic|heif|png|webp|jpe?g|gif|bmp)$/);
+  if (fromName) return fromName[1] === "jpeg" ? "jpg" : fromName[1]!;
+  const t = (file.type ?? "").toLowerCase();
+  if (t.includes("heic")) return "heic";
+  if (t.includes("heif")) return "heif";
+  if (t.includes("png")) return "png";
+  if (t.includes("webp")) return "webp";
+  if (t.includes("gif")) return "gif";
+  if (t.includes("bmp")) return "bmp";
+  return "jpg";
+}
+
+/**
  * Garantiza que el bucket existe. Si ya existe (por nombre), no
  * hace nada. Si no, lo crea con la visibilidad declarada.
  *

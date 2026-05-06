@@ -12,6 +12,7 @@ import {
   installationStepSchema,
   completeInstallationSchema,
 } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
@@ -285,7 +286,7 @@ export async function getInstallationSignatures(installationId: string) {
 export async function createInstallationFromContract(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = installationCreateFromContractSchema.parse(input);
+  const parsed = parseOrFriendly(installationCreateFromContractSchema, input, "Instalación");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -439,7 +440,7 @@ export async function getInstallerAvailabilityAction(
 
 export async function updateInstallationAction(input: unknown) {
   const session = await requireSession();
-  const parsed = installationUpdateSchema.parse(input);
+  const parsed = parseOrFriendly(installationUpdateSchema, input, "Instalación");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const update: Record<string, unknown> = {};
@@ -601,7 +602,7 @@ async function checkStockAndNotifyIfShortInner(installationId: string): Promise<
 
 export async function startInstallation(input: unknown) {
   const session = await requireSession();
-  const parsed = startInstallationSchema.parse(input);
+  const parsed = parseOrFriendly(startInstallationSchema, input, "Iniciar parte");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const now = new Date().toISOString();
@@ -667,7 +668,7 @@ export async function resumeInstallation(id: string) {
 
 export async function reportDamageOrDrilling(input: unknown) {
   const session = await requireSession();
-  const parsed = installationStepSchema.parse(input);
+  const parsed = parseOrFriendly(installationStepSchema, input, "Estado parte");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
@@ -703,7 +704,7 @@ export async function reportDamageOrDrilling(input: unknown) {
 
 export async function completeInstallation(input: unknown) {
   const session = await requireSession();
-  const parsed = completeInstallationSchema.parse(input);
+  const parsed = parseOrFriendly(completeInstallationSchema, input, "Cerrar instalación");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const now = new Date();
