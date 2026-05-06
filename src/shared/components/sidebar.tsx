@@ -131,14 +131,56 @@ export function Sidebar({
         </div>
 
         <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-5">
-          <SidebarGroup label="Principal" items={core} pathname={pathname} collapsed={isCollapsed} badges={badges} />
-          <SidebarGroup label="Operativa" items={operative} pathname={pathname} collapsed={isCollapsed} badges={badges} />
-          <SidebarGroup label="Administración" items={config} pathname={pathname} collapsed={isCollapsed} badges={badges} />
+          <SidebarGroup
+            label="Principal"
+            items={core}
+            pathname={pathname}
+            collapsed={isCollapsed}
+            badges={badges}
+            onItemClick={opts.onMobileClose}
+          />
+          <SidebarGroup
+            label="Operativa"
+            items={operative}
+            pathname={pathname}
+            collapsed={isCollapsed}
+            badges={badges}
+            onItemClick={opts.onMobileClose}
+          />
+          <SidebarGroup
+            label="Administración"
+            items={config}
+            pathname={pathname}
+            collapsed={isCollapsed}
+            badges={badges}
+            onItemClick={opts.onMobileClose}
+          />
         </nav>
 
       </aside>
     );
   }
+
+  // Si la ruta cambia, cerramos el overlay automáticamente. Cubre el
+  // caso de Link prefetch + navegación en background donde el onClick
+  // del item podría llegar después.
+  useEffect(() => {
+    if (mobileOpen) setMobileOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
+  // Bloqueamos scroll del body cuando el overlay móvil está abierto
+  // para que el contenido detrás no se mueva.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (mobileOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [mobileOpen]);
 
   return (
     <>
@@ -154,9 +196,18 @@ export function Sidebar({
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0">
-            {renderSidebar({ collapsed: false, onMobileClose: () => setMobileOpen(false) })}
+          {/* Backdrop con animación de fade-in */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => setMobileOpen(false)}
+            aria-hidden="true"
+          />
+          {/* Panel deslizante desde la izquierda */}
+          <div className="absolute left-0 top-0 h-full max-h-screen animate-in slide-in-from-left duration-200 shadow-2xl">
+            {renderSidebar({
+              collapsed: false,
+              onMobileClose: () => setMobileOpen(false),
+            })}
           </div>
         </div>
       )}
@@ -170,12 +221,16 @@ function SidebarGroup({
   pathname,
   collapsed,
   badges,
+  onItemClick,
 }: {
   label: string;
   items: ModuleEntry[];
   pathname: string;
   collapsed: boolean;
   badges?: Partial<Record<string, number>>;
+  /** Si está definido (modo overlay móvil), se invoca al pulsar un
+   *  item para cerrar el sidebar y volver a la página. */
+  onItemClick?: () => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -196,6 +251,7 @@ function SidebarGroup({
             key={m.key}
             href={m.href as never}
             title={collapsed ? m.label : undefined}
+            onClick={onItemClick}
             className={cn(
               "relative flex min-h-12 items-center rounded-xl text-sm font-semibold transition-colors",
               collapsed ? "justify-center px-2 py-3" : "gap-3 px-4 py-3",
