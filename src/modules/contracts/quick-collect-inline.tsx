@@ -7,7 +7,6 @@ import {
   CreditCard,
   Smartphone,
   Building2,
-  Wrench,
   Coins,
   CheckCircle2,
   Pencil,
@@ -17,7 +16,13 @@ import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { collectContractPaymentAction } from "./actions";
 
-type When = "now" | "on_installation" | "at_office";
+// "now" = el técnico cobra in situ ahora.
+// "at_office" = el cliente pasará por la oficina a pagar más tarde.
+// Antes había una tercera opción "on_installation" que en el contexto
+// del wizard era idéntica a "now" (ya estás en la instalación). La
+// hemos eliminado por confusa. El backend sigue aceptando ambas y
+// "at_office" se sigue persistiendo como when=on_installation con notas.
+type When = "now" | "at_office";
 type Method = "cash" | "card" | "bizum" | "transfer";
 
 const METHOD_LABEL: Record<Method, string> = {
@@ -72,12 +77,8 @@ export function CollectInline({
           });
           notify.success("Marcado: pago en oficina pendiente");
         } else {
-          await collectContractPaymentAction(paymentId, { when, method });
-          notify.success(
-            when === "on_installation"
-              ? "Cobro aplazado a la instalación"
-              : "Cobrado · pendiente de validar",
-          );
+          await collectContractPaymentAction(paymentId, { when: "now", method });
+          notify.success("Cobrado · pendiente de validar");
         }
         setOpen(false);
         router.refresh();
@@ -114,7 +115,7 @@ export function CollectInline({
         <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-muted-foreground">
           ¿Cuándo?
         </p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => setWhen("now")}
@@ -124,7 +125,7 @@ export function CollectInline({
                 : "border-border bg-card hover:border-emerald-300"
             }`}
           >
-            <Coins className="h-4 w-4" /> Ahora
+            <Coins className="h-4 w-4" /> Ahora (in situ)
           </button>
           <button
             type="button"
@@ -135,18 +136,7 @@ export function CollectInline({
                 : "border-border bg-card hover:border-blue-300"
             }`}
           >
-            <Briefcase className="h-4 w-4" /> En oficina
-          </button>
-          <button
-            type="button"
-            onClick={() => setWhen("on_installation")}
-            className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-bold ${
-              when === "on_installation"
-                ? "border-amber-500 bg-amber-50 text-amber-700"
-                : "border-border bg-card hover:border-amber-300"
-            }`}
-          >
-            <Wrench className="h-4 w-4" /> En la instalación
+            <Briefcase className="h-4 w-4" /> En oficina (después)
           </button>
         </div>
       </div>
