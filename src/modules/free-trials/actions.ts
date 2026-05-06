@@ -45,17 +45,30 @@ export interface FreeTrialRow {
 }
 
 export async function listFreeTrials(): Promise<FreeTrialRow[]> {
-  await requireSession();
+  const session = await requireSession();
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data, error } = await supabase
+  let query = supabase
     .from("free_trials")
     .select(
-      "id, reference_code, status, customer_id, lead_id, scheduled_at, installed_at, expires_at, decided_outcome, duration_days, conditions_signed, notes, created_at",
+      "id, reference_code, status, customer_id, lead_id, scheduled_at, installed_at, expires_at, decided_outcome, duration_days, conditions_signed, notes, created_at, assigned_installer_user_id, created_by",
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+  // Scope: nivel 3 ve solo las suyas (creadas por él o instalador asignado);
+  // nivel 2 ve las de su equipo; nivel 1 ve todas.
+  if (visibleUserIds) {
+    const ids = visibleUserIds.map((u) => `"${u}"`).join(",");
+    query = query.or(
+      `created_by.in.(${ids}),assigned_installer_user_id.in.(${ids})`,
+    );
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as FreeTrialRow[];
 }

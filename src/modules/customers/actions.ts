@@ -15,14 +15,13 @@ export async function listCustomers(
   scope?: "mine" | "all",
 ): Promise<CustomerListItem[]> {
   const session = await requireSession();
+  const { resolveVisibleUserIds, isLevel1 } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
   const supabase = await createClient();
-  const isUpperLevel =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director") ||
-    session.roles.includes("telemarketing_director") ||
-    session.roles.includes("technical_director");
-  const effective = !isUpperLevel ? "mine" : (scope ?? "all");
+  // "mine" fuerza al propio user (override del usuario aunque sea admin).
+  const forceMine = scope === "mine" && !isLevel1(session);
 
   let query = supabase
     .from("customers")
@@ -30,7 +29,11 @@ export async function listCustomers(
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
-  if (effective === "mine") {
+  // Scope: nivel 3 ve los suyos; nivel 2 ve los suyos + equipo;
+  // nivel 1 ve todos. assigned_user_id es la columna de pertenencia.
+  if (visibleUserIds && !forceMine) {
+    query = query.in("assigned_user_id", visibleUserIds);
+  } else if (forceMine || (scope === "mine" && !visibleUserIds)) {
     query = query.eq("assigned_user_id", session.user_id);
   }
   if (q) {

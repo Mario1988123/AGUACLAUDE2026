@@ -18,17 +18,14 @@ export async function listLeads(filters?: {
   scope?: "mine" | "all";
 }): Promise<LeadListItem[]> {
   const session = await requireSession();
+  const { resolveVisibleUserIds, isLevel1 } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
   const supabase = await createClient();
 
-  // Si nivel 3 (sin rol superior) → siempre "mine" (RLS lo hará igual, pero
-  // explícito para queries más eficientes)
-  const isUpperLevel =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director") ||
-    session.roles.includes("telemarketing_director") ||
-    session.roles.includes("technical_director");
-  const scope = !isUpperLevel ? "mine" : (filters?.scope ?? "all");
+  // "mine" override del usuario (aunque sea admin) para ver solo los suyos
+  const forceMine = filters?.scope === "mine" && !isLevel1(session);
 
   let query = supabase
     .from("leads")
@@ -39,8 +36,11 @@ export async function listLeads(filters?: {
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (scope === "mine") {
+  if (forceMine) {
     query = query.eq("assigned_user_id", session.user_id);
+  } else if (visibleUserIds) {
+    // Nivel 3 ve los suyos; nivel 2 ve los suyos + equipo; nivel 1 todos.
+    query = query.in("assigned_user_id", visibleUserIds);
   }
 
   // Estados visibles en /leads. Excluimos:

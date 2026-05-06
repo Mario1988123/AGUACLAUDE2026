@@ -28,6 +28,10 @@ export async function listWalletEntries(filters?: {
   toDate?: string;
 }): Promise<WalletEntryRow[]> {
   const session = await requireSession();
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   let query = supabase
@@ -37,12 +41,10 @@ export async function listWalletEntries(filters?: {
     )
     .order("created_at", { ascending: false })
     .limit(200);
-  if (
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("commercial_director")
-  ) {
-    query = query.eq("collected_by_user_id", session.user_id);
+  // Director comercial ahora ve cobros de su equipo via team_assignments
+  // (antes solo veía los suyos). Nivel 1 ve todos. Nivel 3 solo los suyos.
+  if (visibleUserIds) {
+    query = query.in("collected_by_user_id", visibleUserIds);
   }
   if (filters?.method) query = query.eq("method", filters.method);
   if (filters?.status) query = query.eq("status", filters.status);

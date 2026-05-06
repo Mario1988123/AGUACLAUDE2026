@@ -13,7 +13,12 @@ export async function listContracts(filters?: {
   status?: string;
   plan_type?: string;
 }): Promise<ContractListItem[]> {
-  await requireSession();
+  const session = await requireSession();
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  // Si no es admin/director y no tiene userIds visibles, devolvemos vacío.
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
   const supabase = await createClient();
   let query = supabase
     .from("contracts")
@@ -23,6 +28,11 @@ export async function listContracts(filters?: {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
+  // Filtro de scope: nivel 3 ve solo los suyos (created_by); nivel 2
+  // ve los suyos + los de su equipo. Nivel 1 ve todos.
+  if (visibleUserIds) {
+    query = query.in("created_by", visibleUserIds);
+  }
   if (filters?.status) query = query.eq("status", filters.status);
   if (filters?.plan_type) query = query.eq("plan_type", filters.plan_type);
   const { data, error } = await query;

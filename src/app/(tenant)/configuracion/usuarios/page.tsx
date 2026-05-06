@@ -1,8 +1,10 @@
 import { listTenantUsers } from "@/modules/tenant/users/actions";
+import { listTeams, listUnassignedOperatives } from "@/modules/tenant/users/team-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { InviteUserForm } from "@/modules/tenant/users/invite-form";
 import { UserRowActions } from "@/modules/tenant/users/row-actions";
+import { TeamsPanel } from "@/modules/tenant/users/teams-panel";
 import { ROLE_KEYS } from "@/modules/tenant/users/schemas";
 import { UserAvatar } from "@/shared/components/user-avatar";
 
@@ -34,7 +36,11 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warn
   };
 
 export default async function UsuariosPage() {
-  const users = await listTenantUsers();
+  const [users, teams, unassigned] = await Promise.all([
+    listTenantUsers(),
+    listTeams().catch(() => []),
+    listUnassignedOperatives().catch(() => []),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -118,6 +124,17 @@ export default async function UsuariosPage() {
             />
           </CardContent>
         </Card>
+      </div>
+
+      {/* Equipos: jerarquía director → operativos */}
+      <div>
+        <h2 className="mb-1 text-lg font-bold">Equipos</h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Asigna comerciales, instaladores y teleoperadores a su director.
+          Cada director ve solo los datos de su equipo (sus leads, instalaciones,
+          incidencias…). Niveles 1 (admin) ven todo.
+        </p>
+        <TeamsPanel teams={teams} unassigned={unassigned} />
       </div>
     </div>
   );

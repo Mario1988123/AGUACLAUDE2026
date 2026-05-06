@@ -217,7 +217,17 @@ export interface IncidentRow {
 }
 
 export async function listIncidents(): Promise<IncidentRow[]> {
-  await requireSession();
+  const session = await requireSession();
+  const { resolveVisibleUserIds, isLevel1 } = await import("@/shared/lib/auth/role-scope");
+  // Las incidencias las ven niveles 1-2 + installer (su scope). El
+  // resto (sales_rep, telemarketer) no debe ver el módulo.
+  const isInstaller = session.roles.includes("installer");
+  const isTechDir = session.roles.includes("technical_director");
+  if (!isLevel1(session) && !isTechDir && !isInstaller) {
+    return [];
+  }
+  const visibleUserIds = await resolveVisibleUserIds(session);
+
   const supabase = await createClient();
   const FULL =
     "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at, deadline_at";
@@ -225,20 +235,28 @@ export async function listIncidents(): Promise<IncidentRow[]> {
     "id, reference_code, title, status, priority, origin, assigned_user_id, customer_id, created_at";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any;
-  let { data, error } = await sb
+  let q = sb
     .from("incidents")
     .select(FULL)
     .order("priority", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(200);
+  // Nivel 3 installer: solo sus incidencias asignadas.
+  // Nivel 2 director técnico: las de su equipo.
+  if (visibleUserIds) {
+    q = q.in("assigned_user_id", visibleUserIds);
+  }
+  let { data, error } = await q;
   // Si deadline_at no existe (migración SLA pendiente) reintenta sin esa columna
   if (error && /deadline_at/.test(error.message ?? "")) {
-    const r = await sb
+    let q2 = sb
       .from("incidents")
       .select(FALLBACK)
       .order("priority", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(200);
+    if (visibleUserIds) q2 = q2.in("assigned_user_id", visibleUserIds);
+    const r = await q2;
     data = r.data;
     error = r.error;
   }

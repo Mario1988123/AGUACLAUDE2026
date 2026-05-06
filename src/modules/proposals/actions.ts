@@ -13,6 +13,10 @@ import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 export async function listProposals(filters?: { status?: string }): Promise<ProposalListItem[]> {
   const session = await requireSession();
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
   const supabase = await createClient();
   let query = supabase
     .from("proposals")
@@ -22,18 +26,11 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
-  // Filtro de scope: nivel 3 (sales_rep / telemarketer) sólo ve sus
-  // propias propuestas. Niveles 1/2 (admin / directors) ven todas las
-  // de la empresa. La RLS también lo aplica pero filtrar arriba evita
-  // sorpresas y queries inútiles.
-  const isUpper =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director") ||
-    session.roles.includes("telemarketing_director") ||
-    session.roles.includes("technical_director");
-  if (!isUpper) {
-    query = query.eq("created_by", session.user_id);
+  // Nivel 3 ve solo las suyas; nivel 2 ve las suyas + las de su equipo
+  // (resolveVisibleUserIds devuelve la lista vía team_assignments);
+  // nivel 1 ve todas.
+  if (visibleUserIds) {
+    query = query.in("created_by", visibleUserIds);
   }
   if (filters?.status) query = query.eq("status", filters.status);
   const { data, error } = await query;
