@@ -252,7 +252,7 @@ export interface ResetUserPasswordInput {
 
 export async function resetUserPassword({ user_id, new_password }: ResetUserPasswordInput) {
   await ensureSuperadmin();
-  if (new_password.length < 12) throw new Error("Mínimo 12 caracteres");
+  if (!new_password) throw new Error("Escribe una contraseña");
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(user_id, {
     password: new_password,

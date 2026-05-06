@@ -26,8 +26,8 @@ function RestablecerPasswordInner() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 12) {
-      notify.warning("La contraseña debe tener al menos 12 caracteres");
+    if (!password) {
+      notify.warning("Escribe una contraseña");
       return;
     }
     if (password !== confirm) {
@@ -91,7 +91,7 @@ function RestablecerPasswordInner() {
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Nueva contraseña (mínimo 12 caracteres)"
+          placeholder="Nueva contraseña"
           autoComplete="new-password"
           className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2"
         />
@@ -112,7 +112,7 @@ function RestablecerPasswordInner() {
           {submitting ? "Guardando..." : "Guardar contraseña"}
         </button>
         <p className="text-center text-xs text-muted-foreground">
-          Mínimo 12 caracteres. Usa letras, números y símbolos.
+          Elige la contraseña que prefieras. Recuerda guardarla.
         </p>
       </form>
     </div>
