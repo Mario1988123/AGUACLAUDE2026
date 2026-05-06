@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
 
 const PHOTO_BUCKET = "installation-photos";
 const SIG_BUCKET = "installation-signatures";
@@ -58,18 +59,9 @@ export async function uploadInstallationPhotoAction(
   const path = `${session.company_id}/${installationId}/${category}-${ts}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
 
-  // Asegurar bucket: si no existe lo creamos. Si falla la creación
-  // por permisos pero el bucket existe, el upload funcionará igual.
-  try {
-    const { error: ceErr } = await admin.storage.createBucket(PHOTO_BUCKET, {
-      public: false,
-    });
-    if (ceErr && !/already exists|duplicate/i.test(ceErr.message ?? "")) {
-      console.error("[uploadInstallationPhoto] createBucket warn:", ceErr.message);
-    }
-  } catch (e) {
-    console.error("[uploadInstallationPhoto] createBucket threw:", e);
-  }
+  // Garantizamos bucket vía helper compartido (idempotente, listBuckets +
+  // createBucket si falta). Antes podía dar `Bucket not found` en prod.
+  await ensureBucket(admin, PHOTO_BUCKET);
 
   const { error: upErr } = await admin.storage
     .from(PHOTO_BUCKET)

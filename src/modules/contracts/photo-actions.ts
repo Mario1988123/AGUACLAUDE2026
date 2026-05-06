@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
 
 const BUCKET = "contract-photos";
 
@@ -34,6 +35,12 @@ export async function uploadContractPhotoAction(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // Garantizamos que el bucket existe ANTES del upload. Antes asumíamos
+  // que el usuario lo había creado a mano en el panel de Supabase y al
+  // deployar saltaba `Bucket not found` digest 3556820431.
+  const ok = await ensureBucket(admin, BUCKET);
+  if (!ok) throw new Error("No se pudo preparar el bucket de fotos del contrato");
 
   const ext =
     file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
@@ -77,22 +84,36 @@ export async function listContractPhotos(contractId: string): Promise<ContractPh
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data } = await admin
-    .from("contract_photos")
-    .select("id, kind, storage_path, uploaded_at")
-    .eq("contract_id", contractId)
-    .order("uploaded_at", { ascending: false });
-  type R = { id: string; kind: ContractPhotoKind; storage_path: string; uploaded_at: string };
-  const rows = (data ?? []) as R[];
+  let rows: Array<{
+    id: string;
+    kind: ContractPhotoKind;
+    storage_path: string;
+    uploaded_at: string;
+  }> = [];
+  try {
+    const { data } = await admin
+      .from("contract_photos")
+      .select("id, kind, storage_path, uploaded_at")
+      .eq("contract_id", contractId)
+      .order("uploaded_at", { ascending: false });
+    rows = (data ?? []) as typeof rows;
+  } catch (e) {
+    console.error("[listContractPhotos] SELECT failed:", e);
+    return [];
+  }
   const out: ContractPhoto[] = [];
   for (const r of rows) {
-    const { data: signed } = await admin.storage
-      .from(BUCKET)
-      .createSignedUrl(r.storage_path, 3600);
-    out.push({
-      ...r,
-      signed_url: (signed as { signedUrl: string } | null)?.signedUrl ?? null,
-    });
+    let signedUrl: string | null = null;
+    try {
+      const { data: signed } = await admin.storage
+        .from(BUCKET)
+        .createSignedUrl(r.storage_path, 3600);
+      signedUrl = (signed as { signedUrl: string } | null)?.signedUrl ?? null;
+    } catch (e) {
+      // Bucket inexistente o storage caído → seguimos sin URL
+      console.error("[listContractPhotos] createSignedUrl failed:", e);
+    }
+    out.push({ ...r, signed_url: signedUrl });
   }
   return out;
 }
