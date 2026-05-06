@@ -1,12 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createCompanyAction } from "./actions";
+
+/** Convierte cualquier nombre en un slug válido [a-z0-9-]+, máx 50.
+ *  Quita acentos, baja a minúsculas, sustituye no-alfanuméricos por
+ *  guiones y colapsa los repetidos. */
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // quita acentos
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 50);
+}
 
 /**
  * Cliente form para crear empresa. Captura errores y los muestra como
@@ -14,6 +28,10 @@ import { createCompanyAction } from "./actions";
  */
 export function NewCompanyForm() {
   const [pending, startTransition] = useTransition();
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  // Si el usuario edita el slug a mano, paramos el auto-derive.
+  const [slugTouched, setSlugTouched] = useState(false);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,7 +59,18 @@ export function NewCompanyForm() {
         </legend>
         <div className="space-y-2">
           <Label htmlFor="name">Nombre comercial *</Label>
-          <Input id="name" name="name" required placeholder="OSMOFILTER S.L." />
+          <Input
+            id="name"
+            name="name"
+            required
+            placeholder="OSMOFILTER S.L."
+            value={name}
+            onChange={(e) => {
+              const v = e.target.value;
+              setName(v);
+              if (!slugTouched) setSlug(slugify(v));
+            }}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="slug">Slug interno *</Label>
@@ -50,10 +79,19 @@ export function NewCompanyForm() {
             name="slug"
             required
             placeholder="osmofilter"
+            value={slug}
+            onChange={(e) => {
+              setSlugTouched(true);
+              // Sanitizamos en vivo: lo que escribas se normaliza a
+              // [a-z0-9-]+ ANTES de mostrarse, así nunca puede mandar
+              // un valor inválido al server.
+              setSlug(slugify(e.target.value));
+            }}
             title="Solo minúsculas, números y guiones"
           />
           <p className="text-xs text-muted-foreground">
-            Identificador único de la empresa. Solo minúsculas, números y guiones (ej: <code>osmofilter</code>).
+            Auto-generado desde el nombre. Editable: solo se permiten
+            minúsculas, números y guiones (ej: <code>osmofilter</code>).
           </p>
         </div>
         <div className="space-y-2">

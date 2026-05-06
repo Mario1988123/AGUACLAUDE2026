@@ -102,11 +102,42 @@ export async function getCompany(id: string): Promise<CompanyDetail> {
   return data as CompanyDetail;
 }
 
+/** Slugify defensivo en server: aunque el front sanee, esto cubre el
+ *  caso de creación por API directa o request malformada. */
+function serverSlugify(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    // eslint-disable-next-line no-misleading-character-class
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 50);
+}
+
 export async function createCompanyAction(formData: FormData) {
   await ensureSuperadmin();
 
-  const raw = Object.fromEntries(formData.entries());
-  const parsed = companyCreateSchema.parse(raw);
+  const raw = Object.fromEntries(formData.entries()) as Record<string, string>;
+  // Normalizamos slug en server por si viene "OSMO FILTER S.L." o vacío.
+  // Si llega vacío, lo derivamos del name. Antes Zod throwaba con mensaje
+  // opaco "Solo minúsculas, números y guiones" como digest 3731663788.
+  const nameStr = raw.name?.trim() ?? "";
+  let slug = raw.slug?.trim() ?? "";
+  if (!slug && nameStr) slug = serverSlugify(nameStr);
+  else slug = serverSlugify(slug);
+  raw.slug = slug;
+
+  const result = companyCreateSchema.safeParse(raw);
+  if (!result.success) {
+    const first = result.error.issues[0];
+    const path = first?.path?.join(".") ?? "campo";
+    const msg = first?.message ?? "Datos inválidos";
+    console.error("[createCompany] Zod failed:", JSON.stringify(result.error.issues));
+    throw new Error(`${path}: ${msg}`);
+  }
+  const parsed = result.data;
 
   // Las policies "<tabla>_super" permiten todas las operaciones al superadmin.
   // No necesitamos service_role aquí.
