@@ -68,20 +68,13 @@ export async function getFiscalSettings(): Promise<FiscalSettings> {
 }
 
 /**
- * Persiste la configuración fiscal de la empresa. Antes hacía UPDATE
- * sin comprobar error: si la migración 20260503300000_company_fiscal
- * no estaba aplicada (columnas fiscal_* inexistentes), el UPDATE
- * silenciosamente fallaba y el usuario creía que se guardaba el IBAN
- * cuando NO se persistía nada.
+ * Persiste la configuración fiscal de la empresa con UPSERT atómico
+ * + verificación post-write. Si tras escribir el SELECT no devuelve
+ * los valores enviados, lanza error explícito (algo intermedio está
+ * pisando los datos: trigger, schema cache, RLS, etc.).
  *
- * Ahora:
- *  - Verifica errores en cada operación.
- *  - Si una columna no existe, la quita del payload y reintenta para
- *    no perder el resto de cambios. Devuelve la lista de columnas
- *    omitidas en un Error explícito (visible en toast) para que el
- *    usuario sepa qué migración aplicar.
- *  - Devuelve el snapshot guardado para que el form rehidrate sin
- *    suposiciones.
+ * Si una columna no existe en BD, la quita y reintenta para guardar
+ * lo demás, y avisa al usuario qué quedó fuera.
  */
 export async function updateFiscalSettingsAction(
   input: Partial<FiscalSettings>,
@@ -91,59 +84,79 @@ export async function updateFiscalSettingsAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { data: existing, error: selErr } = await admin
-    .from("company_settings")
-    .select("company_id")
-    .eq("company_id", session.company_id)
-    .maybeSingle();
-  if (selErr) {
-    console.error("[updateFiscal] SELECT failed:", selErr.message);
-    throw new Error(`No se pudo leer company_settings: ${selErr.message}`);
-  }
-
   // Trabajamos sobre una copia mutable del payload
-  const payload: Record<string, unknown> = { ...input };
+  const payload: Record<string, unknown> = {
+    company_id: session.company_id,
+    ...input,
+  };
   const skipped: string[] = [];
 
-  async function attempt(): Promise<{ error: { message: string } | null }> {
-    if (existing) {
-      return await admin
-        .from("company_settings")
-        .update(payload)
-        .eq("company_id", session.company_id);
-    }
-    return await admin.from("company_settings").insert({
-      company_id: session.company_id,
-      ...payload,
-    });
-  }
-
-  // Hasta 20 reintentos quitando columnas inexistentes una a una.
-  for (let i = 0; i < 20; i++) {
-    const r = await attempt();
+  // UPSERT con onConflict = company_id. Más robusto que SELECT-then-
+  // INSERT/UPDATE: evita race conditions y sortea casos donde el
+  // SELECT devuelve null por schema cache pero la fila SÍ existe
+  // (haciendo que el INSERT tirara por unique constraint).
+  for (let i = 0; i < 30; i++) {
+    const r = await admin
+      .from("company_settings")
+      .upsert(payload, { onConflict: "company_id" });
     if (!r.error) break;
     const msg = r.error.message ?? "";
+    console.error(`[updateFiscal] upsert attempt ${i} error:`, msg);
     const m =
       msg.match(/column "?([a-z_]+)"? .* does not exist/i) ??
       msg.match(/'([a-z_]+)' column .* schema cache/i) ??
       msg.match(/Could not find the '([a-z_]+)' column/i);
-    if (m && m[1] && m[1] in payload) {
-      console.error(
-        `[updateFiscal] columna ${m[1]} no existe — la omito y reintento`,
-      );
+    if (m && m[1] && m[1] in payload && m[1] !== "company_id") {
       skipped.push(m[1]);
       delete payload[m[1]];
-      if (Object.keys(payload).length === 0) break;
       continue;
     }
-    console.error("[updateFiscal] write failed:", msg);
     throw new Error(`No se pudo guardar: ${msg}`);
   }
 
+  // Verificación post-write: leemos lo que quedó realmente en BD
+  // y comparamos con los campos significativos enviados. Si algo
+  // que enviamos NO está en la BD tras el upsert, lanzamos error
+  // explícito en vez de mentirle al usuario.
+  const requested = Object.keys(input).filter((k) => k !== "company_id");
+  const { data: verify, error: vErr } = await admin
+    .from("company_settings")
+    .select(requested.join(", "))
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (vErr) {
+    console.error("[updateFiscal] verify SELECT failed:", vErr.message);
+  } else if (verify && requested.length > 0) {
+    const v = verify as Record<string, unknown>;
+    const mismatched: string[] = [];
+    for (const k of requested) {
+      if (skipped.includes(k)) continue;
+      const sent = (input as Record<string, unknown>)[k];
+      const got = v[k];
+      // Normalizamos null vs "" porque el form puede enviar "" pero la
+      // BD lo guarda como NULL.
+      const norm = (x: unknown) =>
+        x === "" || x === undefined ? null : x;
+      if (JSON.stringify(norm(sent)) !== JSON.stringify(norm(got))) {
+        console.error(
+          `[updateFiscal] mismatch ${k}: sent=`,
+          sent,
+          "got=",
+          got,
+        );
+        mismatched.push(k);
+      }
+    }
+    if (mismatched.length > 0) {
+      throw new Error(
+        `Algunos campos no se persistieron correctamente: ${mismatched.join(", ")}. Posible trigger o schema cache. Avisa al admin.`,
+      );
+    }
+  }
+
   if (skipped.length > 0) {
-    // Aviso claro al usuario para que vea qué columnas faltan en BD.
     throw new Error(
-      `Datos guardados parcialmente. Columnas no aplicadas en BD: ${skipped.join(", ")}. Aplica la migración 20260503300000_company_fiscal.sql.`,
+      `Datos guardados parcialmente. Columnas inexistentes en BD: ${skipped.join(", ")}.`,
     );
   }
 
