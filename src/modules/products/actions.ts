@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { productCreateSchema } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CategoryItem, ProductDetail, ProductListItem, ProductKind } from "./types";
 
 export async function listProducts(filters?: {
@@ -216,10 +217,14 @@ export async function createProductAction(formData: FormData) {
     throw new Error("Solo admin puede crear productos");
   const raw = Object.fromEntries(formData.entries());
   // stock_managed viene como string "on" o ausente
-  const parsed = productCreateSchema.parse({
-    ...raw,
-    stock_managed: raw.stock_managed === "on" || raw.stock_managed === "true",
-  });
+  const parsed = parseOrFriendly(
+    productCreateSchema,
+    {
+      ...raw,
+      stock_managed: raw.stock_managed === "on" || raw.stock_managed === "true",
+    },
+    "Producto",
+  );
 
   const supabase = await createClient();
   const { data, error } = await supabase

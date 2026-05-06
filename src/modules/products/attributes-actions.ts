@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 export interface ProductAttribute {
   id: string;
@@ -124,7 +125,7 @@ export async function listProductAttributeValues(productId: string): Promise<Pro
 
 export async function upsertAttributeAction(input: unknown) {
   const session = await ensureAdmin();
-  const parsed = attributeUpsertSchema.parse(input);
+  const parsed = parseOrFriendly(attributeUpsertSchema, input, "Atributo producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const payload = {
@@ -148,7 +149,7 @@ export async function upsertAttributeAction(input: unknown) {
 
 export async function setProductAttributeValue(input: unknown) {
   const session = await ensureAdmin();
-  const parsed = valueUpsertSchema.parse(input);
+  const parsed = parseOrFriendly(valueUpsertSchema, input, "Valor atributo");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 

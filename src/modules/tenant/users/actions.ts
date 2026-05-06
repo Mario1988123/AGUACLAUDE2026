@@ -6,6 +6,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { userInviteSchema, type RoleKey } from "./schemas";
 import type { TenantUser } from "./types";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 async function ensureCompanyAdmin() {
   const session = await requireSession();
@@ -82,7 +83,7 @@ export async function inviteUserAction(formData: FormData) {
     job_title: formData.get("job_title") ?? "",
     roles: formData.getAll("roles"),
   };
-  const parsed = userInviteSchema.parse(raw);
+  const parsed = parseOrFriendly(userInviteSchema, raw, "Invitar usuario");
 
   // Validar que no se intenta crear un segundo company_admin
   if (parsed.roles.includes("company_admin")) {

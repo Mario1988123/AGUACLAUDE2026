@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const objectiveSchema = z.object({
   id: z.string().uuid().optional(),
@@ -33,7 +34,7 @@ async function ensureCanSetObjectives() {
 
 export async function upsertObjectiveAction(input: unknown) {
   const session = await ensureCanSetObjectives();
-  const parsed = objectiveSchema.parse(input);
+  const parsed = parseOrFriendly(objectiveSchema, input, "Objetivo ventas");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const payload = {

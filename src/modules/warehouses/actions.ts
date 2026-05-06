@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const warehouseUpsertSchema = z.object({
   id: z.string().uuid().optional(),
@@ -27,7 +28,7 @@ async function ensureCanManageWarehouses() {
 
 export async function upsertWarehouseAction(input: unknown) {
   const session = await ensureCanManageWarehouses();
-  const parsed = warehouseUpsertSchema.parse(input);
+  const parsed = parseOrFriendly(warehouseUpsertSchema, input, "Almacén");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const payload = {

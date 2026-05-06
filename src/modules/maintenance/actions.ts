@@ -7,6 +7,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 export interface MaintenanceRow {
   id: string;
@@ -133,7 +134,7 @@ export async function listMaintenance(filters?: {
 export async function createMaintenanceAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = maintenanceCreateSchema.parse(input);
+  const parsed = parseOrFriendly(maintenanceCreateSchema, input, "Mantenimiento");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data: created, error } = await supabase
@@ -176,7 +177,7 @@ export async function createMaintenanceAction(input: unknown) {
 
 export async function completeMaintenanceAction(input: unknown) {
   const session = await requireSession();
-  const parsed = completeMaintenanceSchema.parse(input);
+  const parsed = parseOrFriendly(completeMaintenanceSchema, input, "Cerrar mantenimiento");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const now = new Date();

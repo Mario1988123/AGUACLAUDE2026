@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 export interface PricingPlan {
   id: string;
@@ -60,7 +61,7 @@ export async function listPricingPlans(productId: string): Promise<PricingPlan[]
 
 export async function upsertPricingPlanAction(input: unknown) {
   const session = await ensureAdmin();
-  const parsed = pricingUpsertSchema.parse(input);
+  const parsed = parseOrFriendly(pricingUpsertSchema, input, "Precio producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const payload = {

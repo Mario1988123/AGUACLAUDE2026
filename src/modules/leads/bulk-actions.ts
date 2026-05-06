@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const reassignSchema = z.object({
   lead_ids: z.array(z.string().uuid()).min(1).max(200),
@@ -22,7 +23,7 @@ export async function bulkReassignLeadsAction(input: unknown): Promise<number> {
     session.is_superadmin || session.roles.includes("company_admin");
   if (!isAdmin) throw new Error("Solo el admin de empresa puede reasignar");
 
-  const parsed = reassignSchema.parse(input);
+  const parsed = parseOrFriendly(reassignSchema, input, "Reasignar leads");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 

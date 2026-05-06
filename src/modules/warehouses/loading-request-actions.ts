@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "./stock-decrement";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 const createSchema = z.object({
   source_warehouse_id: z.string().uuid(),
@@ -25,7 +26,7 @@ const createSchema = z.object({
 export async function createLoadingRequestAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  const parsed = createSchema.parse(input);
+  const parsed = parseOrFriendly(createSchema, input, "Orden de carga");
   if (parsed.source_warehouse_id === parsed.destination_warehouse_id) {
     throw new Error("Origen y destino deben ser diferentes");
   }

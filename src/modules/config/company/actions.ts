@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 export interface CompanySettings {
   business_hours: Record<string, { open: string; close: string } | null>;
@@ -73,7 +74,7 @@ export async function getCompanySettings(): Promise<CompanySettings> {
 
 export async function updateCompanySettingsAction(input: unknown) {
   const session = await ensureAdmin();
-  const parsed = settingsSchema.parse(input);
+  const parsed = parseOrFriendly(settingsSchema, input, "Configuración empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data: existing } = await supabase

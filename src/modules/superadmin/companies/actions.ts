@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { companyCreateSchema, companyUpdateSchema, type CompanyUpdateInput } from "./schemas";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CompanyDetail, CompanyListItem } from "./types";
 
 async function ensureSuperadmin() {
@@ -215,7 +216,7 @@ export async function createCompanyAction(formData: FormData) {
 
 export async function updateCompanyAction(id: string, input: CompanyUpdateInput) {
   await ensureSuperadmin();
-  const parsed = companyUpdateSchema.parse(input);
+  const parsed = parseOrFriendly(companyUpdateSchema, input, "Empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const update: Record<string, unknown> = {};

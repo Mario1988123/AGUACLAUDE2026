@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
 export type ClausePlanType = "cash" | "rental" | "renting";
 
@@ -63,7 +64,7 @@ export async function listClauseTemplates(): Promise<ClauseTemplate[]> {
 
 export async function upsertClauseTemplateAction(input: unknown) {
   const session = await ensureAdmin();
-  const parsed = clauseUpsertSchema.parse(input);
+  const parsed = parseOrFriendly(clauseUpsertSchema, input, "Cláusula contrato");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const payload = {
