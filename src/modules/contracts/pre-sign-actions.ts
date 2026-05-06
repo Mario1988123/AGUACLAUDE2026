@@ -85,7 +85,13 @@ export async function getContractPreSignReadiness(
     .single();
   if (!customer) return null;
 
-  const { data: address } = await supabase
+  // Admin client para leer addresses: la RLS por scope puede ocultar
+  // direcciones recién creadas si el usuario no tiene scope full sobre
+  // el cliente. El UPSERT también usa admin → coherencia.
+  // Buscamos primero la is_primary; si no hay, cogemos la más reciente
+  // (por si el flag is_primary no se marcó por race condition o
+  // policy en el UPDATE de desmarcar otras).
+  const { data: addressPrimary } = await admin
     .from("addresses")
     .select(
       "id, street_type, street, street_number, portal, floor, door, postal_code, city, province",
@@ -93,8 +99,23 @@ export async function getContractPreSignReadiness(
     .eq("customer_id", customerId)
     .eq("is_primary", true)
     .is("deleted_at", null)
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+  let address = addressPrimary;
+  if (!address) {
+    const { data: addressAny } = await admin
+      .from("addresses")
+      .select(
+        "id, street_type, street, street_number, portal, floor, door, postal_code, city, province",
+      )
+      .eq("customer_id", customerId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    address = addressAny;
+  }
 
   const { data: bank } = await admin
     .from("customer_bank_accounts")
