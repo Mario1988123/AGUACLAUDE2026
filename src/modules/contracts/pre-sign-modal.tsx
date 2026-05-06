@@ -102,6 +102,11 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
     });
   }
 
+  // IBAN solo es obligatorio si el contrato tiene cuotas (rental/renting).
+  // Para venta al contado (cash) es opcional.
+  const ibanRequired =
+    readiness?.plan_type === "rental" || readiness?.plan_type === "renting";
+
   // Estado por paso para mostrar feedback en el stepper
   const stepStatus: Record<Step, "ok" | "warn" | "fail" | "neutral"> = {
     1:
@@ -113,7 +118,9 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
       ? readiness.checks.iban_validated
         ? "ok"
         : "warn"
-      : "fail",
+      : ibanRequired
+        ? "fail"
+        : "neutral",
     4: readiness?.checks.has_id_photo ? "ok" : "warn",
     5: "neutral",
   };
@@ -245,15 +252,25 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
             {/* PASO 3: IBAN */}
             {step === 3 && (
               <div className="space-y-3">
+                {!ibanRequired && (
+                  <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    <strong>Plan al contado (cash):</strong> el IBAN NO es
+                    obligatorio para firmar. Puedes añadirlo si lo deseas
+                    para tener el dato del cliente, pero puedes pulsar
+                    «Siguiente» sin completarlo.
+                  </div>
+                )}
                 <SectionStatus
-                  ok={readiness.checks.has_iban}
+                  ok={readiness.checks.has_iban || !ibanRequired}
                   warning={
                     readiness.checks.has_iban && !readiness.checks.iban_validated
                   }
                   okLabel={
-                    readiness.primary_bank?.is_validated
-                      ? `✓ IBAN validado: ${readiness.primary_bank.iban.slice(0, 8)} ****`
-                      : `IBAN ES00 pendiente — firmable, validable después`
+                    readiness.primary_bank
+                      ? readiness.primary_bank.is_validated
+                        ? `✓ IBAN validado: ${readiness.primary_bank.iban}`
+                        : `IBAN ES00 pendiente — firmable, validable después`
+                      : "IBAN no necesario para venta al contado"
                   }
                   failLabel="Falta IBAN — añade la cuenta del cliente abajo"
                 />
@@ -310,16 +327,18 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                   />
                   <SummaryRow
                     label="IBAN"
-                    ok={readiness.checks.has_iban}
+                    ok={readiness.checks.has_iban || !ibanRequired}
                     warning={
                       readiness.checks.has_iban && !readiness.checks.iban_validated
                     }
                     value={
                       readiness.primary_bank
                         ? readiness.primary_bank.is_validated
-                          ? `${readiness.primary_bank.iban.slice(0, 8)} ****`
+                          ? readiness.primary_bank.iban
                           : "ES00 (pendiente)"
-                        : "Falta"
+                        : ibanRequired
+                          ? "Falta"
+                          : "No aplica (al contado)"
                     }
                   />
                   <SummaryRow

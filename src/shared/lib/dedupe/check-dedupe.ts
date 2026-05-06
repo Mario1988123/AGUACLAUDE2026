@@ -58,6 +58,12 @@ export async function checkDedupe(input: DedupeInput): Promise<DedupeMatch[]> {
       .eq("company_id", session.company_id)
       .is("deleted_at", null)
       .or(conds.join(","));
+    // Excluir leads ya convertidos a cliente — son el mismo dato y
+    // el customer ya aparece como match. Antes salía el lead Juan
+    // como duplicado del cliente Juan recién creado.
+    if (table === "leads") {
+      q = q.neq("status", "converted");
+    }
     if (input.exclude?.entity === (table === "leads" ? "lead" : "customer")) {
       q = q.neq("id", input.exclude.id);
     }

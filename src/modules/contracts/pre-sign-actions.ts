@@ -9,6 +9,9 @@ import {
 } from "@/shared/lib/validations/spanish";
 
 export interface PreSignReadiness {
+  /** Tipo de plan del contrato. cash=al contado (no requiere IBAN);
+   *  rental=alquiler con cuotas; renting=renting. */
+  plan_type: "cash" | "rental" | "renting" | null;
   customer: {
     id: string;
     party_kind: "individual" | "company";
@@ -66,7 +69,9 @@ export interface PreSignReadiness {
 export async function getContractPreSignReadiness(
   contractId: string,
 ): Promise<PreSignReadiness | null> {
-  await requireSession();
+  const session = await requireSession();
+  const isLevel1 =
+    session.is_superadmin || session.roles.includes("company_admin");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,10 +79,15 @@ export async function getContractPreSignReadiness(
 
   const { data: contractRow } = await supabase
     .from("contracts")
-    .select("customer_id")
+    .select("customer_id, plan_type")
     .eq("id", contractId)
     .maybeSingle();
-  const customerId = (contractRow as { customer_id: string | null } | null)?.customer_id;
+  const cr = contractRow as {
+    customer_id: string | null;
+    plan_type: "cash" | "rental" | "renting" | null;
+  } | null;
+  const customerId = cr?.customer_id;
+  const planType = cr?.plan_type ?? null;
   if (!customerId) return null;
 
   const { data: customer } = await supabase
@@ -156,7 +166,17 @@ export async function getContractPreSignReadiness(
     a && a.street && a.postal_code && a.city,
   );
 
-  const b = bank as PreSignReadiness["primary_bank"];
+  let b = bank as PreSignReadiness["primary_bank"];
+  // Niveles distintos a admin solo ven los últimos 4 dígitos del IBAN
+  // por privacidad. Pueden confirmar al cliente sus 4 últimos si pregunta.
+  if (b && !isLevel1) {
+    const clean = b.iban.replace(/\s/g, "");
+    const masked =
+      clean.length > 8
+        ? clean.slice(0, 4) + "*".repeat(clean.length - 8) + clean.slice(-4)
+        : clean;
+    b = { ...b, iban: masked };
+  }
 
   const checks = {
     has_tax_id: Boolean(taxId),
@@ -174,14 +194,23 @@ export async function getContractPreSignReadiness(
   if (!checks.has_tax_id) blockers.push("DNI/CIF del cliente");
   else if (!checks.tax_id_valid_format) blockers.push("DNI/CIF con formato inválido");
   if (!checks.has_address) blockers.push("Dirección de instalación");
-  if (!checks.has_iban) blockers.push("IBAN del cliente (puede ser ES00 pendiente)");
+  // IBAN solo es OBLIGATORIO si el contrato tiene cuotas (rental/renting).
+  // Para venta al contado (cash) el IBAN es opcional — el cliente paga
+  // por transferencia/tarjeta/efectivo y no hay domiciliación.
+  const ibanRequired = planType === "rental" || planType === "renting";
+  if (ibanRequired && !checks.has_iban) {
+    blockers.push("IBAN del cliente (puede ser ES00 pendiente)");
+  }
 
   if (!checks.has_email) warnings.push("Email del cliente");
   if (!checks.has_phone) warnings.push("Teléfono del cliente");
-  if (!checks.iban_validated) warnings.push("IBAN sin validar (placeholder ES00)");
+  if (ibanRequired && !checks.iban_validated && checks.has_iban) {
+    warnings.push("IBAN sin validar (placeholder ES00)");
+  }
   if (!checks.has_id_photo) warnings.push("Foto del DNI/NIE no subida");
 
   return {
+    plan_type: planType,
     customer: c,
     primary_address: a,
     primary_bank: b,
