@@ -34,21 +34,50 @@ create index if not exists idx_contract_payments_collected_by
   on public.contract_payments(collected_by_user_id)
   where collected_by_user_id is not null;
 
-create index if not exists idx_wallet_entries_installation
-  on public.wallet_entries(installation_id)
-  where installation_id is not null;
+-- Helper para crear índice solo si la columna existe (varias migraciones
+-- van añadiendo columnas opcionales). Antes la SQL fallaba con
+-- "column free_trial_id does not exist" si la migración aún no estaba.
+create or replace function public._idx_if_col(
+  p_table text,
+  p_column text,
+  p_idx_name text,
+  p_where text default null
+)
+returns void
+language plpgsql
+as $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = p_table
+      and column_name = p_column
+  ) then
+    execute format(
+      'create index if not exists %I on public.%I(%I) %s',
+      p_idx_name, p_table, p_column,
+      coalesce('where ' || p_where, '')
+    );
+  end if;
+end $$;
 
-create index if not exists idx_wallet_entries_free_trial
-  on public.wallet_entries(free_trial_id)
-  where free_trial_id is not null;
-
-create index if not exists idx_stock_movements_free_trial
-  on public.stock_movements(free_trial_id)
-  where free_trial_id is not null;
-
-create index if not exists idx_stock_movements_maintenance
-  on public.stock_movements(maintenance_id)
-  where maintenance_id is not null;
+select public._idx_if_col(
+  'wallet_entries', 'installation_id', 'idx_wallet_entries_installation',
+  'installation_id is not null'
+);
+select public._idx_if_col(
+  'wallet_entries', 'free_trial_id', 'idx_wallet_entries_free_trial',
+  'free_trial_id is not null'
+);
+select public._idx_if_col(
+  'stock_movements', 'free_trial_id', 'idx_stock_movements_free_trial',
+  'free_trial_id is not null'
+);
+select public._idx_if_col(
+  'stock_movements', 'maintenance_id', 'idx_stock_movements_maintenance',
+  'maintenance_id is not null'
+);
 
 create index if not exists idx_maintenance_contracts_plan
   on public.maintenance_contracts(plan_id);
@@ -93,3 +122,5 @@ create index if not exists idx_contracts_signed_by_user_id
 create index if not exists idx_team_assignments_manager
   on public.team_assignments(manager_user_id, company_id)
   where revoked_at is null;
+
+drop function public._idx_if_col(text, text, text, text);

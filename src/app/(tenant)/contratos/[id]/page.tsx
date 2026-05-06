@@ -338,25 +338,45 @@ export default async function ContractDetailPage({
                 />
               </div>
             )}
-            {isSignedOrActive && (
-              <div className="border-t pt-4">
-                <CreateInstallationButton
-                  contractId={contract.id}
-                  installers={installers}
-                  warehouses={warehouses.map((w) => ({
-                    id: w.id,
-                    name: w.name,
-                    kind: w.kind,
-                    assigned_user_id: w.assigned_user_id,
-                  }))}
-                  hasInstallation={hasInstallation}
-                  preferredSlot={c.preferred_install_time_slot ?? null}
-                  preferredNotes={c.preferred_install_time_notes ?? null}
-                  preferredDaysOfWeek={c.preferred_install_days_of_week ?? null}
-                  preferredDates={c.preferred_install_dates ?? null}
-                />
-              </div>
-            )}
+            {/* "Generar instalación" solo lo ven niveles 1-2 con scope
+                técnico/admin. Comerciales NO — la instalación se crea
+                automáticamente al firmar y la programación es del director
+                técnico/admin. */}
+            {isSignedOrActive &&
+              (session.is_superadmin ||
+                session.roles.includes("company_admin") ||
+                session.roles.includes("technical_director")) && (
+                <div className="border-t pt-4">
+                  <CreateInstallationButton
+                    contractId={contract.id}
+                    installers={installers}
+                    warehouses={warehouses.map((w) => ({
+                      id: w.id,
+                      name: w.name,
+                      kind: w.kind,
+                      assigned_user_id: w.assigned_user_id,
+                    }))}
+                    hasInstallation={hasInstallation}
+                    preferredSlot={c.preferred_install_time_slot ?? null}
+                    preferredNotes={c.preferred_install_time_notes ?? null}
+                    preferredDaysOfWeek={c.preferred_install_days_of_week ?? null}
+                    preferredDates={c.preferred_install_dates ?? null}
+                  />
+                </div>
+              )}
+            {/* Comercial: solo ve mensaje informativo */}
+            {isSignedOrActive &&
+              !session.is_superadmin &&
+              !session.roles.includes("company_admin") &&
+              !session.roles.includes("technical_director") && (
+                <div className="border-t pt-4">
+                  <p className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    ✓ Contrato firmado. La instalación se ha generado
+                    automáticamente y el director técnico la programará.
+                    Recibirás una notificación cuando se complete.
+                  </p>
+                </div>
+              )}
           </CardContent>
         </Card>
       </div>

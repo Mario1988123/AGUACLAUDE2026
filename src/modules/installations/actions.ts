@@ -293,23 +293,50 @@ export async function getInstallationSignatures(installationId: string) {
 export async function createInstallationFromContract(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
+
+  // Guard: solo niveles 1-2 (admin/director técnico) pueden crear/programar
+  // instalaciones manualmente. El comercial NO. La instalación se crea
+  // automáticamente al firmar contrato.
+  const isAuthorized =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
+  if (!isAuthorized) {
+    throw new Error(
+      "Solo el admin o director técnico puede generar/programar instalaciones",
+    );
+  }
+
   const parsed = parseOrFriendly(installationCreateFromContractSchema, input, "Instalación");
 
+  // Admin client: la policy installations_insert tiene scope que puede
+  // bloquear según rol. Como ya hemos validado los permisos arriba,
+  // usamos admin para evitar silent fail.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: contract } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: contract } = await admin
     .from("contracts")
-    .select("id, status, customer_id")
+    .select("id, status, customer_id, company_id")
     .eq("id", parsed.contract_id)
     .single();
   if (!contract) throw new Error("Contrato no encontrado");
-  const c = contract as { id: string; status: string; customer_id: string };
+  const c = contract as {
+    id: string;
+    status: string;
+    customer_id: string;
+    company_id: string;
+  };
+  if (c.company_id !== session.company_id) {
+    throw new Error("Contrato de otra empresa");
+  }
   if (!["signed", "active"].includes(c.status)) {
     throw new Error("El contrato debe estar firmado o activo");
   }
 
   // Verificar que no hay ya instalación para este contrato
-  const { count } = await supabase
+  const { count } = await admin
     .from("installations")
     .select("id", { count: "exact", head: true })
     .eq("contract_id", parsed.contract_id)
@@ -319,9 +346,7 @@ export async function createInstallationFromContract(input: unknown) {
   // Generar reference_code I-YYYY-NNNN
   const year = new Date().getFullYear();
   const yearPrefix = `I-${year}-`;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supaAny = supabase as any;
-  const { data: lastCoded } = await supaAny
+  const { data: lastCoded } = await admin
     .from("installations")
     .select("reference_code")
     .eq("company_id", session.company_id)
@@ -337,7 +362,7 @@ export async function createInstallationFromContract(input: unknown) {
   }
   const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
 
-  const { data: created, error } = await supabase
+  const { data: created, error } = await admin
     .from("installations")
     .insert({
       company_id: session.company_id,
@@ -355,18 +380,21 @@ export async function createInstallationFromContract(input: unknown) {
     })
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[createInstallationFromContract] insert failed:", error.message);
+    throw new Error(`No se pudo crear la instalación: ${error.message}`);
+  }
   const installationId = (created as { id: string }).id;
 
   // Copiar items del contrato
-  const { data: items } = await supabase
+  const { data: items } = await admin
     .from("contract_items")
     .select("product_id, quantity, display_order, notes")
     .eq("contract_id", c.id);
   type CI = { product_id: string; quantity: number; display_order: number; notes: string | null };
   const list = (items ?? []) as CI[];
   if (list.length > 0) {
-    await supabase.from("installation_items").insert(
+    await admin.from("installation_items").insert(
       list.map((it) => ({
         installation_id: installationId,
         company_id: session.company_id,
@@ -380,7 +408,7 @@ export async function createInstallationFromContract(input: unknown) {
 
   // Si tiene scheduled_at + installer, crear evento agenda
   if (parsed.scheduled_at && parsed.installer_user_id) {
-    await supabase.from("agenda_events").insert({
+    await admin.from("agenda_events").insert({
       company_id: session.company_id,
       kind: "installation",
       status: "scheduled",
@@ -393,7 +421,7 @@ export async function createInstallationFromContract(input: unknown) {
     });
   }
 
-  await supabase.from("events").insert({
+  await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "installation",
     subject_id: installationId,
@@ -447,9 +475,22 @@ export async function getInstallerAvailabilityAction(
 
 export async function updateInstallationAction(input: unknown) {
   const session = await requireSession();
+
+  // Solo niveles 1-2 (admin / director técnico) pueden programar/editar.
+  const isAuthorized =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
+  if (!isAuthorized) {
+    throw new Error(
+      "Solo el admin o director técnico puede programar/editar instalaciones",
+    );
+  }
+
   const parsed = parseOrFriendly(installationUpdateSchema, input, "Instalación");
+  // Admin client: la policy installations_update por scope puede bloquear.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
   const update: Record<string, unknown> = {};
   if (parsed.scheduled_at !== undefined) update.scheduled_at = parsed.scheduled_at || null;
   if (parsed.installer_user_id !== undefined) {
@@ -462,8 +503,11 @@ export async function updateInstallationAction(input: unknown) {
   if (Object.keys(update).length === 0) return;
   if (update.scheduled_at && update.installer_user_id) update.status = "scheduled";
 
-  const { error } = await supabase.from("installations").update(update).eq("id", parsed.id);
-  if (error) throw new Error(error.message);
+  const { error } = await admin.from("installations").update(update).eq("id", parsed.id);
+  if (error) {
+    console.error("[updateInstallation] update failed:", error.message);
+    throw new Error(`No se pudo actualizar: ${error.message}`);
+  }
 
   // Si pasó a estado scheduled (fecha + instalador), comprobar stock y
   // notificar a admin si falta material para esa instalación.
