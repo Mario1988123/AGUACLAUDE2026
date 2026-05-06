@@ -262,6 +262,134 @@ export async function setUserStatus(userId: string, status: "active" | "inactive
   revalidatePath("/configuracion/usuarios");
 }
 
+/**
+ * Resetea la contraseña de un usuario interno: genera nueva temp password,
+ * la pone en auth.users y marca user_profiles.must_change_password=true
+ * para que la cambie en su próximo login. Devuelve la temp password al
+ * admin para que la copie y se la pase al usuario.
+ *
+ * Solo company_admin (o superadmin), y solo para usuarios de su misma
+ * empresa.
+ */
+export async function resetUserPasswordAction(
+  userId: string,
+): Promise<{ email: string; temp_password: string }> {
+  const session = await ensureCompanyAdmin();
+  const admin = createAdminClient();
+
+  // Validar que el usuario pertenece a la misma empresa que el admin
+  const { data: profile } = await admin
+    .from("user_profiles")
+    .select("user_id, company_id, full_name")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const p = profile as
+    | { user_id: string; company_id: string; full_name: string }
+    | null;
+  if (!p) throw new Error("Usuario no encontrado");
+  if (!session.is_superadmin && p.company_id !== session.company_id) {
+    throw new Error("Ese usuario no pertenece a tu empresa");
+  }
+
+  // Email viene de auth.users
+  const { data: authUser, error: getErr } = await admin.auth.admin.getUserById(userId);
+  if (getErr) {
+    console.error("[resetUserPassword] getUserById failed:", getErr.message);
+    throw new Error(getErr.message);
+  }
+  const email = authUser.user.email ?? "(sin email)";
+
+  const tempPassword = generateTempPassword();
+  const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
+    password: tempPassword,
+  });
+  if (updErr) {
+    console.error("[resetUserPassword] updateUserById failed:", updErr.message);
+    throw new Error(updErr.message);
+  }
+
+  await admin
+    .from("user_profiles")
+    .update({ must_change_password: true })
+    .eq("user_id", userId);
+
+  revalidatePath("/configuracion/usuarios");
+  return { email, temp_password: tempPassword };
+}
+
+/**
+ * ELIMINA PERMANENTEMENTE al usuario:
+ *  · Borra de auth.users → libera el email para reutilizar.
+ *  · CASCADE borra user_profiles, user_roles, team_assignments,
+ *    permission_overrides, notifications.
+ *  · Las FK críticas (contracts.signed_by, contract_payments.collected_by,
+ *    installations.installer_user_id, events.actor_user_id, leads.assigned,
+ *    etc.) están migradas a ON DELETE SET NULL → los datos históricos
+ *    quedan con esos campos en NULL pero no se borran.
+ *
+ * Solo company_admin (o superadmin) y solo en su propia empresa. No se
+ * puede eliminar al propio company_admin (decisión 1.12 — la empresa
+ * siempre tiene que tener uno).
+ */
+export async function deleteUserPermanentlyAction(userId: string): Promise<void> {
+  const session = await ensureCompanyAdmin();
+  if (userId === session.user_id) {
+    throw new Error("No puedes eliminarte a ti mismo");
+  }
+  const admin = createAdminClient();
+
+  // Validar que el usuario pertenece a la misma empresa
+  const { data: profile } = await admin
+    .from("user_profiles")
+    .select("user_id, company_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const p = profile as { user_id: string; company_id: string } | null;
+  if (!p) {
+    // Posible huérfano en auth.users sin profile: dejamos pasar el delete
+    // de auth para liberar el email, pero solo si el caller es superadmin.
+    if (!session.is_superadmin) {
+      throw new Error("Usuario no pertenece a tu empresa");
+    }
+  } else if (!session.is_superadmin && p.company_id !== session.company_id) {
+    throw new Error("Ese usuario no pertenece a tu empresa");
+  }
+
+  // No permitir eliminar al único company_admin de la empresa
+  const { data: rolesData } = await admin
+    .from("user_roles")
+    .select("role_key")
+    .eq("user_id", userId)
+    .is("revoked_at", null);
+  const isAdmin = ((rolesData ?? []) as { role_key: string }[]).some(
+    (r) => r.role_key === "company_admin",
+  );
+  if (isAdmin) {
+    throw new Error(
+      "No se puede eliminar al admin de la empresa. Asigna otro admin antes.",
+    );
+  }
+
+  // Delete en auth.users dispara CASCADE de user_profiles/user_roles y
+  // SET NULL de las FK migradas (contracts, contract_payments, leads...).
+  const { error: delErr } = await admin.auth.admin.deleteUser(userId);
+  if (delErr) {
+    console.error("[deleteUser] auth.admin.deleteUser failed:", delErr.message);
+    throw new Error(`No se pudo eliminar: ${delErr.message}`);
+  }
+
+  // Limpieza extra defensiva por si la migración SET NULL aún no estuviera
+  // aplicada en algún entorno: borramos manualmente lo que sí o sí va.
+  try {
+    await admin.from("user_profiles").delete().eq("user_id", userId);
+    await admin.from("user_roles").delete().eq("user_id", userId);
+  } catch {
+    /* probablemente ya borrado por CASCADE */
+  }
+
+  revalidatePath("/configuracion/usuarios");
+}
+
 export async function updateUserRoles(userId: string, roles: RoleKey[]) {
   const session = await ensureCompanyAdmin();
   const admin = createAdminClient();
