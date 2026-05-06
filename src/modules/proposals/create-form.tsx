@@ -467,22 +467,69 @@ function ItemEditor({
           <input
             type="checkbox"
             checked={item.maintenance_included}
-            onChange={(e) => onChange({ maintenance_included: e.target.checked })}
+            onChange={(e) => {
+              const enabling = e.target.checked;
+              // Si activa mantenimiento incluido y no hay fecha, prerellenamos
+              // con la duración del contrato (paso anterior). Editable luego.
+              if (enabling && !item.maintenance_until_date && duration) {
+                const d = new Date();
+                d.setMonth(d.getMonth() + duration);
+                onChange({
+                  maintenance_included: true,
+                  maintenance_until_date: d.toISOString().slice(0, 10),
+                });
+              } else {
+                onChange({ maintenance_included: enabling });
+              }
+            }}
             className="h-4 w-4"
           />
           <span className="text-sm font-bold">Mantenimiento incluido</span>
         </label>
         {item.maintenance_included ? (
-          <div className="mt-2 space-y-1">
+          <div className="mt-2 space-y-2">
             <Label className="text-xs">Cubierto hasta fecha</Label>
-            <Input
-              type="date"
-              value={item.maintenance_until_date ?? ""}
-              onChange={(e) => onChange({ maintenance_until_date: e.target.value || null })}
-              className="max-w-[200px]"
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              {[12, 24, 36, 48].map((m) => {
+                const isContractDuration = duration === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      const d = new Date();
+                      d.setMonth(d.getMonth() + m);
+                      onChange({
+                        maintenance_until_date: d.toISOString().slice(0, 10),
+                      });
+                    }}
+                    className={`rounded-lg border-2 px-3 py-1.5 text-xs font-bold transition ${
+                      isContractDuration
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-card hover:border-primary/40"
+                    }`}
+                    title={
+                      isContractDuration
+                        ? `Coincide con duración del contrato (${m} meses)`
+                        : `${m} meses desde hoy`
+                    }
+                  >
+                    {m} meses{isContractDuration ? " ★" : ""}
+                  </button>
+                );
+              })}
+              <Input
+                type="date"
+                value={item.maintenance_until_date ?? ""}
+                onChange={(e) => onChange({ maintenance_until_date: e.target.value || null })}
+                className="max-w-[180px]"
+              />
+            </div>
             <p className="text-[10px] text-muted-foreground">
-              Por defecto, lo que dure el contrato. Editable.
+              Pulsa un botón para calcular fecha rápida o edita a mano.{" "}
+              {duration
+                ? `★ marca la duración del contrato (${duration} meses).`
+                : null}
             </p>
           </div>
         ) : (

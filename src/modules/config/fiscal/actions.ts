@@ -67,26 +67,86 @@ export async function getFiscalSettings(): Promise<FiscalSettings> {
   }
 }
 
-export async function updateFiscalSettingsAction(input: Partial<FiscalSettings>): Promise<void> {
+/**
+ * Persiste la configuración fiscal de la empresa. Antes hacía UPDATE
+ * sin comprobar error: si la migración 20260503300000_company_fiscal
+ * no estaba aplicada (columnas fiscal_* inexistentes), el UPDATE
+ * silenciosamente fallaba y el usuario creía que se guardaba el IBAN
+ * cuando NO se persistía nada.
+ *
+ * Ahora:
+ *  - Verifica errores en cada operación.
+ *  - Si una columna no existe, la quita del payload y reintenta para
+ *    no perder el resto de cambios. Devuelve la lista de columnas
+ *    omitidas en un Error explícito (visible en toast) para que el
+ *    usuario sepa qué migración aplicar.
+ *  - Devuelve el snapshot guardado para que el form rehidrate sin
+ *    suposiciones.
+ */
+export async function updateFiscalSettingsAction(
+  input: Partial<FiscalSettings>,
+): Promise<{ saved: Partial<FiscalSettings>; skipped: string[] }> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data: existing } = await admin
+
+  const { data: existing, error: selErr } = await admin
     .from("company_settings")
     .select("company_id")
     .eq("company_id", session.company_id)
     .maybeSingle();
-  if (existing) {
-    await admin
-      .from("company_settings")
-      .update(input)
-      .eq("company_id", session.company_id);
-  } else {
-    await admin.from("company_settings").insert({
+  if (selErr) {
+    console.error("[updateFiscal] SELECT failed:", selErr.message);
+    throw new Error(`No se pudo leer company_settings: ${selErr.message}`);
+  }
+
+  // Trabajamos sobre una copia mutable del payload
+  const payload: Record<string, unknown> = { ...input };
+  const skipped: string[] = [];
+
+  async function attempt(): Promise<{ error: { message: string } | null }> {
+    if (existing) {
+      return await admin
+        .from("company_settings")
+        .update(payload)
+        .eq("company_id", session.company_id);
+    }
+    return await admin.from("company_settings").insert({
       company_id: session.company_id,
-      ...input,
+      ...payload,
     });
   }
+
+  // Hasta 20 reintentos quitando columnas inexistentes una a una.
+  for (let i = 0; i < 20; i++) {
+    const r = await attempt();
+    if (!r.error) break;
+    const msg = r.error.message ?? "";
+    const m =
+      msg.match(/column "?([a-z_]+)"? .* does not exist/i) ??
+      msg.match(/'([a-z_]+)' column .* schema cache/i) ??
+      msg.match(/Could not find the '([a-z_]+)' column/i);
+    if (m && m[1] && m[1] in payload) {
+      console.error(
+        `[updateFiscal] columna ${m[1]} no existe — la omito y reintento`,
+      );
+      skipped.push(m[1]);
+      delete payload[m[1]];
+      if (Object.keys(payload).length === 0) break;
+      continue;
+    }
+    console.error("[updateFiscal] write failed:", msg);
+    throw new Error(`No se pudo guardar: ${msg}`);
+  }
+
+  if (skipped.length > 0) {
+    // Aviso claro al usuario para que vea qué columnas faltan en BD.
+    throw new Error(
+      `Datos guardados parcialmente. Columnas no aplicadas en BD: ${skipped.join(", ")}. Aplica la migración 20260503300000_company_fiscal.sql.`,
+    );
+  }
+
   revalidatePath("/configuracion/fiscal");
+  return { saved: payload as Partial<FiscalSettings>, skipped };
 }

@@ -180,6 +180,25 @@ export function LeadCreateForm() {
     return true;
   }
 
+  /** Dirección obligatoria al crear lead — antes se permitía guardar
+   *  sin calle/CP/ciudad y al convertir a cliente saltaba el aviso de
+   *  "sin dirección" cuando ya no podía corregirse cómodamente. */
+  function validateStep3(): boolean {
+    if (!street.trim()) {
+      notify.warning("Calle obligatoria", "Escribe el nombre de la calle");
+      return false;
+    }
+    if (!postal.trim() || postal.trim().length !== 5) {
+      notify.warning("Código postal obligatorio", "5 dígitos");
+      return false;
+    }
+    if (!city.trim()) {
+      notify.warning("Población obligatoria");
+      return false;
+    }
+    return true;
+  }
+
   function next() {
     if (step === 1 && !validateStep1()) return;
     setStep((s) => Math.min(3, s + 1));
@@ -191,6 +210,10 @@ export function LeadCreateForm() {
   function submit() {
     if (!validateStep1()) {
       setStep(1);
+      return;
+    }
+    if (!validateStep3()) {
+      setStep(3);
       return;
     }
     const fd = new FormData();
@@ -461,7 +484,7 @@ export function LeadCreateForm() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Nombre</Label>
+              <Label>Nombre *</Label>
               <Input
                 value={street}
                 onChange={(e) => setStreet(e.target.value)}
@@ -493,7 +516,7 @@ export function LeadCreateForm() {
           {/* CP / Población / Provincia */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label>CP</Label>
+              <Label>CP *</Label>
               <Input
                 inputMode="numeric"
                 maxLength={5}
@@ -502,7 +525,7 @@ export function LeadCreateForm() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Población</Label>
+              <Label>Población *</Label>
               <Input value={city} onChange={(e) => setCity(e.target.value)} />
             </div>
             <div className="space-y-2">

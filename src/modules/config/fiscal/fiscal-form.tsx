@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -12,6 +13,7 @@ import { updateFiscalSettingsAction, type FiscalSettings } from "./actions";
 export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
   const [v, setV] = useState(initial);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   function set<K extends keyof FiscalSettings>(key: K, val: FiscalSettings[K]) {
     setV((x) => ({ ...x, [key]: val }));
@@ -22,8 +24,14 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
       try {
         await updateFiscalSettingsAction(v);
         notify.success("Datos fiscales guardados");
+        // Refrescar el page server component para confirmar que la BD
+        // realmente tiene los valores (rehidrata el form).
+        router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
+        // Aún así refrescamos para que el usuario vea qué se guardó
+        // realmente vs lo que se quedó vacío.
+        router.refresh();
       }
     });
   }
