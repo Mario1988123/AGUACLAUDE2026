@@ -27,6 +27,11 @@ import { useDedupe } from "@/shared/hooks/use-dedupe";
 import { IbanInput } from "@/shared/components/iban-input";
 import { checkIbanLive, isPendingIban } from "@/shared/lib/validations/iban-partial";
 import {
+  validateDNIorNIE,
+  validateCIF,
+  validateSpanishPhone,
+} from "@/shared/lib/validations/spanish";
+import {
   getContractPreSignReadiness,
   type PreSignReadiness,
 } from "./pre-sign-actions";
@@ -418,7 +423,42 @@ function CustomerEditForm({
     exclude: { entity: "customer", id: customer.id },
   });
 
+  // Validación cliente ANTES de mandar al server. Bloquea el guardado
+  // si el DNI/CIF tiene formato/letra inválido, o si el teléfono no es
+  // válido. El server además valida (defensa en profundidad), pero el
+  // toast cliente es más claro y evita un round-trip.
+  function validateLocal(): string | null {
+    const t = form.tax_id?.trim().toUpperCase() ?? "";
+    if (t) {
+      if (customer.party_kind === "company") {
+        if (!validateCIF(t)) return "CIF con formato inválido";
+      } else {
+        const r = validateDNIorNIE(t);
+        if (!r.valid) {
+          return r.expectedLetter
+            ? `Letra del DNI/NIE incorrecta. Debería ser: ${r.expectedLetter}`
+            : "DNI/NIE con formato inválido";
+        }
+      }
+    }
+    if (form.phone_primary?.trim() && !validateSpanishPhone(form.phone_primary)) {
+      return "Teléfono con formato inválido (móvil o fijo de 9 dígitos)";
+    }
+    if (
+      form.email?.trim() &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+    ) {
+      return "Email con formato inválido";
+    }
+    return null;
+  }
+
   function save() {
+    const err = validateLocal();
+    if (err) {
+      notify.warning("Revisa los datos", err);
+      return;
+    }
     startTransition(async () => {
       try {
         await updateCustomerAction(customer.id, form);

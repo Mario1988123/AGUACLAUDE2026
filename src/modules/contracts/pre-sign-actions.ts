@@ -3,6 +3,10 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import {
+  validateDNIorNIE,
+  validateCIF,
+} from "@/shared/lib/validations/spanish";
 
 export interface PreSignReadiness {
   customer: {
@@ -133,12 +137,19 @@ export async function getContractPreSignReadiness(
     .eq("kind", "id_card");
 
   const c = customer as PreSignReadiness["customer"];
-  const taxId = c.tax_id ?? "";
-  // Format check (no validación letra; ya nos lo pidió laxo el usuario)
-  const taxIdFormatValid =
-    /^\d{8}[A-Z]$/.test(taxId.toUpperCase()) ||
-    /^[XYZ]\d{7}[A-Z]$/.test(taxId.toUpperCase()) ||
-    /^[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J]$/.test(taxId.toUpperCase());
+  const taxId = (c.tax_id ?? "").trim();
+  // Validación según tipo: DNI/NIE para particular comprueba la letra
+  // de control; CIF para empresa comprueba formato laxo (no algoritmo
+  // estricto, decisión usuario). Antes solo se validaba el regex y se
+  // dejaba pasar DNIs con letra incorrecta.
+  let taxIdFormatValid = false;
+  if (taxId) {
+    if (c.party_kind === "company") {
+      taxIdFormatValid = validateCIF(taxId);
+    } else {
+      taxIdFormatValid = validateDNIorNIE(taxId).valid;
+    }
+  }
 
   const a = address as PreSignReadiness["primary_address"];
   const hasAddress = Boolean(
