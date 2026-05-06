@@ -137,38 +137,97 @@ export async function inviteUserAction(
 
   const admin = createAdminClient();
   const tempPassword = generateTempPassword();
-  // Crear user con password — email_confirm: true para que pueda hacer
-  // login inmediatamente sin paso de confirmación de email.
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    email: parsed.email,
-    password: tempPassword,
-    email_confirm: true,
-    user_metadata: { full_name: parsed.full_name },
-  });
-  if (createError) {
-    console.error("[inviteUser] createUser failed:", createError.message);
-    throw new Error(createError.message);
-  }
-  const newUserId = created.user.id;
 
-  // Crear user_profile
-  const { error: profileError } = await admin.from("user_profiles").insert({
-    user_id: newUserId,
-    company_id: session.company_id!,
-    full_name: parsed.full_name,
-    phone: parsed.phone || null,
-    job_title: parsed.job_title || null,
-    status: "invited",
-    must_change_password: true,
-    invited_at: new Date().toISOString(),
-  });
+  // Comprobar si el email ya existe en auth.users (puede pasar si:
+  //  · Hubo un intento previo con inviteUserByEmail() que creó la fila
+  //    pero sin password.
+  //  · El usuario fue eliminado del tenant pero sigue en auth.users.
+  //  · El usuario existe en otra empresa).
+  let newUserId: string;
+  let isRecovering = false;
+  type AuthUser = { id: string; email?: string | null };
+  let existingUser: AuthUser | null = null;
+  try {
+    const { data: list } = await admin.auth.admin.listUsers({ perPage: 200 });
+    existingUser =
+      ((list?.users ?? []) as AuthUser[]).find(
+        (u) => (u.email ?? "").toLowerCase() === parsed.email.toLowerCase(),
+      ) ?? null;
+  } catch (e) {
+    console.error("[inviteUser] listUsers failed:", e);
+  }
+
+  if (existingUser) {
+    // Verificar si el user existente ya tiene profile en alguna empresa
+    const { data: existingProfile } = await admin
+      .from("user_profiles")
+      .select("user_id, company_id")
+      .eq("user_id", existingUser.id)
+      .maybeSingle();
+    const ep = existingProfile as { user_id: string; company_id: string } | null;
+    if (ep && ep.company_id === session.company_id) {
+      throw new Error(
+        `Ya existe un usuario con el email ${parsed.email} en esta empresa`,
+      );
+    }
+    if (ep && ep.company_id !== session.company_id) {
+      throw new Error(
+        `El email ${parsed.email} ya pertenece a otra empresa. Usa otro email.`,
+      );
+    }
+    // Existe en auth.users pero SIN profile en ninguna empresa → recuperamos:
+    // reseteamos su password y le creamos el profile aquí.
+    const { error: updErr } = await admin.auth.admin.updateUserById(existingUser.id, {
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name: parsed.full_name },
+    });
+    if (updErr) {
+      console.error("[inviteUser] updateUserById failed:", updErr.message);
+      throw new Error(updErr.message);
+    }
+    newUserId = existingUser.id;
+    isRecovering = true;
+  } else {
+    // Crear user con password — email_confirm: true para que pueda hacer
+    // login inmediatamente sin paso de confirmación de email.
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email: parsed.email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: { full_name: parsed.full_name },
+    });
+    if (createError) {
+      console.error("[inviteUser] createUser failed:", createError.message);
+      throw new Error(createError.message);
+    }
+    newUserId = created.user.id;
+  }
+
+  // Crear user_profile (upsert por si quedó residuo huérfano)
+  const { error: profileError } = await admin.from("user_profiles").upsert(
+    {
+      user_id: newUserId,
+      company_id: session.company_id!,
+      full_name: parsed.full_name,
+      phone: parsed.phone || null,
+      job_title: parsed.job_title || null,
+      status: "invited",
+      must_change_password: true,
+      invited_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
   if (profileError) {
-    console.error("[inviteUser] profile insert failed:", profileError.message);
-    // Rollback del auth user para no dejar huérfanos
-    try {
-      await admin.auth.admin.deleteUser(newUserId);
-    } catch {
-      /* fail-soft */
+    console.error("[inviteUser] profile upsert failed:", profileError.message);
+    // Rollback del auth user solo si lo creamos en este flow (no en
+    // recovery, porque podría borrar un usuario válido).
+    if (!isRecovering) {
+      try {
+        await admin.auth.admin.deleteUser(newUserId);
+      } catch {
+        /* fail-soft */
+      }
     }
     throw new Error(profileError.message);
   }
