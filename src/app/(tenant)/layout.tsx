@@ -1,6 +1,6 @@
 export const dynamic = "force-dynamic";
 
-import { requireSession } from "@/shared/lib/auth/session";
+import { requireSession, enforcePasswordChange } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Sidebar } from "@/shared/components/sidebar";
 import { Header } from "@/shared/components/header";
@@ -33,6 +33,9 @@ async function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
 
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
+  // Si el admin de empresa entró con la contraseña temporal del super,
+  // forzamos cambio antes de cualquier otra cosa.
+  enforcePasswordChange(session);
 
   // Superadmin tiene su propio layout (redirect lanza NEXT_REDIRECT, NO capturar)
   if (session.is_superadmin) {

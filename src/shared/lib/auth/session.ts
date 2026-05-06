@@ -1,4 +1,5 @@
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { redirect } from "next/navigation";
 
 export interface SessionClaims {
@@ -9,6 +10,9 @@ export interface SessionClaims {
   roles: string[];
   departments: string[];
   full_name: string | null;
+  /** Si true, el usuario debe cambiar la contraseña ANTES de acceder a
+   *  cualquier ruta privada. Lo usa enforcePasswordChange() en layouts. */
+  must_change_password: boolean;
 }
 
 const DEV_AUTOLOGIN =
@@ -23,6 +27,7 @@ const DEV_FAKE_SESSION: SessionClaims = {
   roles: ["superadmin"],
   departments: [],
   full_name: "Dev Superadmin (LOCAL)",
+  must_change_password: false,
 };
 
 /**
@@ -68,6 +73,24 @@ export async function requireSession(): Promise<SessionClaims> {
   const claims = accessToken ? decodeJwt(accessToken) : {};
   const meta = (user.app_metadata ?? {}) as Record<string, unknown>;
 
+  // Lectura defensiva de must_change_password desde user_profiles. Si la
+  // tabla no existe o falla, devolvemos false (no bloqueamos al usuario).
+  let mustChangePassword = false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("user_profiles")
+      .select("must_change_password")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    mustChangePassword = Boolean(
+      (data as { must_change_password?: boolean } | null)?.must_change_password,
+    );
+  } catch {
+    /* fail-soft */
+  }
+
   return {
     user_id: user.id,
     email: user.email ?? null,
@@ -81,7 +104,18 @@ export async function requireSession(): Promise<SessionClaims> {
       (claims.full_name as string | null | undefined) ??
       (meta.full_name as string | null) ??
       null,
+    must_change_password: mustChangePassword,
   };
+}
+
+/**
+ * Si el usuario debe cambiar la contraseña, redirige a /restablecer-password.
+ * Llamar al inicio de los layouts privados ((tenant), (super)).
+ */
+export function enforcePasswordChange(session: SessionClaims): void {
+  if (session.must_change_password) {
+    redirect("/restablecer-password?required=1");
+  }
 }
 
 /** Comprueba si la sesión actual tiene cualquiera de los roles indicados. */
