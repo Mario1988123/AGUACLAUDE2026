@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { addressUpsertSchema, type AddressKind, type StreetType } from "./schemas";
 
@@ -51,9 +52,24 @@ export async function listAddresses(filter: {
 export async function upsertAddressAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
-  const parsed = addressUpsertSchema.parse(input);
+
+  // Parse Zod con safeParse para devolver mensaje legible en vez de
+  // ZodError opaco que en producción aparece como digest.
+  const result = addressUpsertSchema.safeParse(input);
+  if (!result.success) {
+    const first = result.error.issues[0];
+    const path = first?.path?.join(".") ?? "campo";
+    const msg = first?.message ?? "Datos inválidos";
+    console.error("[upsertAddress] Zod failed:", JSON.stringify(result.error.issues));
+    throw new Error(`${path}: ${msg}`);
+  }
+  const parsed = result.data;
+
+  // Admin client: la policy addresses_insert/update por scope puede
+  // bloquear silenciosamente al usuario actual según rol/scope. Antes
+  // throwaba sin mensaje útil → digest "Server Components render".
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const admin = createAdminClient() as any;
 
   const payload = {
     company_id: session.company_id,
@@ -79,29 +95,43 @@ export async function upsertAddressAction(input: unknown) {
   };
 
   if (parsed.id) {
-    const { error } = await supabase.from("addresses").update(payload).eq("id", parsed.id);
-    if (error) throw error;
+    const { error } = await admin
+      .from("addresses")
+      .update(payload)
+      .eq("id", parsed.id);
+    if (error) {
+      console.error("[upsertAddress] UPDATE failed:", error.message);
+      throw new Error(`No se pudo actualizar la dirección: ${error.message}`);
+    }
   } else {
-    const { error } = await supabase.from("addresses").insert(payload);
-    if (error) throw error;
+    const { error } = await admin.from("addresses").insert(payload);
+    if (error) {
+      console.error("[upsertAddress] INSERT failed:", error.message);
+      throw new Error(`No se pudo crear la dirección: ${error.message}`);
+    }
   }
 
   // Si esta es marcada como primaria, desmarcar las demás del mismo dueño
   if (parsed.is_primary) {
-    if (parsed.customer_id) {
-      await supabase
-        .from("addresses")
-        .update({ is_primary: false })
-        .eq("customer_id", parsed.customer_id)
-        .neq("id", parsed.id ?? "00000000-0000-0000-0000-000000000000")
-        .is("deleted_at", null);
-    } else if (parsed.lead_id) {
-      await supabase
-        .from("addresses")
-        .update({ is_primary: false })
-        .eq("lead_id", parsed.lead_id)
-        .neq("id", parsed.id ?? "00000000-0000-0000-0000-000000000000")
-        .is("deleted_at", null);
+    try {
+      if (parsed.customer_id) {
+        await admin
+          .from("addresses")
+          .update({ is_primary: false })
+          .eq("customer_id", parsed.customer_id)
+          .neq("id", parsed.id ?? "00000000-0000-0000-0000-000000000000")
+          .is("deleted_at", null);
+      } else if (parsed.lead_id) {
+        await admin
+          .from("addresses")
+          .update({ is_primary: false })
+          .eq("lead_id", parsed.lead_id)
+          .neq("id", parsed.id ?? "00000000-0000-0000-0000-000000000000")
+          .is("deleted_at", null);
+      }
+    } catch (e) {
+      console.error("[upsertAddress] desmarcar primary falló:", e);
+      /* no bloqueante */
     }
   }
 

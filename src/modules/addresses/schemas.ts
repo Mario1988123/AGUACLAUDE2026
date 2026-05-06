@@ -58,32 +58,39 @@ export const STREET_TYPE_LABEL: Record<StreetType, string> = {
   otra: "Otra",
 };
 
+// Helper: convierte null|undefined|"" → "" para que Zod acepte campos
+// que el front-end manda como null. Antes con .optional() (solo
+// undefined) Zod rechazaba el null y la action explotaba con digest
+// "Server Components render".
+const optStr = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((v) => v ?? "");
+
 export const addressUpsertSchema = z
   .object({
-    id: z.string().uuid().optional(),
-    lead_id: z.string().uuid().optional(),
-    customer_id: z.string().uuid().optional(),
+    id: z.string().uuid().nullish(),
+    lead_id: z.string().uuid().nullish(),
+    customer_id: z.string().uuid().nullish(),
     kind: z.enum(ADDRESS_KIND).default("home"),
-    label: z.string().optional().default(""),
+    label: optStr,
     is_primary: z.coerce.boolean().default(false),
-    contact_name: z.string().optional().default(""),
-    contact_phone: z.string().optional().default(""),
+    contact_name: optStr,
+    contact_phone: optStr,
     street_type: z.enum(STREET_TYPE).default("calle"),
     street: z.string().min(1, "Calle obligatoria"),
-    street_number: z.string().optional().default(""),
-    portal: z.string().optional().default(""),
-    floor: z.string().optional().default(""),
-    door: z.string().optional().default(""),
+    street_number: optStr,
+    portal: optStr,
+    floor: optStr,
+    door: optStr,
     postal_code: z
-      .string()
-      .regex(/^\d{5}$/, "CP español debe tener 5 dígitos")
-      .optional()
-      .or(z.literal("")),
-    city: z.string().optional().default(""),
-    province: z.string().optional().default(""),
-    latitude: z.coerce.number().optional().nullable(),
-    longitude: z.coerce.number().optional().nullable(),
-    notes: z.string().optional().default(""),
+      .union([z.string(), z.null(), z.undefined()])
+      .transform((v) => v ?? "")
+      .refine((v) => v === "" || /^\d{5}$/.test(v), "CP español debe tener 5 dígitos"),
+    city: optStr,
+    province: optStr,
+    latitude: z.coerce.number().nullish(),
+    longitude: z.coerce.number().nullish(),
+    notes: optStr,
   })
   .refine((v) => Boolean(v.lead_id) !== Boolean(v.customer_id), {
     message: "La dirección debe pertenecer a un lead O a un cliente, no ambos",
