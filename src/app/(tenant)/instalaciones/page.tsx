@@ -5,6 +5,8 @@ import { STATUS_LABEL, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
 import { Calendar } from "lucide-react";
+import { requireSession } from "@/shared/lib/auth/session";
+import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,15 @@ export default async function InstalacionesPage({
 }: {
   searchParams: Promise<{ installer?: string; status?: string }>;
 }) {
+  // Comerciales/telemarketers no acceden a instalaciones — redirigimos
+  // al dashboard si llegan por URL directa.
+  const session = await requireSession();
+  requireModuleAccess(session, [
+    "company_admin",
+    "technical_director",
+    "installer",
+  ]);
+
   const sp = await searchParams;
   const installerFilter = sp.installer || undefined;
   const statusFilter = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;

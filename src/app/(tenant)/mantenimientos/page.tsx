@@ -9,6 +9,7 @@ import {
   MaintenanceRemesaButton,
 } from "@/modules/maintenance-plans/contracts-table";
 import { requireSession } from "@/shared/lib/auth/session";
+import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -52,14 +53,20 @@ export default async function MantenimientosPage({
 }: {
   searchParams: Promise<{ status?: string; period?: string }>;
 }) {
+  const session = await requireSession();
+  requireModuleAccess(session, [
+    "company_admin",
+    "technical_director",
+    "installer",
+  ]);
+
   const sp = await searchParams;
   const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const period = sp.period && Object.prototype.hasOwnProperty.call(PERIOD_OPTIONS, sp.period) ? sp.period : "";
   const { fromDate, toDate } = periodToRange(period);
-  const [jobs, contracts, session] = await Promise.all([
+  const [jobs, contracts] = await Promise.all([
     listMaintenance({ status, fromDate, toDate }),
     listMaintenanceContracts().catch(() => []),
-    requireSession(),
   ]);
   const isAdmin =
     session.is_superadmin || session.roles.includes("company_admin");

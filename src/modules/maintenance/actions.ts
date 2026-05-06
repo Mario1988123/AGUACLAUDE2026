@@ -90,12 +90,17 @@ export async function listMaintenance(filters?: {
     )
     .order("scheduled_at", { ascending: true, nullsFirst: false })
     .limit(200);
-  if (
-    session.roles.includes("installer") &&
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("technical_director")
-  ) {
+  const isLevel1 =
+    session.is_superadmin || session.roles.includes("company_admin");
+  const isTechDirector = session.roles.includes("technical_director");
+  const isInstaller = session.roles.includes("installer");
+
+  // Comercial / telemarketer no acceden al módulo de mantenimientos.
+  if (!isLevel1 && !isTechDirector && !isInstaller) {
+    return [];
+  }
+
+  if (isInstaller && !isLevel1 && !isTechDirector) {
     query = query.eq("technician_user_id", session.user_id);
   }
   if (filters?.status) query = query.eq("status", filters.status);

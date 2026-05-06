@@ -108,13 +108,20 @@ export async function listInstallations(filters?: {
     .order("scheduled_at", { ascending: true, nullsFirst: false })
     .limit(200);
 
-  // Si es nivel 3 instalador → forzar a sus instalaciones
-  if (
-    session.roles.includes("installer") &&
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("technical_director")
-  ) {
+  const isLevel1 =
+    session.is_superadmin || session.roles.includes("company_admin");
+  const isTechDirector = session.roles.includes("technical_director");
+  const isInstaller = session.roles.includes("installer");
+
+  // Comercial / telemarketer NO acceden al módulo de instalaciones.
+  // Si llega por URL directa devolvemos vacío (la página les redirige
+  // al dashboard si quieren).
+  if (!isLevel1 && !isTechDirector && !isInstaller) {
+    return [];
+  }
+
+  // Nivel 3 instalador → solo sus instalaciones activas.
+  if (isInstaller && !isLevel1 && !isTechDirector) {
     query = query
       .eq("installer_user_id", session.user_id)
       .not("status", "in", "(completed,cancelled)");
@@ -815,13 +822,34 @@ export async function completeInstallation(input: unknown) {
 
   const { data: instRef } = await supabase
     .from("installations")
-    .select("reference_code")
+    .select("reference_code, contract_id")
     .eq("id", parsed.id)
     .single();
+  const instRow = instRef as {
+    reference_code: string | null;
+    contract_id: string | null;
+  } | null;
+  // Buscamos el comercial que cerró la venta (created_by del contrato)
+  // para notificarle que su cliente está instalado y cobra comisión.
+  let salesRepId: string | null = null;
+  if (instRow?.contract_id) {
+    try {
+      const { data: contract } = await supabase
+        .from("contracts")
+        .select("created_by")
+        .eq("id", instRow.contract_id)
+        .maybeSingle();
+      salesRepId =
+        (contract as { created_by: string | null } | null)?.created_by ?? null;
+    } catch {
+      /* no bloquea */
+    }
+  }
   await notifyInstallationCompleted(
     session.company_id!,
     parsed.id,
-    (instRef as { reference_code: string | null } | null)?.reference_code ?? null,
+    instRow?.reference_code ?? null,
+    salesRepId,
   );
 
   // Puntos al instalador

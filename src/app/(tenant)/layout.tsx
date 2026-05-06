@@ -1,6 +1,8 @@
 export const dynamic = "force-dynamic";
 
+import { headers } from "next/headers";
 import { requireSession, enforcePasswordChange } from "@/shared/lib/auth/session";
+import { MODULES } from "@/shared/lib/modules";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Sidebar } from "@/shared/components/sidebar";
 import { Header } from "@/shared/components/header";
@@ -44,6 +46,36 @@ export default async function TenantLayout({ children }: { children: React.React
 
   if (!session.company_id) {
     redirect("/login?error=no_company");
+  }
+
+  // Guard de scope por rol: si el usuario intenta acceder por URL directa
+  // a un módulo que no tiene asignado en su rol (sales_rep entrando en
+  // /instalaciones, telemarketer entrando en /clientes, etc.), lo
+  // redirigimos al dashboard. Niveles 1 (company_admin) siempre pasan.
+  if (!session.roles.includes("company_admin")) {
+    try {
+      const h = await headers();
+      const pathname =
+        h.get("x-invoke-path") ||
+        h.get("next-url") ||
+        h.get("x-pathname") ||
+        "";
+      if (pathname) {
+        const matched = MODULES.find(
+          (m) => m.href !== "/" && (pathname === m.href || pathname.startsWith(`${m.href}/`)),
+        );
+        if (matched?.rolesAllowed && matched.rolesAllowed.length > 0) {
+          const ok = session.roles.some((r) => matched.rolesAllowed!.includes(r));
+          if (!ok) {
+            redirect("/dashboard");
+          }
+        }
+      }
+    } catch (e) {
+      // headers() puede fallar en edge cases, no bloquear el render por esto
+      const msg = e instanceof Error ? e.message : "";
+      if (msg.startsWith("NEXT_REDIRECT")) throw e;
+    }
   }
 
   // Resto de queries: tolerantes a fallos. Si una migración no está aplicada

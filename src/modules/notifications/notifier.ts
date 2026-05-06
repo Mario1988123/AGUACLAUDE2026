@@ -137,7 +137,12 @@ export async function notifyInstallationCompleted(
   companyId: string,
   installationId: string,
   ref: string | null,
+  /** ID del comercial que firmó el contrato (sales_rep). Recibe una
+   *  notificación específica indicando que el cliente está instalado
+   *  → cobra comisión + suma puntos. */
+  salesRepUserId?: string | null,
 ): Promise<void> {
+  // Notificación a admin/directores (gestión)
   try {
     await notifyByRoles(
       companyId,
@@ -154,6 +159,29 @@ export async function notifyInstallationCompleted(
     );
   } catch {
     /* no-op */
+  }
+
+  // Notificación específica al comercial — el comercial NO ve la
+  // página de instalaciones, pero sí debe enterarse de que su venta
+  // se ha hecho efectiva para cobrar comisión.
+  if (salesRepUserId) {
+    try {
+      await notify({
+        company_id: companyId,
+        recipient_user_id: salesRepUserId,
+        kind: "installation.completed",
+        severity: "success",
+        title: "✓ Tu cliente ya está instalado",
+        body: ref
+          ? `Ref ${ref} — venta efectiva, comisión y puntos sumados`
+          : "Venta efectiva, comisión y puntos sumados",
+        subject_type: "installation",
+        subject_id: installationId,
+        action_url: `/contratos`,
+      });
+    } catch {
+      /* no-op */
+    }
   }
 }
 
