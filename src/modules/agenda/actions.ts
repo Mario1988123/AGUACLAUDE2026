@@ -159,16 +159,21 @@ export async function listAgenda(
     .lte("starts_at", until.toISOString())
     .order("starts_at");
 
-  if (filters?.user_id) {
-    query = query.eq("assigned_user_id", filters.user_id);
-  } else if (
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("technical_director") &&
-    !session.roles.includes("commercial_director") &&
-    !session.roles.includes("telemarketing_director")
-  ) {
+  // Aplicación de scope. Si el caller es nivel 3 (sales_rep,
+  // telemarketer, installer) NO puede ver agenda de otros usuarios:
+  // forzamos siempre filter.user_id = self, ignorando lo que llegue.
+  // Antes con filters.user_id pasaba el bypass y veían al admin.
+  const isLevel1or2 =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
+
+  if (!isLevel1or2) {
     query = query.eq("assigned_user_id", session.user_id);
+  } else if (filters?.user_id) {
+    query = query.eq("assigned_user_id", filters.user_id);
   }
 
   if (filters?.kind) {
@@ -270,15 +275,74 @@ async function recomputeOutsideHoursForList(
   });
 }
 
+/**
+ * Devuelve la lista de miembros para los selectores de "asignar a" /
+ * "ver agenda de". Aplica las reglas de scope:
+ *  - Nivel 1 (company_admin) o superadmin → ve a todos los miembros.
+ *  - Nivel 2 (directores) → ve a los miembros de su departamento.
+ *  - Nivel 3 (sales_rep, telemarketer, installer) → solo se ve a sí
+ *    mismo (no debe ver al admin u otros usuarios).
+ */
 export async function listTeamMembers(): Promise<{ user_id: string; full_name: string }[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
+
+  const isLevel1 =
+    session.is_superadmin || session.roles.includes("company_admin");
+  const isLevel2 =
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  // Nivel 3: solo a sí mismo
+  if (!isLevel1 && !isLevel2) {
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("user_id, full_name")
+      .eq("company_id", session.company_id)
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    if (!data) return [];
+    return [data as { user_id: string; full_name: string }];
+  }
+
+  // Nivel 1: todos
+  if (isLevel1) {
+    const { data } = await supabase
+      .from("user_profiles")
+      .select("user_id, full_name")
+      .eq("company_id", session.company_id)
+      .order("full_name");
+    return (data ?? []) as { user_id: string; full_name: string }[];
+  }
+
+  // Nivel 2: su departamento. Resolvemos via team_assignments donde el
+  // director es manager_user_id; los miembros son member_user_id.
+  // Fallback: si no hay assignments, devolvemos el propio director.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = (await createAdminClient()) as any;
+  let memberIds: string[] = [session.user_id];
+  try {
+    const { data: assignments } = await admin
+      .from("team_assignments")
+      .select("member_user_id")
+      .eq("company_id", session.company_id)
+      .eq("manager_user_id", session.user_id)
+      .is("revoked_at", null);
+    type TA = { member_user_id: string };
+    const ids = ((assignments ?? []) as TA[]).map((a) => a.member_user_id);
+    memberIds = Array.from(new Set([session.user_id, ...ids]));
+  } catch {
+    /* fail-soft: solo se ve a sí mismo */
+  }
   const { data } = await supabase
     .from("user_profiles")
     .select("user_id, full_name")
     .eq("company_id", session.company_id)
+    .in("user_id", memberIds)
     .order("full_name");
   return (data ?? []) as { user_id: string; full_name: string }[];
 }
