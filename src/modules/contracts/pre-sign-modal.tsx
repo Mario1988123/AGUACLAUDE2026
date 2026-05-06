@@ -212,24 +212,39 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                       : "Falta DNI/CIF — completa los datos abajo"
                   }
                 />
-                <CustomerEditForm
-                  customer={readiness.customer}
-                  onSaved={() => void reload()}
-                />
+                {/* Resumen email/tel arriba con botón Editar si faltan */}
                 <div className="grid grid-cols-2 gap-2">
                   <MiniCheck
                     icon={<Mail className="h-3.5 w-3.5" />}
                     label="Email"
                     ok={readiness.checks.has_email}
                     value={readiness.customer.email ?? "—"}
+                    onEdit={() => {
+                      const el = document.querySelector<HTMLInputElement>(
+                        'input[type="email"]',
+                      );
+                      el?.focus();
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
                   />
                   <MiniCheck
                     icon={<Phone className="h-3.5 w-3.5" />}
                     label="Teléfono"
                     ok={readiness.checks.has_phone}
                     value={readiness.customer.phone_primary ?? "—"}
+                    onEdit={() => {
+                      const el = document.querySelector<HTMLInputElement>(
+                        'input[type="tel"]',
+                      );
+                      el?.focus();
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
                   />
                 </div>
+                <CustomerEditForm
+                  customer={readiness.customer}
+                  onSaved={() => void reload()}
+                />
               </div>
             )}
 
@@ -354,14 +369,34 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                     <p className="flex items-center gap-1.5 text-sm font-bold text-destructive">
                       <AlertTriangle className="h-4 w-4" /> No puedes firmar
                     </p>
-                    <ul className="mt-1 ml-5 list-disc text-xs text-destructive">
-                      {readiness.blockers.map((b) => (
-                        <li key={b}>{b}</li>
-                      ))}
+                    <ul className="mt-2 space-y-1.5">
+                      {readiness.blockers.map((b) => {
+                        const targetStep: Step | null = /dni|cif/i.test(b)
+                          ? 1
+                          : /direcci[oó]n/i.test(b)
+                            ? 2
+                            : /iban/i.test(b)
+                              ? 3
+                              : null;
+                        return (
+                          <li
+                            key={b}
+                            className="flex items-center justify-between gap-2 text-xs text-destructive"
+                          >
+                            <span>• {b}</span>
+                            {targetStep && (
+                              <button
+                                type="button"
+                                onClick={() => setStep(targetStep)}
+                                className="shrink-0 rounded-md border border-destructive bg-white px-2 py-1 text-[10px] font-bold text-destructive hover:bg-destructive/10"
+                              >
+                                Editar
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
-                    <p className="mt-2 text-xs text-destructive">
-                      Vuelve a los pasos anteriores y completa lo que falta.
-                    </p>
                   </div>
                 )}
                 {readiness.warnings.length > 0 && (
@@ -369,13 +404,39 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                     <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">
                       <AlertTriangle className="h-4 w-4" /> Recomendado
                     </p>
-                    <ul className="mt-1 ml-5 list-disc text-xs text-amber-800">
-                      {readiness.warnings.map((w) => (
-                        <li key={w}>{w}</li>
-                      ))}
+                    <ul className="mt-2 space-y-1.5">
+                      {readiness.warnings.map((w) => {
+                        // Mapear cada warning a su paso correspondiente
+                        const targetStep: Step | null = /email/i.test(w)
+                          ? 1
+                          : /tel[eé]fono/i.test(w)
+                            ? 1
+                            : /iban/i.test(w)
+                              ? 3
+                              : /foto/i.test(w)
+                                ? 4
+                                : null;
+                        return (
+                          <li
+                            key={w}
+                            className="flex items-center justify-between gap-2 text-xs text-amber-900"
+                          >
+                            <span>• {w}</span>
+                            {targetStep && (
+                              <button
+                                type="button"
+                                onClick={() => setStep(targetStep)}
+                                className="shrink-0 rounded-md border border-amber-400 bg-white px-2 py-1 text-[10px] font-bold text-amber-800 hover:bg-amber-100"
+                              >
+                                Editar
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
-                    <p className="mt-1 text-xs text-amber-800">
-                      Puedes firmar igualmente.
+                    <p className="mt-2 text-xs text-amber-800">
+                      Puedes firmar igualmente sin completarlo.
                     </p>
                   </div>
                 )}
@@ -555,11 +616,15 @@ function MiniCheck({
   label,
   ok,
   value,
+  onEdit,
 }: {
   icon: React.ReactNode;
   label: string;
   ok: boolean;
   value: string;
+  /** Si está definido y no está OK, muestra botón "Editar" que llama
+   *  esta callback (típicamente: scroll al form o cambiar de paso). */
+  onEdit?: () => void;
 }) {
   return (
     <div
@@ -575,7 +640,18 @@ function MiniCheck({
       {ok ? (
         <Check className="h-3 w-3 text-emerald-600" />
       ) : (
-        <AlertTriangle className="h-3 w-3 text-amber-600" />
+        <>
+          <AlertTriangle className="h-3 w-3 text-amber-600" />
+          {onEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="rounded-md border border-amber-400 bg-white px-2 py-1 text-[10px] font-bold text-amber-800 hover:bg-amber-100"
+            >
+              Editar
+            </button>
+          )}
+        </>
       )}
     </div>
   );
