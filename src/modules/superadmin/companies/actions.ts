@@ -7,6 +7,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { companyCreateSchema, companyUpdateSchema, type CompanyUpdateInput } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { generateTempPassword } from "@/shared/lib/auth/temp-password";
 import type { CompanyDetail, CompanyListItem } from "./types";
 
 async function ensureSuperadmin() {
@@ -260,29 +261,8 @@ export async function resetUserPassword({ user_id, new_password }: ResetUserPass
   if (error) throw error;
 }
 
-/** Genera password temporal segura. */
-function generateTempPassword(): string {
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lower = "abcdefghjkmnpqrstuvwxyz";
-  const digits = "23456789";
-  const symbols = "!@#$%&*";
-  const all = upper + lower + digits + symbols;
-  const len = 16;
-  let pwd = "";
-  // Asegurar al menos 1 de cada
-  pwd += upper[Math.floor(Math.random() * upper.length)];
-  pwd += lower[Math.floor(Math.random() * lower.length)];
-  pwd += digits[Math.floor(Math.random() * digits.length)];
-  pwd += symbols[Math.floor(Math.random() * symbols.length)];
-  for (let i = pwd.length; i < len; i++) {
-    pwd += all[Math.floor(Math.random() * all.length)];
-  }
-  // Shuffle
-  return pwd
-    .split("")
-    .sort(() => Math.random() - 0.5)
-    .join("");
-}
+// generateTempPassword vive ahora en src/shared/lib/auth/temp-password.ts
+// para reusarse desde el invite-user del company admin.
 
 export interface CreateCompanyAdminInput {
   company_id: string;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Check, Copy, KeyRound } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -14,11 +15,26 @@ interface Props {
 export function InviteUserForm({ roleOptions }: Props) {
   const [pending, startTransition] = useTransition();
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [credentials, setCredentials] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
+  const [copiedField, setCopiedField] = useState<"email" | "pwd" | null>(null);
 
   function toggleRole(role: string) {
     setSelectedRoles((prev) =>
       prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
     );
+  }
+
+  async function copy(text: string, field: "email" | "pwd") {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    } catch {
+      notify.warning("No se pudo copiar al portapapeles");
+    }
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -29,16 +45,53 @@ export function InviteUserForm({ roleOptions }: Props) {
     }
     const fd = new FormData(e.currentTarget);
     selectedRoles.forEach((r) => fd.append("roles", r));
+    const formEl = e.currentTarget;
     startTransition(async () => {
       try {
-        await inviteUserAction(fd);
-        notify.success("Invitación enviada");
-        (e.target as HTMLFormElement).reset();
+        const result = await inviteUserAction(fd);
+        setCredentials({ email: result.email, password: result.temp_password });
+        notify.success("Usuario creado");
+        formEl.reset();
         setSelectedRoles([]);
       } catch (err) {
-        notify.error("No se pudo invitar", err instanceof Error ? err.message : String(err));
+        notify.error("No se pudo crear", err instanceof Error ? err.message : String(err));
       }
     });
+  }
+
+  if (credentials) {
+    return (
+      <div className="space-y-3 rounded-md border-2 border-amber-300 bg-amber-50 p-4">
+        <div className="flex items-center gap-2 text-sm font-bold text-amber-900">
+          <KeyRound className="h-4 w-4" />
+          Credenciales generadas — guárdalas ahora, no se volverán a mostrar
+        </div>
+        <p className="text-xs text-amber-800">
+          Pásale estas credenciales al usuario. Al iniciar sesión por
+          primera vez, el sistema le pedirá automáticamente que cambie la
+          contraseña por una propia.
+        </p>
+        <CredField
+          label="Email"
+          value={credentials.email}
+          field="email"
+          copy={copy}
+          copiedField={copiedField}
+        />
+        <CredField
+          label="Contraseña temporal"
+          value={credentials.password}
+          field="pwd"
+          copy={copy}
+          copiedField={copiedField}
+        />
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" size="sm" onClick={() => setCredentials(null)}>
+            Crear otro usuario
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -80,12 +133,52 @@ export function InviteUserForm({ roleOptions }: Props) {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Decisión 1.2: un usuario puede tener varios roles (ej. director comercial + comercial).
+          Un usuario puede tener varios roles (ej. director comercial + comercial).
         </p>
       </div>
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+        <strong>Cómo funciona:</strong> al crear el usuario se generará una
+        contraseña temporal de 16 caracteres. Cópiala y pásasela al usuario.
+        En su primer login se le pedirá que la cambie por una propia.
+      </div>
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Enviando..." : "Enviar invitación"}
+        {pending ? "Creando..." : "Crear usuario"}
       </Button>
     </form>
+  );
+}
+
+function CredField({
+  label,
+  value,
+  field,
+  copy,
+  copiedField,
+}: {
+  label: string;
+  value: string;
+  field: "email" | "pwd";
+  copy: (v: string, f: "email" | "pwd") => void;
+  copiedField: "email" | "pwd" | null;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{label}</div>
+      <div className="flex items-center gap-2 rounded border border-amber-300 bg-white px-2 py-1.5">
+        <code className="flex-1 select-all break-all font-mono text-sm">{value}</code>
+        <button
+          type="button"
+          onClick={() => copy(value, field)}
+          className="flex h-7 w-7 items-center justify-center rounded hover:bg-amber-100"
+          aria-label={`Copiar ${label}`}
+        >
+          {copiedField === field ? (
+            <Check className="h-3.5 w-3.5 text-emerald-600" />
+          ) : (
+            <Copy className="h-3.5 w-3.5 text-amber-700" />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }

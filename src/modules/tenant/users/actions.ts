@@ -7,6 +7,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { userInviteSchema, type RoleKey } from "./schemas";
 import type { TenantUser } from "./types";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { generateTempPassword } from "@/shared/lib/auth/temp-password";
 
 async function ensureCompanyAdmin() {
   const session = await requireSession();
@@ -74,7 +75,24 @@ export async function listTenantUsers(): Promise<TenantUser[]> {
   }));
 }
 
-export async function inviteUserAction(formData: FormData) {
+/**
+ * Crea un usuario interno (comercial, instalador, director, etc.) con
+ * contraseña temporal de 16 chars. ANTES usaba inviteUserByEmail() que
+ * solo manda email — el usuario nunca tenía password y al intentar
+ * loguearse veía "Invalid login credentials".
+ *
+ * Ahora replica el flujo del superadmin:
+ *  1. Crea user en auth.users con password + email_confirm=true.
+ *  2. Inserta user_profiles con must_change_password=true.
+ *  3. Asigna roles.
+ *  4. Devuelve { email, temp_password } al cliente para que el admin
+ *     se la copie y se la pase al nuevo usuario. Al hacer login el
+ *     guard enforcePasswordChange lo redirige a /restablecer-password
+ *     para que la cambie por una real.
+ */
+export async function inviteUserAction(
+  formData: FormData,
+): Promise<{ email: string; temp_password: string }> {
   const session = await ensureCompanyAdmin();
   const raw = {
     email: formData.get("email"),
@@ -118,14 +136,20 @@ export async function inviteUserAction(formData: FormData) {
   }
 
   const admin = createAdminClient();
-  const { data: invited, error: inviteError } = await admin.auth.admin.inviteUserByEmail(
-    parsed.email,
-    {
-      data: { full_name: parsed.full_name },
-    },
-  );
-  if (inviteError) throw inviteError;
-  const newUserId = invited.user.id;
+  const tempPassword = generateTempPassword();
+  // Crear user con password — email_confirm: true para que pueda hacer
+  // login inmediatamente sin paso de confirmación de email.
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email: parsed.email,
+    password: tempPassword,
+    email_confirm: true,
+    user_metadata: { full_name: parsed.full_name },
+  });
+  if (createError) {
+    console.error("[inviteUser] createUser failed:", createError.message);
+    throw new Error(createError.message);
+  }
+  const newUserId = created.user.id;
 
   // Crear user_profile
   const { error: profileError } = await admin.from("user_profiles").insert({
@@ -138,7 +162,16 @@ export async function inviteUserAction(formData: FormData) {
     must_change_password: true,
     invited_at: new Date().toISOString(),
   });
-  if (profileError) throw profileError;
+  if (profileError) {
+    console.error("[inviteUser] profile insert failed:", profileError.message);
+    // Rollback del auth user para no dejar huérfanos
+    try {
+      await admin.auth.admin.deleteUser(newUserId);
+    } catch {
+      /* fail-soft */
+    }
+    throw new Error(profileError.message);
+  }
 
   // Asignar roles
   const { error: rolesError } = await admin.from("user_roles").insert(
@@ -149,9 +182,13 @@ export async function inviteUserAction(formData: FormData) {
       assigned_by: session.user_id,
     })),
   );
-  if (rolesError) throw rolesError;
+  if (rolesError) {
+    console.error("[inviteUser] roles insert failed:", rolesError.message);
+    throw new Error(rolesError.message);
+  }
 
   revalidatePath("/configuracion/usuarios");
+  return { email: parsed.email, temp_password: tempPassword };
 }
 
 export async function setUserStatus(userId: string, status: "active" | "inactive" | "suspended") {
