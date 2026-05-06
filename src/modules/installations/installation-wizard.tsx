@@ -187,6 +187,13 @@ export function InstallationWizard(props: Props) {
   const [signerTaxId, setSignerTaxId] = useState(customerTaxId ?? "");
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [finishNotes, setFinishNotes] = useState("");
+  // Firma final ya persistida en BD (al ir de paso 5 → 6 con botón
+  // "Guardar y continuar"). Persiste si el usuario vuelve atrás al
+  // paso 5 — antes el canvas se quedaba en blanco y parecía perdida.
+  const [finalSignatureSaved, setFinalSignatureSaved] = useState(
+    Boolean(signatures.find((s) => s.signer_role === "customer" && s.context === "final")),
+  );
+  const [savingSignature, setSavingSignature] = useState(false);
 
   // Estado inicial: si hay daño/agujero pedir firma del cliente AHORA
   const [initialSignerName, setInitialSignerName] = useState(customerName);
@@ -211,7 +218,6 @@ export function InstallationWizard(props: Props) {
   // 4. Fotos: AL MENOS 1 de equipo + 1 de conexión.
   // 5. Firma del cliente + encuesta de satisfacción contestada.
   // 6. Cerrar: sólo accesible si 1..5 están OK; permite volver atrás.
-  const custSig = signatures.find((s) => s.signer_role === "customer" && s.context === "final");
   const initialStateSig = signatures.find(
     (s) => s.signer_role === "customer" && s.context === "initial_state",
   );
@@ -230,7 +236,10 @@ export function InstallationWizard(props: Props) {
   const step4Done =
     photos.some((p) => p.category === "equipment") &&
     photos.some((p) => p.category === "connection");
-  const step5Done = Boolean(custSig);
+  // Paso 5 done si la firma final está guardada en BD (vía estado local
+  // que se sincroniza al guardar). Al cargar el componente ya viene
+  // marcada en true si la firma existía en `signatures` props.
+  const step5Done = finalSignatureSaved;
 
   function canGoTo(target: Step): boolean {
     // Siempre puedes ir hacia atrás libremente.
@@ -390,7 +399,9 @@ export function InstallationWizard(props: Props) {
     });
   }
 
-  function finish() {
+  /** Guarda la firma final en BD. Se llama al pasar de 5 → 6 para que
+   *  no se pierda si el usuario vuelve atrás al paso 5. */
+  function saveFinalSignature(onDone?: () => void) {
     if (!signerName.trim()) {
       notify.warning("Nombre del firmante obligatorio");
       return;
@@ -403,6 +414,7 @@ export function InstallationWizard(props: Props) {
       notify.warning("El cliente debe marcar la encuesta de satisfacción");
       return;
     }
+    setSavingSignature(true);
     startTransition(async () => {
       try {
         await saveInstallationSignatureAction({
@@ -413,6 +425,28 @@ export function InstallationWizard(props: Props) {
           signature_data_url: signatureData,
           context: "final",
         });
+        setFinalSignatureSaved(true);
+        notify.success("Firma guardada");
+        if (onDone) onDone();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      } finally {
+        setSavingSignature(false);
+      }
+    });
+  }
+
+  function finish() {
+    if (!finalSignatureSaved) {
+      notify.warning("Guarda la firma del cliente antes de cerrar");
+      return;
+    }
+    if (!satisfaction) {
+      notify.warning("El cliente debe marcar la encuesta de satisfacción");
+      return;
+    }
+    startTransition(async () => {
+      try {
         await finishInstallationAction({
           installation_id: installationId,
           satisfaction_score: satisfaction,
@@ -834,6 +868,7 @@ export function InstallationWizard(props: Props) {
                         <Input
                           value={signerName}
                           onChange={(e) => setSignerName(e.target.value)}
+                          disabled={finalSignatureSaved}
                         />
                       </div>
                       <div className="space-y-1">
@@ -841,10 +876,46 @@ export function InstallationWizard(props: Props) {
                         <Input
                           value={signerTaxId}
                           onChange={(e) => setSignerTaxId(e.target.value.toUpperCase())}
+                          disabled={finalSignatureSaved}
                         />
                       </div>
                     </div>
-                    <SignaturePad onChange={setSignatureData} />
+                    {finalSignatureSaved ? (
+                      <div className="space-y-2 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3">
+                        <p className="text-sm font-bold text-emerald-900">
+                          ✓ Firma guardada
+                        </p>
+                        <p className="text-xs text-emerald-800">
+                          La firma del cliente ya está registrada. Si necesitas
+                          rehacerla, pulsa abajo.
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setFinalSignatureSaved(false);
+                            setSignatureData(null);
+                          }}
+                        >
+                          Re-firmar
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <SignaturePad onChange={setSignatureData} />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => saveFinalSignature()}
+                          disabled={savingSignature || !signatureData || !signerName.trim()}
+                          className="w-full"
+                        >
+                          {savingSignature ? "Guardando…" : "Guardar firma"}
+                        </Button>
+                      </>
+                    )}
                   </div>
 
                   <div className="space-y-2 rounded-xl border-2 border-blue-200 bg-blue-50 p-4">
@@ -888,11 +959,30 @@ export function InstallationWizard(props: Props) {
                   </div>
 
                   <Button
-                    onClick={() => setStep(6)}
-                    disabled={pending || !signatureData || !satisfaction}
+                    onClick={() => {
+                      // Si la firma aún no está guardada server-side la
+                      // guardamos antes de avanzar — así si vuelve atrás
+                      // al paso 5 sigue presente.
+                      if (finalSignatureSaved) {
+                        setStep(6);
+                        return;
+                      }
+                      saveFinalSignature(() => setStep(6));
+                    }}
+                    disabled={
+                      pending ||
+                      savingSignature ||
+                      (!finalSignatureSaved && !signatureData) ||
+                      !satisfaction
+                    }
                     className="w-full"
                   >
-                    Continuar <ArrowRight className="h-4 w-4" />
+                    {finalSignatureSaved
+                      ? "Continuar"
+                      : savingSignature
+                        ? "Guardando firma…"
+                        : "Guardar firma y continuar"}
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
               )}
