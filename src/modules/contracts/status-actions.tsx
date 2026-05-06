@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { PenLine } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { PreSignContractModal } from "./pre-sign-modal";
 import type { ContractStatus } from "./schemas";
@@ -32,12 +32,11 @@ export function ContractStatusActions({ contractId, status, hasProvisional }: Pr
           variant="success"
           size="lg"
         >
-          <CheckCircle2 className="h-5 w-5" /> Marcar firmado
+          <PenLine className="h-5 w-5" /> Firmar
         </Button>
         <p className="text-xs text-muted-foreground">
-          Al pulsar verás los datos del cliente. Si falta algo crítico
-          (DNI, IBAN, dirección) lo completas en el mismo modal antes de
-          firmar.
+          Te guiará paso a paso para completar los datos del cliente
+          (DNI, dirección, IBAN, foto) antes de firmar.
         </p>
         {open && (
           <PreSignContractModal
