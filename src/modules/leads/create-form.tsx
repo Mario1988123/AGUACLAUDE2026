@@ -11,6 +11,7 @@ import { createLeadAction } from "./actions";
 import { LEAD_ORIGIN, LEAD_POTENTIAL, ORIGIN_LABEL } from "./schemas";
 import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
+import { PhoneInput } from "@/shared/components/phone-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
 import { STREET_TYPE, STREET_TYPE_LABEL, type StreetType } from "@/modules/addresses/schemas";
@@ -337,11 +338,7 @@ export function LeadCreateForm() {
               </div>
               <div className="space-y-2">
                 <Label>Tel. empresa</Label>
-                <Input
-                  type="tel"
-                  value={phoneCompany}
-                  onChange={(e) => setPhoneCompany(e.target.value)}
-                />
+                <PhoneInput value={phoneCompany} onChange={setPhoneCompany} />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -381,7 +378,7 @@ export function LeadCreateForm() {
             </div>
             <div className="space-y-2">
               <Label>Teléfono *</Label>
-              <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              <PhoneInput value={phone} onChange={setPhone} required />
             </div>
           </div>
 

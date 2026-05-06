@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import {
+  validateCIF,
+  validateIBAN,
+  validateSpanishPhone,
+  validateSpanishPostalCode,
+} from "@/shared/lib/validations/spanish";
+import { isPendingIban } from "@/shared/lib/validations/iban-partial";
 
 export interface FiscalSettings {
   fiscal_legal_name: string | null;
@@ -76,11 +83,53 @@ export async function getFiscalSettings(): Promise<FiscalSettings> {
  * Si una columna no existe en BD, la quita y reintenta para guardar
  * lo demás, y avisa al usuario qué quedó fuera.
  */
+/** Validación de formato de los campos críticos antes de persistir.
+ *  Lanza Error con mensaje legible si algo no cumple. */
+function validateFiscalFormat(input: Partial<FiscalSettings>): void {
+  const errs: string[] = [];
+
+  if (input.fiscal_tax_id != null && input.fiscal_tax_id !== "") {
+    if (!validateCIF(input.fiscal_tax_id)) {
+      errs.push("CIF/NIF de empresa con formato inválido");
+    }
+  }
+
+  if (input.fiscal_iban != null && input.fiscal_iban !== "") {
+    // Aceptamos IBAN válido o "ES00..." (placeholder pendiente).
+    const ok = validateIBAN(input.fiscal_iban) || isPendingIban(input.fiscal_iban);
+    if (!ok) errs.push("IBAN con formato inválido");
+  }
+
+  if (input.fiscal_phone != null && input.fiscal_phone !== "") {
+    if (!validateSpanishPhone(input.fiscal_phone)) {
+      errs.push("Teléfono con formato inválido (móvil/fijo español de 9 dígitos)");
+    }
+  }
+
+  if (input.fiscal_postal_code != null && input.fiscal_postal_code !== "") {
+    if (!validateSpanishPostalCode(input.fiscal_postal_code)) {
+      errs.push("Código postal inválido");
+    }
+  }
+
+  if (input.fiscal_email != null && input.fiscal_email !== "") {
+    // Validación básica
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.fiscal_email)) {
+      errs.push("Email con formato inválido");
+    }
+  }
+
+  if (errs.length > 0) {
+    throw new Error(errs.join(" · "));
+  }
+}
+
 export async function updateFiscalSettingsAction(
   input: Partial<FiscalSettings>,
 ): Promise<{ saved: Partial<FiscalSettings>; skipped: string[] }> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
+  validateFiscalFormat(input);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

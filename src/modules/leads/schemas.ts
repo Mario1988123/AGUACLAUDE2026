@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  validateCIF,
+  validateDNIorNIE,
+  validateSpanishPhone,
+  validateSpanishPostalCode,
+} from "@/shared/lib/validations/spanish";
 
 export const PARTY_KIND = ["individual", "company"] as const;
 export const LEAD_STATUS = [
@@ -92,6 +98,32 @@ export const leadCreateSchema = z
       return Boolean(v.first_name?.trim());
     },
     { message: "Nombre obligatorio según tipo (razón social o nombre)", path: ["legal_name"] },
+  )
+  // Tax ID válido según tipo (si está informado)
+  .refine(
+    (v) => {
+      const t = v.tax_id?.trim();
+      if (!t) return true;
+      return v.party_kind === "company" ? validateCIF(t) : validateDNIorNIE(t).valid;
+    },
+    {
+      message: "Documento (DNI/NIE/CIF) con formato inválido",
+      path: ["tax_id"],
+    },
+  )
+  .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
+    message: "Teléfono principal con formato inválido (móvil/fijo, 9 dígitos)",
+    path: ["phone_primary"],
+  })
+  .refine((v) => !v.phone_company?.trim() || validateSpanishPhone(v.phone_company), {
+    message: "Teléfono de empresa con formato inválido",
+    path: ["phone_company"],
+  })
+  .refine(
+    (v) =>
+      !v.address_postal_code?.trim() ||
+      validateSpanishPostalCode(v.address_postal_code),
+    { message: "Código postal inválido", path: ["address_postal_code"] },
   );
 
 export type LeadCreateInput = z.infer<typeof leadCreateSchema>;

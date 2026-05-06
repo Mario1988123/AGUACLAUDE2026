@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { customerCreateSchema } from "./schemas";
+import { customerCreateSchema, customerUpdateSchema } from "./schemas";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 
@@ -190,6 +190,32 @@ export async function updateCustomerAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+
+  // Validación de formato (DNI/CIF, teléfonos, email). Cargamos el
+  // party_kind del cliente para validar tax_id según corresponda.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const adminPre = createAdminClient() as any;
+  let partyKind: "individual" | "company" | undefined;
+  try {
+    const { data: cur } = await adminPre
+      .from("customers")
+      .select("party_kind")
+      .eq("id", customerId)
+      .maybeSingle();
+    partyKind = (cur as { party_kind?: "individual" | "company" } | null)?.party_kind;
+  } catch {
+    /* sin party_kind, validador acepta cualquiera de los formatos */
+  }
+  // Convertimos null → string vacío para que el schema valide bien
+  const validatable: Record<string, unknown> = { party_kind: partyKind };
+  for (const [k, v] of Object.entries(patch)) {
+    validatable[k] = v ?? "";
+  }
+  const parsed = customerUpdateSchema.safeParse(validatable);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new Error(first?.message ?? "Datos inválidos");
+  }
 
   // Dedupe de tax_id si se está cambiando: validar que no choque con
   // otro cliente de la misma empresa.

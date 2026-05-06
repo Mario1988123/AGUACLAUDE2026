@@ -9,6 +9,7 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createCustomerAction } from "./actions";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
+import { PhoneInput } from "@/shared/components/phone-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
 
@@ -200,15 +201,11 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
             </div>
             <div className="space-y-2">
               <Label>Teléfono *</Label>
-              <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              <PhoneInput value={phone} onChange={setPhone} required />
             </div>
             <div className="space-y-2">
               <Label>Teléfono secundario</Label>
-              <Input
-                type="tel"
-                value={phoneSecondary}
-                onChange={(e) => setPhoneSecondary(e.target.value)}
-              />
+              <PhoneInput value={phoneSecondary} onChange={setPhoneSecondary} />
             </div>
           </div>
 

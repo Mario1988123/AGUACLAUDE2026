@@ -8,6 +8,9 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
+import { TaxIdInput } from "@/shared/components/tax-id-input";
+import { IbanInput } from "@/shared/components/iban-input";
+import { PhoneInput } from "@/shared/components/phone-input";
 import { updateFiscalSettingsAction, type FiscalSettings } from "./actions";
 
 export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
@@ -53,9 +56,10 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
           </div>
           <div className="space-y-1.5">
             <Label>CIF / NIF *</Label>
-            <Input
+            <TaxIdInput
+              kind="cif"
               value={v.fiscal_tax_id ?? ""}
-              onChange={(e) => set("fiscal_tax_id", e.target.value || null)}
+              onChange={(val) => set("fiscal_tax_id", val || null)}
               placeholder="B12345678"
             />
           </div>
@@ -129,17 +133,16 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
           </div>
           <div className="space-y-1.5">
             <Label>Teléfono</Label>
-            <Input
+            <PhoneInput
               value={v.fiscal_phone ?? ""}
-              onChange={(e) => set("fiscal_phone", e.target.value || null)}
+              onChange={(val) => set("fiscal_phone", val || null)}
             />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>IBAN</Label>
-            <Input
+            <IbanInput
               value={v.fiscal_iban ?? ""}
-              onChange={(e) => set("fiscal_iban", e.target.value || null)}
-              placeholder="ES00 0000 0000 0000 0000 0000"
+              onChange={(val) => set("fiscal_iban", val || null)}
             />
           </div>
           <div className="space-y-1.5 sm:col-span-2">

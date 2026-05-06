@@ -21,6 +21,9 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
+import { PhoneInput } from "@/shared/components/phone-input";
+import { DedupeWarning } from "@/shared/components/dedupe-warning";
+import { useDedupe } from "@/shared/hooks/use-dedupe";
 import { IbanInput } from "@/shared/components/iban-input";
 import { checkIbanLive, isPendingIban } from "@/shared/lib/validations/iban-partial";
 import {
@@ -405,6 +408,16 @@ function CustomerEditForm({
     tax_id: customer.tax_id ?? "",
   });
 
+  // Dedupe en vivo: avisamos si tax_id/email/phone que el comercial está
+  // escribiendo ya pertenece a OTRO cliente/lead. Excluimos al cliente
+  // actual para no dispararse contra sí mismo.
+  const dedupeMatches = useDedupe({
+    tax_id: form.tax_id,
+    email: form.email,
+    phone: form.phone_primary,
+    exclude: { entity: "customer", id: customer.id },
+  });
+
   function save() {
     startTransition(async () => {
       try {
@@ -500,13 +513,13 @@ function CustomerEditForm({
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Teléfono</Label>
-          <Input
-            type="tel"
+          <PhoneInput
             value={form.phone_primary}
-            onChange={(e) => setForm({ ...form, phone_primary: e.target.value })}
+            onChange={(v) => setForm({ ...form, phone_primary: v })}
           />
         </div>
       </div>
+      {dedupeMatches.length > 0 && <DedupeWarning matches={dedupeMatches} />}
       <div className="flex justify-end">
         <Button size="sm" onClick={save} disabled={pending}>
           {pending ? "Guardando…" : "Guardar datos"}
