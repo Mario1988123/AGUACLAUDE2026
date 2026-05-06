@@ -364,13 +364,16 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     status: string;
     converted_to_customer_id: string | null;
   };
+  // Admin client para todo el flow. La policy customers_insert_by_scope
+  // limita el INSERT a roles concretos y un nivel 3 (sales_rep) no
+  // pasaba: explotaba con "new row violates row-level security policy".
+  // Como ya validamos que el lead pertenece a la empresa del caller
+  // arriba, es seguro usar admin para crear el customer.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
   // Si ya estaba convertido, devolver el customer_id existente sin tirar
   if (l.converted_to_customer_id) {
-    // Asegurar que las propuestas del lead apuntan al cliente. Usamos admin
-    // porque la policy proposals_update_draft sólo permite updates si
-    // status='draft' — y aquí pueden estar en accepted/sent.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
     await admin
       .from("proposals")
       .update({ customer_id: l.converted_to_customer_id, lead_id: null })
@@ -378,7 +381,7 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     return l.converted_to_customer_id;
   }
 
-  const { data: created, error: e2 } = await supabase
+  const { data: created, error: e2 } = await admin
     .from("customers")
     .insert({
       company_id: session.company_id,
@@ -393,19 +396,30 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
       tax_id: l.tax_id,
       notes: l.notes,
       is_active: true,
+      // Nivel 3: lo asignamos automáticamente al comercial que convierte.
+      // Niveles 1/2 lo dejan sin asignar para que el admin lo redirija.
+      assigned_user_id:
+        session.is_superadmin ||
+        session.roles.includes("company_admin") ||
+        session.roles.includes("commercial_director") ||
+        session.roles.includes("technical_director") ||
+        session.roles.includes("telemarketing_director")
+          ? null
+          : session.user_id,
       created_by: session.user_id,
       source_lead_id: l.id,
     })
     .select("id")
     .single();
-  if (e2) throw new Error(e2.message);
+  if (e2) {
+    console.error("[convertLeadToCustomer] customers insert failed:", e2.message);
+    throw new Error(`No se pudo crear cliente: ${e2.message}`);
+  }
   const customerId = (created as { id: string }).id;
 
   // Mover TODAS las propuestas del lead al nuevo cliente. Admin client
   // porque la policy proposals_update_draft bloquea updates a propuestas
   // que ya estén en accepted/sent.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
   await admin
     .from("proposals")
     .update({ customer_id: customerId, lead_id: null })
@@ -434,24 +448,33 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     })
     .eq("id", l.id);
 
-  await supabase.from("events").insert([
-    {
-      company_id: session.company_id,
-      subject_type: "lead",
-      subject_id: l.id,
-      kind: "lead.converted",
-      payload: { customer_id: customerId },
-      actor_user_id: session.user_id,
-    },
-    {
-      company_id: session.company_id,
-      subject_type: "customer",
-      subject_id: customerId,
-      kind: "customer.created",
-      payload: { from_lead_id: l.id },
-      actor_user_id: session.user_id,
-    },
-  ] as never);
+  // Admin para los events: events_insert puede limitar por scope y
+  // hemos visto que un nivel 3 puede no tener policy para insertar
+  // events del subject_type "customer". No bloquear el conversion por
+  // un audit log perdido.
+  try {
+    await admin.from("events").insert([
+      {
+        company_id: session.company_id,
+        subject_type: "lead",
+        subject_id: l.id,
+        kind: "lead.converted",
+        payload: { customer_id: customerId },
+        actor_user_id: session.user_id,
+      },
+      {
+        company_id: session.company_id,
+        subject_type: "customer",
+        subject_id: customerId,
+        kind: "customer.created",
+        payload: { from_lead_id: l.id },
+        actor_user_id: session.user_id,
+      },
+    ]);
+  } catch (e) {
+    console.error("[convertLeadToCustomer] events insert failed:", e);
+    /* no bloquear */
+  }
 
   revalidatePath(`/leads/${l.id}`);
   revalidatePath("/leads");
