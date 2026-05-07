@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import * as Icons from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { MODULES, type ModuleEntry } from "@/shared/lib/modules";
+import { MODULES, SIDEBAR_GROUPS, type ModuleEntry } from "@/shared/lib/modules";
 
 interface SidebarProps {
   userRoles: string[];
@@ -57,22 +57,34 @@ export function Sidebar({
     });
   }
 
+  // Módulos siempre visibles para cualquier rol (sin depender de
+  // company_modules activos): Inicio (dashboard, mi día, agenda),
+  // Personal (fichaje, chat, puntos) y Sistema (auditoría/config).
+  const ALWAYS_ON_GROUPS = new Set<ModuleEntry["group"]>([
+    "main",
+    "personal",
+    "system",
+  ]);
+
   const visibleModules = MODULES.filter((m) => {
     // Override del admin para este usuario tiene precedencia absoluta
     const ov = moduleOverrides?.[m.key];
     if (ov === false) return false;
     if (ov === true) return true;
-    const isSystem = m.group === "config" || m.group === "core";
-    if (!isSystem && !activeModuleKeys.includes(m.key)) return false;
+    if (!ALWAYS_ON_GROUPS.has(m.group) && !activeModuleKeys.includes(m.key))
+      return false;
     if (m.rolesAllowed && m.rolesAllowed.length > 0) {
       return isSuperadmin || m.rolesAllowed.some((r) => userRoles.includes(r));
     }
     return true;
   });
 
-  const operative = visibleModules.filter((m) => m.group === "operative");
-  const core = visibleModules.filter((m) => m.group === "core");
-  const config = visibleModules.filter((m) => m.group === "config");
+  // Agrupar por group respetando el orden de SIDEBAR_GROUPS
+  const groupedModules = SIDEBAR_GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    items: visibleModules.filter((m) => m.group === g.key),
+  })).filter((g) => g.items.length > 0);
 
   function renderSidebar(opts: { collapsed: boolean; onMobileClose?: () => void }) {
     const isCollapsed = opts.collapsed;
@@ -130,31 +142,18 @@ export function Sidebar({
           )}
         </div>
 
-        <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-5">
-          <SidebarGroup
-            label="Principal"
-            items={core}
-            pathname={pathname}
-            collapsed={isCollapsed}
-            badges={badges}
-            onItemClick={opts.onMobileClose}
-          />
-          <SidebarGroup
-            label="Operativa"
-            items={operative}
-            pathname={pathname}
-            collapsed={isCollapsed}
-            badges={badges}
-            onItemClick={opts.onMobileClose}
-          />
-          <SidebarGroup
-            label="Administración"
-            items={config}
-            pathname={pathname}
-            collapsed={isCollapsed}
-            badges={badges}
-            onItemClick={opts.onMobileClose}
-          />
+        <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+          {groupedModules.map((g) => (
+            <SidebarGroup
+              key={g.key}
+              label={g.label}
+              items={g.items}
+              pathname={pathname}
+              collapsed={isCollapsed}
+              badges={badges}
+              onItemClick={opts.onMobileClose}
+            />
+          ))}
         </nav>
 
       </aside>
@@ -234,11 +233,13 @@ function SidebarGroup({
 }) {
   if (items.length === 0) return null;
   return (
-    <div className="space-y-1">
-      {!collapsed && (
-        <div className="px-3 pb-2 pt-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/60">
+    <div className="space-y-0.5">
+      {!collapsed ? (
+        <div className="px-3 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/50">
           {label}
         </div>
+      ) : (
+        <div className="my-1 mx-2 h-px bg-sidebar-border/50" />
       )}
       {items.map((m) => {
         const Icon =
@@ -253,8 +254,8 @@ function SidebarGroup({
             title={collapsed ? m.label : undefined}
             onClick={onItemClick}
             className={cn(
-              "relative flex min-h-12 items-center rounded-xl text-sm font-semibold transition-colors",
-              collapsed ? "justify-center px-2 py-3" : "gap-3 px-4 py-3",
+              "relative flex min-h-11 items-center rounded-lg text-sm font-semibold transition-colors",
+              collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
               active
                 ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                 : "text-foreground/80 hover:bg-sidebar-accent hover:text-foreground",

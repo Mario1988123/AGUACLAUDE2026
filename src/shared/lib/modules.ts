@@ -1,22 +1,25 @@
 // =============================================================================
 // modules.ts
-// Catálogo de módulos lado cliente (para sidebar). Espejo del seed
-// modules_catalog en BD. Si añades un módulo en BD, también aquí.
+// Catálogo de módulos lado cliente (sidebar). Agrupados por flujo de uso
+// (decisión usuario 2026-05-08).
 //
-// rolesAllowed: si está definido, SOLO esos roles ven el módulo en el
-// sidebar. Si no, todos los roles con permiso lo verán. Niveles 1
-// (company_admin) y superadmin siempre ven todo.
+// Grupos en orden de aparición:
+//  1. main         — Dashboard / Mi día / Agenda
+//  2. sales        — Leads / Clientes / Propuestas / Pruebas / Contratos
+//  3. revenue      — Ventas (objetivos) / Ventas perdidas / Mailing*
+//  4. operations   — Instalaciones / Mantenimientos / Incidencias / Almacenes
+//  5. catalog      — Productos
+//  6. billing      — Wallet (cobros) / Facturas
+//  7. personal     — Fichajes / Chat / Puntos
+//  8. system       — Auditoría / Configuración
 //
-// Reglas de negocio (decisión usuario 2026-05):
+// rolesAllowed por módulo (decisión 2026-05-07):
+//  - Comercial: ve sales + revenue (sin mailing aún) + billing.wallet.
+//  - Telemarketer: solo Mi día / Agenda / Leads + Personal.
+//  - Instalador: Mi día / Agenda / Operations + Personal.
+//  - Niveles 1/2: ven todo según scope.
 //
-// · Comercial (sales_rep): clientes/propuestas/contratos suyos. NO
-//   instalaciones, mantenimientos, incidencias, almacenes, ventas, ni
-//   facturas. Recibe notificación al completarse instalación → cobra
-//   comisión y suma puntos.
-// · Telemarketer: solo agenda y leads (asignar/crear). Nada más.
-// · Instalador: instalaciones, mantenimientos, agenda, incidencias,
-//   almacenes (su carga). Sin acceso a leads/clientes/propuestas/etc.
-// · Niveles 1/2 (admin, directores): todo según scope BD.
+// Notificaciones NO aparecen como módulo: están en la campana del header.
 // =============================================================================
 
 export interface ModuleEntry {
@@ -25,9 +28,33 @@ export interface ModuleEntry {
   icon: string;
   href: string;
   configHref?: string;
-  group: "core" | "operative" | "config" | "parked";
-  rolesAllowed?: string[]; // si vacío, todos los con permiso lo verán
+  group:
+    | "main"
+    | "sales"
+    | "revenue"
+    | "operations"
+    | "catalog"
+    | "billing"
+    | "personal"
+    | "system";
+  rolesAllowed?: string[];
 }
+
+export interface SidebarGroupDef {
+  key: ModuleEntry["group"];
+  label: string;
+}
+
+export const SIDEBAR_GROUPS: SidebarGroupDef[] = [
+  { key: "main", label: "Inicio" },
+  { key: "sales", label: "Comercial" },
+  { key: "revenue", label: "Ventas" },
+  { key: "operations", label: "Operaciones" },
+  { key: "catalog", label: "Catálogo" },
+  { key: "billing", label: "Cobros y facturación" },
+  { key: "personal", label: "Personal" },
+  { key: "system", label: "Sistema" },
+];
 
 const LEVEL_1_2 = [
   "company_admin",
@@ -36,60 +63,48 @@ const LEVEL_1_2 = [
   "telemarketing_director",
 ];
 
-// Roles que ven módulos comerciales (clientes/propuestas/contratos)
 const SALES_ROLES = [...LEVEL_1_2, "sales_rep"];
-// Roles que ven módulos operativos de campo (instalaciones/mantenimiento)
 const FIELD_ROLES = [...LEVEL_1_2, "installer"];
-// Roles que ven leads (todo el equipo de ventas + tmk)
 const LEADS_ROLES = [...LEVEL_1_2, "sales_rep", "telemarketer"];
 
 export const MODULES: ModuleEntry[] = [
-  // ===== CORE — todos los roles =====
-  { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", href: "/dashboard", group: "core" },
-  { key: "my_day", label: "Mi día", icon: "CalendarCheck", href: "/mi-dia", group: "core" },
-  { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "core" },
-  { key: "notifications", label: "Notificaciones", icon: "Bell", href: "/notificaciones", group: "core" },
-  { key: "chat", label: "Chat", icon: "MessageSquare", href: "/chat", group: "core" },
-  { key: "time_tracking", label: "Fichajes", icon: "Clock", href: "/fichajes", configHref: "/configuracion/horarios", group: "core" },
+  // ===== 1. INICIO — todos =====
+  { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", href: "/dashboard", group: "main" },
+  { key: "my_day", label: "Mi día", icon: "CalendarCheck", href: "/mi-dia", group: "main" },
+  { key: "agenda", label: "Agenda", icon: "Calendar", href: "/agenda", configHref: "/configuracion/agenda", group: "main" },
 
-  // ===== OPERATIVE =====
+  // ===== 2. COMERCIAL =====
+  { key: "leads", label: "Leads", icon: "Contact", href: "/leads", configHref: "/configuracion/leads", group: "sales", rolesAllowed: LEADS_ROLES },
+  { key: "customers", label: "Clientes", icon: "Users", href: "/clientes", group: "sales", rolesAllowed: SALES_ROLES },
+  { key: "proposals", label: "Propuestas", icon: "FileText", href: "/propuestas", group: "sales", rolesAllowed: SALES_ROLES },
+  { key: "free_trials", label: "Pruebas gratuitas", icon: "Gift", href: "/pruebas-gratuitas", configHref: "/configuracion/pruebas-gratuitas", group: "sales", rolesAllowed: SALES_ROLES },
+  { key: "contracts", label: "Contratos", icon: "FileSignature", href: "/contratos", configHref: "/configuracion/contratos", group: "sales", rolesAllowed: SALES_ROLES },
 
-  // Agenda: todos (sales_rep, telemarketer e installer la usan).
-  { key: "agenda", label: "Agenda", icon: "Calendar", href: "/agenda", configHref: "/configuracion/agenda", group: "operative" },
+  // ===== 3. VENTAS (resultado) =====
+  { key: "sales", label: "Objetivos", icon: "Target", href: "/ventas", configHref: "/configuracion/objetivos", group: "revenue", rolesAllowed: SALES_ROLES },
+  { key: "lost_sales", label: "Ventas perdidas", icon: "TrendingDown", href: "/ventas-perdidas", group: "revenue", rolesAllowed: SALES_ROLES },
+  // mailing — pendiente desarrollo (próxima iteración)
+  // { key: "mailing", label: "Campañas", icon: "Mail", href: "/mailing", group: "revenue", rolesAllowed: SALES_ROLES },
 
-  // Leads: niveles 1-2 + sales_rep + telemarketer (no installer).
-  { key: "leads", label: "Leads", icon: "Contact", href: "/leads", configHref: "/configuracion/leads", group: "operative", rolesAllowed: LEADS_ROLES },
+  // ===== 4. OPERACIONES (campo) =====
+  { key: "installations", label: "Instalaciones", icon: "Wrench", href: "/instalaciones", group: "operations", rolesAllowed: FIELD_ROLES },
+  { key: "maintenance", label: "Mantenimientos", icon: "ShieldCheck", href: "/mantenimientos", group: "operations", rolesAllowed: FIELD_ROLES },
+  { key: "incidents", label: "Incidencias", icon: "AlertTriangle", href: "/incidencias", group: "operations", rolesAllowed: FIELD_ROLES },
+  { key: "warehouses", label: "Almacenes", icon: "Warehouse", href: "/almacenes", configHref: "/configuracion/almacenes", group: "operations", rolesAllowed: FIELD_ROLES },
 
-  // Clientes/propuestas/contratos: comercial sí, telemarketer/installer no.
-  { key: "customers", label: "Clientes", icon: "Users", href: "/clientes", group: "operative", rolesAllowed: SALES_ROLES },
-  { key: "proposals", label: "Propuestas", icon: "FileText", href: "/propuestas", group: "operative", rolesAllowed: SALES_ROLES },
-  { key: "contracts", label: "Contratos", icon: "FileSignature", href: "/contratos", configHref: "/configuracion/contratos", group: "operative", rolesAllowed: SALES_ROLES },
-  { key: "free_trials", label: "Pruebas gratuitas", icon: "Gift", href: "/pruebas-gratuitas", configHref: "/configuracion/pruebas-gratuitas", group: "operative", rolesAllowed: SALES_ROLES },
-  { key: "lost_sales", label: "Ventas perdidas", icon: "TrendingDown", href: "/ventas-perdidas", group: "operative", rolesAllowed: SALES_ROLES },
+  // ===== 5. CATÁLOGO =====
+  { key: "products", label: "Productos", icon: "Package", href: "/productos", configHref: "/configuracion/productos", group: "catalog", rolesAllowed: LEVEL_1_2 },
 
-  // Catálogo de productos: solo niveles 1-2 (gestionan precios/altas).
-  { key: "products", label: "Productos", icon: "Package", href: "/productos", configHref: "/configuracion/productos", group: "operative", rolesAllowed: LEVEL_1_2 },
+  // ===== 6. COBROS Y FACTURACIÓN =====
+  { key: "wallet", label: "Wallet", icon: "Wallet", href: "/wallet", group: "billing", rolesAllowed: SALES_ROLES },
+  { key: "invoicing", label: "Facturas", icon: "Receipt", href: "/facturas", configHref: "/configuracion/facturacion", group: "billing", rolesAllowed: ["company_admin"] },
 
-  // Almacenes: niveles 1-2 + instaladores (ven su almacén/vehículo).
-  { key: "warehouses", label: "Almacenes", icon: "Warehouse", href: "/almacenes", configHref: "/configuracion/almacenes", group: "operative", rolesAllowed: FIELD_ROLES },
+  // ===== 7. PERSONAL =====
+  { key: "time_tracking", label: "Fichajes", icon: "Clock", href: "/fichajes", configHref: "/configuracion/horarios", group: "personal" },
+  { key: "chat", label: "Chat", icon: "MessageSquare", href: "/chat", group: "personal" },
+  { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "personal" },
 
-  // Instalaciones / mantenimientos: niveles 1-2 + instaladores. NO comerciales.
-  { key: "installations", label: "Instalaciones", icon: "Wrench", href: "/instalaciones", group: "operative", rolesAllowed: FIELD_ROLES },
-  { key: "maintenance", label: "Mantenimientos", icon: "ShieldCheck", href: "/mantenimientos", group: "operative", rolesAllowed: FIELD_ROLES },
-
-  // Incidencias: niveles 1-2 + instaladores (las reportan/resuelven).
-  { key: "incidents", label: "Incidencias", icon: "AlertTriangle", href: "/incidencias", group: "operative", rolesAllowed: FIELD_ROLES },
-
-  // Ventas (objetivos): niveles 1-2 + sales_rep (ven sus objetivos/comisiones).
-  { key: "sales", label: "Ventas", icon: "TrendingUp", href: "/ventas", configHref: "/configuracion/objetivos", group: "operative", rolesAllowed: SALES_ROLES },
-
-  // Wallet (caja/cobros): niveles 1-2 + sales_rep (cobran). Telemarketer/installer no.
-  { key: "wallet", label: "Wallet", icon: "Wallet", href: "/wallet", group: "operative", rolesAllowed: SALES_ROLES },
-
-  // Facturación: solo company_admin.
-  { key: "invoicing", label: "Facturas", icon: "Receipt", href: "/facturas", configHref: "/configuracion/fiscal", group: "operative", rolesAllowed: ["company_admin"] },
-
-  // ===== CONFIG =====
-  { key: "audit", label: "Auditoría", icon: "ScrollText", href: "/auditoria", group: "config", rolesAllowed: LEVEL_1_2 },
-  { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "config", rolesAllowed: ["company_admin"] },
+  // ===== 8. SISTEMA =====
+  { key: "audit", label: "Auditoría", icon: "ScrollText", href: "/auditoria", group: "system", rolesAllowed: LEVEL_1_2 },
+  { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];
