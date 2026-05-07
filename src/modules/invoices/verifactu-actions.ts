@@ -45,12 +45,37 @@ export async function listInvoiceSeries(): Promise<InvoiceSeriesRow[]> {
   const { data } = await admin
     .from("invoice_series")
     .select(
-      "id, code, name, prefix, invoice_type, next_number, year_reset, current_year, is_active, is_default",
+      "id, series_code, description, prefix, invoice_type, next_number, resets_yearly, current_year, is_active, is_default, kind",
     )
     .eq("company_id", session.company_id)
     .order("is_default", { ascending: false })
-    .order("code");
-  return (data ?? []) as InvoiceSeriesRow[];
+    .order("series_code");
+  // Mapear nombres antiguos → nuevos para que el front no cambie
+  type Old = {
+    id: string;
+    series_code: string;
+    description: string | null;
+    prefix: string | null;
+    invoice_type: string | null;
+    next_number: number;
+    resets_yearly: boolean | null;
+    current_year: number | null;
+    is_active: boolean;
+    is_default: boolean | null;
+    kind: string | null;
+  };
+  return ((data ?? []) as Old[]).map((s) => ({
+    id: s.id,
+    code: s.series_code,
+    name: s.description ?? s.series_code,
+    prefix: s.prefix,
+    invoice_type: s.invoice_type ?? "F1",
+    next_number: s.next_number,
+    year_reset: s.resets_yearly ?? true,
+    current_year: s.current_year ?? new Date().getFullYear(),
+    is_active: s.is_active,
+    is_default: s.is_default ?? false,
+  }));
 }
 
 export async function upsertInvoiceSeriesAction(input: {
@@ -76,15 +101,18 @@ export async function upsertInvoiceSeriesAction(input: {
       .neq("id", input.id ?? "00000000-0000-0000-0000-000000000000");
   }
 
-  const payload = {
+  // Mapeo a nombres reales en BD (series_code, description, resets_yearly)
+  const payload: Record<string, unknown> = {
     company_id: session.company_id,
-    code: input.code.trim().toUpperCase(),
-    name: input.name.trim(),
+    series_code: input.code.trim().toUpperCase(),
+    description: input.name.trim(),
     prefix: input.prefix?.trim() || null,
     invoice_type: input.invoice_type ?? "F1",
-    year_reset: input.year_reset ?? true,
+    resets_yearly: input.year_reset ?? true,
     is_default: input.is_default ?? false,
     is_active: true,
+    kind: "invoice", // requerido por el sistema antiguo
+    current_year: new Date().getFullYear(),
   };
 
   if (input.id) {
@@ -133,7 +161,7 @@ export async function listInvoicesV2(filters?: {
     .select(
       `id, reference_code, number, invoice_type, status, customer_id,
        customer_snapshot, total_cents, issued_at, due_at, paid_at,
-       verifactu_qr_url, series:invoice_series(code)`,
+       verifactu_qr_url, series:invoice_series(series_code)`,
     )
     .eq("company_id", session.company_id)
     .is("deleted_at", null)
@@ -171,7 +199,7 @@ export async function listInvoicesV2(filters?: {
       id: r.id,
       reference_code: r.reference_code,
       number: r.number,
-      series_code: r.series?.code ?? null,
+      series_code: (r.series as { series_code?: string } | null)?.series_code ?? null,
       invoice_type: r.invoice_type,
       status: r.status,
       customer_id: r.customer_id,
@@ -437,11 +465,16 @@ export async function issueInvoiceV2Action(invoiceId: string): Promise<void> {
   if (numErr) throw new Error(numErr.message);
   const invoiceNumber = numResult as number;
 
-  const { data: series } = await admin
+  const { data: seriesRow } = await admin
     .from("invoice_series")
-    .select("code, prefix, current_year")
+    .select("series_code, prefix, current_year")
     .eq("id", inv.series_id)
     .single();
+  const series = {
+    code: seriesRow.series_code,
+    prefix: seriesRow.prefix,
+    current_year: seriesRow.current_year,
+  };
   const referenceCode = `${series.prefix ?? ""}${series.code}-${series.current_year}-${String(invoiceNumber).padStart(4, "0")}`;
 
   // Hash anterior (cadena por empresa)
@@ -610,11 +643,12 @@ export async function cancelInvoiceV2Action(
     ?.fiscal_legal_name;
   if (!issuerNif || !issuerName) throw new Error("Faltan datos fiscales");
 
-  const { data: series } = await admin
+  const { data: seriesRow2 } = await admin
     .from("invoice_series")
-    .select("code")
+    .select("series_code")
     .eq("id", inv.series_id)
     .single();
+  const series = { code: seriesRow2.series_code };
 
   const { data: prevRecord } = await admin
     .from("invoice_verifactu_records")

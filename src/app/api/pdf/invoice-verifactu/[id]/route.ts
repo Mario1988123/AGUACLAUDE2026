@@ -23,7 +23,7 @@ export async function GET(
        payment_method, notes, legal_notes,
        verifactu_qr_url, verifactu_hash, verifactu_csv,
        is_rectificative, rectifies_invoice_id,
-       series:invoice_series(code)`,
+       series:invoice_series(series_code)`,
     )
     .eq("id", id)
     .single();
@@ -73,7 +73,7 @@ export async function GET(
     issued_at: inv.issued_at ?? new Date().toISOString(),
     due_at: inv.due_at,
     invoice_type: inv.invoice_type,
-    series_code: (inv.series as { code?: string })?.code ?? "",
+    series_code: (inv.series as { series_code?: string })?.series_code ?? "",
     number: inv.number ?? 0,
     issuer: {
       legal_name: cs?.fiscal_legal_name ?? "—",
