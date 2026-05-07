@@ -5,6 +5,8 @@ import { listAddresses } from "@/modules/addresses/actions";
 import { AddressList } from "@/modules/addresses/address-list";
 import { listBankAccounts } from "@/modules/customers/bank-accounts/actions";
 import { BankAccountList } from "@/modules/customers/bank-accounts/bank-list";
+import { listCustomerMandates, getGoCardlessSettings } from "@/modules/gocardless/actions";
+import { CustomerMandatesPanel } from "@/modules/gocardless/customer-mandates-panel";
 import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
@@ -51,6 +53,10 @@ export default async function CustomerDetailPage({
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
+  const [gcSettings, mandates] = await Promise.all([
+    getGoCardlessSettings().catch(() => ({ configured: false, environment: null, enabled: false, hasWebhookSecret: false })),
+    listCustomerMandates(id).catch(() => []),
+  ]);
 
   // Productos del catálogo para el botón "Añadir equipo"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -214,6 +220,19 @@ export default async function CustomerDetailPage({
                 🔒 Solo el administrador de la empresa puede ver los datos bancarios.
               </p>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Domiciliación GoCardless ({mandates.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CustomerMandatesPanel
+              customerId={id}
+              mandates={mandates}
+              configured={gcSettings.configured && gcSettings.enabled}
+            />
           </CardContent>
         </Card>
 

@@ -755,6 +755,18 @@ export async function markContractSigned(id: string) {
     (cref as { reference_code: string | null } | null)?.reference_code ?? null,
   );
 
+  // Auto-envío email bienvenida al cliente con PDF del contrato adjunto.
+  // Fail-soft: si el email falla, NO bloquea la firma (la firma ya está
+  // hecha y registrada en BD).
+  try {
+    const { sendContractByEmailAction } = await import(
+      "@/modules/mailing/send-document-actions"
+    );
+    await sendContractByEmailAction(id);
+  } catch (e) {
+    console.error("[markContractSigned] auto-email bienvenida falló:", e);
+  }
+
   revalidatePath(`/contratos/${id}`);
   revalidatePath("/contratos");
   revalidatePath("/wallet");

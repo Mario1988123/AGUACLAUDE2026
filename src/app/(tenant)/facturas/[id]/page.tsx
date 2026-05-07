@@ -4,6 +4,9 @@ import { getInvoice } from "@/modules/invoices/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { InvoiceActions } from "@/modules/invoices/invoice-actions";
+import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
+import { listActiveMandatesForCustomer } from "@/modules/gocardless/actions";
+import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 
 function eur(c: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -41,6 +44,7 @@ export default async function InvoiceDetailPage({
   } catch {
     notFound();
   }
+  const gcMandates = await listActiveMandatesForCustomer(inv.customer_id).catch(() => []);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -64,7 +68,7 @@ export default async function InvoiceDetailPage({
             )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <a
             href={`/api/pdf/invoice/${inv.id}`}
             target="_blank"
@@ -73,6 +77,7 @@ export default async function InvoiceDetailPage({
           >
             📄 PDF
           </a>
+          <SendByEmailButton documentId={inv.id} kind="invoice" short />
           <Link href="/facturas" className="text-sm text-primary hover:underline self-center">
             ← Volver
           </Link>
@@ -156,6 +161,17 @@ export default async function InvoiceDetailPage({
               kind={inv.kind}
               pendingCents={inv.pending_cents}
             />
+            {inv.pending_cents > 0 && inv.status !== "draft" && inv.status !== "cancelled" && (
+              <div className="mt-3 border-t pt-3">
+                <ChargeWithGoCardlessButton
+                  mandates={gcMandates}
+                  defaultAmountCents={inv.pending_cents}
+                  description={`Factura ${inv.full_reference}`}
+                  invoiceId={inv.id}
+                  size="sm"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

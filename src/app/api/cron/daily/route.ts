@@ -198,6 +198,96 @@ export async function GET(req: NextRequest) {
       /* no-op */
     }
     stats.installations_tomorrow += 1;
+
+    // Email recordatorio al cliente (víspera) con datos de la cita.
+    // Fail-soft: si falta plantilla o cliente sin email, no rompe el cron.
+    try {
+      const { data: instFull } = await admin
+        .from("installations")
+        .select(
+          `customer_id, address_id, installer:installer_user_id(full_name, phone)`,
+        )
+        .eq("id", inst.id)
+        .maybeSingle();
+      if (!instFull?.customer_id) continue;
+
+      const { data: cust } = await admin
+        .from("customers")
+        .select("email, first_name, last_name, legal_name, trade_name, party_kind")
+        .eq("id", instFull.customer_id)
+        .maybeSingle();
+      if (!cust?.email) continue;
+
+      let address = "";
+      if (instFull.address_id) {
+        const { data: addr } = await admin
+          .from("addresses")
+          .select("street_type, street, street_number, city")
+          .eq("id", instFull.address_id)
+          .maybeSingle();
+        if (addr) {
+          address = `${addr.street_type ?? ""} ${addr.street ?? ""} ${addr.street_number ?? ""}, ${addr.city ?? ""}`.trim();
+        }
+      }
+
+      const installer = instFull.installer as {
+        full_name?: string;
+        phone?: string;
+      } | null;
+      const customerFirstName =
+        cust.party_kind === "company"
+          ? cust.trade_name ?? cust.legal_name ?? "Cliente"
+          : cust.first_name ?? "Cliente";
+
+      // Importar dinámicamente para no cargar el módulo en cada deploy
+      const { sendTransactionalEmail } = await import(
+        "@/modules/mailing/actions"
+      );
+      await sendTransactionalEmail({
+        template_key: "installation_reminder",
+        to_email: cust.email,
+        to_name: customerFirstName,
+        customer_id: instFull.customer_id,
+        variables: {
+          customer_first_name: customerFirstName,
+          appointment_date: inst.scheduled_at,
+          appointment_time: time,
+          customer_address: address || "—",
+          technician_name: installer?.full_name ?? "Nuestro técnico",
+          technician_phone: installer?.phone ?? "—",
+        },
+        related_subject_type: "installation",
+        related_subject_id: inst.id,
+      });
+
+      // WhatsApp paralelo (si hay phone + Twilio configurado)
+      try {
+        const { data: phoneRow } = await admin
+          .from("customers")
+          .select("phone_primary")
+          .eq("id", instFull.customer_id)
+          .maybeSingle();
+        if (phoneRow?.phone_primary) {
+          const { isWhatsAppConfigured, sendWhatsApp } = await import(
+            "@/modules/mailing/whatsapp"
+          );
+          if (isWhatsAppConfigured()) {
+            const fullDate = new Date(inst.scheduled_at).toLocaleDateString(
+              "es-ES",
+              { day: "numeric", month: "long" },
+            );
+            await sendWhatsApp({
+              to_phone: phoneRow.phone_primary,
+              body: `Hola ${customerFirstName} 👋\n\nTe recordamos que *mañana ${fullDate} a las ${time}* tenemos tu instalación.\n\n📍 ${address || "Tu dirección"}\n👷 ${installer?.full_name ?? "Nuestro técnico"}\n\n¡Hasta mañana!`,
+            });
+          }
+        }
+      } catch (e) {
+        console.error("[cron/daily] installation_reminder whatsapp failed:", e);
+      }
+    } catch (e) {
+      console.error("[cron/daily] installation_reminder email failed:", e);
+    }
   }
 
   // 3) Mantenimientos para mañana ----------------------------------------------

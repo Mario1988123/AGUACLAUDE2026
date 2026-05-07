@@ -383,8 +383,9 @@ begin
     'email_sends','email_campaigns','email_automations',
     'email_automation_steps','email_automation_runs'
   ]) loop
+    execute format('drop policy if exists %I on public.%I', t || '_super', t);
     execute format(
-      'create policy if not exists %I on public.%I for all to authenticated using (app.is_superadmin()) with check (app.is_superadmin())',
+      'create policy %I on public.%I for all to authenticated using (app.is_superadmin()) with check (app.is_superadmin())',
       t || '_super', t
     );
   end loop;

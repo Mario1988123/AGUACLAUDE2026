@@ -18,6 +18,7 @@ const SECTIONS = [
   { href: "/configuracion/mantenimientos", label: "Mantenimientos", icon: "ShieldCheck", desc: "Planes Lite/Medium/Premium" },
   { href: "/configuracion/incidencias", label: "Incidencias", icon: "AlertTriangle", desc: "SLA por origen y prioridad" },
   { href: "/configuracion/wallet", label: "Wallet", icon: "Wallet", desc: "Métodos cobro, validación, IBAN" },
+  { href: "/configuracion/gocardless", label: "GoCardless", icon: "Banknote", desc: "Domiciliación SEPA · access token + webhook" },
   { href: "/configuracion/notificaciones", label: "Notificaciones", icon: "Bell", desc: "Opt-in por evento y canal" },
   { href: "/configuracion/dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "KPIs por rol y período" },
   { href: "/configuracion/productos", label: "Productos", icon: "Package", desc: "Categorías y atributos" },

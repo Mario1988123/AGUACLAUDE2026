@@ -7,6 +7,7 @@ import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/proposals/schemas";
 import { ProposalActions } from "@/modules/proposals/actions-panel";
 import { requireSession } from "@/shared/lib/auth/session";
+import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
 
 function formatCents(cents: number | null) {
   if (cents == null) return "—";
@@ -61,7 +62,7 @@ export default async function ProposalDetailPage({
             Para: <strong>{proposal.customer_or_lead_name}</strong>
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <a
             href={`/api/pdf/proposal/${proposal.id}`}
             target="_blank"
@@ -70,6 +71,7 @@ export default async function ProposalDetailPage({
           >
             📄 Descargar PDF
           </a>
+          <SendByEmailButton documentId={proposal.id} kind="proposal" short />
           <Link href="/propuestas" className="text-sm text-primary hover:underline">
             ← Volver
           </Link>

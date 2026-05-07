@@ -263,3 +263,132 @@ export async function rejectWalletEntryAction(id: string, reason: string) {
   }
   revalidatePath("/wallet");
 }
+
+/**
+ * Marca un cobro pendiente (ej. "pago en oficina pendiente") como
+ * cobrado. Útil cuando el cliente finalmente paga y hay que actualizar
+ * el estado en lugar de crear otra entrada.
+ */
+export async function markWalletAsCollectedAction(id: string) {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: entry } = await admin
+    .from("wallet_entries")
+    .select("id, status, method, contract_id, contract_payment_id, amount_cents, concept, company_id")
+    .eq("id", id)
+    .maybeSingle();
+  const e = entry as
+    | {
+        id: string;
+        status: string;
+        method: string;
+        contract_id: string | null;
+        contract_payment_id: string | null;
+        amount_cents: number;
+        concept: string;
+        company_id: string;
+      }
+    | null;
+  if (!e) throw new Error("Cobro no encontrado");
+  if (e.company_id !== session.company_id) throw new Error("Cobro de otra empresa");
+  if (e.status !== "pending" && e.status !== "rejected" && e.status !== "cancelled") {
+    throw new Error(
+      `Solo se puede marcar cobrado desde pendiente/rechazado (estado actual: ${e.status})`,
+    );
+  }
+  const newStatus = e.method === "cash" ? "pending_settlement" : "collected";
+  const r = await admin
+    .from("wallet_entries")
+    .update({
+      status: newStatus,
+      collected_by_user_id: session.user_id,
+      collected_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
+  if (e.contract_payment_id) {
+    await admin
+      .from("contract_payments")
+      .update({
+        status: "collected_pending_validation",
+        moment: "now",
+        collected_at: new Date().toISOString(),
+        collected_by_user_id: session.user_id,
+      })
+      .eq("id", e.contract_payment_id);
+  }
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "wallet_entry",
+    subject_id: id,
+    kind: "wallet.payment_marked_collected",
+    payload: { amount_cents: e.amount_cents, from_status: e.status },
+    actor_user_id: session.user_id,
+  });
+  if (e.contract_id) revalidatePath(`/contratos/${e.contract_id}`);
+  revalidatePath("/wallet");
+}
+
+/**
+ * Cancela un cobro pendiente o rechazado (el cliente no pagará).
+ */
+export async function cancelWalletEntryAction(id: string, reason: string) {
+  const session = await requireSession();
+  if (
+    !session.is_superadmin &&
+    !session.roles.includes("company_admin") &&
+    !session.roles.includes("commercial_director")
+  ) {
+    throw new Error("Solo admin/director puede cancelar");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: entry } = await admin
+    .from("wallet_entries")
+    .select("id, status, contract_id, contract_payment_id, company_id, amount_cents")
+    .eq("id", id)
+    .maybeSingle();
+  const e = entry as
+    | {
+        id: string;
+        status: string;
+        contract_id: string | null;
+        contract_payment_id: string | null;
+        company_id: string;
+        amount_cents: number;
+      }
+    | null;
+  if (!e) throw new Error("Cobro no encontrado");
+  if (e.company_id !== session.company_id) throw new Error("Cobro de otra empresa");
+  if (e.status === "validated" || e.status === "settled") {
+    throw new Error("No se puede cancelar un cobro ya validado/liquidado");
+  }
+  const r = await admin
+    .from("wallet_entries")
+    .update({
+      status: "cancelled",
+      rejected_reason: reason || "Cancelado por el usuario",
+      validated_by_user_id: session.user_id,
+      validated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (r.error) throw new Error(r.error.message);
+  if (e.contract_payment_id) {
+    await admin
+      .from("contract_payments")
+      .update({ wallet_entry_id: null, status: "pending" })
+      .eq("id", e.contract_payment_id);
+  }
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "wallet_entry",
+    subject_id: id,
+    kind: "wallet.payment_cancelled",
+    payload: { reason, amount_cents: e.amount_cents },
+    actor_user_id: session.user_id,
+  });
+  if (e.contract_id) revalidatePath(`/contratos/${e.contract_id}`);
+  revalidatePath("/wallet");
+}

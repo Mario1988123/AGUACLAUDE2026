@@ -214,9 +214,11 @@ export default async function WalletPage({
                         />
                       </td>
                       <td className="py-3 text-right">
-                        {(e.status === "collected" || e.status === "pending_settlement") && (
-                          <ValidateWalletButtons id={e.id} canValidate={canValidate} />
-                        )}
+                        <ValidateWalletButtons
+                          id={e.id}
+                          status={e.status}
+                          canValidate={canValidate}
+                        />
                       </td>
                     </tr>
                   ))}

@@ -6,6 +6,7 @@ import {
   getContractPayments,
 } from "@/modules/contracts/actions";
 import { listContractSignatures } from "@/modules/contracts/signatures-actions";
+import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { listWarehouses } from "@/modules/warehouses/actions";
 import { getFiscalSettings } from "@/modules/config/fiscal/actions";
@@ -262,6 +263,9 @@ export default async function ContractDetailPage({
           >
             📄 PDF
           </a>
+          {(contract.status === "signed" || contract.status === "active") && (
+            <SendByEmailButton documentId={contract.id} kind="contract" short />
+          )}
           <Link href="/contratos" className="text-sm text-primary hover:underline">
             ← Volver
           </Link>
