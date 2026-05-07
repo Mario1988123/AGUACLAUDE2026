@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { InvoiceSeriesPanel } from "@/modules/invoices/series-panel";
 import { VerifactuModePanel } from "@/modules/invoices/verifactu-mode-panel";
+import { CertUploader } from "@/modules/invoices/cert-uploader";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,18 @@ export default async function FacturacionConfigPage() {
           <VerifactuModePanel
             initialMode={cs?.verifactu_mode ?? "no_envio"}
             initialEnvironment={cs?.verifactu_environment ?? "production"}
+            certAlias={cs?.verifactu_cert_alias ?? null}
+            certExpiresAt={cs?.verifactu_cert_expires_at ?? null}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Certificado digital FNMT</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CertUploader
             certAlias={cs?.verifactu_cert_alias ?? null}
             certExpiresAt={cs?.verifactu_cert_expires_at ?? null}
           />
