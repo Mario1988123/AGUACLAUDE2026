@@ -198,6 +198,28 @@ export async function resolveIncidentAction(id: string, notes: string) {
     } catch {
       /* no-op */
     }
+
+    // Notificar a admin/director técnico que la incidencia se resolvió
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      const incidentTitle =
+        (prev as { title: string | null } | null)?.title ?? "Incidencia";
+      await notifyByRoles(
+        session.company_id,
+        ["company_admin", "technical_director"],
+        {
+          kind: "incident.resolved",
+          severity: "success",
+          title: "✓ Incidencia resuelta",
+          body: incidentTitle,
+          subject_type: "incident",
+          subject_id: id,
+          action_url: `/incidencias/${id}`,
+        },
+      );
+    } catch {
+      /* no-op */
+    }
   }
 
   revalidatePath(`/incidencias`);

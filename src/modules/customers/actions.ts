@@ -167,6 +167,34 @@ export async function createCustomerAction(formData: FormData) {
     actor_user_id: session.user_id,
   } as never);
 
+  // Si NO viene de lead (alta directa), notificar a admin/director
+  // comercial para que sepan del nuevo cliente.
+  if (!parsed.source_lead_id) {
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      const customerName =
+        parsed.party_kind === "company"
+          ? parsed.trade_name || parsed.legal_name || "Sin nombre"
+          : `${parsed.first_name ?? ""} ${parsed.last_name ?? ""}`.trim() ||
+            "Sin nombre";
+      await notifyByRoles(
+        session.company_id,
+        ["company_admin", "commercial_director"],
+        {
+          kind: "customer.created",
+          severity: "info",
+          title: "Nuevo cliente",
+          body: customerName,
+          subject_type: "customer",
+          subject_id: newId,
+          action_url: `/clientes/${newId}`,
+        },
+      );
+    } catch {
+      /* no-op */
+    }
+  }
+
   revalidatePath("/clientes");
   redirect(`/clientes/${newId}` as never);
 }

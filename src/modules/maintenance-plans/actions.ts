@@ -306,5 +306,26 @@ export async function cancelMaintenanceContractAction(
     payload: { reason },
     actor_user_id: session.user_id,
   });
+
+  // Notificar a admin/director técnico de la cancelación
+  try {
+    const { notifyByRoles } = await import("@/modules/notifications/notifier");
+    await notifyByRoles(
+      session.company_id,
+      ["company_admin", "technical_director", "commercial_director"],
+      {
+        kind: "maintenance_contract.cancelled",
+        severity: "warning",
+        title: "Contrato de mantenimiento cancelado",
+        body: reason ?? "Sin motivo indicado",
+        subject_type: "contract",
+        subject_id: id,
+        action_url: `/mantenimientos`,
+      },
+    );
+  } catch {
+    /* no-op */
+  }
+
   revalidatePath("/mantenimientos");
 }
