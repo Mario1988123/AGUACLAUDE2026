@@ -76,6 +76,8 @@ interface Props {
   maintenancePlans: MaintenancePlan[];
   /** true si el contrato principal YA incluye mantenimiento */
   contractIncludesMaintenance: boolean;
+  /** Solo admin/director puede editar cobros ya validados/cobrados. */
+  canEditCollectedPayments?: boolean;
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -138,6 +140,7 @@ export function InstallationWizard(props: Props) {
     contractId,
     maintenancePlans,
     contractIncludesMaintenance,
+    canEditCollectedPayments = false,
   } = props;
   void representativeName;
 
@@ -735,6 +738,7 @@ export function InstallationWizard(props: Props) {
                               status={p.status}
                               defaultMethod={p.method}
                               amountLabel={`${(p.amount_cents / 100).toFixed(2)} €`}
+                              canEditAfterCollect={canEditCollectedPayments}
                             />
                           </div>
                         </div>

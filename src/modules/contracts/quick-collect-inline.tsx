@@ -48,11 +48,14 @@ export function CollectInline({
   status,
   defaultMethod,
   amountLabel,
+  canEditAfterCollect = false,
 }: {
   paymentId: string;
   status: string;
   defaultMethod?: string;
   amountLabel?: string;
+  /** Solo admin/director puede editar un cobro ya cobrado/validado. */
+  canEditAfterCollect?: boolean;
 }) {
   const isEdit = status !== "pending";
   const [open, setOpen] = useState(false);
@@ -62,6 +65,10 @@ export function CollectInline({
   );
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  // Sin permiso para editar cobros ya cobrados → no se renderiza
+  if (isEdit && !canEditAfterCollect) {
+    return null;
+  }
 
   function confirm() {
     startTransition(async () => {

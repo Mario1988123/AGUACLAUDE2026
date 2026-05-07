@@ -914,7 +914,7 @@ export async function collectContractPaymentAction(
 
   const { data: pay } = await admin
     .from("contract_payments")
-    .select("id, contract_id, concept, amount_cents, method, status, wallet_entry_id, company_id")
+    .select("id, contract_id, concept, amount_cents, method, status, wallet_entry_id, company_id, moment")
     .eq("id", paymentId)
     .single();
   if (!pay) throw new Error("Pago no encontrado");
@@ -927,7 +927,21 @@ export async function collectContractPaymentAction(
     status: string;
     wallet_entry_id: string | null;
     company_id: string;
+    moment: string | null;
   };
+  // Reglas de quién puede cambiar:
+  //  - pending → cualquiera (el comercial está cobrando por primera vez)
+  //  - collected_pending_validation / validated → solo admin/director
+  //    (puede haber sido un error humano, pero requiere supervisión)
+  const isAdminOrDirector =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (p.status !== "pending" && !isAdminOrDirector) {
+    throw new Error(
+      "Este pago ya está cobrado. Solo admin o director comercial puede modificarlo.",
+    );
+  }
   if (p.company_id !== session.company_id) {
     throw new Error("Pago de otra empresa");
   }
@@ -1015,7 +1029,11 @@ export async function collectContractPaymentAction(
   const cpUpdates: Record<string, unknown> = {
     status: p.status === "validated" ? "validated" : "collected_pending_validation",
     method: effectiveMethod,
-    moment: "on_signature",
+    // Preservamos el moment original del pago: si era "on_installation"
+    // (cobro programado para la instalación) debe seguir siéndolo aunque
+    // el comercial lo cobre "in situ" desde el wizard de instalación.
+    // Solo si el moment es null (legacy) caemos a on_signature.
+    moment: p.moment ?? "on_signature",
     wallet_entry_id: walletEntryId,
     collected_at: new Date().toISOString(),
     collected_by_user_id: session.user_id,

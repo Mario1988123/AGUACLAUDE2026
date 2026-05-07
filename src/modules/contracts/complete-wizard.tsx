@@ -65,6 +65,7 @@ export function ContractCompleteWizard({
   defaultCustomerTaxId,
   preview,
   canEdit,
+  canEditCollectedPayments = false,
 }: {
   contractId: string;
   payments: PaymentRow[];
@@ -80,6 +81,7 @@ export function ContractCompleteWizard({
   defaultCustomerTaxId?: string | null;
   preview: PreviewBag;
   canEdit: boolean;
+  canEditCollectedPayments?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
@@ -213,6 +215,7 @@ export function ContractCompleteWizard({
                               status={p.status}
                               defaultMethod={p.method}
                               amountLabel={fmtEur(p.amount_cents)}
+                              canEditAfterCollect={canEditCollectedPayments}
                             />
                           </div>
                         </div>

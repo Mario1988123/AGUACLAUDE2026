@@ -175,6 +175,11 @@ export default async function InstallationDetailPage({
               contractId={i.contract_id}
               maintenancePlans={maintenancePlans}
               contractIncludesMaintenance={contractIncludesMaintenance}
+              canEditCollectedPayments={
+                session.is_superadmin ||
+                session.roles.includes("company_admin") ||
+                session.roles.includes("commercial_director")
+              }
             />
           )}
           <a

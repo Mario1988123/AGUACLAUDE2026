@@ -29,11 +29,14 @@ export function QuickCollectButton({
   status,
   defaultMethod,
   amountLabel,
+  canEditAfterCollect = false,
 }: {
   paymentId: string;
   status: string;
   defaultMethod?: string;
   amountLabel?: string;
+  /** Solo admin/director puede editar un cobro ya validado/cobrado. */
+  canEditAfterCollect?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -48,6 +51,8 @@ export function QuickCollectButton({
   // Estados que aceptan acción: pending = cobrar, otros = editar cobro previo.
   const isEdit = status !== "pending";
   if (status === "rejected" || status === "cancelled") return null;
+  // Si ya está cobrado y el usuario no es admin/director → no mostrar botón
+  if (isEdit && !canEditAfterCollect) return null;
 
   function reset() {
     setOpen(false);

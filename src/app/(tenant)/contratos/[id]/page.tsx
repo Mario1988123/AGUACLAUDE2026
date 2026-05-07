@@ -87,6 +87,11 @@ export default async function ContractDetailPage({
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
+  // Editar pagos ya cobrados/validados solo lo puede hacer admin o director comercial
+  const canEditCollectedPayments =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const c = contract as any;
   const clauses = (c.clauses_snapshot ?? []) as Array<{
@@ -168,6 +173,7 @@ export default async function ContractDetailPage({
             defaultCustomerName={customerName}
             defaultCustomerTaxId={customerSnap.tax_id ?? null}
             canEdit={canEditClauses || ["draft", "pending_data", "pending_signature"].includes(contract.status)}
+            canEditCollectedPayments={canEditCollectedPayments}
             preview={{
               contractRef: contract.reference_code ?? "(sin código)",
               customerName,
@@ -429,6 +435,7 @@ export default async function ContractDetailPage({
                         status={p.status}
                         defaultMethod={p.method}
                         amountLabel={formatCents(p.amount_cents) ?? undefined}
+                        canEditAfterCollect={canEditCollectedPayments}
                       />
                     </td>
                   </tr>
