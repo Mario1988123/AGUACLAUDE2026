@@ -50,7 +50,7 @@ export const SIDEBAR_GROUPS: SidebarGroupDef[] = [
   { key: "sales", label: "Comercial" },
   { key: "revenue", label: "Ventas" },
   { key: "operations", label: "Operaciones" },
-  { key: "catalog", label: "Catálogo" },
+  { key: "catalog", label: "Catálogo y stock" },
   { key: "billing", label: "Cobros y facturación" },
   { key: "personal", label: "Personal" },
   { key: "system", label: "Sistema" },
@@ -90,10 +90,10 @@ export const MODULES: ModuleEntry[] = [
   { key: "installations", label: "Instalaciones", icon: "Wrench", href: "/instalaciones", group: "operations", rolesAllowed: FIELD_ROLES },
   { key: "maintenance", label: "Mantenimientos", icon: "ShieldCheck", href: "/mantenimientos", group: "operations", rolesAllowed: FIELD_ROLES },
   { key: "incidents", label: "Incidencias", icon: "AlertTriangle", href: "/incidencias", group: "operations", rolesAllowed: FIELD_ROLES },
-  { key: "warehouses", label: "Almacenes", icon: "Warehouse", href: "/almacenes", configHref: "/configuracion/almacenes", group: "operations", rolesAllowed: FIELD_ROLES },
 
-  // ===== 5. CATÁLOGO =====
+  // ===== 5. CATÁLOGO Y STOCK (productos + almacenes juntos) =====
   { key: "products", label: "Productos", icon: "Package", href: "/productos", configHref: "/configuracion/productos", group: "catalog", rolesAllowed: LEVEL_1_2 },
+  { key: "warehouses", label: "Almacenes", icon: "Warehouse", href: "/almacenes", configHref: "/configuracion/almacenes", group: "catalog", rolesAllowed: FIELD_ROLES },
 
   // ===== 6. COBROS Y FACTURACIÓN =====
   { key: "wallet", label: "Wallet", icon: "Wallet", href: "/wallet", group: "billing", rolesAllowed: SALES_ROLES },
