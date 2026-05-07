@@ -101,6 +101,7 @@ export const MODULES: ModuleEntry[] = [
 
   // ===== 7. PERSONAL =====
   { key: "time_tracking", label: "Fichajes", icon: "Clock", href: "/fichajes", configHref: "/configuracion/horarios", group: "personal" },
+  { key: "expenses", label: "Mis gastos", icon: "Receipt", href: "/gastos", configHref: "/configuracion/gastos", group: "personal" },
   { key: "chat", label: "Chat", icon: "MessageSquare", href: "/chat", group: "personal" },
   { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "personal" },
 

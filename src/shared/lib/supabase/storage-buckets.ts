@@ -26,6 +26,8 @@ export const STORAGE_BUCKETS = {
   "product-datasheets": { public: true },
   /** Logos de empresa para PDF. Públicos. */
   "company-logos": { public: true },
+  /** Tickets/recibos de gastos comerciales. Privados. */
+  expenses: { public: false },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;
