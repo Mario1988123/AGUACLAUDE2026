@@ -310,5 +310,22 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, stats, ranAt: new Date().toISOString() });
+  // Procesar cola Verifactu pendiente (envíos a AEAT). En Vercel Hobby
+  // solo tenemos 1 cron diario → lo invocamos desde aquí. Para mayor
+  // frecuencia (cada 5-15min) hace falta cron externo o Vercel Pro.
+  let verifactu = { processed: 0, succeeded: 0, failed: 0 };
+  try {
+    const { processVerifactuQueue } = await import(
+      "@/modules/invoices/verifactu-queue"
+    );
+    verifactu = await processVerifactuQueue();
+  } catch (e) {
+    console.error("[cron/daily] verifactu queue failed:", e);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    stats: { ...stats, verifactu },
+    ranAt: new Date().toISOString(),
+  });
 }
