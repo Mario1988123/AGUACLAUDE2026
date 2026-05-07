@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const SECTIONS = [
   { href: "/configuracion/fiscal", label: "Datos fiscales", icon: "Building2", desc: "Razón social, CIF, dirección, IBAN" },
   { href: "/configuracion/facturacion", label: "Facturación", icon: "Receipt", desc: "Series, modo Verifactu, certificado FNMT" },
+  { href: "/configuracion/mailing", label: "Mailing", icon: "Mail", desc: "Dominio envío + DNS DKIM/SPF + plantillas" },
   { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Caducidad y orígenes" },
   { href: "/configuracion/clientes", label: "Clientes", icon: "Users", desc: "Campos custom y reglas dedupe" },
   { href: "/configuracion/propuestas", label: "Propuestas", icon: "FileText", desc: "Validez, descuentos, aprobaciones" },
