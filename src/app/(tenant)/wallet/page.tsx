@@ -8,6 +8,7 @@ import { StatusPill } from "@/shared/components/status-pill";
 import { RegisterPaymentButton } from "@/modules/wallet/register-button";
 import { ValidateWalletButtons } from "@/modules/wallet/validate-buttons";
 import { PaymentMethodBadge } from "@/modules/wallet/payment-method-badge";
+import { WalletInfoButton } from "@/modules/wallet/info-modal";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -86,57 +87,32 @@ export default async function WalletPage({
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-3xl font-extrabold tracking-tight">Wallet</h1>
-          <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
-            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
-              <div className="font-bold text-blue-900 mb-1">
-                💳 Tarjeta / Transferencia / Bizum / SEPA
-              </div>
-              <ul className="space-y-0.5 text-blue-900">
-                <li>
-                  <span className="font-semibold">Sin cobrar</span> → cliente no ha pagado.
-                </li>
-                <li>
-                  <span className="font-semibold">Cobrado · pdte. banco</span> → comercial tiene
-                  justificante (datáfono, captura transferencia/bizum). Falta que el admin lo vea
-                  llegar al banco.
-                </li>
-                <li>
-                  <span className="font-semibold">Confirmado en banco</span> → admin lo ha visto en
-                  el extracto. Estado final.
-                </li>
-              </ul>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
-              <div className="font-bold text-emerald-900 mb-1">💶 Efectivo</div>
-              <ul className="space-y-0.5 text-emerald-900">
-                <li>
-                  <span className="font-semibold">Sin cobrar</span> → cliente no ha pagado.
-                </li>
-                <li>
-                  <span className="font-semibold">Cobrado · pdte. liquidar</span> → comercial cobró
-                  el efectivo y lo tiene en mano. Falta entregárselo al admin.
-                </li>
-                <li>
-                  <span className="font-semibold">Liquidado al admin</span> → admin recibió el
-                  efectivo. Estado final (no pasa por banco).
-                </li>
-              </ul>
-            </div>
-          </div>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Wallet</h1>
+          <WalletInfoButton />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           <Link
             href={"/api/export/wallet" as never}
             prefetch={false}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
           >
-            ⬇ Exportar CSV
+            ⬇ CSV
           </Link>
           <RegisterPaymentButton />
         </div>
+      </div>
+
+      <div className="sm:hidden flex gap-2">
+        <RegisterPaymentButton />
+        <Link
+          href={"/api/export/wallet" as never}
+          prefetch={false}
+          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+        >
+          ⬇ CSV
+        </Link>
       </div>
 
       <div className="space-y-3">
@@ -401,103 +377,181 @@ export default async function WalletPage({
           {entries.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay movimientos.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  <tr className="border-b">
-                    <th className="py-3 pr-4 text-left">Fecha</th>
-                    <th className="py-3 pr-4 text-left">Cliente</th>
-                    <th className="py-3 pr-4 text-left">Contrato</th>
-                    <th className="py-3 pr-4 text-left">Concepto</th>
-                    <th className="py-3 pr-6 text-right">Importe</th>
-                    <th className="py-3 pr-4 text-left">Método</th>
-                    <th className="py-3 pr-4 text-left">Estado</th>
-                    {isAdmin && <th className="py-3 pr-4 text-left">Comercial</th>}
-                    <th className="py-3 pr-4 text-left">Factura</th>
-                    <th className="py-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {entries.map((e) => (
-                    <tr key={e.id} className="hover:bg-muted/30">
-                      <td className="py-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(e.created_at).toLocaleDateString("es-ES")}
-                      </td>
-                      <td className="py-3 pr-4">
+            <>
+              {/* MÓVIL: cards apiladas */}
+              <div className="space-y-3 lg:hidden">
+                {entries.map((e) => (
+                  <div
+                    key={e.id}
+                    className="rounded-xl border border-border bg-card/50 p-3 space-y-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
                         {e.customer_id ? (
                           <Link
                             href={`/clientes/${e.customer_id}` as never}
-                            className="font-medium hover:underline"
+                            className="font-bold text-sm hover:underline block truncate"
                           >
                             {e.customer_name ?? "Cliente"}
                           </Link>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-sm text-muted-foreground">Sin cliente</span>
                         )}
-                      </td>
-                      <td className="py-3 pr-4 text-xs">
-                        {e.contract_id && e.contract_reference ? (
-                          <Link
-                            href={`/contratos/${e.contract_id}` as never}
-                            className="font-mono text-primary hover:underline"
-                          >
-                            {e.contract_reference}
-                          </Link>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-xs">{e.concept}</td>
-                      <td className="py-3 pr-6 text-right font-semibold tabular-nums whitespace-nowrap">
-                        {formatCents(e.amount_cents)}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <PaymentMethodBadge method={e.method} />
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusPill
-                          label={WALLET_STATUS_LABEL[e.status] ?? e.status}
-                          tone={WALLET_TONE[e.status] ?? "info"}
-                        />
-                      </td>
+                        <div className="text-xs text-muted-foreground truncate">{e.concept}</div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="font-bold tabular-nums">{formatCents(e.amount_cents)}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {new Date(e.created_at).toLocaleDateString("es-ES")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <PaymentMethodBadge method={e.method} />
+                      <StatusPill
+                        label={WALLET_STATUS_LABEL[e.status] ?? e.status}
+                        tone={WALLET_TONE[e.status] ?? "info"}
+                      />
+                      {e.contract_reference && (
+                        <Link
+                          href={`/contratos/${e.contract_id}` as never}
+                          className="text-[11px] font-mono text-primary hover:underline"
+                        >
+                          {e.contract_reference}
+                        </Link>
+                      )}
+                      {e.invoice_id && (
+                        <Link
+                          href={`/facturas/${e.invoice_id}` as never}
+                          className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 hover:underline"
+                        >
+                          ✓ Factura
+                        </Link>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/50">
                       {isAdmin && (
-                        <td className="py-3 pr-4 text-xs">
-                          {e.collected_by_name ? (
-                            <span className="font-medium">{e.collected_by_name}</span>
+                        <span className="text-[11px] text-muted-foreground truncate flex-1">
+                          {e.collected_by_name ?? "—"}
+                        </span>
+                      )}
+                      <ValidateWalletButtons
+                        id={e.id}
+                        status={e.status}
+                        method={e.method}
+                        canValidate={canValidate}
+                        needsInvoice={!e.invoice_id && !!e.customer_id}
+                        canInvoice={canInvoice}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP: tabla compacta */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <tr className="border-b">
+                      <th className="py-2 pr-3 text-left">Fecha</th>
+                      <th className="py-2 pr-3 text-left">Cliente</th>
+                      <th className="py-2 pr-3 text-left">Contrato</th>
+                      <th className="py-2 pr-3 text-left">Concepto</th>
+                      <th className="py-2 pr-4 text-right">Importe</th>
+                      <th className="py-2 pr-3 text-left">Método</th>
+                      <th className="py-2 pr-3 text-left">Estado</th>
+                      {isAdmin && <th className="py-2 pr-3 text-left">Comercial</th>}
+                      <th className="py-2 pr-3 text-center">Fact.</th>
+                      <th className="py-2 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {entries.map((e) => (
+                      <tr key={e.id} className="hover:bg-muted/30">
+                        <td className="py-2 pr-3 text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(e.created_at).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </td>
+                        <td className="py-2 pr-3 max-w-[180px]">
+                          {e.customer_id ? (
+                            <Link
+                              href={`/clientes/${e.customer_id}` as never}
+                              className="font-medium text-sm hover:underline block truncate"
+                              title={e.customer_name ?? ""}
+                            >
+                              {e.customer_name ?? "Cliente"}
+                            </Link>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
                         </td>
-                      )}
-                      <td className="py-3 pr-4 text-xs">
-                        {e.invoice_id ? (
-                          <Link
-                            href={`/facturas/${e.invoice_id}` as never}
-                            className="text-primary hover:underline"
-                          >
-                            ✓ {e.invoice_reference ?? "Facturada"}
-                          </Link>
-                        ) : (
-                          <Badge variant="outline" className="text-[10px]">
-                            Sin facturar
-                          </Badge>
+                        <td className="py-2 pr-3 text-xs">
+                          {e.contract_id && e.contract_reference ? (
+                            <Link
+                              href={`/contratos/${e.contract_id}` as never}
+                              className="font-mono text-primary hover:underline whitespace-nowrap"
+                            >
+                              {e.contract_reference}
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-3 text-xs max-w-[160px] truncate" title={e.concept}>
+                          {e.concept}
+                        </td>
+                        <td className="py-2 pr-4 text-right font-semibold tabular-nums whitespace-nowrap">
+                          {formatCents(e.amount_cents)}
+                        </td>
+                        <td className="py-2 pr-3">
+                          <PaymentMethodBadge method={e.method} />
+                        </td>
+                        <td className="py-2 pr-3">
+                          <StatusPill
+                            label={WALLET_STATUS_LABEL[e.status] ?? e.status}
+                            tone={WALLET_TONE[e.status] ?? "info"}
+                          />
+                        </td>
+                        {isAdmin && (
+                          <td className="py-2 pr-3 text-xs max-w-[120px] truncate">
+                            {e.collected_by_name ? (
+                              <span className="font-medium">{e.collected_by_name}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
                         )}
-                      </td>
-                      <td className="py-3 text-right">
-                        <ValidateWalletButtons
-                          id={e.id}
-                          status={e.status}
-                          method={e.method}
-                          canValidate={canValidate}
-                          needsInvoice={!e.invoice_id && !!e.customer_id}
-                          canInvoice={canInvoice}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <td className="py-2 pr-3 text-center">
+                          {e.invoice_id ? (
+                            <Link
+                              href={`/facturas/${e.invoice_id}` as never}
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                              title={e.invoice_reference ?? "Facturada"}
+                            >
+                              ✓
+                            </Link>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right">
+                          <ValidateWalletButtons
+                            id={e.id}
+                            status={e.status}
+                            method={e.method}
+                            canValidate={canValidate}
+                            needsInvoice={!e.invoice_id && !!e.customer_id}
+                            canInvoice={canInvoice}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
