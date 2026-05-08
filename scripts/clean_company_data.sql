@@ -18,19 +18,21 @@
 --   - external_equipment_models, savings_*
 --
 -- USO:
---   1. Abre Supabase SQL editor.
---   2. Pega TODO el script.
---   3. Ejecútalo. Verás conteos al final.
---   4. Si todo bien → escribe `COMMIT;` y enter.
---   5. Si algo mal → escribe `ROLLBACK;` y enter.
+--   1. (recomendado) HAZ BACKUP antes — Supabase Dashboard → Database
+--      → Backups → "Take a manual backup". Tarda 1 min.
+--   2. Abre Supabase SQL editor, pega este script y ejecútalo.
+--   3. Al final verás los conteos. Comprueba que están a 0 los
+--      transaccionales y que productos/usuarios siguen ahí.
+--
+-- NO uso BEGIN/COMMIT a propósito: Supabase SQL Editor hace rollback
+-- automático si el script no termina con COMMIT explícito, y al ser
+-- multi-statement con DO $$ se complica. Mejor autocommit puro.
 --
 -- IMPLEMENTACIÓN:
---   - Usa to_regclass() para verificar existencia ANTES de cada DELETE.
---   - EXECUTE format() para diferir el parse hasta runtime — así no falla
---     en compile aunque la tabla no exista.
+--   - to_regclass() verifica existencia antes de cada DELETE.
+--   - EXECUTE format() difiere el parse hasta runtime — no falla en
+--     compile aunque la tabla no exista.
 -- =============================================================================
-
-begin;
 
 do $$
 declare
@@ -280,6 +282,7 @@ union all select 'USERS (debe quedar)', count(*) from public.user_profiles, co w
 union all select 'WAREHOUSES (debe quedar)', count(*) from public.warehouses, co where warehouses.company_id = co.company_id;
 
 -- =============================================================================
--- ✅ Si los conteos son los esperados:   COMMIT;
--- ❌ Si algo está mal:                   ROLLBACK;
+-- Los DELETE ya son persistentes (sin BEGIN/COMMIT). Si los conteos no
+-- son los esperados, no hay rollback automático: tendrías que restaurar
+-- desde backup. Por eso recomiendo backup ANTES de ejecutar.
 -- =============================================================================
