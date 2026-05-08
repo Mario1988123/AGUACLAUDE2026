@@ -129,34 +129,148 @@ export async function listWalletEntries(filters?: {
   }));
 }
 
-export async function getWalletSummary() {
+/**
+ * Resumen de wallet. Pendientes son acumulado (lo que falta cobrar es
+ * pendiente, da igual cuándo se generó). Settled/validated se filtran
+ * por mes (los importes finales tienen sentido medirlos mensualmente —
+ * "este mes el comercial ha liquidado X, ha confirmado en banco Y").
+ *
+ * Si no se pasa year/month, usa el mes en curso.
+ */
+export async function getWalletSummary(input?: { year?: number; month?: number }) {
   const session = await requireSession();
+  const now = new Date();
+  const year = input?.year ?? now.getFullYear();
+  const month = input?.month ?? now.getMonth() + 1; // 1-12
+  const monthStart = new Date(year, month - 1, 1).toISOString();
+  const monthEnd = new Date(year, month, 1).toISOString();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data, error } = await supabase
     .from("wallet_entries")
-    .select("status, amount_cents, collected_by_user_id");
+    .select(
+      "status, amount_cents, collected_by_user_id, settled_at, validated_at, created_at",
+    );
   if (error) throw error;
   const rows = (data ?? []) as Array<{
     status: string;
     amount_cents: number;
     collected_by_user_id: string | null;
+    settled_at: string | null;
+    validated_at: string | null;
+    created_at: string;
   }>;
-  const filtered =
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("commercial_director")
-      ? rows.filter((r) => r.collected_by_user_id === session.user_id)
-      : rows;
-  const sum = (st: string) =>
+  const isAllSeer =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  const filtered = isAllSeer
+    ? rows
+    : rows.filter((r) => r.collected_by_user_id === session.user_id);
+
+  // Pendientes: acumulado (no se filtran por fecha)
+  const sumStatus = (st: string) =>
     filtered.filter((r) => r.status === st).reduce((s, r) => s + r.amount_cents, 0);
+
+  // Liquidado del mes: status=settled cuyo settled_at cae en el mes
+  const settledMonth = filtered
+    .filter(
+      (r) =>
+        r.status === "settled" &&
+        r.settled_at &&
+        r.settled_at >= monthStart &&
+        r.settled_at < monthEnd,
+    )
+    .reduce((s, r) => s + r.amount_cents, 0);
+  // Validado del mes: status=validated cuyo validated_at cae en el mes
+  const validatedMonth = filtered
+    .filter(
+      (r) =>
+        r.status === "validated" &&
+        r.validated_at &&
+        r.validated_at >= monthStart &&
+        r.validated_at < monthEnd,
+    )
+    .reduce((s, r) => s + r.amount_cents, 0);
+
   return {
-    pending_cents: sum("pending"),
-    collected_cents: sum("collected"),
-    pending_settlement_cents: sum("pending_settlement"),
-    settled_cents: sum("settled"),
-    validated_cents: sum("validated"),
+    pending_cents: sumStatus("pending"),
+    collected_cents: sumStatus("collected"),
+    pending_settlement_cents: sumStatus("pending_settlement"),
+    settled_month_cents: settledMonth,
+    validated_month_cents: validatedMonth,
+    period_year: year,
+    period_month: month,
   };
+}
+
+/**
+ * Histórico mensual del año dado. Para que el admin vea evolución.
+ * Devuelve 12 entradas (enero a diciembre) con el total settled y
+ * validated cerrado en cada mes.
+ */
+export interface WalletMonthlyRow {
+  month: number;
+  settled_cents: number;
+  validated_cents: number;
+  total_final_cents: number;
+}
+
+export async function getWalletYearlyHistory(input?: {
+  year?: number;
+  user_id?: string;
+}): Promise<WalletMonthlyRow[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (!isAdmin) return [];
+
+  const year = input?.year ?? new Date().getFullYear();
+  const yearStart = new Date(year, 0, 1).toISOString();
+  const yearEnd = new Date(year + 1, 0, 1).toISOString();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  let q = admin
+    .from("wallet_entries")
+    .select("status, amount_cents, settled_at, validated_at, collected_by_user_id")
+    .eq("company_id", session.company_id);
+  if (input?.user_id) q = q.eq("collected_by_user_id", input.user_id);
+  const { data } = await q;
+  const rows = ((data as Array<{
+    status: string;
+    amount_cents: number;
+    settled_at: string | null;
+    validated_at: string | null;
+  }> | null) ?? []);
+
+  const monthly: WalletMonthlyRow[] = Array.from({ length: 12 }, (_, i) => ({
+    month: i + 1,
+    settled_cents: 0,
+    validated_cents: 0,
+    total_final_cents: 0,
+  }));
+
+  for (const r of rows) {
+    if (r.status === "settled" && r.settled_at && r.settled_at >= yearStart && r.settled_at < yearEnd) {
+      const m = new Date(r.settled_at).getMonth();
+      monthly[m]!.settled_cents += r.amount_cents;
+      monthly[m]!.total_final_cents += r.amount_cents;
+    } else if (
+      r.status === "validated" &&
+      r.validated_at &&
+      r.validated_at >= yearStart &&
+      r.validated_at < yearEnd
+    ) {
+      const m = new Date(r.validated_at).getMonth();
+      monthly[m]!.validated_cents += r.amount_cents;
+      monthly[m]!.total_final_cents += r.amount_cents;
+    }
+  }
+  return monthly;
 }
 
 export async function createWalletEntryAction(input: unknown) {

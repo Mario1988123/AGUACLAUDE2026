@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getWalletSummary, listWalletEntries } from "@/modules/wallet/actions";
+import { getWalletSummary, getWalletYearlyHistory, listWalletEntries } from "@/modules/wallet/actions";
 import { WALLET_STATUS_LABEL, METHOD_LABEL } from "@/modules/wallet/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -47,6 +47,9 @@ export default async function WalletPage({
     from?: string;
     to?: string;
     invoice?: string;
+    period_year?: string;
+    period_month?: string;
+    history_year?: string;
   }>;
 }) {
   const session = await requireSession();
@@ -56,10 +59,10 @@ export default async function WalletPage({
   const fromDate = sp.from ? new Date(sp.from + "T00:00:00").toISOString() : undefined;
   const toDate = sp.to ? new Date(sp.to + "T23:59:59").toISOString() : undefined;
   const notInvoiced = sp.invoice === "pending";
-  const [entries, summary] = await Promise.all([
-    listWalletEntries({ method, status, fromDate, toDate, notInvoiced }),
-    getWalletSummary(),
-  ]);
+  const now = new Date();
+  const periodYear = sp.period_year ? parseInt(sp.period_year, 10) : now.getFullYear();
+  const periodMonth = sp.period_month ? parseInt(sp.period_month, 10) : now.getMonth() + 1;
+  const historyYear = sp.history_year ? parseInt(sp.history_year, 10) : now.getFullYear();
 
   const canValidate =
     session.is_superadmin ||
@@ -67,6 +70,19 @@ export default async function WalletPage({
     session.roles.includes("commercial_director");
   const canInvoice = session.is_superadmin || session.roles.includes("company_admin");
   const isAdmin = canInvoice;
+
+  const [entries, summary, yearHistory] = await Promise.all([
+    listWalletEntries({ method, status, fromDate, toDate, notInvoiced }),
+    getWalletSummary({ year: periodYear, month: periodMonth }),
+    isAdmin ? getWalletYearlyHistory({ year: historyYear }) : Promise.resolve([]),
+  ]);
+
+  const MONTHS = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+  const yearsAvailable: number[] = [];
+  for (let y = now.getFullYear(); y >= now.getFullYear() - 4; y--) yearsAvailable.push(y);
 
   return (
     <div className="space-y-8">
@@ -123,38 +139,184 @@ export default async function WalletPage({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <KpiCard
-          label="Sin cobrar"
-          value={formatCents(summary.pending_cents)}
-          icon="Clock"
-          iconColor="warning"
-        />
-        <KpiCard
-          label="Cobrado · pdte. banco"
-          value={formatCents(summary.collected_cents)}
-          icon="Coins"
-          iconColor="primary"
-        />
-        <KpiCard
-          label="Pdte. liquidar (efectivo)"
-          value={formatCents(summary.pending_settlement_cents)}
-          icon="HandCoins"
-          iconColor="warning"
-        />
-        <KpiCard
-          label="Liquidado"
-          value={formatCents(summary.settled_cents)}
-          icon="Banknote"
-          iconColor="primary"
-        />
-        <KpiCard
-          label="Confirmado en banco"
-          value={formatCents(summary.validated_cents)}
-          icon="CheckCircle2"
-          iconColor="success"
-        />
+      <div className="space-y-3">
+        <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
+          <div className="space-y-1">
+            <label className="text-xs uppercase text-muted-foreground">Mes del resumen</label>
+            <div className="flex gap-2">
+              <select
+                name="period_month"
+                defaultValue={String(periodMonth)}
+                className="h-9 rounded-xl border border-input bg-background px-3 text-sm"
+              >
+                {MONTHS.map((m, i) => (
+                  <option key={i} value={i + 1}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="period_year"
+                defaultValue={String(periodYear)}
+                className="h-9 rounded-xl border border-input bg-background px-3 text-sm"
+              >
+                {yearsAvailable.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              {/* Mantener filtros activos */}
+              {method && <input type="hidden" name="method" value={method} />}
+              {status && <input type="hidden" name="status" value={status} />}
+              {sp.from && <input type="hidden" name="from" value={sp.from} />}
+              {sp.to && <input type="hidden" name="to" value={sp.to} />}
+              {sp.invoice && <input type="hidden" name="invoice" value={sp.invoice} />}
+              {sp.history_year && (
+                <input type="hidden" name="history_year" value={sp.history_year} />
+              )}
+              <button
+                type="submit"
+                className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground self-center">
+            Pendientes son acumulados. Liquidado y Confirmado en banco son del mes seleccionado.
+          </p>
+        </form>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <KpiCard
+            label="Sin cobrar (acumulado)"
+            value={formatCents(summary.pending_cents)}
+            icon="Clock"
+            iconColor="warning"
+          />
+          <KpiCard
+            label="Cobrado · pdte. banco"
+            value={formatCents(summary.collected_cents)}
+            icon="Coins"
+            iconColor="primary"
+          />
+          <KpiCard
+            label="Pdte. liquidar (efectivo)"
+            value={formatCents(summary.pending_settlement_cents)}
+            icon="HandCoins"
+            iconColor="warning"
+          />
+          <KpiCard
+            label={`Liquidado · ${MONTHS[periodMonth - 1]} ${periodYear}`}
+            value={formatCents(summary.settled_month_cents)}
+            icon="Banknote"
+            iconColor="primary"
+          />
+          <KpiCard
+            label={`Confirmado banco · ${MONTHS[periodMonth - 1]} ${periodYear}`}
+            value={formatCents(summary.validated_month_cents)}
+            icon="CheckCircle2"
+            iconColor="success"
+          />
+        </div>
       </div>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center justify-between gap-3">
+              <span>Histórico mensual {historyYear}</span>
+              <form className="flex gap-2">
+                <select
+                  name="history_year"
+                  defaultValue={String(historyYear)}
+                  className="h-8 rounded-xl border border-input bg-background px-3 text-xs"
+                >
+                  {yearsAvailable.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                {/* preserve other params */}
+                {method && <input type="hidden" name="method" value={method} />}
+                {status && <input type="hidden" name="status" value={status} />}
+                {sp.from && <input type="hidden" name="from" value={sp.from} />}
+                {sp.to && <input type="hidden" name="to" value={sp.to} />}
+                {sp.invoice && <input type="hidden" name="invoice" value={sp.invoice} />}
+                <input type="hidden" name="period_year" value={String(periodYear)} />
+                <input type="hidden" name="period_month" value={String(periodMonth)} />
+                <button
+                  type="submit"
+                  className="inline-flex h-8 items-center rounded-xl border border-border bg-card px-3 text-xs font-semibold hover:bg-muted"
+                >
+                  Ver año
+                </button>
+              </form>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="py-2 text-left">Mes</th>
+                    <th className="py-2 text-right">Liquidado (efectivo)</th>
+                    <th className="py-2 text-right">Confirmado banco</th>
+                    <th className="py-2 text-right">Total cerrado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {yearHistory.map((m) => {
+                    const isCurrent =
+                      historyYear === now.getFullYear() && m.month === now.getMonth() + 1;
+                    const isFuture =
+                      historyYear > now.getFullYear() ||
+                      (historyYear === now.getFullYear() && m.month > now.getMonth() + 1);
+                    return (
+                      <tr
+                        key={m.month}
+                        className={`hover:bg-muted/30 ${isFuture ? "opacity-40" : ""} ${isCurrent ? "bg-primary/5 font-semibold" : ""}`}
+                      >
+                        <td className="py-2">
+                          {MONTHS[m.month - 1]}
+                          {isCurrent && (
+                            <span className="ml-2 text-xs text-primary">(actual)</span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {formatCents(m.settled_cents)}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {formatCents(m.validated_cents)}
+                        </td>
+                        <td className="py-2 text-right font-bold tabular-nums">
+                          {formatCents(m.total_final_cents)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t font-bold">
+                    <td className="py-3 text-left">Total {historyYear}</td>
+                    <td className="py-3 text-right tabular-nums">
+                      {formatCents(yearHistory.reduce((s, m) => s + m.settled_cents, 0))}
+                    </td>
+                    <td className="py-3 text-right tabular-nums">
+                      {formatCents(yearHistory.reduce((s, m) => s + m.validated_cents, 0))}
+                    </td>
+                    <td className="py-3 text-right text-lg tabular-nums">
+                      {formatCents(yearHistory.reduce((s, m) => s + m.total_final_cents, 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">
