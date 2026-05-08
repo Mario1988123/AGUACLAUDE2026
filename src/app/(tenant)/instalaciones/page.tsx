@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listInstallations } from "@/modules/installations/actions";
-import { listTeamMembers } from "@/modules/agenda/actions";
+import { listInstallers } from "@/modules/agenda/actions";
 import { STATUS_LABEL, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
@@ -66,7 +66,7 @@ export default async function InstalacionesPage({
   const statusFilter = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const [installations, team] = await Promise.all([
     listInstallations({ installer_user_id: installerFilter, status: statusFilter }),
-    listTeamMembers().catch(() => []),
+    listInstallers().catch(() => []),
   ]);
 
   // Separar agendadas (con scheduled_at) y sin agendar

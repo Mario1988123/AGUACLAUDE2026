@@ -347,6 +347,37 @@ export async function listTeamMembers(): Promise<{ user_id: string; full_name: s
   return (data ?? []) as { user_id: string; full_name: string }[];
 }
 
+/**
+ * Lista solo usuarios con rol que pueda hacer instalaciones:
+ * `installer` o `technical_director`. Para el filtro "Instalador" en
+ * /instalaciones — los comerciales no deben salir.
+ */
+export async function listInstallers(): Promise<{ user_id: string; full_name: string }[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = (await createAdminClient()) as any;
+  // Usuarios con rol installer o technical_director (no revocados)
+  const { data: roles } = await admin
+    .from("user_roles")
+    .select("user_id")
+    .eq("company_id", session.company_id)
+    .in("role_key", ["installer", "technical_director"])
+    .is("revoked_at", null);
+  const ids = Array.from(
+    new Set(((roles as Array<{ user_id: string }> | null) ?? []).map((r) => r.user_id)),
+  );
+  if (ids.length === 0) return [];
+  const { data } = await admin
+    .from("user_profiles")
+    .select("user_id, full_name")
+    .eq("company_id", session.company_id)
+    .in("user_id", ids)
+    .order("full_name");
+  return ((data as { user_id: string; full_name: string }[] | null) ?? []);
+}
+
 export async function createAgendaEventAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
