@@ -29,7 +29,7 @@ export function IbanInput({
     hint = "Formato IBAN no válido";
     hintTone = "error";
   } else if (check.state === "pending") {
-    hint = "IBAN pendiente — se guardará como placeholder. Completa el número real antes de firmar el contrato.";
+    hint = "IBAN pendiente";
     hintTone = "warning";
   }
 

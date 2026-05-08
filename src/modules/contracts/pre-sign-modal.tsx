@@ -284,7 +284,7 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                     readiness.primary_bank
                       ? readiness.primary_bank.is_validated
                         ? `✓ IBAN validado: ${readiness.primary_bank.iban}`
-                        : `IBAN ES00 pendiente — firmable, validable después`
+                        : `IBAN pendiente — necesario cambiarlo cuando lo tengas`
                       : "IBAN no necesario para venta al contado"
                   }
                   failLabel="Falta IBAN — añade la cuenta del cliente abajo"
