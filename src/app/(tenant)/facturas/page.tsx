@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { listInvoices } from "@/modules/invoices/actions";
+import { listPendingInvoiceWalletEntries } from "@/modules/wallet/actions";
 import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
+import { Badge } from "@/shared/ui/badge";
 import { GenerateMonthlyButton } from "@/modules/invoices/generate-monthly-button";
+import { InvoiceFromWalletButton } from "@/modules/wallet/invoice-from-wallet-button";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +43,10 @@ function eur(c: number): string {
 }
 
 export default async function InvoicesPage() {
-  const invoices = await listInvoices();
+  const [invoices, pendingInvoice] = await Promise.all([
+    listInvoices(),
+    listPendingInvoiceWalletEntries(),
+  ]);
 
   const totalPending = invoices
     .filter((i) => i.status === "issued" || i.status === "overdue")
@@ -62,6 +68,81 @@ export default async function InvoicesPage() {
           </Button>
         </div>
       </div>
+
+      {pendingInvoice.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Pendientes de facturar ({pendingInvoice.length})
+              <Badge variant="warning">{eur(pendingInvoice.reduce((s, p) => s + p.amount_cents, 0))}</Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Cobros del wallet ya cobrados pero sin factura emitida. Pulsa «Facturar» para crear
+              borrador con IVA 21% (luego puedes ajustar).
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="py-2 text-left">Cobrado</th>
+                    <th className="py-2 text-left">Cliente</th>
+                    <th className="py-2 text-left">Contrato</th>
+                    <th className="py-2 text-left">Concepto</th>
+                    <th className="py-2 text-right">Importe</th>
+                    <th className="py-2 text-left">Comercial</th>
+                    <th className="py-2 text-right"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {pendingInvoice.map((p) => (
+                    <tr key={p.id} className="hover:bg-amber-100/50">
+                      <td className="py-2 text-xs">
+                        {p.collected_at
+                          ? new Date(p.collected_at).toLocaleDateString("es-ES")
+                          : "—"}
+                      </td>
+                      <td className="py-2">
+                        {p.customer_id ? (
+                          <Link
+                            href={`/clientes/${p.customer_id}` as never}
+                            className="font-medium hover:underline"
+                          >
+                            {p.customer_name ?? "Cliente"}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="py-2 font-mono text-xs">
+                        {p.contract_reference ? (
+                          <Link
+                            href={`/contratos/${p.contract_id}` as never}
+                            className="text-primary hover:underline"
+                          >
+                            {p.contract_reference}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="py-2 text-xs">{p.concept}</td>
+                      <td className="py-2 text-right font-semibold tabular-nums">
+                        {eur(p.amount_cents)}
+                      </td>
+                      <td className="py-2 text-xs">{p.collected_by_name ?? "—"}</td>
+                      <td className="py-2 text-right">
+                        <InvoiceFromWalletButton walletId={p.id} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

@@ -40,7 +40,13 @@ const STATUS_OPTIONS = [
 export default async function WalletPage({
   searchParams,
 }: {
-  searchParams: Promise<{ method?: string; status?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    method?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    invoice?: string;
+  }>;
 }) {
   const session = await requireSession();
   const sp = await searchParams;
@@ -48,8 +54,9 @@ export default async function WalletPage({
   const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const fromDate = sp.from ? new Date(sp.from + "T00:00:00").toISOString() : undefined;
   const toDate = sp.to ? new Date(sp.to + "T23:59:59").toISOString() : undefined;
+  const notInvoiced = sp.invoice === "pending";
   const [entries, summary] = await Promise.all([
-    listWalletEntries({ method, status, fromDate, toDate }),
+    listWalletEntries({ method, status, fromDate, toDate, notInvoiced }),
     getWalletSummary(),
   ]);
 
@@ -57,6 +64,8 @@ export default async function WalletPage({
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
+  const canInvoice = session.is_superadmin || session.roles.includes("company_admin");
+  const isAdmin = canInvoice;
 
   return (
     <div className="space-y-8">
@@ -64,7 +73,8 @@ export default async function WalletPage({
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Wallet</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cobros y liquidaciones. Objetivo: dejar saldo a 0 tras liquidar.
+            Cobros y liquidaciones. <strong>Pendiente</strong> = aún no cobrado.{" "}
+            <strong>Pendiente liquidar</strong> = comercial cobró efectivo, falta entregar a la empresa.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -81,7 +91,7 @@ export default async function WalletPage({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
-          label="Pendiente"
+          label="Pendiente cobrar"
           value={formatCents(summary.pending_cents)}
           icon="Clock"
           iconColor="warning"
@@ -93,7 +103,7 @@ export default async function WalletPage({
           iconColor="primary"
         />
         <KpiCard
-          label="Pdte. liquidar"
+          label="Pdte. liquidar comercial"
           value={formatCents(summary.pending_settlement_cents)}
           icon="HandCoins"
           iconColor="warning"
@@ -143,6 +153,19 @@ export default async function WalletPage({
             ))}
           </select>
         </div>
+        {isAdmin && (
+          <div className="space-y-1">
+            <label className="text-xs uppercase text-muted-foreground">Facturación</label>
+            <select
+              name="invoice"
+              defaultValue={sp.invoice ?? ""}
+              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            >
+              <option value="">Todas</option>
+              <option value="pending">Sin facturar</option>
+            </select>
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Desde</label>
           <input
@@ -167,7 +190,7 @@ export default async function WalletPage({
         >
           Aplicar
         </button>
-        {(method || status || sp.from || sp.to) && (
+        {(method || status || sp.from || sp.to || sp.invoice) && (
           <Link href="/wallet" className="text-sm text-muted-foreground hover:underline">
             Limpiar
           </Link>
@@ -187,21 +210,49 @@ export default async function WalletPage({
                 <thead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   <tr className="border-b">
                     <th className="py-3 text-left">Fecha</th>
+                    <th className="py-3 text-left">Cliente</th>
+                    <th className="py-3 text-left">Contrato</th>
                     <th className="py-3 text-left">Concepto</th>
                     <th className="py-3 text-right">Importe</th>
                     <th className="py-3 text-left">Método</th>
                     <th className="py-3 text-left">Estado</th>
+                    {isAdmin && <th className="py-3 text-left">Comercial</th>}
+                    <th className="py-3 text-left">Factura</th>
                     <th className="py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {entries.map((e) => (
                     <tr key={e.id} className="hover:bg-muted/30">
-                      <td className="py-3 text-xs text-muted-foreground">
+                      <td className="py-3 text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(e.created_at).toLocaleDateString("es-ES")}
                       </td>
-                      <td className="py-3 font-medium">{e.concept}</td>
-                      <td className="py-3 text-right font-semibold tabular-nums">
+                      <td className="py-3">
+                        {e.customer_id ? (
+                          <Link
+                            href={`/clientes/${e.customer_id}` as never}
+                            className="font-medium hover:underline"
+                          >
+                            {e.customer_name ?? "Cliente"}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-xs">
+                        {e.contract_id && e.contract_reference ? (
+                          <Link
+                            href={`/contratos/${e.contract_id}` as never}
+                            className="font-mono text-primary hover:underline"
+                          >
+                            {e.contract_reference}
+                          </Link>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 text-xs">{e.concept}</td>
+                      <td className="py-3 text-right font-semibold tabular-nums whitespace-nowrap">
                         {formatCents(e.amount_cents)}
                       </td>
                       <td className="py-3">
@@ -213,12 +264,37 @@ export default async function WalletPage({
                           tone={WALLET_TONE[e.status] ?? "info"}
                         />
                       </td>
+                      {isAdmin && (
+                        <td className="py-3 text-xs">
+                          {e.collected_by_name ? (
+                            <span className="font-medium">{e.collected_by_name}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      )}
+                      <td className="py-3 text-xs">
+                        {e.invoice_id ? (
+                          <Link
+                            href={`/facturas/${e.invoice_id}` as never}
+                            className="text-primary hover:underline"
+                          >
+                            ✓ {e.invoice_reference ?? "Facturada"}
+                          </Link>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">
+                            Sin facturar
+                          </Badge>
+                        )}
+                      </td>
                       <td className="py-3 text-right">
                         <ValidateWalletButtons
                           id={e.id}
                           status={e.status}
                           method={e.method}
                           canValidate={canValidate}
+                          needsInvoice={!e.invoice_id && !!e.customer_id}
+                          canInvoice={canInvoice}
                         />
                       </td>
                     </tr>

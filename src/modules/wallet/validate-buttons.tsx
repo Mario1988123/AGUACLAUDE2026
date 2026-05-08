@@ -9,13 +9,20 @@ import {
   markWalletAsCollectedAction,
   cancelWalletEntryAction,
   changeWalletMethodAction,
+  createInvoiceFromWalletAction,
 } from "./actions";
+import { useRouter } from "next/navigation";
+import { Receipt } from "lucide-react";
 
 interface Props {
   id: string;
   status: string;
   method: string;
   canValidate: boolean;
+  /** true si este wallet_entry NO tiene invoice_id (sin facturar) */
+  needsInvoice?: boolean;
+  /** true si el usuario es admin (puede facturar) */
+  canInvoice?: boolean;
 }
 
 const METHOD_OPTIONS: Array<{ value: string; label: string }> = [
@@ -27,12 +34,32 @@ const METHOD_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "financing", label: "Financiación" },
 ];
 
-export function ValidateWalletButtons({ id, status, method, canValidate }: Props) {
+export function ValidateWalletButtons({
+  id,
+  status,
+  method,
+  canValidate,
+  needsInvoice = false,
+  canInvoice = false,
+}: Props) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [reasonOpen, setReasonOpen] = useState<"reject" | "cancel" | null>(null);
   const [reason, setReason] = useState("");
   const [methodOpen, setMethodOpen] = useState(false);
   const [newMethod, setNewMethod] = useState(method);
+
+  function invoice() {
+    startTransition(async () => {
+      const r = await createInvoiceFromWalletAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo facturar", r.error);
+        return;
+      }
+      notify.success("Factura creada", "Borrador listo para revisar y emitir.");
+      router.push(`/facturas/${r.invoice_id}` as never);
+    });
+  }
 
   const isCollected = status === "collected" || status === "pending_settlement";
   const isPending = status === "pending";
@@ -156,6 +183,11 @@ export function ValidateWalletButtons({ id, status, method, canValidate }: Props
         {isRejected && canValidate && (
           <Button size="sm" variant="outline" onClick={markCollected} disabled={pending}>
             Reabrir como cobrado
+          </Button>
+        )}
+        {needsInvoice && canInvoice && (isCollected || (status as string) === "validated") && (
+          <Button size="sm" variant="success" onClick={invoice} disabled={pending} className="gap-1">
+            <Receipt className="h-3 w-3" /> Facturar
           </Button>
         )}
       </div>

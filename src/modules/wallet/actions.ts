@@ -15,9 +15,15 @@ export interface WalletEntryRow {
   method: string;
   status: string;
   collected_by_user_id: string | null;
+  collected_by_name: string | null;
   collected_at: string | null;
   validated_at: string | null;
   contract_id: string | null;
+  contract_reference: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  invoice_id: string | null;
+  invoice_reference: string | null;
   created_at: string;
 }
 
@@ -26,6 +32,7 @@ export async function listWalletEntries(filters?: {
   status?: string;
   fromDate?: string;
   toDate?: string;
+  notInvoiced?: boolean;
 }): Promise<WalletEntryRow[]> {
   const session = await requireSession();
   const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
@@ -34,15 +41,16 @@ export async function listWalletEntries(filters?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  // Defensa-en-profundidad: la columna invoice_id se añadió en
+  // 20260511100000. Si la migración no se ha aplicado, hacemos fallback
+  // sin esa columna en lugar de reventar la página.
   let query = supabase
     .from("wallet_entries")
     .select(
-      "id, concept, amount_cents, method, status, collected_by_user_id, collected_at, validated_at, contract_id, created_at",
+      "id, concept, amount_cents, method, status, collected_by_user_id, collected_at, validated_at, contract_id, customer_id, invoice_id, created_at, contracts(reference_code), customers(legal_name, trade_name, first_name, last_name), invoices(full_reference, status)",
     )
     .order("created_at", { ascending: false })
     .limit(200);
-  // Director comercial ahora ve cobros de su equipo via team_assignments
-  // (antes solo veía los suyos). Nivel 1 ve todos. Nivel 3 solo los suyos.
   if (visibleUserIds) {
     query = query.in("collected_by_user_id", visibleUserIds);
   }
@@ -50,9 +58,70 @@ export async function listWalletEntries(filters?: {
   if (filters?.status) query = query.eq("status", filters.status);
   if (filters?.fromDate) query = query.gte("created_at", filters.fromDate);
   if (filters?.toDate) query = query.lte("created_at", filters.toDate);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []) as WalletEntryRow[];
+  if (filters?.notInvoiced) query = query.is("invoice_id", null);
+
+  // eslint-disable-next-line prefer-const
+  let { data, error } = await query;
+  if (error && /invoice_id|invoices/i.test(error.message ?? "")) {
+    // Fallback sin la migración aplicada
+    let q2 = supabase
+      .from("wallet_entries")
+      .select(
+        "id, concept, amount_cents, method, status, collected_by_user_id, collected_at, validated_at, contract_id, customer_id, created_at, contracts(reference_code), customers(legal_name, trade_name, first_name, last_name)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (visibleUserIds) q2 = q2.in("collected_by_user_id", visibleUserIds);
+    if (filters?.method) q2 = q2.eq("method", filters.method);
+    if (filters?.status) q2 = q2.eq("status", filters.status);
+    if (filters?.fromDate) q2 = q2.gte("created_at", filters.fromDate);
+    if (filters?.toDate) q2 = q2.lte("created_at", filters.toDate);
+    const r2 = await q2;
+    if (r2.error) throw r2.error;
+    data = r2.data;
+  } else if (error) {
+    throw error;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const baseRows = ((data as any[]) ?? []);
+
+  // Resolver nombre del comercial via user_profiles (auth.users → user_profiles.user_id)
+  const userIds = Array.from(new Set(baseRows.map((r) => r.collected_by_user_id).filter(Boolean) as string[]));
+  const nameMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("user_id, full_name, email")
+      .in("user_id", userIds);
+    for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
+      nameMap.set(p.user_id, p.full_name ?? p.email ?? "");
+    }
+  }
+
+  return baseRows.map((r) => ({
+    id: r.id,
+    concept: r.concept,
+    amount_cents: r.amount_cents,
+    method: r.method,
+    status: r.status,
+    collected_by_user_id: r.collected_by_user_id,
+    collected_by_name: r.collected_by_user_id
+      ? (nameMap.get(r.collected_by_user_id) ?? null)
+      : null,
+    collected_at: r.collected_at,
+    validated_at: r.validated_at,
+    contract_id: r.contract_id,
+    contract_reference: r.contracts?.reference_code ?? null,
+    customer_id: r.customer_id,
+    customer_name:
+      r.customers?.trade_name ||
+      r.customers?.legal_name ||
+      [r.customers?.first_name, r.customers?.last_name].filter(Boolean).join(" ") ||
+      null,
+    invoice_id: r.invoice_id ?? null,
+    invoice_reference: r.invoices?.full_reference ?? null,
+    created_at: r.created_at,
+  }));
 }
 
 export async function getWalletSummary() {
@@ -477,4 +546,168 @@ export async function cancelWalletEntryAction(id: string, reason: string) {
   });
   if (e.contract_id) revalidatePath(`/contratos/${e.contract_id}`);
   revalidatePath("/wallet");
+}
+
+// =============================================================================
+// Facturación desde wallet
+// =============================================================================
+
+export type InvoiceFromWalletResult =
+  | { ok: true; invoice_id: string }
+  | { ok: false; error: string };
+
+/**
+ * Crea una factura borrador a partir de un wallet entry cobrado.
+ * Vincula wallet.invoice_id → la factura.
+ *
+ * El amount_cents del wallet es el TOTAL pagado (con IVA). Separamos
+ * base + IVA al 21% por defecto. El admin puede ajustar antes de emitir.
+ */
+export async function createInvoiceFromWalletAction(
+  walletId: string,
+): Promise<InvoiceFromWalletResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo admin puede facturar" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: row } = await admin
+      .from("wallet_entries")
+      .select(
+        "id, company_id, customer_id, contract_id, concept, amount_cents, status, invoice_id",
+      )
+      .eq("id", walletId)
+      .maybeSingle();
+    const w = row as
+      | {
+          id: string;
+          company_id: string;
+          customer_id: string | null;
+          contract_id: string | null;
+          concept: string;
+          amount_cents: number;
+          status: string;
+          invoice_id: string | null;
+        }
+      | null;
+    if (!w) return { ok: false, error: "Cobro no encontrado" };
+    if (w.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
+    if (!w.customer_id) {
+      return {
+        ok: false,
+        error: "El cobro no tiene cliente asociado — no se puede facturar",
+      };
+    }
+    if (w.invoice_id) return { ok: false, error: "Este cobro ya está facturado" };
+    if (!["collected", "pending_settlement", "validated", "settled"].includes(w.status)) {
+      return {
+        ok: false,
+        error: `Solo se factura un cobro confirmado (estado actual: ${w.status})`,
+      };
+    }
+
+    const totalCents = w.amount_cents;
+    const baseCents = Math.round(totalCents / 1.21);
+
+    const { createInvoiceAction } = await import("@/modules/invoices/actions");
+    const invoiceId = await createInvoiceAction({
+      customer_id: w.customer_id,
+      contract_id: w.contract_id ?? null,
+      kind: "invoice",
+      lines: [
+        {
+          description: w.concept,
+          quantity: 1,
+          unit_price_cents: baseCents,
+          discount_percent: 0,
+          tax_rate_percent: 21,
+        },
+      ],
+    });
+
+    await admin
+      .from("wallet_entries")
+      .update({ invoice_id: invoiceId })
+      .eq("id", w.id);
+
+    revalidatePath("/wallet");
+    revalidatePath("/facturas");
+    if (w.contract_id) revalidatePath(`/contratos/${w.contract_id}`);
+    return { ok: true, invoice_id: invoiceId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[createInvoiceFromWallet]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+export interface PendingInvoiceRow {
+  id: string;
+  concept: string;
+  amount_cents: number;
+  customer_id: string | null;
+  customer_name: string | null;
+  contract_id: string | null;
+  contract_reference: string | null;
+  collected_at: string | null;
+  collected_by_name: string | null;
+  method: string;
+}
+
+export async function listPendingInvoiceWalletEntries(): Promise<PendingInvoiceRow[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data, error } = await admin
+    .from("wallet_entries")
+    .select(
+      "id, concept, amount_cents, method, collected_at, collected_by_user_id, contract_id, customer_id, contracts(reference_code), customers(legal_name, trade_name, first_name, last_name)",
+    )
+    .eq("company_id", session.company_id)
+    .is("invoice_id", null)
+    .in("status", ["collected", "pending_settlement", "validated", "settled"])
+    .order("collected_at", { ascending: false })
+    .limit(100);
+  if (error) {
+    if (/invoice_id/i.test(error.message ?? "")) return [];
+    throw error;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = ((data as any[]) ?? []);
+  const userIds = Array.from(
+    new Set(rows.map((r) => r.collected_by_user_id).filter(Boolean) as string[]),
+  );
+  const nameMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("user_profiles")
+      .select("user_id, full_name, email")
+      .in("user_id", userIds);
+    for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
+      nameMap.set(p.user_id, p.full_name ?? p.email ?? "");
+    }
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    concept: r.concept,
+    amount_cents: r.amount_cents,
+    method: r.method,
+    customer_id: r.customer_id,
+    customer_name:
+      r.customers?.trade_name ||
+      r.customers?.legal_name ||
+      [r.customers?.first_name, r.customers?.last_name].filter(Boolean).join(" ") ||
+      null,
+    contract_id: r.contract_id,
+    contract_reference: r.contracts?.reference_code ?? null,
+    collected_at: r.collected_at,
+    collected_by_name: r.collected_by_user_id
+      ? (nameMap.get(r.collected_by_user_id) ?? null)
+      : null,
+  }));
 }
