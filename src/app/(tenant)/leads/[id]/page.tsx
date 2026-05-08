@@ -45,17 +45,13 @@ export default async function LeadDetailPage({
     requireSession(),
     listTeamMembers().catch(() => []),
   ]);
-  // Reasignar lead/contrato/instalación restringido a admin de empresa
-  // (decisión usuario): los directores ya no pueden reasignar.
   const canReassign =
     session.is_superadmin || session.roles.includes("company_admin");
   const hasProposals = proposals.length > 0;
   const isConverted = lead.status === "converted";
 
-  // Resolver nombre del comercial asignado (si lo hay)
   let assignedName: string | null = null;
   if (lead.assigned_user_id) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { createClient } = await import("@/shared/lib/supabase/server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = (await createClient()) as any;
@@ -68,87 +64,103 @@ export default async function LeadDetailPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{displayName}</h1>
+    <div className="space-y-5">
+      {/* Header: nombre + badge + meta + Volver */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-bold">{displayName}</h1>
             <Badge variant={STATUS_VARIANT[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
           </div>
-          <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
             <span>{lead.party_kind === "company" ? "Empresa" : "Particular"}</span>
             <span>·</span>
             <span>Origen: {ORIGIN_LABEL[lead.origin]}</span>
             {assignedName && (
               <>
                 <span>·</span>
-                <span>Asignado a <strong className="text-foreground">{assignedName}</strong></span>
+                <span>
+                  Asignado a <strong className="text-foreground">{assignedName}</strong>
+                </span>
               </>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {!isConverted && (
-            <EditLeadButton
-              leadId={lead.id}
-              initial={{
-                party_kind: lead.party_kind,
-                legal_name: lead.legal_name,
-                trade_name: lead.trade_name,
-                first_name: lead.first_name,
-                last_name: lead.last_name,
-                email: lead.email,
-                phone_primary: lead.phone_primary,
-                phone_company: lead.phone_company,
-                tax_id: lead.tax_id,
-                notes: lead.notes,
-                potential: lead.potential,
-              }}
-            />
-          )}
-          <Link href="/leads" className="text-sm text-primary hover:underline">
-            ← Volver
-          </Link>
-        </div>
+        <Link href="/leads" className="text-sm text-primary hover:underline self-start mt-2">
+          ← Volver
+        </Link>
       </div>
 
-      <LeadContactButtons
-        leadId={lead.id}
-        phone={lead.phone_primary}
-        email={lead.email}
-        recipientName={displayName}
-        commercialName={session.full_name}
-      />
+      {/* Toolbar de acciones agrupada arriba */}
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card/50 p-3">
+        <LeadContactButtons
+          leadId={lead.id}
+          phone={lead.phone_primary}
+          email={lead.email}
+          recipientName={displayName}
+          commercialName={session.full_name}
+        />
+        {!isConverted && (
+          <>
+            <span className="hidden sm:inline-block h-8 w-px bg-border mx-1" aria-hidden />
+            <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
+            {!hasProposals && <ConvertLeadButton leadId={lead.id} alreadyConverted={false} />}
+            {canReassign && (
+              <ReassignLeadButton
+                leadId={lead.id}
+                currentUserId={lead.assigned_user_id}
+                team={team}
+              />
+            )}
+          </>
+        )}
+        {isConverted && lead.converted_to_customer_id && (
+          <Link
+            href={`/clientes/${lead.converted_to_customer_id}` as never}
+            className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700"
+          >
+            Ver cliente →
+          </Link>
+        )}
+      </div>
 
-      {addresses.length === 0 && !isConverted && (
-        <div className="flex items-start gap-3 rounded-2xl border-2 border-dashed border-warning bg-warning/5 p-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-warning/15 text-warning">
-            <MapPin className="h-5 w-5" />
-          </div>
-          <div className="flex-1 text-sm">
-            <div className="font-bold">Falta la dirección</div>
-            <p className="text-muted-foreground">
-              Añádela abajo para programar visitas y traspasarla al cliente al convertir.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
+      {/* Datos: full-width, Editar en esquina superior derecha */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
             <CardTitle>Datos</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            {!isConverted && (
+              <EditLeadButton
+                leadId={lead.id}
+                initial={{
+                  party_kind: lead.party_kind,
+                  legal_name: lead.legal_name,
+                  trade_name: lead.trade_name,
+                  first_name: lead.first_name,
+                  last_name: lead.last_name,
+                  email: lead.email,
+                  phone_primary: lead.phone_primary,
+                  phone_company: lead.phone_company,
+                  tax_id: lead.tax_id,
+                  notes: lead.notes,
+                  potential: lead.potential,
+                }}
+              />
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2">
             <DataRow label="Tipo" value={lead.party_kind === "company" ? "Empresa" : "Particular"} />
             {lead.party_kind === "company" ? (
               <>
                 <DataRow label="Razón social" value={lead.legal_name} />
                 <DataRow label="Nombre comercial" value={lead.trade_name} />
                 <DataRow label="CIF" value={lead.tax_id} />
-                <DataRow label="Persona de contacto" value={
-                  `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || null
-                } />
+                <DataRow
+                  label="Persona contacto"
+                  value={`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || null}
+                />
                 <DataRow label="Tel. empresa" value={lead.phone_company} />
               </>
             ) : (
@@ -159,69 +171,35 @@ export default async function LeadDetailPage({
               </>
             )}
             <DataRow label="Email" value={lead.email} />
-            <DataRow label="Teléfono principal" value={lead.phone_primary} />
-            <DataRow label="Potencial" value={lead.potential === "unknown" ? "Sin clasificar" : `Clase ${lead.potential}`} />
-            {lead.notes && (
-              <div className="border-t pt-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Notas</div>
-                <p className="mt-1 whitespace-pre-wrap text-sm">{lead.notes}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <DataRow label="Teléfono" value={lead.phone_primary} />
+            <DataRow
+              label="Potencial"
+              value={lead.potential === "unknown" ? "Sin clasificar" : `Clase ${lead.potential}`}
+            />
+          </div>
+          {lead.notes && (
+            <div className="mt-4 border-t pt-3">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Notas</div>
+              <p className="mt-1 whitespace-pre-wrap text-sm">{lead.notes}</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-        <div className="space-y-6">
-          {isConverted ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Convertido</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {lead.converted_to_customer_id && (
-                  <Link
-                    href={`/clientes/${lead.converted_to_customer_id}` as never}
-                    className="block rounded-xl bg-success px-4 py-3 text-center text-sm font-semibold text-success-foreground hover:bg-success/90"
-                  >
-                    Ver cliente →
-                  </Link>
-                )}
-              </CardContent>
-            </Card>
-          ) : !hasProposals ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Convertir directamente</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Crea cliente sin propuesta (uso poco habitual). Lo recomendado es crear
-                  propuesta y aceptarla.
-                </p>
-                <ConvertLeadButton leadId={lead.id} alreadyConverted={false} />
-              </CardContent>
-            </Card>
-          ) : null}
+      {/* Direcciones */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-primary" />
+            Direcciones ({addresses.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AddressList leadId={id} addresses={addresses} />
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Estado</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
-              {canReassign && !isConverted && (
-                <div className="border-t pt-3">
-                  <ReassignLeadButton
-                    leadId={lead.id}
-                    currentUserId={lead.assigned_user_id}
-                    team={team}
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
+      {/* Propuestas */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -240,18 +218,7 @@ export default async function LeadDetailPage({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-primary" />
-            Direcciones ({addresses.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <AddressList leadId={id} addresses={addresses} />
-        </CardContent>
-      </Card>
-
+      {/* Timeline */}
       <Card>
         <CardHeader>
           <CardTitle>Timeline</CardTitle>
@@ -268,7 +235,7 @@ function DataRow({ label, value }: { label: string; value: string | null | undef
   return (
     <div className="grid grid-cols-3 gap-2 text-sm">
       <div className="text-muted-foreground">{label}</div>
-      <div className="col-span-2 break-words">{value || "—"}</div>
+      <div className="col-span-2 break-words font-medium">{value || "—"}</div>
     </div>
   );
 }
