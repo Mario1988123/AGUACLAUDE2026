@@ -92,15 +92,56 @@ begin
     delete from public.expense_mileage where company_id = v_company_id;
   end if;
 
-  -- Invoices (Verifactu)
+  -- Invoices (Verifactu) — borrar dependientes primero (algunas tienen
+  -- ON DELETE RESTRICT que bloqueará el DELETE de invoices si quedan).
   perform 1 from information_schema.tables where table_schema='public' and table_name='invoices';
   if found then
-    delete from public.invoice_lines where invoice_id in (
-      select id from public.invoices where company_id = v_company_id
-    );
-    delete from public.invoice_payments where invoice_id in (
-      select id from public.invoices where company_id = v_company_id
-    );
+    -- invoice_lines
+    perform 1 from information_schema.tables where table_schema='public' and table_name='invoice_lines';
+    if found then
+      delete from public.invoice_lines where invoice_id in (
+        select id from public.invoices where company_id = v_company_id
+      );
+    end if;
+    -- invoice_payments (puede no existir)
+    perform 1 from information_schema.tables where table_schema='public' and table_name='invoice_payments';
+    if found then
+      delete from public.invoice_payments where invoice_id in (
+        select id from public.invoices where company_id = v_company_id
+      );
+    end if;
+    -- invoice_taxes (verifactu)
+    perform 1 from information_schema.tables where table_schema='public' and table_name='invoice_taxes';
+    if found then
+      delete from public.invoice_taxes where invoice_id in (
+        select id from public.invoices where company_id = v_company_id
+      );
+    end if;
+    -- invoice_verifactu_records (RESTRICT — si quedan, bloquea invoices)
+    perform 1 from information_schema.tables where table_schema='public' and table_name='invoice_verifactu_records';
+    if found then
+      delete from public.invoice_verifactu_records where company_id = v_company_id;
+    end if;
+    -- verifactu_submissions / queue (si existen)
+    perform 1 from information_schema.tables where table_schema='public' and table_name='verifactu_submission_queue';
+    if found then
+      delete from public.verifactu_submission_queue where invoice_id in (
+        select id from public.invoices where company_id = v_company_id
+      );
+    end if;
+    perform 1 from information_schema.tables where table_schema='public' and table_name='verifactu_audit_log';
+    if found then
+      delete from public.verifactu_audit_log where invoice_id in (
+        select id from public.invoices where company_id = v_company_id
+      );
+    end if;
+    -- Algún contrato puede tener rectifies_invoice_id apuntando a invoices.
+    -- Lo nulificamos antes para evitar restricción.
+    perform 1 from information_schema.columns where table_schema='public' and table_name='contracts' and column_name='rectifies_invoice_id';
+    if found then
+      update public.contracts set rectifies_invoice_id = null
+      where company_id = v_company_id and rectifies_invoice_id is not null;
+    end if;
     delete from public.invoices where company_id = v_company_id;
   end if;
 
