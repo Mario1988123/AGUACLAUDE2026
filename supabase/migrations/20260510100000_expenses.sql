@@ -32,7 +32,7 @@ alter table public.expense_categories enable row level security;
 create table if not exists public.expenses (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
-  user_id uuid not null references public.user_accounts(id) on delete restrict, -- comercial que sube
+  user_id uuid not null references auth.users(id) on delete restrict, -- comercial que sube
   category_id uuid references public.expense_categories(id) on delete set null,
 
   -- Datos extraídos del ticket (OCR + revisión)
@@ -68,7 +68,7 @@ create table if not exists public.expenses (
   -- Workflow
   status text not null default 'submitted',    -- draft | submitted | approved | rejected | reimbursed | reconciled
   submitted_at timestamptz default now(),
-  approved_by_user_id uuid references public.user_accounts(id) on delete set null,
+  approved_by_user_id uuid references auth.users(id) on delete set null,
   approved_at timestamptz,
   rejection_reason text,
   reimbursed_at timestamptz,
@@ -95,7 +95,7 @@ alter table public.expenses enable row level security;
 create table if not exists public.expense_per_diems (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
-  user_id uuid not null references public.user_accounts(id) on delete restrict,
+  user_id uuid not null references auth.users(id) on delete restrict,
   trip_purpose text,
   customer_id uuid references public.customers(id) on delete set null,
   date date not null,
@@ -104,7 +104,7 @@ create table if not exists public.expense_per_diems (
   destination text,
   daily_amount_exempt_cents integer not null,  -- exento IRPF según RD 439/2007
   status text not null default 'submitted',    -- submitted | approved | rejected | reimbursed
-  approved_by_user_id uuid references public.user_accounts(id) on delete set null,
+  approved_by_user_id uuid references auth.users(id) on delete set null,
   approved_at timestamptz,
   rejection_reason text,
   reimbursed_at timestamptz,
@@ -120,7 +120,7 @@ alter table public.expense_per_diems enable row level security;
 create table if not exists public.expense_mileage (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
-  user_id uuid not null references public.user_accounts(id) on delete restrict,
+  user_id uuid not null references auth.users(id) on delete restrict,
   date date not null,
   origin text,
   destination text,
@@ -132,7 +132,7 @@ create table if not exists public.expense_mileage (
   installation_id uuid references public.installations(id) on delete set null,
   vehicle_plate text,
   status text not null default 'submitted',
-  approved_by_user_id uuid references public.user_accounts(id) on delete set null,
+  approved_by_user_id uuid references auth.users(id) on delete set null,
   approved_at timestamptz,
   rejection_reason text,
   reimbursed_at timestamptz,

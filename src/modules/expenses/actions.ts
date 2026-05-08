@@ -310,7 +310,7 @@ export async function listExpenses(filters?: {
   let q = admin
     .from("expenses")
     .select(
-      "id, user_id, category_id, merchant_name, issue_date, total_cents, payment_method, status, customer_id, receipt_storage_path, notes, approved_at, reimbursed_at, created_at, expense_categories(code, name), customers(legal_name, trade_name, first_name, last_name), user_accounts(full_name, email)",
+      "id, user_id, category_id, merchant_name, issue_date, total_cents, payment_method, status, customer_id, receipt_storage_path, notes, approved_at, reimbursed_at, created_at, expense_categories(code, name), customers(legal_name, trade_name, first_name, last_name)",
     )
     .eq("company_id", session.company_id)
     .order("created_at", { ascending: false })
@@ -324,10 +324,25 @@ export async function listExpenses(filters?: {
 
   const { data } = await q;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rows = ((data as any[]) ?? []).map((r) => ({
+  const baseRows = ((data as any[]) ?? []);
+
+  // Resolver nombres del comercial via user_profiles (auth.users → user_profiles.user_id)
+  const userIds = Array.from(new Set(baseRows.map((r) => r.user_id).filter(Boolean) as string[]));
+  const nameMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await admin
+      .from("user_profiles")
+      .select("user_id, full_name, email")
+      .in("user_id", userIds);
+    for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
+      nameMap.set(p.user_id, p.full_name ?? p.email ?? "");
+    }
+  }
+
+  const rows = baseRows.map((r) => ({
     id: r.id,
     user_id: r.user_id,
-    user_name: r.user_accounts?.full_name ?? r.user_accounts?.email ?? null,
+    user_name: nameMap.get(r.user_id) ?? null,
     category_code: r.expense_categories?.code ?? null,
     category_name: r.expense_categories?.name ?? null,
     merchant_name: r.merchant_name,

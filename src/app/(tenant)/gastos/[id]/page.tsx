@@ -47,7 +47,7 @@ export default async function ExpenseDetailPage({
   const { data } = await admin
     .from("expenses")
     .select(
-      "*, expense_categories(name, code, vat_deductible), customers(legal_name, trade_name, first_name, last_name), user_accounts(full_name, email)",
+      "*, expense_categories(name, code, vat_deductible), customers(legal_name, trade_name, first_name, last_name)",
     )
     .eq("id", id)
     .eq("company_id", session.company_id)
@@ -55,6 +55,17 @@ export default async function ExpenseDetailPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const e = data as any;
   if (!e) notFound();
+  // Nombre del comercial via user_profiles (auth.users → user_profiles.user_id)
+  let userName: string | null = null;
+  if (e.user_id) {
+    const { data: profile } = await admin
+      .from("user_profiles")
+      .select("full_name, email")
+      .eq("user_id", e.user_id)
+      .maybeSingle();
+    const p = profile as { full_name: string | null; email: string | null } | null;
+    userName = p?.full_name ?? p?.email ?? null;
+  }
 
   const receiptUrl = await getExpenseReceiptUrl(id).catch(() => null);
   const customerName =
@@ -87,7 +98,7 @@ export default async function ExpenseDetailPage({
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {e.expense_categories?.name ?? "Sin categoría"} · {eur(e.total_cents)} ·{" "}
-            {e.user_accounts?.full_name ?? e.user_accounts?.email}
+            {userName ?? "(comercial)"}
           </p>
         </div>
         <Link href="/gastos" className="text-sm text-primary hover:underline self-center">
