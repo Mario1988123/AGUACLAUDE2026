@@ -78,6 +78,8 @@ interface Props {
   contractIncludesMaintenance: boolean;
   /** Solo admin/director puede editar cobros ya validados/cobrados. */
   canEditCollectedPayments?: boolean;
+  /** Estado del contrato — usado para bloquear el wizard si no está firmado. */
+  contractStatus?: string;
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -141,6 +143,7 @@ export function InstallationWizard(props: Props) {
     maintenancePlans,
     contractIncludesMaintenance,
     canEditCollectedPayments = false,
+    contractStatus,
   } = props;
   void representativeName;
 
@@ -521,11 +524,34 @@ export function InstallationWizard(props: Props) {
     });
   }
 
+  // Bloqueador: si el contrato no está firmado, el instalador NO puede
+  // abrir el parte. Tiene que pasar el iPad al cliente para que firme
+  // primero (decisión usuario 2026-05-08).
+  const contractNotSigned =
+    contractStatus &&
+    !["signed", "active", "validated"].includes(contractStatus);
+
   return (
     <>
-      <Button onClick={() => setOpen(true)} variant="success" className="gap-2">
-        <Sparkles className="h-4 w-4" /> Abrir parte de instalación
-      </Button>
+      {contractNotSigned ? (
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="font-bold text-amber-900">⚠ Contrato sin firmar</p>
+          <p className="mt-1 text-sm text-amber-800">
+            El cliente debe firmar el contrato antes de empezar la instalación.
+            Abre el contrato y pásale el dispositivo para que firme.
+          </p>
+          <a
+            href={`/contratos/${contractId}`}
+            className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-amber-600 px-4 text-sm font-bold text-white hover:bg-amber-700"
+          >
+            → Abrir contrato para firmar
+          </a>
+        </div>
+      ) : (
+        <Button onClick={() => setOpen(true)} variant="success" className="gap-2">
+          <Sparkles className="h-4 w-4" /> Abrir parte de instalación
+        </Button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 flex flex-col bg-background">

@@ -21,6 +21,7 @@ import { InvoiceFromContractButton } from "@/modules/invoices/invoice-from-contr
 import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
 import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
 import { ReassignContractButton } from "@/modules/contracts/reassign-button";
+import { ContractAdminActions } from "@/modules/contracts/admin-actions";
 import { Timeline } from "@/modules/events/timeline";
 import { ContractPhotosCard } from "@/modules/contracts/photo-uploader";
 import { SignaturesCard } from "@/modules/contracts/signature-pad";
@@ -136,6 +137,33 @@ export default async function ContractDetailPage({
   const gcMandates = c.customer_id
     ? await listActiveMandatesForCustomer(c.customer_id).catch(() => [])
     : [];
+
+  // Datos para el panel admin: IBAN del cliente, plan, validación
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabaseAdminPanel = (await createClient()) as any;
+  let hasIban = false;
+  let ibanIsPending = false;
+  if (c.customer_id) {
+    const { data: bk } = await supabaseAdminPanel
+      .from("customer_bank_accounts")
+      .select("iban, is_validated, is_primary")
+      .eq("customer_id", c.customer_id)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const b = bk as { iban: string | null; is_validated: boolean | null } | null;
+    if (b?.iban) {
+      hasIban = true;
+      ibanIsPending = !b.is_validated || /^ES00/i.test(b.iban);
+    }
+  }
+  const planType = (c.chosen_plan_type ?? "cash") as string;
+  const needsValidation = planType === "rental" || planType === "renting";
+  const canValidate =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  const canCancel = session.is_superadmin || session.roles.includes("company_admin");
 
   return (
     <div className="space-y-6">
@@ -343,6 +371,23 @@ export default async function ContractDetailPage({
               status={contract.status}
               hasProvisional={contract.has_provisional_data}
             />
+            {/* Validar / Cancelar / Editar IBAN */}
+            <div className="border-t pt-4">
+              <ContractAdminActions
+                contractId={contract.id}
+                customerId={c.customer_id ?? null}
+                status={contract.status}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                validatedAt={(c as any).validated_at ?? null}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                cancelledAt={(c as any).cancelled_at ?? null}
+                hasIban={hasIban}
+                ibanIsPending={ibanIsPending}
+                needsValidation={needsValidation}
+                canValidate={canValidate}
+                canCancel={canCancel}
+              />
+            </div>
             {/* Reasignar comercial: nivel 1 (admin/superadmin) y
                 nivel 2 (directores comercial/técnico/telemarketing). */}
             {(session.is_superadmin ||

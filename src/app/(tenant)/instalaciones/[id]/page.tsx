@@ -82,6 +82,7 @@ export default async function InstallationDetailPage({
   let customerTaxId: string | null = null;
   let customerId: string | null = null;
   let contractIncludesMaintenance = false;
+  let contractStatus: string | null = null;
   if (i.contract_id) {
     try {
       const { data: ps } = await sb
@@ -96,7 +97,7 @@ export default async function InstallationDetailPage({
     try {
       const { data: ct } = await sb
         .from("contracts")
-        .select("customer_id, customer_snapshot, maintenance_included")
+        .select("customer_id, customer_snapshot, maintenance_included, status")
         .eq("id", i.contract_id)
         .single();
       if (ct) {
@@ -104,9 +105,11 @@ export default async function InstallationDetailPage({
           customer_id: string | null;
           customer_snapshot: Record<string, unknown> | null;
           maintenance_included: boolean | null;
+          status: string | null;
         };
         customerId = ctRow.customer_id;
         contractIncludesMaintenance = Boolean(ctRow.maintenance_included);
+        contractStatus = ctRow.status ?? null;
         const cust = ctRow.customer_snapshot;
         if (cust) {
           const c = cust as {
@@ -181,6 +184,7 @@ export default async function InstallationDetailPage({
                 session.roles.includes("company_admin") ||
                 session.roles.includes("commercial_director")
               }
+              contractStatus={contractStatus ?? undefined}
             />
           )}
           <a
