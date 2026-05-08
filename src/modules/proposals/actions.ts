@@ -257,7 +257,18 @@ export async function getProposalPaymentOptions(
     )
     .eq("proposal_id", proposalId)
     .order("display_order");
-  if (error) throw error;
+  if (error) {
+    // Defensa-en-profundidad: si la tabla no existe en BD (migración 20260501121200
+    // no aplicada o schema cache de PostgREST obsoleta) devolvemos vacío en lugar
+    // de reventar la página entera. PGRST205 = tabla no encontrada en cache.
+    const code = (error as { code?: string }).code;
+    const msg = (error as { message?: string }).message ?? "";
+    if (code === "PGRST205" || /could not find the table|does not exist/i.test(msg)) {
+      console.warn("[getProposalPaymentOptions] proposal_payment_options no disponible:", msg);
+      return [];
+    }
+    throw error;
+  }
   return ((data as ProposalPaymentOption[] | null) ?? []);
 }
 
