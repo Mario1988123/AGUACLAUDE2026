@@ -77,7 +77,20 @@ export async function uploadContractPhotoAction(
     })
     .select("id, kind, storage_path, uploaded_at")
     .single();
-  if (e2) throw new Error(e2.message);
+  if (e2) {
+    const code = (e2 as { code?: string }).code;
+    const msg = (e2 as { message?: string }).message ?? "";
+    if (
+      code === "PGRST205" ||
+      code === "42P01" ||
+      /could not find the table|does not exist/i.test(msg)
+    ) {
+      throw new Error(
+        "La tabla contract_photos no está disponible. Ejecuta la migración pendiente o reinicia la cache de PostgREST con: notify pgrst, 'reload schema';",
+      );
+    }
+    throw new Error(e2.message);
+  }
 
   const { data: signed } = await admin.storage
     .from(BUCKET)
@@ -101,11 +114,27 @@ export async function listContractPhotos(contractId: string): Promise<ContractPh
     uploaded_at: string;
   }> = [];
   try {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("contract_photos")
       .select("id, kind, storage_path, uploaded_at")
       .eq("contract_id", contractId)
       .order("uploaded_at", { ascending: false });
+    if (error) {
+      // PGRST205 = tabla no encontrada en cache de PostgREST. Fail-soft:
+      // la página puede seguir funcionando sin fotos si la migración aún
+      // no se ha aplicado o si la cache está obsoleta.
+      const code = (error as { code?: string }).code;
+      const msg = (error as { message?: string }).message ?? "";
+      if (
+        code === "PGRST205" ||
+        code === "42P01" ||
+        /could not find the table|does not exist/i.test(msg)
+      ) {
+        console.warn("[listContractPhotos] contract_photos no disponible:", msg);
+        return [];
+      }
+      throw error;
+    }
     rows = (data ?? []) as typeof rows;
   } catch (e) {
     console.error("[listContractPhotos] SELECT failed:", e);

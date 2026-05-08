@@ -343,10 +343,13 @@ export default async function ContractDetailPage({
               status={contract.status}
               hasProvisional={contract.has_provisional_data}
             />
-            {/* Reasignar comercial: SOLO superadmin / company_admin. Antes
-                lo veían también directores comerciales/técnicos via
-                canEditClauses. El user pidió restringir a admin. */}
-            {(session.is_superadmin || session.roles.includes("company_admin")) && (
+            {/* Reasignar comercial: nivel 1 (admin/superadmin) y
+                nivel 2 (directores comercial/técnico/telemarketing). */}
+            {(session.is_superadmin ||
+              session.roles.includes("company_admin") ||
+              session.roles.includes("commercial_director") ||
+              session.roles.includes("technical_director") ||
+              session.roles.includes("telemarketing_director")) && (
               <div className="border-t pt-4">
                 <ReassignContractButton
                   contractId={contract.id}

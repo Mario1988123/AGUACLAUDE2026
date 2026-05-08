@@ -34,10 +34,6 @@ export function ContractStatusActions({ contractId, status, hasProvisional }: Pr
         >
           <PenLine className="h-5 w-5" /> Firmar
         </Button>
-        <p className="text-xs text-muted-foreground">
-          Te guiará paso a paso para completar los datos del cliente
-          (DNI, dirección, IBAN, foto) antes de firmar.
-        </p>
         {open && (
           <PreSignContractModal
             contractId={contractId}
