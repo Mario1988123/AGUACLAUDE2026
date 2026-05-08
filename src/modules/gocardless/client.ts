@@ -193,6 +193,33 @@ export async function getMandate(config: GoCardlessConfig, mandateId: string): P
   return res.mandates;
 }
 
+/**
+ * Lista mandatos de un customer en GoCardless. Útil para sincronizar
+ * mandatos que no llegaron a registrarse en nuestra BD (el callback
+ * no se ejecutó por algún motivo).
+ */
+export async function listMandatesByCustomer(
+  config: GoCardlessConfig,
+  gcCustomerId: string,
+): Promise<GcMandate[]> {
+  const res = await request<{ mandates: GcMandate[] }>(config, {
+    method: "GET",
+    path: `/mandates?customer=${encodeURIComponent(gcCustomerId)}&limit=200`,
+  });
+  return res.mandates;
+}
+
+export async function getRedirectFlow(
+  config: GoCardlessConfig,
+  redirectFlowId: string,
+): Promise<GcRedirectFlow & { links: { mandate?: string; customer?: string; customer_bank_account?: string } }> {
+  const res = await request<{ redirect_flows: GcRedirectFlow }>(config, {
+    method: "GET",
+    path: `/redirect_flows/${redirectFlowId}`,
+  });
+  return res.redirect_flows;
+}
+
 export async function cancelMandate(
   config: GoCardlessConfig,
   mandateId: string,

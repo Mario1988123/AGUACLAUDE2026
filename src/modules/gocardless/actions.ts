@@ -13,6 +13,8 @@ import {
   createRedirectFlow,
   getBankAccount,
   getMandate,
+  getRedirectFlow,
+  listMandatesByCustomer,
 } from "./client";
 
 interface SettingsRow {
@@ -509,3 +511,236 @@ export async function listActiveMandatesForCustomer(
       status: m.status,
     }));
 }
+
+// ============================================================================
+// Sincronización: cuando el callback no se ejecutó, recuperamos mandatos
+// ============================================================================
+
+export type SyncResult =
+  | { ok: true; imported: number; updated: number; message: string }
+  | { ok: false; error: string };
+
+/**
+ * Recoge mandatos huérfanos de GoCardless y los inserta en nuestra BD.
+ * Estrategia:
+ *  1. Para cada redirect_flow en BD que esté en status="created" pero
+ *     ya tenga mandate_id en GoCardless → completar y registrar.
+ *  2. Refrescar el status de mandatos ya registrados (consultando GC).
+ *
+ * Esto cubre el caso típico: el cliente firma, GoCardless le redirige
+ * a nuestro callback, pero algo falla (red, sesión perdida, navegador
+ * cerrado…) y el mandato queda en su sistema sin registrarse en el CRM.
+ */
+export async function syncCustomerMandatesAction(customerId: string): Promise<SyncResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const settings = await getSettingsForCompany(session.company_id);
+    if (!settings) return { ok: false, error: "GoCardless no configurado" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    let imported = 0;
+    let updated = 0;
+
+    // 1) Redirect flows pendientes — mirar si ya hay mandato en GC
+    const { data: flows } = await admin
+      .from("gocardless_redirect_flows")
+      .select("id, gocardless_redirect_flow_id, session_token, status")
+      .eq("company_id", session.company_id)
+      .eq("customer_id", customerId);
+    const flowList = ((flows as Array<{
+      id: string;
+      gocardless_redirect_flow_id: string;
+      session_token: string;
+      status: string;
+    }> | null) ?? []);
+
+    for (const f of flowList) {
+      if (f.status === "completed") continue;
+      try {
+        // GET el redirect flow en GoCardless para ver si ya tiene mandate
+        const gcFlow = await getRedirectFlow(
+          settingsToConfig(settings),
+          f.gocardless_redirect_flow_id,
+        );
+        const gcMandateId = gcFlow.links?.mandate;
+        if (!gcMandateId) {
+          // Aún sin firmar (el cliente no completó)
+          continue;
+        }
+        // Si ya existe en mandates, solo refrescar y marcar flow completed
+        const { data: existing } = await admin
+          .from("gocardless_mandates")
+          .select("id")
+          .eq("gocardless_mandate_id", gcMandateId)
+          .maybeSingle();
+        if (existing) {
+          await admin
+            .from("gocardless_redirect_flows")
+            .update({ status: "completed", mandate_id: (existing as { id: string }).id })
+            .eq("id", f.id);
+          continue;
+        }
+        // Importar mandato + bank account
+        const mandate = await getMandate(settingsToConfig(settings), gcMandateId);
+        let iban_last4: string | null = null;
+        let account_holder_name: string | null = null;
+        let bank_name: string | null = null;
+        try {
+          const bank = await getBankAccount(
+            settingsToConfig(settings),
+            mandate.links.customer_bank_account,
+          );
+          iban_last4 = bank.account_number_ending;
+          account_holder_name = bank.account_holder_name;
+          bank_name = bank.bank_name;
+        } catch {
+          /* no-op */
+        }
+        const { data: newMandate } = await admin
+          .from("gocardless_mandates")
+          .insert({
+            company_id: session.company_id,
+            customer_id: customerId,
+            gocardless_mandate_id: mandate.id,
+            gocardless_customer_id: mandate.links.customer,
+            gocardless_bank_account_id: mandate.links.customer_bank_account,
+            scheme: mandate.scheme,
+            status: mandate.status,
+            reference: mandate.reference,
+            iban_last4,
+            account_holder_name,
+            bank_name,
+          })
+          .select("id")
+          .single();
+        await admin
+          .from("gocardless_redirect_flows")
+          .update({
+            status: "completed",
+            mandate_id: (newMandate as { id: string } | null)?.id ?? null,
+            completed_at: new Date().toISOString(),
+          })
+          .eq("id", f.id);
+        imported++;
+      } catch (e) {
+        console.error("[sync flow]", f.gocardless_redirect_flow_id, e);
+      }
+    }
+
+    // 2) Refrescar status de mandatos ya registrados
+    const { data: ourMandates } = await admin
+      .from("gocardless_mandates")
+      .select("id, gocardless_mandate_id, gocardless_customer_id, status")
+      .eq("company_id", session.company_id)
+      .eq("customer_id", customerId);
+    for (const m of ((ourMandates as Array<{
+      id: string;
+      gocardless_mandate_id: string;
+      gocardless_customer_id: string | null;
+      status: string;
+    }> | null) ?? [])) {
+      try {
+        const fresh = await getMandate(settingsToConfig(settings), m.gocardless_mandate_id);
+        if (fresh.status !== m.status) {
+          await admin
+            .from("gocardless_mandates")
+            .update({ status: fresh.status })
+            .eq("id", m.id);
+          updated++;
+        }
+      } catch (e) {
+        console.error("[refresh mandate]", m.gocardless_mandate_id, e);
+      }
+    }
+
+    revalidatePath(`/clientes/${customerId}`);
+    return {
+      ok: true,
+      imported,
+      updated,
+      message: `${imported} mandato(s) importado(s) · ${updated} actualizado(s)`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[gocardless sync]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Importar mandato por ID manualmente (para cuando el comercial copia
+ * el ID MD... desde el dashboard de GoCardless).
+ */
+export async function importMandateByIdAction(input: {
+  customer_id: string;
+  gocardless_mandate_id: string;
+}): Promise<SyncResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const settings = await getSettingsForCompany(session.company_id);
+    if (!settings) return { ok: false, error: "GoCardless no configurado" };
+    const id = input.gocardless_mandate_id.trim();
+    if (!/^MD\w+$/i.test(id)) {
+      return { ok: false, error: "ID inválido — debe empezar por MD..." };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // ¿Ya existe?
+    const { data: existing } = await admin
+      .from("gocardless_mandates")
+      .select("id")
+      .eq("gocardless_mandate_id", id)
+      .maybeSingle();
+    if (existing) {
+      return { ok: true, imported: 0, updated: 0, message: "Ya estaba registrado" };
+    }
+
+    const mandate = await getMandate(settingsToConfig(settings), id);
+    let iban_last4: string | null = null;
+    let account_holder_name: string | null = null;
+    let bank_name: string | null = null;
+    try {
+      const bank = await getBankAccount(
+        settingsToConfig(settings),
+        mandate.links.customer_bank_account,
+      );
+      iban_last4 = bank.account_number_ending;
+      account_holder_name = bank.account_holder_name;
+      bank_name = bank.bank_name;
+    } catch {
+      /* no-op */
+    }
+    const { error } = await admin.from("gocardless_mandates").insert({
+      company_id: session.company_id,
+      customer_id: input.customer_id,
+      gocardless_mandate_id: mandate.id,
+      gocardless_customer_id: mandate.links.customer,
+      gocardless_bank_account_id: mandate.links.customer_bank_account,
+      scheme: mandate.scheme,
+      status: mandate.status,
+      reference: mandate.reference,
+      iban_last4,
+      account_holder_name,
+      bank_name,
+    });
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/clientes/${input.customer_id}`);
+    return {
+      ok: true,
+      imported: 1,
+      updated: 0,
+      message: `Mandato importado (estado: ${mandate.status})`,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[gocardless import]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+// Suprimir warning de unused (la fn está importada por si la usamos en futuro)
+void listMandatesByCustomer;

@@ -2,13 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Banknote, Plus, X } from "lucide-react";
+import { Banknote, Plus, X, RefreshCw, Download } from "lucide-react";
 import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
+import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   cancelMandateAction,
   createMandateRedirectFlowAction,
+  syncCustomerMandatesAction,
+  importMandateByIdAction,
   type MandateListRow,
 } from "./actions";
 
@@ -41,6 +45,42 @@ export function CustomerMandatesPanel({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
+  const [mandateIdInput, setMandateIdInput] = useState("");
+
+  function sync() {
+    startTransition(async () => {
+      const r = await syncCustomerMandatesAction(customerId);
+      if (!r.ok) {
+        notify.error("No se pudo sincronizar", r.error);
+        return;
+      }
+      notify.success("Sincronizado con GoCardless", r.message);
+      router.refresh();
+    });
+  }
+
+  function importById() {
+    const id = mandateIdInput.trim();
+    if (!id) {
+      notify.warning("Pega el ID del mandato (empieza por MD…)");
+      return;
+    }
+    startTransition(async () => {
+      const r = await importMandateByIdAction({
+        customer_id: customerId,
+        gocardless_mandate_id: id,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo importar", r.error);
+        return;
+      }
+      notify.success("Importado", r.message);
+      setImportOpen(false);
+      setMandateIdInput("");
+      router.refresh();
+    });
+  }
 
   function startMandateFlow() {
     if (!configured) {
@@ -115,9 +155,61 @@ export function CustomerMandatesPanel({
           )}
         </div>
       ))}
-      <Button onClick={startMandateFlow} disabled={pending} variant="outline" className="w-full gap-2">
-        <Plus className="h-4 w-4" /> Generar nuevo mandato
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button onClick={startMandateFlow} disabled={pending} className="gap-2" variant="outline">
+          <Plus className="h-4 w-4" /> Generar nuevo mandato
+        </Button>
+        <Button onClick={sync} disabled={pending} variant="outline" className="gap-2">
+          <RefreshCw className={`h-4 w-4 ${pending ? "animate-spin" : ""}`} />
+          Sincronizar con GoCardless
+        </Button>
+      </div>
+      <Button
+        onClick={() => setImportOpen(true)}
+        disabled={pending}
+        variant="ghost"
+        size="sm"
+        className="w-full gap-2 text-xs"
+      >
+        <Download className="h-3 w-3" /> Importar mandato por ID (MD…)
       </Button>
+
+      {importOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !pending && setImportOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-3 p-5">
+              <h2 className="text-base font-bold">Importar mandato por ID</h2>
+              <p className="text-xs text-muted-foreground">
+                Si has creado un mandato directamente en el dashboard de GoCardless, pega aquí el ID
+                (empieza por MD…) y lo añadimos a este cliente.
+              </p>
+              <div className="space-y-1">
+                <Label>ID del mandato</Label>
+                <Input
+                  value={mandateIdInput}
+                  onChange={(e) => setMandateIdInput(e.target.value)}
+                  placeholder="MD000ABC123…"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+              <Button variant="outline" onClick={() => setImportOpen(false)} disabled={pending}>
+                Cancelar
+              </Button>
+              <Button onClick={importById} disabled={pending}>
+                Importar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
