@@ -21,7 +21,7 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
   let query = supabase
     .from("proposals")
     .select(
-      "id, reference_code, status, customer_id, lead_id, total_cash_cents, validity_until, created_at, version_number",
+      "id, reference_code, status, customer_id, lead_id, total_cash_cents, validity_until, created_at, version_number, chosen_plan_type, chosen_duration_months, monthly_rental_cents, monthly_renting_min_cents",
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -46,13 +46,18 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
     validity_until: string | null;
     created_at: string;
     version_number: number;
+    chosen_plan_type: "cash" | "rental" | "renting" | "financing" | null;
+    chosen_duration_months: number | null;
+    monthly_rental_cents: number | null;
+    monthly_renting_min_cents: number | null;
   }>;
   if (rows.length === 0) return [];
 
+  const proposalIds = rows.map((r) => r.id);
   const customerIds = rows.map((r) => r.customer_id).filter(Boolean) as string[];
   const leadIds = rows.map((r) => r.lead_id).filter(Boolean) as string[];
 
-  const [custRes, leadRes] = await Promise.all([
+  const [custRes, leadRes, itemsRes] = await Promise.all([
     customerIds.length > 0
       ? supabase
           .from("customers")
@@ -65,6 +70,11 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
           .select("id, party_kind, legal_name, trade_name, first_name, last_name")
           .in("id", leadIds)
       : Promise.resolve({ data: [] as never[] }),
+    supabase
+      .from("proposal_items")
+      .select("proposal_id, product_name_snapshot, quantity, display_order")
+      .in("proposal_id", proposalIds)
+      .order("display_order"),
   ]);
 
   type Party = {
@@ -85,14 +95,45 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
   );
   const lMap = new Map(((leadRes.data ?? []) as Party[]).map((p) => [p.id, nameOf(p)]));
 
-  return rows.map((r) => ({
-    ...r,
-    customer_or_lead_name: r.customer_id
-      ? cMap.get(r.customer_id) ?? "Cliente"
-      : r.lead_id
-        ? `Lead: ${lMap.get(r.lead_id) ?? "?"}`
-        : "—",
-  }));
+  // Resumen de productos por propuesta — primer producto + "+N más"
+  const itemsByProposal = new Map<string, Array<{ name: string; qty: number }>>();
+  for (const it of (itemsRes.data ?? []) as Array<{
+    proposal_id: string;
+    product_name_snapshot: string;
+    quantity: number;
+  }>) {
+    const list = itemsByProposal.get(it.proposal_id) ?? [];
+    list.push({ name: it.product_name_snapshot, qty: it.quantity });
+    itemsByProposal.set(it.proposal_id, list);
+  }
+
+  return rows.map((r) => {
+    const items = itemsByProposal.get(r.id) ?? [];
+    let summary: string | null = null;
+    if (items.length > 0 && items[0]) {
+      const first = items[0]!;
+      summary = first.qty > 1 ? `${first.qty}× ${first.name}` : first.name;
+      if (items.length > 1) summary += ` +${items.length - 1}`;
+    }
+    const monthly =
+      r.chosen_plan_type === "rental"
+        ? r.monthly_rental_cents
+        : r.chosen_plan_type === "renting"
+          ? r.monthly_renting_min_cents
+          : null;
+    return {
+      ...r,
+      customer_or_lead_name: r.customer_id
+        ? cMap.get(r.customer_id) ?? "Cliente"
+        : r.lead_id
+          ? `Lead: ${lMap.get(r.lead_id) ?? "?"}`
+          : "—",
+      product_summary: summary,
+      chosen_plan_type: r.chosen_plan_type,
+      duration_months: r.chosen_duration_months,
+      monthly_cents: monthly,
+    };
+  });
 }
 
 export async function getProposal(id: string): Promise<ProposalDetail> {

@@ -11,6 +11,14 @@ export interface ProposalListItem {
   validity_until: string | null;
   created_at: string;
   version_number: number;
+  /** Resumen de productos para identificar la propuesta de un vistazo. */
+  product_summary?: string | null;
+  /** Plan elegido para mostrar cuota o total al contado. */
+  chosen_plan_type?: "cash" | "rental" | "renting" | "financing" | null;
+  /** Cuota mensual del plan elegido (si rental/renting). */
+  monthly_cents?: number | null;
+  /** Duración en meses del plan. */
+  duration_months?: number | null;
   /** true si esta propuesta ya tiene un contrato generado (no borrado). */
   has_contract?: boolean;
 }
