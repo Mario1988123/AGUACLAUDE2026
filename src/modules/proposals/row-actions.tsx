@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, Download, XCircle, Trash2 } from "lucide-react";
+import { Eye, Download, XCircle, Trash2, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
@@ -25,10 +25,12 @@ export function ProposalRowActions({
   const [openModal, setOpenModal] = useState<"reject" | "delete" | null>(null);
   const [reason, setReason] = useState("");
 
-  // Estados terminales: ya no se puede rechazar/eliminar
+  // Estados terminales: ya no se puede rechazar/eliminar/editar
   const isTerminal = ["rejected", "expired", "superseded", "accepted"].includes(status);
   const canReject = !isTerminal;
   const canDelete = !hasContract && status !== "accepted";
+  // Editable mientras no esté aceptada/rechazada/expirada/superseded
+  const canEdit = !isTerminal;
 
   function confirmReject() {
     startTransition(async () => {
@@ -76,6 +78,15 @@ export function ProposalRowActions({
         >
           <Download className="h-4 w-4" />
         </a>
+        {canEdit && (
+          <Link
+            href={`/propuestas/${id}/editar` as never}
+            title="Editar propuesta"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+          >
+            <Pencil className="h-4 w-4" />
+          </Link>
+        )}
         {canReject && (
           <button
             type="button"

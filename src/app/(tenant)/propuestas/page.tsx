@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Package } from "lucide-react";
+import { Plus } from "lucide-react";
 import { listProposals } from "@/modules/proposals/actions";
 import { Button } from "@/shared/ui/button";
 import { StatusPill } from "@/shared/components/status-pill";
@@ -146,12 +146,9 @@ export default async function PropuestasPage({
                       </td>
                       <td className="px-4 py-3 max-w-[220px]">
                         {p.product_summary ? (
-                          <div className="flex items-center gap-1.5 text-xs">
-                            <Package className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate" title={p.product_summary}>
-                              {p.product_summary}
-                            </span>
-                          </div>
+                          <span className="text-xs truncate block" title={p.product_summary}>
+                            {p.product_summary}
+                          </span>
                         ) : (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
@@ -247,11 +244,10 @@ function ProposalCard({
         </span>
         {p.product_summary && (
           <span
-            className="text-xs text-muted-foreground flex items-center gap-1 truncate max-w-[60%]"
+            className="text-xs text-muted-foreground truncate max-w-[60%]"
             title={p.product_summary}
           >
-            <Package className="h-3 w-3 shrink-0" />
-            <span className="truncate">{p.product_summary}</span>
+            {p.product_summary}
           </span>
         )}
       </div>

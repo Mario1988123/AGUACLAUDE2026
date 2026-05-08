@@ -582,6 +582,167 @@ export async function createProposalAction(input: unknown) {
 }
 
 /**
+ * Actualiza una propuesta existente. Solo permitida si NO está en estado
+ * terminal (rejected/expired/superseded/accepted) — para esas hay que
+ * crear una nueva. Reusa la misma lógica de validación + cálculo de
+ * totales que createProposal.
+ *
+ * Estrategia: UPDATE proposals + DELETE+INSERT proposal_items. Mantiene
+ * reference_code, customer_id, lead_id (no se editan).
+ */
+export async function updateProposalAction(proposalId: string, input: unknown) {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Usuario sin empresa");
+  const parsed = parseOrFriendly(proposalCreateSchema, input, "Propuesta");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Verificar que la propuesta existe y es editable
+  const { data: existing } = await supabase
+    .from("proposals")
+    .select("id, status, company_id")
+    .eq("id", proposalId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  const e = existing as { id: string; status: string; company_id: string } | null;
+  if (!e) throw new Error("Propuesta no encontrada");
+  if (e.company_id !== session.company_id) throw new Error("Otra empresa");
+  if (["rejected", "expired", "superseded", "accepted"].includes(e.status)) {
+    throw new Error(
+      "Esta propuesta no se puede editar (estado terminal). Crea una nueva.",
+    );
+  }
+
+  const lineTotal = (it: typeof parsed.items[number]) =>
+    it.unit_price_cents * it.quantity;
+  const planTotal = parsed.items.reduce((s, it) => s + lineTotal(it), 0);
+
+  // Detectar requiresApproval (mismo cálculo que en create)
+  let requiresApproval = false;
+  if (parsed.items.length > 0) {
+    const productIds = Array.from(new Set(parsed.items.map((i) => i.product_id)));
+    const { data: plans } = await supabase
+      .from("product_pricing_plans")
+      .select("product_id, plan_type, min_authorized_cents, duration_months")
+      .in("product_id", productIds)
+      .eq("plan_type", parsed.chosen_plan_type)
+      .eq("is_active", true);
+    type Plan = {
+      product_id: string;
+      plan_type: string;
+      min_authorized_cents: number | null;
+      duration_months: number | null;
+    };
+    const planByProduct = new Map<string, Plan>();
+    for (const p of (plans ?? []) as Plan[]) {
+      if (
+        parsed.chosen_duration_months &&
+        p.duration_months &&
+        p.duration_months === parsed.chosen_duration_months
+      ) {
+        planByProduct.set(p.product_id, p);
+      } else if (!planByProduct.has(p.product_id)) {
+        planByProduct.set(p.product_id, p);
+      }
+    }
+    for (const it of parsed.items) {
+      const p = planByProduct.get(it.product_id);
+      if (p?.min_authorized_cents != null && it.unit_price_cents < p.min_authorized_cents) {
+        requiresApproval = true;
+        break;
+      }
+    }
+  }
+
+  const isCash = parsed.chosen_plan_type === "cash";
+  const isRenting = parsed.chosen_plan_type === "renting";
+  const isRental = parsed.chosen_plan_type === "rental";
+
+  // Si la propuesta editada cae bajo mínimo y antes no, vuelve a pending_approval.
+  // Si era pending_approval y ahora ya cumple, vuelve a draft.
+  let newStatus = e.status;
+  if (requiresApproval && e.status !== "pending_approval") {
+    newStatus = "pending_approval";
+  } else if (!requiresApproval && e.status === "pending_approval") {
+    newStatus = "draft";
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    status: newStatus,
+    validity_until: parsed.validity_until || null,
+    chosen_plan_type: parsed.chosen_plan_type,
+    chosen_duration_months: parsed.chosen_duration_months,
+    requires_approval: requiresApproval,
+    total_cash_cents: isCash ? planTotal : null,
+    monthly_renting_min_cents: isRenting ? planTotal : null,
+    monthly_rental_cents: isRental ? planTotal : null,
+    notes: parsed.notes || null,
+  };
+
+  const r = await admin
+    .from("proposals")
+    .update(updatePayload)
+    .eq("id", proposalId);
+  if (r.error) throw new Error(r.error.message);
+
+  // Reemplazar items: DELETE + INSERT
+  await admin.from("proposal_items").delete().eq("proposal_id", proposalId);
+
+  const productIds = parsed.items.map((i) => i.product_id);
+  const { data: prods } = await supabase
+    .from("products")
+    .select("id, name")
+    .in("id", productIds);
+  const nameMap = new Map(
+    ((prods ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]),
+  );
+
+  const itemRows = parsed.items.map((it, i) => ({
+    proposal_id: proposalId,
+    company_id: session.company_id,
+    product_id: it.product_id,
+    quantity: it.quantity,
+    product_name_snapshot: nameMap.get(it.product_id) ?? "Producto",
+    unit_price_cash_cents: it.unit_price_cents,
+    installation_included: it.installation_included,
+    installation_price_cents: it.installation_included ? null : it.installation_price_cents,
+    maintenance_included: it.maintenance_included,
+    maintenance_until_date: it.maintenance_included ? it.maintenance_until_date : null,
+    maintenance_price_cents: it.maintenance_included ? null : it.maintenance_price_cents,
+    maintenance_periodicity_months: it.maintenance_included
+      ? null
+      : it.maintenance_periodicity_months,
+    deposit_cents: isRental ? it.deposit_cents : null,
+    charge_first_payment_now: isRental ? it.charge_first_payment_now : false,
+    display_order: i,
+  }));
+  if (itemRows.length > 0) {
+    await admin.from("proposal_items").insert(itemRows);
+  }
+
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "proposal",
+    subject_id: proposalId,
+    kind: "proposal.updated",
+    payload: {
+      items: parsed.items.length,
+      plan: parsed.chosen_plan_type,
+      duration: parsed.chosen_duration_months,
+      requires_approval: requiresApproval,
+    },
+    actor_user_id: session.user_id,
+  });
+
+  revalidatePath("/propuestas");
+  revalidatePath(`/propuestas/${proposalId}`);
+  redirect(`/propuestas/${proposalId}` as never);
+}
+
+/**
  * Aprueba una propuesta en estado pending_approval (solo nivel 1/2).
  * Tras aprobar pasa a 'draft' para que el comercial decida cuándo enviarla.
  */

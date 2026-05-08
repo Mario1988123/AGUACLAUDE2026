@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { MoneyInput } from "@/shared/components/money-input";
 import { notify } from "@/shared/hooks/use-toast";
-import { createProposalAction } from "./actions";
+import { createProposalAction, updateProposalAction } from "./actions";
 import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
 import type { ProductForProposal } from "@/modules/products/actions";
 
@@ -24,6 +24,18 @@ interface Props {
    * en el mismo paso (Escenario B - cliente acepta de palabra).
    */
   directMode?: boolean;
+  /** Si está presente, modo edición: se actualiza la propuesta en vez de crear. */
+  editId?: string;
+  /** Datos iniciales en modo edición. */
+  initial?: {
+    customer_id: string | null;
+    lead_id: string | null;
+    chosen_plan_type: PlanType;
+    chosen_duration_months: number | null;
+    validity_until: string | null;
+    notes: string | null;
+    items: ItemRow[];
+  };
 }
 
 interface ItemRow {
@@ -83,18 +95,24 @@ export function ProposalCreateForm({
   defaultCustomerId,
   defaultLeadId,
   directMode = false,
+  editId,
+  initial,
 }: Props) {
-  const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
+  const isEdit = !!editId;
+  const [customerId, setCustomerId] = useState(initial?.customer_id ?? defaultCustomerId ?? "");
   const [validityUntil, setValidityUntil] = useState(() => {
+    if (initial?.validity_until) return initial.validity_until;
     // Por defecto: hoy + 15 días (formato YYYY-MM-DD)
     const d = new Date();
     d.setDate(d.getDate() + 15);
     return d.toISOString().slice(0, 10);
   });
-  const [notes, setNotes] = useState("");
-  const [planType, setPlanType] = useState<PlanType>("cash");
-  const [duration, setDuration] = useState<number | null>(48);
-  const [items, setItems] = useState<ItemRow[]>([]);
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [planType, setPlanType] = useState<PlanType>(initial?.chosen_plan_type ?? "cash");
+  const [duration, setDuration] = useState<number | null>(
+    initial?.chosen_duration_months ?? 48,
+  );
+  const [items, setItems] = useState<ItemRow[]>(initial?.items ?? []);
   const [pending, startTransition] = useTransition();
 
   const availableProducts = useMemo(
@@ -188,16 +206,21 @@ export function ProposalCreateForm({
     }
     startTransition(async () => {
       try {
-        await createProposalAction({
+        const payload = {
           customer_id: customerId || undefined,
-          lead_id: defaultLeadId,
+          lead_id: defaultLeadId ?? initial?.lead_id ?? undefined,
           chosen_plan_type: planType,
           chosen_duration_months: planType === "cash" ? null : duration,
           validity_until: validityUntil || undefined,
           notes,
           items,
           auto_accept: directMode,
-        });
+        };
+        if (isEdit && editId) {
+          await updateProposalAction(editId, payload);
+        } else {
+          await createProposalAction(payload);
+        }
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {
           const d = String((err as { digest?: unknown }).digest);
@@ -367,7 +390,13 @@ export function ProposalCreateForm({
 
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button onClick={submit} disabled={pending} variant="success" size="lg">
-          {pending ? "Creando…" : "Crear propuesta"}
+          {pending
+            ? isEdit
+              ? "Guardando…"
+              : "Creando…"
+            : isEdit
+              ? "Guardar cambios"
+              : "Crear propuesta"}
         </Button>
       </div>
     </div>
