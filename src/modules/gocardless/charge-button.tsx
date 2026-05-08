@@ -47,24 +47,24 @@ export function ChargeWithGoCardlessButton({
       return;
     }
     startTransition(async () => {
-      try {
-        await createPaymentAction({
-          mandate_id: mandateId,
-          amount_cents: amt,
-          description,
-          contract_id: contractId ?? null,
-          invoice_id: invoiceId ?? null,
-          contract_payment_id: contractPaymentId ?? null,
-        });
-        notify.success(
-          "Cobro creado",
-          "GoCardless lo procesará y notificará al CRM cuando se confirme.",
-        );
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const result = await createPaymentAction({
+        mandate_id: mandateId,
+        amount_cents: amt,
+        description,
+        contract_id: contractId ?? null,
+        invoice_id: invoiceId ?? null,
+        contract_payment_id: contractPaymentId ?? null,
+      });
+      if (!result.ok) {
+        notify.error("No se pudo crear el cobro", result.error);
+        return;
       }
+      notify.success(
+        "Cobro creado",
+        "GoCardless lo procesará y notificará al CRM cuando se confirme.",
+      );
+      setOpen(false);
+      router.refresh();
     });
   }
 

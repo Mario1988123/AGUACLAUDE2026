@@ -91,14 +91,36 @@ export async function saveGoCardlessSettingsAction(input: {
   revalidatePath("/configuracion/gocardless");
 }
 
+export type MandateRedirectResult =
+  | { ok: true; redirect_url: string; flow_db_id: string }
+  | { ok: false; error: string };
+
 /**
  * Crea un redirect flow para que el cliente firme un mandato.
- * Devuelve la URL a la que redirigir al cliente.
+ * Devuelve la URL a la que redirigir al cliente, o un error legible.
+ *
+ * IMPORTANTE: devolvemos un result en vez de throw porque Next.js
+ * redacta los errores de server actions en producción ("digest: ...")
+ * y el mensaje real (ej. "access token no válido para live") nunca
+ * llegaría al toast del cliente.
  */
 export async function createMandateRedirectFlowAction(input: {
   customer_id: string;
   return_path?: string;     // Path interno al que volver tras firmar
-}): Promise<{ redirect_url: string; flow_db_id: string }> {
+}): Promise<MandateRedirectResult> {
+  try {
+    return await _createMandateRedirectFlow(input);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[gocardless redirect flow]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+async function _createMandateRedirectFlow(input: {
+  customer_id: string;
+  return_path?: string;
+}): Promise<MandateRedirectResult> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   const settings = await getSettingsForCompany(session.company_id);
@@ -206,6 +228,7 @@ export async function createMandateRedirectFlowAction(input: {
   if (error) throw new Error(error.message);
 
   return {
+    ok: true,
     redirect_url: flow.redirect_url,
     flow_db_id: (dbFlow as { id: string }).id,
   };
@@ -317,30 +340,46 @@ export async function listCustomerMandates(customerId: string): Promise<MandateL
   return ((data as MandateListRow[] | null) ?? []);
 }
 
-export async function cancelMandateAction(mandateDbId: string) {
-  const session = await requireSession();
-  if (!session.company_id) throw new Error("Sin empresa");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data: m } = await admin
-    .from("gocardless_mandates")
-    .select("id, gocardless_mandate_id, customer_id, company_id")
-    .eq("id", mandateDbId)
-    .maybeSingle();
-  const mandate = m as
-    | { id: string; gocardless_mandate_id: string; customer_id: string; company_id: string }
-    | null;
-  if (!mandate) throw new Error("Mandato no encontrado");
-  if (mandate.company_id !== session.company_id) throw new Error("Otra empresa");
-  const settings = await getSettingsForCompany(mandate.company_id);
-  if (!settings) throw new Error("GoCardless no configurado");
-  const cancelled = await gcCancelMandate(settingsToConfig(settings), mandate.gocardless_mandate_id);
-  await admin
-    .from("gocardless_mandates")
-    .update({ status: cancelled.status, cancelled_at: new Date().toISOString() })
-    .eq("id", mandate.id);
-  revalidatePath(`/clientes/${mandate.customer_id}`);
+export type SimpleResult = { ok: true } | { ok: false; error: string };
+
+export async function cancelMandateAction(mandateDbId: string): Promise<SimpleResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: m } = await admin
+      .from("gocardless_mandates")
+      .select("id, gocardless_mandate_id, customer_id, company_id")
+      .eq("id", mandateDbId)
+      .maybeSingle();
+    const mandate = m as
+      | { id: string; gocardless_mandate_id: string; customer_id: string; company_id: string }
+      | null;
+    if (!mandate) return { ok: false, error: "Mandato no encontrado" };
+    if (mandate.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
+    const settings = await getSettingsForCompany(mandate.company_id);
+    if (!settings) return { ok: false, error: "GoCardless no configurado" };
+    const cancelled = await gcCancelMandate(
+      settingsToConfig(settings),
+      mandate.gocardless_mandate_id,
+    );
+    await admin
+      .from("gocardless_mandates")
+      .update({ status: cancelled.status, cancelled_at: new Date().toISOString() })
+      .eq("id", mandate.id);
+    revalidatePath(`/clientes/${mandate.customer_id}`);
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[gocardless cancel mandate]", e);
+    return { ok: false, error: msg };
+  }
 }
+
+export type CreatePaymentResult =
+  | { ok: true; payment_db_id: string }
+  | { ok: false; error: string };
 
 /**
  * Crea un cobro GoCardless contra un mandato activo y materializa un
@@ -353,7 +392,24 @@ export async function createPaymentAction(input: {
   contract_id?: string | null;
   invoice_id?: string | null;
   contract_payment_id?: string | null;
-}): Promise<{ payment_db_id: string }> {
+}): Promise<CreatePaymentResult> {
+  try {
+    return await _createPayment(input);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[gocardless create payment]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+async function _createPayment(input: {
+  mandate_id: string;
+  amount_cents: number;
+  description: string;
+  contract_id?: string | null;
+  invoice_id?: string | null;
+  contract_payment_id?: string | null;
+}): Promise<CreatePaymentResult> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   if (input.amount_cents <= 0) throw new Error("Importe inválido");
@@ -432,7 +488,7 @@ export async function createPaymentAction(input: {
   revalidatePath(`/clientes/${mandate.customer_id}`);
   revalidatePath("/wallet");
 
-  return { payment_db_id: (dbPay as { id: string }).id };
+  return { ok: true, payment_db_id: (dbPay as { id: string }).id };
 }
 
 export interface MandateOption {

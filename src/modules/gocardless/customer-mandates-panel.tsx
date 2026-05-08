@@ -48,18 +48,19 @@ export function CustomerMandatesPanel({
       return;
     }
     startTransition(async () => {
-      try {
-        const { redirect_url } = await createMandateRedirectFlowAction({
-          customer_id: customerId,
-          return_path: `/clientes/${customerId}`,
-        });
-        // Abrir en pestaña nueva para que el usuario interno pueda enviar
-        // el link al cliente (o redirigir si está con él al lado)
-        window.open(redirect_url, "_blank", "noopener");
-        notify.info("Link de firma generado", "Se ha abierto el formulario en una pestaña nueva. Envíalo al cliente para que firme.");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const result = await createMandateRedirectFlowAction({
+        customer_id: customerId,
+        return_path: `/clientes/${customerId}`,
+      });
+      if (!result.ok) {
+        notify.error("No se pudo generar el mandato", result.error);
+        return;
       }
+      window.open(result.redirect_url, "_blank", "noopener");
+      notify.info(
+        "Link de firma generado",
+        "Se ha abierto el formulario en una pestaña nueva. Envíalo al cliente para que firme.",
+      );
     });
   }
 
@@ -68,13 +69,13 @@ export function CustomerMandatesPanel({
       return;
     }
     startTransition(async () => {
-      try {
-        await cancelMandateAction(id);
-        notify.success("Mandato cancelado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const result = await cancelMandateAction(id);
+      if (!result.ok) {
+        notify.error("No se pudo cancelar", result.error);
+        return;
       }
+      notify.success("Mandato cancelado");
+      router.refresh();
     });
   }
 
