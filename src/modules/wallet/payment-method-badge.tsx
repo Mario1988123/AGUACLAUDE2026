@@ -7,6 +7,8 @@ import {
   Landmark,
   Coins,
 } from "lucide-react";
+import fs from "node:fs";
+import path from "node:path";
 
 const METHOD_CONFIG: Record<
   string,
@@ -70,14 +72,46 @@ const FALLBACK = {
   border: "border-border",
 };
 
+/**
+ * Cache server-side: ¿existe `/public/payment-icons/{method}.{svg|png}`?
+ * Se calcula la primera vez y se reutiliza (las imágenes nuevas requieren
+ * redeploy de todos modos).
+ */
+const ICONS_DIR = path.join(process.cwd(), "public", "payment-icons");
+const customIconCache = new Map<string, string | null>();
+
+function resolveCustomIcon(method: string): string | null {
+  if (customIconCache.has(method)) return customIconCache.get(method) ?? null;
+  for (const ext of ["svg", "png"]) {
+    const file = path.join(ICONS_DIR, `${method}.${ext}`);
+    try {
+      if (fs.existsSync(file)) {
+        const url = `/payment-icons/${method}.${ext}`;
+        customIconCache.set(method, url);
+        return url;
+      }
+    } catch {
+      /* no-op */
+    }
+  }
+  customIconCache.set(method, null);
+  return null;
+}
+
 export function PaymentMethodBadge({ method }: { method: string }) {
   const cfg = METHOD_CONFIG[method] ?? { ...FALLBACK, label: method };
+  const customUrl = resolveCustomIcon(method);
   const Icon = cfg.icon;
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${cfg.bg} ${cfg.text} ${cfg.border}`}
     >
-      <Icon className="h-3.5 w-3.5" />
+      {customUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={customUrl} alt="" className="h-4 w-4 object-contain" />
+      ) : (
+        <Icon className="h-3.5 w-3.5" />
+      )}
       <span className="whitespace-nowrap">{cfg.label}</span>
     </span>
   );

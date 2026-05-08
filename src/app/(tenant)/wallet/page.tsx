@@ -71,12 +71,27 @@ export default async function WalletPage({
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">Wallet</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Cobros y liquidaciones. <strong>Pendiente</strong> = aún no cobrado.{" "}
-            <strong>Pendiente liquidar</strong> = comercial cobró efectivo, falta entregar a la empresa.
-          </p>
+          <div className="mt-2 grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <span className="font-bold text-amber-700">Sin cobrar</span> — el cliente todavía no
+              ha pagado.
+            </div>
+            <div>
+              <span className="font-bold text-blue-700">Cobrado · pdte. banco</span> — comercial tiene
+              justificante (datáfono, transferencia…), pero el admin todavía no ha visto el dinero
+              en banco.
+            </div>
+            <div>
+              <span className="font-bold text-orange-700">Cobrado · pdte. liquidar</span> — efectivo
+              en mano del comercial; falta entregar a la empresa.
+            </div>
+            <div>
+              <span className="font-bold text-emerald-700">Confirmado en banco</span> — admin ha
+              verificado el ingreso. Estado final.
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -92,19 +107,19 @@ export default async function WalletPage({
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
-          label="Pendiente cobrar"
+          label="Sin cobrar"
           value={formatCents(summary.pending_cents)}
           icon="Clock"
           iconColor="warning"
         />
         <KpiCard
-          label="Cobrado"
+          label="Cobrado · pdte. banco"
           value={formatCents(summary.collected_cents)}
           icon="Coins"
           iconColor="primary"
         />
         <KpiCard
-          label="Pdte. liquidar comercial"
+          label="Pdte. liquidar (efectivo)"
           value={formatCents(summary.pending_settlement_cents)}
           icon="HandCoins"
           iconColor="warning"
@@ -116,7 +131,7 @@ export default async function WalletPage({
           iconColor="primary"
         />
         <KpiCard
-          label="Validado"
+          label="Confirmado en banco"
           value={formatCents(summary.validated_cents)}
           icon="CheckCircle2"
           iconColor="success"
