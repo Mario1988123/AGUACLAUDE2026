@@ -91,6 +91,13 @@ export default async function ProposalDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ProposalActions
+            proposalId={proposal.id}
+            status={proposal.status}
+            canApprove={canApprove}
+            hasLead={Boolean(proposal.lead_id)}
+            contractId={contractId}
+          />
           <a
             href={`/api/pdf/proposal/${proposal.id}`}
             target="_blank"
@@ -228,81 +235,65 @@ export default async function ProposalDetailPage({
         );
       })()}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <CardTitle>Productos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {items.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin productos.</p>
-            ) : (
-              <table className="w-full text-sm">
-                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="py-2 text-left">Producto</th>
-                    <th className="py-2 text-right">Cant.</th>
-                    <th className="py-2 text-right">Precio</th>
-                    <th className="py-2 text-right">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {items.map((it) => (
-                    <tr key={it.id}>
-                      <td className="py-2">{it.product_name_snapshot}</td>
-                      <td className="py-2 text-right tabular-nums">{it.quantity}</td>
-                      <td className="py-2 text-right tabular-nums">
-                        {formatCents(it.unit_price_cash_cents) ?? "—"}
-                      </td>
-                      <td className="py-2 text-right tabular-nums">
-                        {formatCents((it.unit_price_cash_cents ?? 0) * it.quantity) ?? "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                {proposal.total_cash_cents != null && proposal.total_cash_cents > 0 && (
-                  <tfoot>
-                    <tr className="border-t font-semibold">
-                      <td colSpan={3} className="py-3 text-right">
-                        Total contado
-                      </td>
-                      <td className="py-3 text-right tabular-nums">
-                        {formatCents(proposal.total_cash_cents)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Acciones</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProposalActions
-              proposalId={proposal.id}
-              status={proposal.status}
-              canApprove={canApprove}
-              hasLead={Boolean(proposal.lead_id)}
-              contractId={contractId}
-            />
             {proposal.validity_until && (
-              <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Coins className="h-3 w-3" />
-                Validez hasta {proposal.validity_until}
-              </p>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Coins className="h-3 w-3" /> Validez hasta {proposal.validity_until}
+              </span>
             )}
-            {proposal.rejected_reason && (
-              <p className="mt-4 text-xs">
-                <strong>Motivo rechazo:</strong> {proposal.rejected_reason}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sin productos.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="py-2 text-left">Producto</th>
+                  <th className="py-2 text-right">Cant.</th>
+                  <th className="py-2 text-right">Precio</th>
+                  <th className="py-2 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="py-2">{it.product_name_snapshot}</td>
+                    <td className="py-2 text-right tabular-nums">{it.quantity}</td>
+                    <td className="py-2 text-right tabular-nums">
+                      {formatCents(it.unit_price_cash_cents) ?? "—"}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">
+                      {formatCents((it.unit_price_cash_cents ?? 0) * it.quantity) ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {proposal.total_cash_cents != null && proposal.total_cash_cents > 0 && (
+                <tfoot>
+                  <tr className="border-t font-semibold">
+                    <td colSpan={3} className="py-3 text-right">
+                      Total contado
+                    </td>
+                    <td className="py-3 text-right tabular-nums">
+                      {formatCents(proposal.total_cash_cents)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          )}
+          {proposal.rejected_reason && (
+            <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
+              <strong>Motivo del rechazo:</strong> {proposal.rejected_reason}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {proposal.notes && (
         <Card>

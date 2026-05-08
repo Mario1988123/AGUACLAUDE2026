@@ -44,7 +44,7 @@ export async function listCustomers(
   }
   const { data, error } = await query;
   if (error) throw error;
-  return (data as Array<{
+  const baseRows = (data as Array<{
     id: string;
     party_kind: "individual" | "company";
     legal_name: string | null;
@@ -55,18 +55,71 @@ export async function listCustomers(
     phone_primary: string | null;
     is_active: boolean;
     created_at: string;
-  }>).map((c) => ({
-    id: c.id,
-    party_kind: c.party_kind,
-    display_name:
-      c.party_kind === "company"
-        ? c.trade_name || c.legal_name || "Sin nombre"
-        : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre",
-    email: c.email,
-    phone_primary: c.phone_primary,
-    is_active: c.is_active,
-    created_at: c.created_at,
-  }));
+  }>);
+
+  // Cargar dirección primaria de cada cliente (1 query bulk)
+  const addressMap = new Map<
+    string,
+    {
+      street: string | null;
+      city: string | null;
+      province: string | null;
+      lat: number | null;
+      lng: number | null;
+    }
+  >();
+  if (baseRows.length > 0) {
+    const ids = baseRows.map((c) => c.id);
+    const { data: addrs } = await supabase
+      .from("addresses")
+      .select("customer_id, street, city, province, latitude, longitude, is_primary")
+      .in("customer_id", ids)
+      .order("is_primary", { ascending: false });
+    for (const a of ((addrs as Array<{
+      customer_id: string;
+      street: string | null;
+      city: string | null;
+      province: string | null;
+      latitude: number | null;
+      longitude: number | null;
+    }> | null) ?? [])) {
+      // El primero (is_primary desc) gana
+      if (!addressMap.has(a.customer_id)) {
+        addressMap.set(a.customer_id, {
+          street: a.street,
+          city: a.city,
+          province: a.province,
+          lat: a.latitude,
+          lng: a.longitude,
+        });
+      }
+    }
+  }
+
+  return baseRows.map((c) => {
+    const addr = addressMap.get(c.id);
+    return {
+      id: c.id,
+      party_kind: c.party_kind,
+      display_name:
+        c.party_kind === "company"
+          ? c.trade_name || c.legal_name || "Sin nombre"
+          : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre",
+      contact_name:
+        c.party_kind === "company"
+          ? `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || null
+          : null,
+      email: c.email,
+      phone_primary: c.phone_primary,
+      is_active: c.is_active,
+      created_at: c.created_at,
+      address_street: addr?.street ?? null,
+      address_city: addr?.city ?? null,
+      address_province: addr?.province ?? null,
+      address_lat: addr?.lat ?? null,
+      address_lng: addr?.lng ?? null,
+    };
+  });
 }
 
 export async function getCustomer(id: string): Promise<CustomerDetail> {

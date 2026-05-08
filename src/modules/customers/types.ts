@@ -2,10 +2,18 @@ export interface CustomerListItem {
   id: string;
   party_kind: "individual" | "company";
   display_name: string;
+  /** Para empresas: persona de contacto (first + last). */
+  contact_name: string | null;
   email: string | null;
   phone_primary: string | null;
   is_active: boolean;
   created_at: string;
+  // Dirección primaria
+  address_street: string | null;
+  address_city: string | null;
+  address_province: string | null;
+  address_lat: number | null;
+  address_lng: number | null;
 }
 
 export interface CustomerDetail {
