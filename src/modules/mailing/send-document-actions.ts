@@ -255,6 +255,90 @@ export async function sendInvoiceByEmailAction(
 }
 
 // =====================================================================
+// PROPUESTA DE AHORRO
+// =====================================================================
+
+export async function sendSavingsByEmailAction(
+  savingsId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const session = await requireSession();
+  if (!session.company_id) return { ok: false, error: "Sin empresa" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const { data: sp } = await admin
+    .from("savings_proposals")
+    .select(
+      "id, reference_code, customer_id, lead_id, company_id, current_monthly_cost_cents, total_monthly_cost_cents, total_saved_5y_cents, payback_months",
+    )
+    .eq("id", savingsId)
+    .maybeSingle();
+  if (!sp) return { ok: false, error: "Propuesta de ahorro no encontrada" };
+  if (sp.company_id !== session.company_id) {
+    return { ok: false, error: "Propuesta de otra empresa" };
+  }
+
+  let toEmail: string | null = null;
+  let toName: string | null = null;
+  if (sp.customer_id) {
+    const { data: c } = await admin
+      .from("customers")
+      .select("email, first_name, last_name, legal_name, trade_name, party_kind")
+      .eq("id", sp.customer_id)
+      .maybeSingle();
+    toEmail = c?.email ?? null;
+    toName = nameOf(c);
+  } else if (sp.lead_id) {
+    const { data: l } = await admin
+      .from("leads")
+      .select("email, first_name, last_name, legal_name, trade_name, party_kind")
+      .eq("id", sp.lead_id)
+      .maybeSingle();
+    toEmail = l?.email ?? null;
+    toName = nameOf(l);
+  }
+
+  if (!toEmail) {
+    return { ok: false, error: "El cliente/lead no tiene email registrado" };
+  }
+
+  const pdfBase64 = await fetchPdfAsBase64(`/api/pdf/savings/${savingsId}`);
+
+  const r = await sendTransactionalEmail({
+    template_key: "savings_proposal_sent",
+    to_email: toEmail,
+    to_name: toName ?? "Cliente",
+    customer_id: sp.customer_id,
+    lead_id: sp.lead_id,
+    variables: {
+      savings_reference: sp.reference_code ?? "—",
+      current_monthly: sp.current_monthly_cost_cents,
+      our_monthly: sp.total_monthly_cost_cents,
+      saved_5y: sp.total_saved_5y_cents ?? 0,
+      payback_months: sp.payback_months ?? "—",
+    },
+    attachments: pdfBase64
+      ? [
+          {
+            filename: `propuesta-ahorro-${sp.reference_code ?? savingsId.slice(0, 8)}.pdf`,
+            content_base64: pdfBase64,
+          },
+        ]
+      : undefined,
+    related_subject_type: "savings_proposal",
+    related_subject_id: savingsId,
+  });
+
+  if (r.ok) {
+    await admin
+      .from("savings_proposals")
+      .update({ sent_by_email_at: new Date().toISOString(), status: "sent" })
+      .eq("id", savingsId);
+  }
+  return r;
+}
+
+// =====================================================================
 // Helper compartido
 // =====================================================================
 

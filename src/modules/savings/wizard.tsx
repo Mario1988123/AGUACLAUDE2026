@@ -21,6 +21,7 @@ import {
   Banknote,
   Zap,
   ShoppingCart,
+  FileSignature,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -35,6 +36,7 @@ import {
   recommendedDispensers,
 } from "./calc";
 import {
+  convertSavingsToProposalAction,
   saveSavingsProposalAction,
   type SavingsBrand,
   type WizardExtra,
@@ -114,6 +116,9 @@ export function SavingsWizard(props: Props) {
 
   const [result, setResult] = useState<CalcResult | null>(null);
   const [calcDone, setCalcDone] = useState(false);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [converting, setConverting] = useState(false);
 
   const products =
     clientType === "home"
@@ -362,8 +367,55 @@ export function SavingsWizard(props: Props) {
         notify.error("No se pudo guardar", r.error);
         return;
       }
-      notify.success("Propuesta de ahorro guardada", `Ref. ${r.id.slice(0, 8)}`);
+      setSavedId(r.id);
+      notify.success("Propuesta de ahorro guardada", "Ya puedes descargar el PDF o enviarla por email.");
     });
+  }
+
+  function convertToProposal() {
+    if (!savedId) {
+      notify.warning("Guarda la propuesta primero");
+      return;
+    }
+    setConverting(true);
+    (async () => {
+      try {
+        const r = await convertSavingsToProposalAction(savedId);
+        if (!r.ok) {
+          notify.error("No se pudo convertir", r.error);
+          return;
+        }
+        notify.success("Propuesta comercial creada", "Te llevamos a la propuesta.");
+        if (r.proposal_id) {
+          router.push(`/propuestas/${r.proposal_id}` as never);
+        }
+      } finally {
+        setConverting(false);
+      }
+    })();
+  }
+
+  function sendEmail() {
+    if (!savedId) {
+      notify.warning("Guarda la propuesta primero");
+      return;
+    }
+    setSendingEmail(true);
+    (async () => {
+      try {
+        const { sendSavingsByEmailAction } = await import(
+          "@/modules/mailing/send-document-actions"
+        );
+        const r = await sendSavingsByEmailAction(savedId);
+        if (!r.ok) {
+          notify.error("No se pudo enviar", r.error);
+        } else {
+          notify.success("Propuesta enviada por email");
+        }
+      } finally {
+        setSendingEmail(false);
+      }
+    })();
   }
 
   return (
@@ -818,6 +870,11 @@ export function SavingsWizard(props: Props) {
             leadName={defaultLeadName ?? null}
             onSave={save}
             saving={pending}
+            savedId={savedId}
+            onEmail={sendEmail}
+            sendingEmail={sendingEmail}
+            onConvert={convertToProposal}
+            converting={converting}
           />
         )}
       </div>
@@ -896,6 +953,11 @@ function ResultPanel({
   leadName,
   onSave,
   saving,
+  savedId,
+  onEmail,
+  sendingEmail,
+  onConvert,
+  converting,
 }: {
   result: CalcResult | null;
   planType: PlanType;
@@ -903,6 +965,11 @@ function ResultPanel({
   leadName: string | null;
   onSave: () => void;
   saving: boolean;
+  savedId: string | null;
+  onEmail: () => void;
+  sendingEmail: boolean;
+  onConvert: () => void;
+  converting: boolean;
 }) {
   if (!result) {
     return (
@@ -992,14 +1059,47 @@ function ResultPanel({
 
       {/* Acciones */}
       <div className="flex flex-wrap gap-2 pt-2">
-        <Button onClick={onSave} disabled={saving} variant="success" className="gap-2">
-          <Save className="h-4 w-4" /> {saving ? "Guardando…" : "Guardar propuesta"}
+        {!savedId ? (
+          <Button onClick={onSave} disabled={saving} variant="success" className="gap-2">
+            <Save className="h-4 w-4" /> {saving ? "Guardando…" : "Guardar propuesta"}
+          </Button>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-100 px-3 py-2 text-xs font-bold text-emerald-700">
+            <Check className="h-4 w-4" /> Guardada
+          </span>
+        )}
+        <Button
+          asChild={!!savedId}
+          disabled={!savedId}
+          variant="outline"
+          className="gap-2"
+        >
+          {savedId ? (
+            <a href={`/api/pdf/savings/${savedId}`} target="_blank" rel="noopener">
+              <Download className="h-4 w-4" /> Descargar PDF
+            </a>
+          ) : (
+            <span>
+              <Download className="h-4 w-4" /> Descargar PDF
+            </span>
+          )}
         </Button>
-        <Button variant="outline" disabled className="gap-2">
-          <Download className="h-4 w-4" /> PDF (próximamente)
+        <Button
+          onClick={onEmail}
+          disabled={!savedId || sendingEmail}
+          variant="outline"
+          className="gap-2"
+        >
+          <Mail className="h-4 w-4" /> {sendingEmail ? "Enviando…" : "Enviar por email"}
         </Button>
-        <Button variant="outline" disabled className="gap-2">
-          <Mail className="h-4 w-4" /> Enviar por email
+        <Button
+          onClick={onConvert}
+          disabled={!savedId || converting}
+          variant="success"
+          className="gap-2"
+        >
+          <FileSignature className="h-4 w-4" />
+          {converting ? "Convirtiendo…" : "Convertir en propuesta comercial"}
         </Button>
       </div>
     </div>

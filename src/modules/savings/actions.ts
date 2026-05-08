@@ -133,6 +133,136 @@ export async function upsertSavingsBrandAction(input: Partial<SavingsBrand> & { 
   revalidatePath("/configuracion/calculadora-ahorro");
 }
 
+/**
+ * Convierte una propuesta de ahorro (AH-XXX) en una propuesta comercial
+ * (proposals) con el cliente/lead, plan, items y extras. Útil cuando el
+ * cliente acepta la calculadora y quieres formalizarla.
+ */
+export async function convertSavingsToProposalAction(
+  savingsId: string,
+): Promise<{ ok: true; proposal_id: string } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const { data: sp } = await admin
+      .from("savings_proposals")
+      .select("*")
+      .eq("id", savingsId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = sp as any;
+    if (!s) return { ok: false, error: "Propuesta de ahorro no encontrada" };
+    if (s.converted_to_proposal_id) {
+      return { ok: false, error: "Ya estaba convertida" };
+    }
+    if (!s.product_id) {
+      return { ok: false, error: "La propuesta de ahorro no tiene producto" };
+    }
+
+    // Construir items: principal + extras
+    const items: Array<{
+      product_id: string;
+      quantity: number;
+      unit_price_cents: number;
+      installation_included: boolean;
+      installation_price_cents: number | null;
+      maintenance_included: boolean;
+      maintenance_until_date: string | null;
+      maintenance_price_cents: number | null;
+      maintenance_periodicity_months: number | null;
+      deposit_cents: number | null;
+      charge_first_payment_now: boolean;
+    }> = [
+      {
+        product_id: s.product_id,
+        quantity: s.num_units ?? 1,
+        unit_price_cents: s.product_unit_price_cents ?? 0,
+        installation_included: true,
+        installation_price_cents: null,
+        maintenance_included: false,
+        maintenance_until_date: null,
+        maintenance_price_cents: null,
+        maintenance_periodicity_months: 12,
+        deposit_cents: s.plan_type === "rental" ? s.deposit_cents ?? 0 : null,
+        charge_first_payment_now: false,
+      },
+    ];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const e of (s.extras ?? []) as any[]) {
+      if (!e.product_id) continue;
+      items.push({
+        product_id: e.product_id,
+        quantity: 1,
+        unit_price_cents: e.monthly_cents ?? 0,
+        installation_included: true,
+        installation_price_cents: null,
+        maintenance_included: false,
+        maintenance_until_date: null,
+        maintenance_price_cents: null,
+        maintenance_periodicity_months: 12,
+        deposit_cents: null,
+        charge_first_payment_now: false,
+      });
+    }
+
+    const { createProposalAction } = await import("@/modules/proposals/actions");
+    let proposalId = "";
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (createProposalAction as any)({
+        customer_id: s.customer_id ?? undefined,
+        lead_id: s.lead_id ?? undefined,
+        chosen_plan_type: s.plan_type,
+        chosen_duration_months: s.duration_months,
+        items,
+        notes:
+          `Convertida desde ${s.reference_code ?? "propuesta de ahorro"}. ` +
+          `Ahorro estimado 5y: ${(s.total_saved_5y_cents ?? 0) / 100}€.`,
+      });
+    } catch (err) {
+      // createProposalAction lanza NEXT_REDIRECT — capturamos el id de la URL
+      if (err && typeof err === "object" && "digest" in err) {
+        const d = String((err as { digest?: unknown }).digest);
+        const m = d.match(/\/propuestas\/([0-9a-f-]+)/);
+        if (m && m[1]) proposalId = m[1];
+      }
+    }
+
+    if (!proposalId) {
+      // Fallback: buscar la propuesta más reciente del comercial
+      const { data: latest } = await admin
+        .from("proposals")
+        .select("id")
+        .eq("created_by", session.user_id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      proposalId = (latest as { id: string } | null)?.id ?? "";
+    }
+
+    if (proposalId) {
+      await admin
+        .from("savings_proposals")
+        .update({
+          converted_to_proposal_id: proposalId,
+          status: "converted",
+        })
+        .eq("id", savingsId);
+    }
+
+    revalidatePath("/calculadora-ahorro");
+    return { ok: true, proposal_id: proposalId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    console.error("[convertSavingsToProposal]", e);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function refreshScraperPricesAction(): Promise<
   | { ok: true; stats: { ok: number; failed: number; total: number } }
   | { ok: false; error: string }
