@@ -134,6 +134,92 @@ export async function createWalletEntryAction(input: unknown) {
   if (parsed.contract_id) revalidatePath(`/contratos/${parsed.contract_id}`);
 }
 
+/**
+ * Cambia el método de pago de un wallet entry.
+ * Regla:
+ *  - pending → cualquiera (el comercial corrige antes de cobrar real).
+ *  - collected/pending_settlement/validated → solo admin/director (corregir
+ *    error humano en cobro ya registrado).
+ *  - rejected/cancelled → solo admin/director.
+ */
+export async function changeWalletMethodAction(id: string, newMethod: string) {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const allowedMethods = [
+    "cash",
+    "card",
+    "bizum",
+    "transfer",
+    "direct_debit",
+    "financing",
+  ];
+  if (!allowedMethods.includes(newMethod)) {
+    throw new Error("Método inválido");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: row } = await admin
+    .from("wallet_entries")
+    .select("id, status, method, contract_id, contract_payment_id, company_id")
+    .eq("id", id)
+    .maybeSingle();
+  const e = row as
+    | {
+        id: string;
+        status: string;
+        method: string;
+        contract_id: string | null;
+        contract_payment_id: string | null;
+        company_id: string;
+      }
+    | null;
+  if (!e) throw new Error("Cobro no encontrado");
+  if (e.company_id !== session.company_id) throw new Error("Otra empresa");
+
+  const isAdminOrDirector =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (e.status !== "pending" && !isAdminOrDirector) {
+    throw new Error(
+      "Cobro ya registrado. Solo admin o director comercial puede cambiar el método.",
+    );
+  }
+  if (e.method === newMethod) return;
+
+  // Si está cobrado y cambias a efectivo, la liquidación cambia
+  // (cash → pending_settlement; resto → collected). Si está pending,
+  // dejamos status como está, solo cambiamos method.
+  const updates: Record<string, unknown> = { method: newMethod };
+  if (e.status === "collected" && newMethod === "cash") {
+    updates.status = "pending_settlement";
+  } else if (e.status === "pending_settlement" && newMethod !== "cash") {
+    updates.status = "collected";
+  }
+  const r = await admin.from("wallet_entries").update(updates).eq("id", id);
+  if (r.error) throw new Error(r.error.message);
+
+  // Sincronizar el contract_payment vinculado
+  if (e.contract_payment_id) {
+    await admin
+      .from("contract_payments")
+      .update({ method: newMethod })
+      .eq("id", e.contract_payment_id);
+  }
+
+  await admin.from("events").insert({
+    company_id: session.company_id,
+    subject_type: "wallet_entry",
+    subject_id: id,
+    kind: "wallet.method_changed",
+    payload: { from: e.method, to: newMethod, status: e.status },
+    actor_user_id: session.user_id,
+  });
+
+  if (e.contract_id) revalidatePath(`/contratos/${e.contract_id}`);
+  revalidatePath("/wallet");
+}
+
 export async function validateWalletEntryAction(id: string) {
   const session = await requireSession();
   if (

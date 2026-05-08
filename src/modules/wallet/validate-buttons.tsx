@@ -8,18 +8,31 @@ import {
   validateWalletEntryAction,
   markWalletAsCollectedAction,
   cancelWalletEntryAction,
+  changeWalletMethodAction,
 } from "./actions";
 
 interface Props {
   id: string;
   status: string;
+  method: string;
   canValidate: boolean;
 }
 
-export function ValidateWalletButtons({ id, status, canValidate }: Props) {
+const METHOD_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "cash", label: "Efectivo" },
+  { value: "card", label: "Tarjeta" },
+  { value: "bizum", label: "Bizum" },
+  { value: "transfer", label: "Transferencia" },
+  { value: "direct_debit", label: "Domiciliación" },
+  { value: "financing", label: "Financiación" },
+];
+
+export function ValidateWalletButtons({ id, status, method, canValidate }: Props) {
   const [pending, startTransition] = useTransition();
   const [reasonOpen, setReasonOpen] = useState<"reject" | "cancel" | null>(null);
   const [reason, setReason] = useState("");
+  const [methodOpen, setMethodOpen] = useState(false);
+  const [newMethod, setNewMethod] = useState(method);
 
   const isCollected = status === "collected" || status === "pending_settlement";
   const isPending = status === "pending";
@@ -70,6 +83,25 @@ export function ValidateWalletButtons({ id, status, canValidate }: Props) {
     });
   }
 
+  function changeMethod() {
+    if (newMethod === method) {
+      setMethodOpen(false);
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await changeWalletMethodAction(id, newMethod);
+        notify.success("Método actualizado");
+        setMethodOpen(false);
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  // Quién puede cambiar el método: pending = todos; resto = solo admin/director
+  const canEditMethod = isPending || canValidate;
+
   // Pending → todos pueden marcar como cobrado; admin puede cancelar
   // Collected/pending_settlement → admin valida o rechaza
   // Rejected/cancelled → admin puede reabrir como cobrado
@@ -78,6 +110,19 @@ export function ValidateWalletButtons({ id, status, canValidate }: Props) {
   return (
     <>
       <div className="flex flex-wrap justify-end gap-1.5">
+        {canEditMethod && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setNewMethod(method);
+              setMethodOpen(true);
+            }}
+            disabled={pending}
+          >
+            Cambiar método
+          </Button>
+        )}
         {isCollected && canValidate && (
           <>
             <Button size="sm" variant="success" onClick={validate} disabled={pending}>
@@ -165,6 +210,53 @@ export function ValidateWalletButtons({ id, status, canValidate }: Props) {
               </Button>
               <Button variant="destructive" onClick={confirmReason} disabled={pending}>
                 Confirmar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {methodOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !pending && setMethodOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="space-y-3 p-5">
+              <h2 className="text-base font-bold">Cambiar método de cobro</h2>
+              <p className="text-xs text-muted-foreground">
+                {isPending
+                  ? "El cobro está pendiente — puedes cambiar el método antes de confirmarlo."
+                  : "El cobro ya está registrado. Cambiar el método queda en el log de auditoría."}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {METHOD_OPTIONS.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setNewMethod(m.value)}
+                    className={`rounded-xl border-2 p-3 text-sm font-bold ${
+                      newMethod === m.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-card hover:border-primary/40"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+              <Button variant="outline" onClick={() => setMethodOpen(false)} disabled={pending}>
+                Cancelar
+              </Button>
+              <Button onClick={changeMethod} disabled={pending} variant="success">
+                Guardar
               </Button>
             </div>
           </div>

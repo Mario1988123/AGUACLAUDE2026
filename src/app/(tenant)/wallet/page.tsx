@@ -217,6 +217,7 @@ export default async function WalletPage({
                         <ValidateWalletButtons
                           id={e.id}
                           status={e.status}
+                          method={e.method}
                           canValidate={canValidate}
                         />
                       </td>

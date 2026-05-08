@@ -28,6 +28,7 @@ import { InstallPreference } from "@/modules/contracts/install-preference";
 import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { ContractPreviewButton } from "@/modules/contracts/preview-modal-button";
 import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
+import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -126,6 +127,14 @@ export default async function ContractDetailPage({
   // ¿hay algún pago por transferencia? Si sí, mostramos el IBAN de la
   // empresa para que el cliente pueda hacer el ingreso.
   const hasTransferPayment = payments.some((p) => p.method === "transfer");
+
+  // GoCardless: mandatos activos del cliente para cobro inmediato
+  const { listActiveMandatesForCustomer } = await import(
+    "@/modules/gocardless/actions"
+  );
+  const gcMandates = c.customer_id
+    ? await listActiveMandatesForCustomer(c.customer_id).catch(() => [])
+    : [];
 
   return (
     <div className="space-y-6">
@@ -430,13 +439,25 @@ export default async function ContractDetailPage({
                       </Badge>
                     </td>
                     <td className="px-2 py-2 text-right">
-                      <QuickCollectButton
-                        paymentId={p.id}
-                        status={p.status}
-                        defaultMethod={p.method}
-                        amountLabel={formatCents(p.amount_cents) ?? undefined}
-                        canEditAfterCollect={canEditCollectedPayments}
-                      />
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        <QuickCollectButton
+                          paymentId={p.id}
+                          status={p.status}
+                          defaultMethod={p.method}
+                          amountLabel={formatCents(p.amount_cents) ?? undefined}
+                          canEditAfterCollect={canEditCollectedPayments}
+                        />
+                        {p.status === "pending" && gcMandates.length > 0 && (
+                          <ChargeWithGoCardlessButton
+                            mandates={gcMandates}
+                            defaultAmountCents={p.amount_cents}
+                            description={`${p.concept} · ${contract.reference_code ?? "Contrato"}`}
+                            contractId={contract.id}
+                            contractPaymentId={p.id}
+                            size="sm"
+                          />
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
