@@ -1008,12 +1008,23 @@ export async function collectContractPaymentAction(
       })
       .eq("id", walletEntryId);
   } else {
+    // Resolver customer_id desde el contrato (necesario para mostrar
+    // cliente en /wallet y para poder facturar desde wallet)
+    const { data: contractRow } = await admin
+      .from("contracts")
+      .select("customer_id")
+      .eq("id", p.contract_id)
+      .maybeSingle();
+    const contractCustomerId = (contractRow as { customer_id: string | null } | null)
+      ?.customer_id ?? null;
+
     const { data: created } = await admin
       .from("wallet_entries")
       .insert({
         company_id: session.company_id,
         contract_id: p.contract_id,
         contract_payment_id: p.id,
+        customer_id: contractCustomerId,
         concept: p.concept,
         amount_cents: p.amount_cents,
         method: effectiveMethod,

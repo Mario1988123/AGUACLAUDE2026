@@ -7,6 +7,7 @@ import { KpiCard } from "@/shared/components/kpi-card";
 import { StatusPill } from "@/shared/components/status-pill";
 import { RegisterPaymentButton } from "@/modules/wallet/register-button";
 import { ValidateWalletButtons } from "@/modules/wallet/validate-buttons";
+import { PaymentMethodBadge } from "@/modules/wallet/payment-method-badge";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -209,25 +210,25 @@ export default async function WalletPage({
               <table className="w-full text-sm">
                 <thead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   <tr className="border-b">
-                    <th className="py-3 text-left">Fecha</th>
-                    <th className="py-3 text-left">Cliente</th>
-                    <th className="py-3 text-left">Contrato</th>
-                    <th className="py-3 text-left">Concepto</th>
-                    <th className="py-3 text-right">Importe</th>
-                    <th className="py-3 text-left">Método</th>
-                    <th className="py-3 text-left">Estado</th>
-                    {isAdmin && <th className="py-3 text-left">Comercial</th>}
-                    <th className="py-3 text-left">Factura</th>
+                    <th className="py-3 pr-4 text-left">Fecha</th>
+                    <th className="py-3 pr-4 text-left">Cliente</th>
+                    <th className="py-3 pr-4 text-left">Contrato</th>
+                    <th className="py-3 pr-4 text-left">Concepto</th>
+                    <th className="py-3 pr-6 text-right">Importe</th>
+                    <th className="py-3 pr-4 text-left">Método</th>
+                    <th className="py-3 pr-4 text-left">Estado</th>
+                    {isAdmin && <th className="py-3 pr-4 text-left">Comercial</th>}
+                    <th className="py-3 pr-4 text-left">Factura</th>
                     <th className="py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {entries.map((e) => (
                     <tr key={e.id} className="hover:bg-muted/30">
-                      <td className="py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      <td className="py-3 pr-4 text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(e.created_at).toLocaleDateString("es-ES")}
                       </td>
-                      <td className="py-3">
+                      <td className="py-3 pr-4">
                         {e.customer_id ? (
                           <Link
                             href={`/clientes/${e.customer_id}` as never}
@@ -239,7 +240,7 @@ export default async function WalletPage({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="py-3 text-xs">
+                      <td className="py-3 pr-4 text-xs">
                         {e.contract_id && e.contract_reference ? (
                           <Link
                             href={`/contratos/${e.contract_id}` as never}
@@ -251,21 +252,21 @@ export default async function WalletPage({
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
-                      <td className="py-3 text-xs">{e.concept}</td>
-                      <td className="py-3 text-right font-semibold tabular-nums whitespace-nowrap">
+                      <td className="py-3 pr-4 text-xs">{e.concept}</td>
+                      <td className="py-3 pr-6 text-right font-semibold tabular-nums whitespace-nowrap">
                         {formatCents(e.amount_cents)}
                       </td>
-                      <td className="py-3">
-                        <Badge variant="outline">{METHOD_LABEL[e.method] ?? e.method}</Badge>
+                      <td className="py-3 pr-4">
+                        <PaymentMethodBadge method={e.method} />
                       </td>
-                      <td className="py-3">
+                      <td className="py-3 pr-4">
                         <StatusPill
                           label={WALLET_STATUS_LABEL[e.status] ?? e.status}
                           tone={WALLET_TONE[e.status] ?? "info"}
                         />
                       </td>
                       {isAdmin && (
-                        <td className="py-3 text-xs">
+                        <td className="py-3 pr-4 text-xs">
                           {e.collected_by_name ? (
                             <span className="font-medium">{e.collected_by_name}</span>
                           ) : (
@@ -273,7 +274,7 @@ export default async function WalletPage({
                           )}
                         </td>
                       )}
-                      <td className="py-3 text-xs">
+                      <td className="py-3 pr-4 text-xs">
                         {e.invoice_id ? (
                           <Link
                             href={`/facturas/${e.invoice_id}` as never}

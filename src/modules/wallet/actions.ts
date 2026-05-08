@@ -85,16 +85,21 @@ export async function listWalletEntries(filters?: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const baseRows = ((data as any[]) ?? []);
 
-  // Resolver nombre del comercial via user_profiles (auth.users → user_profiles.user_id)
+  // Resolver nombre del comercial via user_profiles. IMPORTANTE: la RLS
+  // de user_profiles típicamente solo deja al user leer su propio perfil.
+  // Para mostrar nombres en listados usamos el admin client.
   const userIds = Array.from(new Set(baseRows.map((r) => r.collected_by_user_id).filter(Boolean) as string[]));
   const nameMap = new Map<string, string>();
   if (userIds.length > 0) {
-    const { data: profiles } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: profiles } = await admin
       .from("user_profiles")
       .select("user_id, full_name, email")
       .in("user_id", userIds);
     for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
-      nameMap.set(p.user_id, p.full_name ?? p.email ?? "");
+      const nice = p.full_name?.trim() || p.email?.split("@")[0] || p.user_id.slice(0, 8);
+      nameMap.set(p.user_id, nice);
     }
   }
 
