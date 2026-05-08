@@ -9,6 +9,7 @@ import { Timeline } from "@/modules/events/timeline";
 import { MaintenanceCompleteForm } from "@/modules/maintenance/complete-form";
 import { StartMaintenanceButton } from "@/modules/maintenance/start-button";
 import { createClient } from "@/shared/lib/supabase/server";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -75,9 +76,7 @@ export default async function MaintenanceDetailPage({
               ` · Programado ${new Date(job.scheduled_at).toLocaleString("es-ES")}`}
           </p>
         </div>
-        <Link href="/mantenimientos" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <BackButton href="/mantenimientos" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

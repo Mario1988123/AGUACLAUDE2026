@@ -17,6 +17,7 @@ import { InstallationWizard } from "@/modules/installations/installation-wizard"
 import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/modules/installations/client-actions";
 import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
+import { BackButton } from "@/shared/components/back-button";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { createClient } from "@/shared/lib/supabase/server";
 
@@ -190,9 +191,7 @@ export default async function InstallationDetailPage({
           >
             📄 Parte trabajo PDF
           </a>
-          <Link href="/instalaciones" className="text-sm text-primary hover:underline">
-            ← Volver
-          </Link>
+          <BackButton href="/instalaciones" />
         </div>
       </div>
 

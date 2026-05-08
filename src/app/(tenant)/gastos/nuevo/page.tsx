@@ -5,6 +5,7 @@ import { NewExpenseForm } from "@/modules/expenses/new-expense-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +49,7 @@ export default async function NewExpensePage() {
             Sube el ticket y rellenamos los datos automáticamente.
           </p>
         </div>
-        <Link href="/gastos" className="text-sm text-primary hover:underline self-center">
-          ← Volver
-        </Link>
+        <BackButton href="/gastos" />
       </div>
 
       <Card>

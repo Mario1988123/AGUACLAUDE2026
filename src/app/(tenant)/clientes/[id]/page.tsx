@@ -11,6 +11,7 @@ import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
+import { BackButton } from "@/shared/components/back-button";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
 import { listContractsByCustomer, listInstallationsByCustomer } from "@/modules/customers/actions";
 import { CustomerContractsCard } from "@/modules/customers/contracts-card";
@@ -163,9 +164,7 @@ export default async function CustomerDetailPage({
           >
             ⚡ Contrato directo
           </Link>
-          <Link href="/clientes" className="text-sm text-primary hover:underline">
-            ← Volver
-          </Link>
+          <BackButton href="/clientes" />
         </div>
       </div>
 

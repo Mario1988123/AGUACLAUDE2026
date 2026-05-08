@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -101,9 +102,7 @@ export default async function ExpenseDetailPage({
             {userName ?? "(comercial)"}
           </p>
         </div>
-        <Link href="/gastos" className="text-sm text-primary hover:underline self-center">
-          ← Volver
-        </Link>
+        <BackButton href="/gastos" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

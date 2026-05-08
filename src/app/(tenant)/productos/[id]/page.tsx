@@ -12,6 +12,7 @@ import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -61,9 +62,7 @@ export default async function ProductDetailPage({
           >
             📄 Ficha técnica
           </a>
-          <Link href="/productos" className="text-sm text-primary hover:underline">
-            ← Volver
-          </Link>
+          <BackButton href="/productos" />
         </div>
       </div>
 

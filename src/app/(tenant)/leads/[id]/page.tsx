@@ -18,6 +18,7 @@ import { Plus, MapPin } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { listTeamMembers } from "@/modules/agenda/actions";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -86,9 +87,7 @@ export default async function LeadDetailPage({
             )}
           </div>
         </div>
-        <Link href="/leads" className="text-sm text-primary hover:underline self-start mt-2">
-          ← Volver
-        </Link>
+        <BackButton href="/leads" />
       </div>
 
       {/* Toolbar de acciones agrupada arriba */}

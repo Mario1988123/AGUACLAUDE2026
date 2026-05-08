@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Timeline } from "@/modules/events/timeline";
 import { IncidentActionsPanel } from "@/modules/incidents/incident-actions-panel";
+import { BackButton } from "@/shared/components/back-button";
 import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -88,9 +89,7 @@ export default async function IncidentDetailPage({
             Creada {new Date(incident.created_at).toLocaleString("es-ES")}
           </p>
         </div>
-        <Link href="/incidencias" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <BackButton href="/incidencias" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

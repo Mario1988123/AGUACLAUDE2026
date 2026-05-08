@@ -29,6 +29,7 @@ import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { ContractPreviewButton } from "@/modules/contracts/preview-modal-button";
 import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
+import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -281,9 +282,7 @@ export default async function ContractDetailPage({
           {(contract.status === "signed" || contract.status === "active") && (
             <SendByEmailButton documentId={contract.id} kind="contract" short />
           )}
-          <Link href="/contratos" className="text-sm text-primary hover:underline">
-            ← Volver
-          </Link>
+          <BackButton href="/contratos" />
         </div>
       </div>
 

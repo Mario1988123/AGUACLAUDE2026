@@ -5,6 +5,7 @@ import { FreeTrialActionsPanel } from "@/modules/free-trials/actions-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Timeline } from "@/modules/events/timeline";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -78,9 +79,7 @@ export default async function FreeTrialDetailPage({
             )}
           </p>
         </div>
-        <Link href="/pruebas-gratuitas" className="text-sm text-primary hover:underline">
-          ← Volver
-        </Link>
+        <BackButton href="/pruebas-gratuitas" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

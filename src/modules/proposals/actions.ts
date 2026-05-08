@@ -229,6 +229,38 @@ export async function getProposal(id: string): Promise<ProposalDetail> {
   return { ...p, customer_or_lead_name: name };
 }
 
+export interface ProposalPaymentOption {
+  id: string;
+  plan_type: "cash" | "rental" | "renting" | "financing";
+  duration_months: number | null;
+  monthly_cents: number | null;
+  total_cents: number;
+  permanence_months: number | null;
+  deposit_cents: number;
+  installation_fee_cents: number;
+  first_payment_cents: number | null;
+  maintenance_included: boolean;
+  maintenance_periodicity_months: number | null;
+  is_recommended: boolean;
+  display_order: number;
+}
+
+export async function getProposalPaymentOptions(
+  proposalId: string,
+): Promise<ProposalPaymentOption[]> {
+  await requireSession();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("proposal_payment_options")
+    .select(
+      "id, plan_type, duration_months, monthly_cents, total_cents, permanence_months, deposit_cents, installation_fee_cents, first_payment_cents, maintenance_included, maintenance_periodicity_months, is_recommended, display_order",
+    )
+    .eq("proposal_id", proposalId)
+    .order("display_order");
+  if (error) throw error;
+  return ((data as ProposalPaymentOption[] | null) ?? []);
+}
+
 export async function getProposalItems(proposalId: string): Promise<ProposalItem[]> {
   await requireSession();
   const supabase = await createClient();

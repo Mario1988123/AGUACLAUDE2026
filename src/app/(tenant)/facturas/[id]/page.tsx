@@ -7,6 +7,7 @@ import { InvoiceActions } from "@/modules/invoices/invoice-actions";
 import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
 import { listActiveMandatesForCustomer } from "@/modules/gocardless/actions";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
+import { BackButton } from "@/shared/components/back-button";
 
 function eur(c: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -78,9 +79,7 @@ export default async function InvoiceDetailPage({
             📄 PDF
           </a>
           <SendByEmailButton documentId={inv.id} kind="invoice" short />
-          <Link href="/facturas" className="text-sm text-primary hover:underline self-center">
-            ← Volver
-          </Link>
+          <BackButton href="/facturas" />
         </div>
       </div>
 
