@@ -63,7 +63,11 @@ begin
     delete from public.email_consents where company_id = v_company_id;
     delete from public.email_subscriptions where company_id = v_company_id;
     delete from public.email_lists where company_id = v_company_id;
-    delete from public.email_automation_runs where company_id = v_company_id;
+    -- email_automation_runs y email_automation_steps NO tienen company_id
+    -- directamente — se filtran via automation_id (FK a email_automations)
+    delete from public.email_automation_runs where automation_id in (
+      select id from public.email_automations where company_id = v_company_id
+    );
     delete from public.email_automation_steps where automation_id in (
       select id from public.email_automations where company_id = v_company_id
     );
