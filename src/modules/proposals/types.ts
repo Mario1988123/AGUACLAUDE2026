@@ -25,6 +25,8 @@ export interface ProposalDetail extends ProposalListItem {
   monthly_renting_min_cents: number | null;
   monthly_renting_max_cents: number | null;
   monthly_rental_cents: number | null;
+  chosen_plan_type: "cash" | "rental" | "renting" | "financing" | null;
+  chosen_duration_months: number | null;
   notes: string | null;
   internal_notes: string | null;
 }
@@ -37,4 +39,13 @@ export interface ProposalItem {
   quantity: number;
   unit_price_cash_cents: number | null;
   notes: string | null;
+  // Configuración por línea (migración 20260503340000_proposal_overhaul)
+  installation_included?: boolean;
+  installation_price_cents?: number | null;
+  maintenance_included?: boolean;
+  maintenance_until_date?: string | null;
+  maintenance_price_cents?: number | null;
+  maintenance_periodicity_months?: number | null;
+  deposit_cents?: number | null;
+  charge_first_payment_now?: boolean;
 }

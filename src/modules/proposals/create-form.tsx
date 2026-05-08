@@ -85,7 +85,12 @@ export function ProposalCreateForm({
   directMode = false,
 }: Props) {
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
-  const [validityUntil, setValidityUntil] = useState("");
+  const [validityUntil, setValidityUntil] = useState(() => {
+    // Por defecto: hoy + 15 días (formato YYYY-MM-DD)
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    return d.toISOString().slice(0, 10);
+  });
   const [notes, setNotes] = useState("");
   const [planType, setPlanType] = useState<PlanType>("cash");
   const [duration, setDuration] = useState<number | null>(48);
@@ -492,6 +497,19 @@ function ItemEditor({
             <div className="flex flex-wrap items-center gap-2">
               {[12, 24, 36, 48].map((m) => {
                 const isContractDuration = duration === m;
+                // Detectar si este botón es el que está seleccionado:
+                // calculamos la fecha que generaría y comparamos (con tolerancia
+                // de ±2 días para absorber pequeñas diferencias de cuando se
+                // pulsó el botón vs ahora).
+                let isSelected = false;
+                if (item.maintenance_until_date) {
+                  const target = new Date();
+                  target.setMonth(target.getMonth() + m);
+                  const current = new Date(item.maintenance_until_date);
+                  const diffDays =
+                    Math.abs(current.getTime() - target.getTime()) / (1000 * 60 * 60 * 24);
+                  isSelected = diffDays < 5;
+                }
                 return (
                   <button
                     key={m}
@@ -504,13 +522,13 @@ function ItemEditor({
                       });
                     }}
                     className={`rounded-lg border-2 px-3 py-1.5 text-xs font-bold transition ${
-                      isContractDuration
-                        ? "border-primary bg-primary/10 text-primary"
+                      isSelected
+                        ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-card hover:border-primary/40"
                     }`}
                     title={
                       isContractDuration
-                        ? `Coincide con duración del contrato (${m} meses)`
+                        ? `★ Coincide con duración del contrato (${m} meses)`
                         : `${m} meses desde hoy`
                     }
                   >

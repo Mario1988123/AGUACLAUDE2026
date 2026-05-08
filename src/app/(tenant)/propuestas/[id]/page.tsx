@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import {
   getProposal,
   getProposalItems,
-  getProposalPaymentOptions,
 } from "@/modules/proposals/actions";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -18,7 +17,6 @@ import {
   Coins,
   ShieldCheck,
   Wrench,
-  Star,
   Download,
 } from "lucide-react";
 
@@ -55,9 +53,8 @@ export default async function ProposalDetailPage({
   } catch {
     notFound();
   }
-  const [items, paymentOptions, session] = await Promise.all([
+  const [items, session] = await Promise.all([
     getProposalItems(id),
-    getProposalPaymentOptions(id),
     requireSession(),
   ]);
 
@@ -107,114 +104,129 @@ export default async function ProposalDetailPage({
         </div>
       </div>
 
-      {/* Planes de pago — el corazón de la propuesta */}
-      {paymentOptions.length > 0 && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {paymentOptions.map((opt) => {
-            const colors = PLAN_COLOR[opt.plan_type] ?? PLAN_COLOR.cash!;
-            const initialPayments: Array<{ label: string; cents: number }> = [];
-            if (opt.deposit_cents > 0) {
-              initialPayments.push({ label: "Fianza", cents: opt.deposit_cents });
-            }
-            if (opt.installation_fee_cents > 0) {
-              initialPayments.push({
-                label: "Instalación",
-                cents: opt.installation_fee_cents,
-              });
-            }
-            if (opt.first_payment_cents && opt.first_payment_cents > 0) {
-              initialPayments.push({
-                label: "1ª cuota al firmar",
-                cents: opt.first_payment_cents,
-              });
-            }
-            const initialTotal = initialPayments.reduce((s, p) => s + p.cents, 0);
+      {/* Resumen del plan elegido — calculado desde proposal + proposal_items */}
+      {(() => {
+        const planType = proposal.chosen_plan_type ?? "cash";
+        const colors = PLAN_COLOR[planType] ?? PLAN_COLOR.cash!;
+        const duration = proposal.chosen_duration_months;
 
-            return (
-              <div
-                key={opt.id}
-                className={`relative rounded-2xl border-2 p-4 ${colors.bg} ${colors.border}`}
-              >
-                {opt.is_recommended && (
-                  <div className="absolute -top-3 left-4 inline-flex items-center gap-1 rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-900">
-                    <Star className="h-3 w-3 fill-amber-900" /> Recomendado
-                  </div>
-                )}
+        // Cuota mensual: la del plan elegido (rental, renting, financing)
+        const monthlyCents =
+          planType === "rental"
+            ? proposal.monthly_rental_cents
+            : planType === "renting"
+              ? proposal.monthly_renting_min_cents ?? proposal.monthly_renting_max_cents
+              : null;
 
-                <div className={`flex items-center gap-2 ${colors.text}`}>
-                  {opt.plan_type === "cash" ? (
-                    <Banknote className={`h-5 w-5 ${colors.icon}`} />
-                  ) : (
-                    <Calendar className={`h-5 w-5 ${colors.icon}`} />
-                  )}
-                  <h3 className="font-bold">{PLAN_LABEL[opt.plan_type] ?? opt.plan_type}</h3>
+        // Pagos al firmar/instalar — calculado desde items
+        const initialPayments: Array<{ label: string; cents: number }> = [];
+        let depositSum = 0;
+        let installationSum = 0;
+        let firstPaymentSum = 0;
+        for (const it of items) {
+          if (it.deposit_cents) depositSum += it.deposit_cents * (it.quantity ?? 1);
+          if (it.installation_included === false && it.installation_price_cents) {
+            installationSum += it.installation_price_cents * (it.quantity ?? 1);
+          }
+          if (it.charge_first_payment_now && it.unit_price_cash_cents) {
+            firstPaymentSum += it.unit_price_cash_cents * (it.quantity ?? 1);
+          }
+        }
+        if (depositSum > 0) initialPayments.push({ label: "Fianza", cents: depositSum });
+        if (installationSum > 0)
+          initialPayments.push({ label: "Instalación", cents: installationSum });
+        if (firstPaymentSum > 0)
+          initialPayments.push({ label: "1ª cuota al firmar", cents: firstPaymentSum });
+        const initialTotal = initialPayments.reduce((s, p) => s + p.cents, 0);
+
+        const hasMaintenance = items.some((it) => it.maintenance_included);
+        const maintenancePeriodicity = items.find((it) => it.maintenance_included)
+          ?.maintenance_periodicity_months;
+
+        return (
+          <div className={`rounded-2xl border-2 p-5 ${colors.bg} ${colors.border}`}>
+            <div className={`flex items-center gap-2 ${colors.text}`}>
+              {planType === "cash" ? (
+                <Banknote className={`h-5 w-5 ${colors.icon}`} />
+              ) : (
+                <Calendar className={`h-5 w-5 ${colors.icon}`} />
+              )}
+              <h3 className="font-bold text-lg">{PLAN_LABEL[planType] ?? planType}</h3>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Precio principal */}
+              <div>
+                <div className="text-[11px] uppercase font-bold tracking-wider opacity-70">
+                  {planType === "cash" ? "Precio total" : "Cuota mensual"}
                 </div>
-
-                <div className="mt-3">
-                  {opt.plan_type === "cash" ? (
-                    <div className={`text-2xl font-bold tabular-nums ${colors.text}`}>
-                      {formatCents(opt.total_cents) ?? "—"}
-                    </div>
-                  ) : (
-                    <div className={`text-2xl font-bold tabular-nums ${colors.text}`}>
-                      {formatCents(opt.monthly_cents) ?? "—"}
-                      <span className="text-sm font-medium">/mes</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Permanencia / cuotas (sin total acumulado) */}
-                {(opt.permanence_months || opt.duration_months) && (
-                  <div className={`mt-2 flex items-center gap-1.5 text-xs ${colors.text}`}>
-                    <ShieldCheck className={`h-3.5 w-3.5 ${colors.icon}`} />
-                    {opt.permanence_months ? (
-                      <>Permanencia {opt.permanence_months} meses</>
-                    ) : (
-                      <>{opt.duration_months} cuotas</>
-                    )}
-                    {opt.duration_months && opt.permanence_months &&
-                      opt.duration_months !== opt.permanence_months && (
-                        <span> · {opt.duration_months} cuotas</span>
-                      )}
+                {planType === "cash" ? (
+                  <div className={`text-3xl font-bold tabular-nums ${colors.text}`}>
+                    {formatCents(proposal.total_cash_cents) ?? "—"}
                   </div>
-                )}
-
-                {opt.maintenance_included && (
-                  <div className={`mt-1.5 flex items-center gap-1.5 text-xs ${colors.text}`}>
-                    <Wrench className={`h-3.5 w-3.5 ${colors.icon}`} />
-                    Mantenimiento incluido
-                    {opt.maintenance_periodicity_months &&
-                      ` · cada ${opt.maintenance_periodicity_months} meses`}
-                  </div>
-                )}
-
-                {/* Pagos al inicio (firma + instalación) */}
-                {initialPayments.length > 0 && (
-                  <div className={`mt-3 rounded-xl bg-white/60 p-3 ${colors.text}`}>
-                    <div className="text-[11px] uppercase font-bold tracking-wider opacity-70">
-                      Al firmar / instalar
-                    </div>
-                    <ul className="mt-1.5 space-y-1 text-sm">
-                      {initialPayments.map((p) => (
-                        <li key={p.label} className="flex items-center justify-between gap-2">
-                          <span>{p.label}</span>
-                          <span className="tabular-nums font-semibold">
-                            {formatCents(p.cents)}
-                          </span>
-                        </li>
-                      ))}
-                      <li className="flex items-center justify-between gap-2 pt-1.5 border-t border-current/20 font-bold">
-                        <span>Total inicio</span>
-                        <span className="tabular-nums">{formatCents(initialTotal)}</span>
-                      </li>
-                    </ul>
+                ) : (
+                  <div className={`text-3xl font-bold tabular-nums ${colors.text}`}>
+                    {formatCents(monthlyCents) ?? "—"}
+                    <span className="text-base font-medium">/mes</span>
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              {/* Permanencia / cuotas */}
+              {duration && planType !== "cash" && (
+                <div>
+                  <div className="text-[11px] uppercase font-bold tracking-wider opacity-70">
+                    Compromiso
+                  </div>
+                  <div className={`mt-0.5 flex items-center gap-1.5 text-base font-semibold ${colors.text}`}>
+                    <ShieldCheck className={`h-4 w-4 ${colors.icon}`} />
+                    {duration} {duration === 1 ? "cuota" : "cuotas"}
+                  </div>
+                </div>
+              )}
+
+              {/* Mantenimiento */}
+              {hasMaintenance && (
+                <div>
+                  <div className="text-[11px] uppercase font-bold tracking-wider opacity-70">
+                    Mantenimiento
+                  </div>
+                  <div className={`mt-0.5 flex items-center gap-1.5 text-base font-semibold ${colors.text}`}>
+                    <Wrench className={`h-4 w-4 ${colors.icon}`} />
+                    Incluido
+                    {maintenancePeriodicity && (
+                      <span className="font-normal text-sm">
+                        · cada {maintenancePeriodicity}m
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pagos al inicio */}
+            {initialPayments.length > 0 && (
+              <div className={`mt-4 rounded-xl bg-white/60 p-3 ${colors.text}`}>
+                <div className="text-[11px] uppercase font-bold tracking-wider opacity-70">
+                  Al firmar / instalar
+                </div>
+                <ul className="mt-1.5 space-y-1 text-sm">
+                  {initialPayments.map((p) => (
+                    <li key={p.label} className="flex items-center justify-between gap-2">
+                      <span>{p.label}</span>
+                      <span className="tabular-nums font-semibold">{formatCents(p.cents)}</span>
+                    </li>
+                  ))}
+                  <li className="flex items-center justify-between gap-2 pt-1.5 border-t border-current/20 font-bold">
+                    <span>Total a entregar al inicio</span>
+                    <span className="tabular-nums">{formatCents(initialTotal)}</span>
+                  </li>
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
