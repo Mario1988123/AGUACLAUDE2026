@@ -60,11 +60,11 @@ export default async function ExpenseDetailPage({
   if (e.user_id) {
     const { data: profile } = await admin
       .from("user_profiles")
-      .select("full_name, email")
+      .select("full_name, display_name")
       .eq("user_id", e.user_id)
       .maybeSingle();
-    const p = profile as { full_name: string | null; email: string | null } | null;
-    userName = p?.full_name ?? p?.email ?? null;
+    const p = profile as { full_name: string | null; display_name: string | null } | null;
+    userName = p?.display_name ?? p?.full_name ?? null;
   }
 
   const receiptUrl = await getExpenseReceiptUrl(id).catch(() => null);

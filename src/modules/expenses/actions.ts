@@ -332,10 +332,11 @@ export async function listExpenses(filters?: {
   if (userIds.length > 0) {
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, full_name, email")
+      .select("user_id, full_name, display_name")
       .in("user_id", userIds);
-    for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
-      nameMap.set(p.user_id, p.full_name ?? p.email ?? "");
+    for (const p of ((profiles as { user_id: string; full_name: string | null; display_name: string | null }[] | null) ?? [])) {
+      const nice = p.display_name?.trim() || p.full_name?.trim() || "";
+      nameMap.set(p.user_id, nice);
     }
   }
 

@@ -95,10 +95,10 @@ export async function listWalletEntries(filters?: {
     const admin = createAdminClient() as any;
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, full_name, email")
+      .select("user_id, full_name, display_name")
       .in("user_id", userIds);
-    for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
-      const nice = p.full_name?.trim() || p.email?.split("@")[0] || p.user_id.slice(0, 8);
+    for (const p of ((profiles as { user_id: string; full_name: string | null; display_name: string | null }[] | null) ?? [])) {
+      const nice = p.display_name?.trim() || p.full_name?.trim() || p.user_id.slice(0, 8);
       nameMap.set(p.user_id, nice);
     }
   }
@@ -691,10 +691,11 @@ export async function listPendingInvoiceWalletEntries(): Promise<PendingInvoiceR
   if (userIds.length > 0) {
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, full_name, email")
+      .select("user_id, full_name, display_name")
       .in("user_id", userIds);
-    for (const p of ((profiles as { user_id: string; full_name: string | null; email: string | null }[] | null) ?? [])) {
-      nameMap.set(p.user_id, p.full_name ?? p.email ?? "");
+    for (const p of ((profiles as { user_id: string; full_name: string | null; display_name: string | null }[] | null) ?? [])) {
+      const nice = p.display_name?.trim() || p.full_name?.trim() || p.user_id.slice(0, 8);
+      nameMap.set(p.user_id, nice);
     }
   }
   return rows.map((r) => ({
