@@ -685,12 +685,47 @@ export async function markContractSigned(id: string) {
         .single();
       const cFull = contractFull as { customer_id: string | null } | null;
 
+      // Resolver fecha sugerida para la instalación. Si el cliente
+      // dejó preferencias en el contrato (preferred_install_dates), las
+      // usamos. Si no, agendamos a 7 días desde hoy a las 10:00.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: contractPrefs } = await admin
+        .from("contracts")
+        .select(
+          "preferred_install_dates, preferred_install_time_slot, customer_id, assigned_user_id",
+        )
+        .eq("id", id)
+        .maybeSingle();
+      const prefs = contractPrefs as
+        | {
+            preferred_install_dates: string[] | null;
+            preferred_install_time_slot: string | null;
+            customer_id: string | null;
+            assigned_user_id: string | null;
+          }
+        | null;
+
+      let scheduledAt: string | null = null;
+      if (prefs?.preferred_install_dates && prefs.preferred_install_dates[0]) {
+        const dateStr = prefs.preferred_install_dates[0];
+        const slot = prefs.preferred_install_time_slot;
+        const hour = slot === "afternoon" ? 16 : slot === "morning" ? 10 : 10;
+        scheduledAt = new Date(`${dateStr}T${String(hour).padStart(2, "0")}:00:00`).toISOString();
+      } else {
+        // Fallback: 7 días desde hoy a las 10:00
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        d.setHours(10, 0, 0, 0);
+        scheduledAt = d.toISOString();
+      }
+
       const { data: instCreated } = await admin
         .from("installations")
         .insert({
           company_id: session.company_id!,
           kind: "normal",
-          status: "unscheduled",
+          status: "scheduled",
+          scheduled_at: scheduledAt,
           contract_id: id,
           customer_id: cFull?.customer_id ?? null,
           reference_code: referenceCode,
@@ -723,6 +758,29 @@ export async function markContractSigned(id: string) {
             })),
           );
         }
+
+        // Crear evento en agenda. Defensa por si la tabla no está
+        // disponible (PGRST205) o el enum agenda_event_kind no tiene el
+        // valor — fail-soft sin romper la firma.
+        try {
+          await admin.from("agenda_events").insert({
+            company_id: session.company_id!,
+            kind: "installation",
+            status: "scheduled",
+            title: `Instalación · ${referenceCode}`,
+            starts_at: scheduledAt,
+            ends_at: new Date(
+              new Date(scheduledAt).getTime() + 2 * 60 * 60 * 1000,
+            ).toISOString(),
+            assigned_user_id: prefs?.assigned_user_id ?? null,
+            created_by: session.user_id,
+            subject_type: "installation",
+            subject_id: newInstId,
+          });
+        } catch (e) {
+          console.error("[markContractSigned] agenda_events insert failed:", e);
+        }
+
         installationCreated = true;
       }
     }
@@ -770,6 +828,171 @@ export async function markContractSigned(id: string) {
   revalidatePath(`/contratos/${id}`);
   revalidatePath("/contratos");
   revalidatePath("/wallet");
+}
+
+// =============================================================================
+// Validación contrato (firma financiera) + Cancelación
+// =============================================================================
+
+export type ContractActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Marca el contrato como validado. Se usa típicamente cuando la
+ * financiera confirma OK del renting (o cuando el admin comprueba que
+ * todo está en regla). A partir de aquí el comercial cuenta la venta.
+ * Solo admin / director comercial.
+ */
+export async function validateContractAction(id: string): Promise<ContractActionResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (
+      !session.is_superadmin &&
+      !session.roles.includes("company_admin") &&
+      !session.roles.includes("commercial_director")
+    ) {
+      return { ok: false, error: "Solo admin o director comercial puede validar" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: row } = await admin
+      .from("contracts")
+      .select("id, status, company_id")
+      .eq("id", id)
+      .maybeSingle();
+    const c = row as { id: string; status: string; company_id: string } | null;
+    if (!c) return { ok: false, error: "Contrato no encontrado" };
+    if (c.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
+    if (!["signed", "active"].includes(c.status)) {
+      return {
+        ok: false,
+        error: `El contrato debe estar firmado para validar (estado: ${c.status})`,
+      };
+    }
+    const r = await admin
+      .from("contracts")
+      .update({
+        validated_at: new Date().toISOString(),
+        validated_by_user_id: session.user_id,
+      })
+      .eq("id", id);
+    if (r.error) return { ok: false, error: r.error.message };
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "contract",
+      subject_id: id,
+      kind: "contract.validated",
+      payload: {},
+      actor_user_id: session.user_id,
+    });
+    revalidatePath(`/contratos/${id}`);
+    revalidatePath("/contratos");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    console.error("[validateContract]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Cancela un contrato. Solo permitido si NO se ha firmado todavía o si
+ * se ha firmado pero NO hay instalación creada. Si ya hay instalación,
+ * hay que cancelar la instalación primero.
+ */
+export async function cancelContractAction(
+  id: string,
+  reason: string,
+): Promise<ContractActionResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo admin puede cancelar contratos" };
+    }
+    if (!reason.trim()) return { ok: false, error: "Indica el motivo de cancelación" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: row } = await admin
+      .from("contracts")
+      .select("id, status, company_id, signed_at")
+      .eq("id", id)
+      .maybeSingle();
+    const c = row as
+      | { id: string; status: string; company_id: string; signed_at: string | null }
+      | null;
+    if (!c) return { ok: false, error: "Contrato no encontrado" };
+    if (c.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
+
+    // Verificar que no haya instalación con status distinto de "scheduled"/"unscheduled"
+    const { data: insts } = await admin
+      .from("installations")
+      .select("id, status")
+      .eq("contract_id", id)
+      .is("deleted_at", null);
+    const installs = ((insts as Array<{ id: string; status: string }> | null) ?? []);
+    const blockedByInstall = installs.some((i) =>
+      ["in_progress", "completed"].includes(i.status),
+    );
+    if (blockedByInstall) {
+      return {
+        ok: false,
+        error:
+          "No se puede cancelar: ya hay instalación en curso o completada. Cancela la instalación primero.",
+      };
+    }
+
+    // Cancelar instalaciones pendientes asociadas (soft-delete)
+    if (installs.length > 0) {
+      await admin
+        .from("installations")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("contract_id", id)
+        .is("deleted_at", null);
+    }
+
+    // Cancelar wallet entries pendientes (rejected o cancelled)
+    await admin
+      .from("wallet_entries")
+      .update({
+        status: "cancelled",
+        rejected_reason: `Contrato cancelado: ${reason}`,
+        validated_at: new Date().toISOString(),
+        validated_by_user_id: session.user_id,
+      })
+      .eq("contract_id", id)
+      .in("status", ["pending", "pending_settlement"]);
+
+    const r = await admin
+      .from("contracts")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancelled_by_user_id: session.user_id,
+        cancellation_reason: reason,
+        deleted_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (r.error) return { ok: false, error: r.error.message };
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "contract",
+      subject_id: id,
+      kind: "contract.cancelled",
+      payload: { reason, from_status: c.status },
+      actor_user_id: session.user_id,
+    });
+
+    revalidatePath("/contratos");
+    revalidatePath("/instalaciones");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    console.error("[cancelContract]", e);
+    return { ok: false, error: msg };
+  }
 }
 
 /**

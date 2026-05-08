@@ -4,7 +4,7 @@ import { listTeamMembers } from "@/modules/agenda/actions";
 import { STATUS_LABEL, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
-import { Calendar } from "lucide-react";
+import { Calendar, Eye, Phone, MessageSquare, MapPin } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
 
@@ -204,6 +204,7 @@ export default async function InstalacionesPage({
                               label={STATUS_LABEL[i.status] ?? i.status}
                               tone={INST_TONE[i.status] ?? "info"}
                             />
+                            <InstallationRowActions inst={i} />
                           </li>
                         );
                       })}
@@ -242,11 +243,79 @@ export default async function InstalacionesPage({
                     label={STATUS_LABEL[i.status] ?? i.status}
                     tone={INST_TONE[i.status] ?? "info"}
                   />
+                  <InstallationRowActions inst={i} />
                 </li>
               ))}
             </ul>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function InstallationRowActions({
+  inst,
+}: {
+  inst: Awaited<ReturnType<typeof listInstallations>>[number];
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const i = inst as any;
+  const phone = i.customer_phone ?? null;
+  const lat = i.address_lat ?? null;
+  const lng = i.address_lng ?? null;
+  const street = i.address_street ?? null;
+  const city = i.address_city ?? null;
+  const mapsUrl =
+    lat != null && lng != null
+      ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+      : city
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            [street, city, "España"].filter(Boolean).join(", "),
+          )}`
+        : null;
+  const wa = phone
+    ? `https://wa.me/${(phone.startsWith("+") ? phone.slice(1) : `34${phone.replace(/\D/g, "")}`).replace(/\D/g, "")}`
+    : null;
+  return (
+    <div className="flex items-center gap-0.5">
+      <Link
+        href={`/instalaciones/${inst.id}` as never}
+        title="Ver instalación"
+        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+      >
+        <Eye className="h-4 w-4" />
+      </Link>
+      {phone && (
+        <a
+          href={`tel:${phone}`}
+          title={`Llamar ${phone}`}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
+        >
+          <Phone className="h-4 w-4" />
+        </a>
+      )}
+      {wa && (
+        <a
+          href={wa}
+          target="_blank"
+          rel="noopener"
+          title="WhatsApp"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-600"
+        >
+          <MessageSquare className="h-4 w-4" />
+        </a>
+      )}
+      {mapsUrl && (
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener"
+          title="Ver en Maps"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+        >
+          <MapPin className="h-4 w-4" />
+        </a>
       )}
     </div>
   );

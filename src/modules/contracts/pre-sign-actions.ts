@@ -210,15 +210,26 @@ export async function getContractPreSignReadiness(
     has_id_photo: (photoCount ?? 0) > 0,
   };
 
+  // Reglas de firma según plan (decisión usuario 2026-05-08):
+  //  - Contado (cash):  sin DNI, sin IBAN, sin dirección obligatorios.
+  //                     Solo firma. DNI = warning, no bloquea.
+  //  - Alquiler/Renting: IBAN obligatorio (puede ser ES00 → pending_data).
+  //                     DNI = warning, no bloquea. Dirección obligatoria
+  //                     porque hay que ir a instalar.
   const blockers: string[] = [];
   const warnings: string[] = [];
-  if (!checks.has_tax_id) blockers.push("DNI/CIF del cliente");
-  else if (!checks.tax_id_valid_format) blockers.push("DNI/CIF con formato inválido");
-  if (!checks.has_address) blockers.push("Dirección de instalación");
-  // IBAN solo es OBLIGATORIO si el contrato tiene cuotas (rental/renting).
-  // Para venta al contado (cash) el IBAN es opcional — el cliente paga
-  // por transferencia/tarjeta/efectivo y no hay domiciliación.
   const ibanRequired = planType === "rental" || planType === "renting";
+
+  // DNI: SIEMPRE warning (nunca bloquea, para ningún plan)
+  if (!checks.has_tax_id) warnings.push("DNI/CIF del cliente (recomendado)");
+  else if (!checks.tax_id_valid_format) warnings.push("DNI/CIF con formato inválido");
+
+  // Dirección: obligatoria en alquiler/renting (hay que instalar)
+  if (ibanRequired && !checks.has_address) {
+    blockers.push("Dirección de instalación");
+  }
+
+  // IBAN: obligatorio en alquiler/renting. Acepta ES00 (pending_data).
   if (ibanRequired && !checks.has_iban) {
     blockers.push("IBAN del cliente (puede ser ES00 pendiente)");
   }
@@ -226,7 +237,7 @@ export async function getContractPreSignReadiness(
   if (!checks.has_email) warnings.push("Email del cliente");
   if (!checks.has_phone) warnings.push("Teléfono del cliente");
   if (ibanRequired && !checks.iban_validated && checks.has_iban) {
-    warnings.push("IBAN sin validar (placeholder ES00)");
+    warnings.push("IBAN pendiente (ES00) — completa cuando lo tengas");
   }
   if (!checks.has_id_photo) warnings.push("Foto del DNI/NIE no subida");
 
