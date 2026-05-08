@@ -133,6 +133,29 @@ export async function upsertSavingsBrandAction(input: Partial<SavingsBrand> & { 
   revalidatePath("/configuracion/calculadora-ahorro");
 }
 
+export async function refreshScraperPricesAction(): Promise<
+  | { ok: true; stats: { ok: number; failed: number; total: number } }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo admin" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { refreshAllScraperPrices } = await import("./scrapers");
+    const stats = await refreshAllScraperPrices(admin, session.company_id);
+    revalidatePath("/configuracion/calculadora-ahorro");
+    return { ok: true, stats };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    console.error("[refreshScraperPrices]", e);
+    return { ok: false, error: msg };
+  }
+}
+
 export async function deleteSavingsBrandAction(id: string) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");

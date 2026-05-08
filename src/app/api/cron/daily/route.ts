@@ -413,9 +413,26 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] verifactu queue failed:", e);
   }
 
+  // ============================================================================
+  // SCRAPER PRECIOS AGUA — solo el día 1 del mes
+  // ============================================================================
+  let scraperStats: { ok: number; failed: number; total: number } | null = null;
+  const today = new Date();
+  if (today.getDate() === 1) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const adminCli = (createAdminClient()) as any;
+      const { refreshAllScraperPrices } = await import("@/modules/savings/scrapers");
+      scraperStats = await refreshAllScraperPrices(adminCli);
+      console.log(`[cron/daily] savings scraper:`, scraperStats);
+    } catch (e) {
+      console.error("[cron/daily] savings scraper failed:", e);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
-    stats: { ...stats, verifactu },
+    stats: { ...stats, verifactu, savings_scraper: scraperStats },
     ranAt: new Date().toISOString(),
   });
 }

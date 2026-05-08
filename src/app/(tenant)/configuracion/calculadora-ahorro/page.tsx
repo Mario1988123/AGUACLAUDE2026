@@ -4,6 +4,7 @@ import { Badge } from "@/shared/ui/badge";
 import { BackButton } from "@/shared/components/back-button";
 import { SavingsConfigForm } from "@/modules/savings/config-form";
 import { SavingsBrandsManager } from "@/modules/savings/brands-manager";
+import { RefreshScraperButton } from "@/modules/savings/refresh-scraper-button";
 import { AlertCircle } from "lucide-react";
 import { formatDateES } from "@/shared/lib/format-date";
 
@@ -60,7 +61,10 @@ export default async function CalculadoraAhorroConfigPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Histórico de scrapes</CardTitle>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle>Histórico de scrapes</CardTitle>
+            <RefreshScraperButton />
+          </div>
         </CardHeader>
         <CardContent>
           <table className="w-full text-sm">
