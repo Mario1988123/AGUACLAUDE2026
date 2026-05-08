@@ -16,20 +16,30 @@ export async function listProducts(filters?: {
   active_only?: boolean;
 }): Promise<ProductListItem[]> {
   await requireSession();
-  const supabase = await createClient();
-  let query = supabase
-    .from("products")
-    .select("id, name, kind, category_id, internal_reference, is_active, main_image_url")
-    .is("deleted_at", null)
-    .order("name");
-  if (filters?.kind) query = query.eq("kind", filters.kind);
-  if (filters?.category_id) query = query.eq("category_id", filters.category_id);
-  if (filters?.active_only) query = query.eq("is_active", true);
-  if (filters?.q) {
-    const q = filters.q.replace(/[%_]/g, "");
-    query = query.or(`name.ilike.%${q}%,internal_reference.ilike.%${q}%`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  // Defensivo: si la migración show_in_calculator no está aplicada, hacemos
+  // un select sin esa columna y ponemos false por defecto.
+  async function runQuery(includeShowInCalc: boolean) {
+    const cols = includeShowInCalc
+      ? "id, name, kind, category_id, internal_reference, is_active, main_image_url, show_in_calculator"
+      : "id, name, kind, category_id, internal_reference, is_active, main_image_url";
+    let q = supabase.from("products").select(cols).is("deleted_at", null).order("name");
+    if (filters?.kind) q = q.eq("kind", filters.kind);
+    if (filters?.category_id) q = q.eq("category_id", filters.category_id);
+    if (filters?.active_only) q = q.eq("is_active", true);
+    if (filters?.q) {
+      const txt = filters.q.replace(/[%_]/g, "");
+      q = q.or(`name.ilike.%${txt}%,internal_reference.ilike.%${txt}%`);
+    }
+    return q;
   }
-  const { data: products, error } = await query;
+  let { data: products, error } = await runQuery(true);
+  if (error && /show_in_calculator/i.test(error.message ?? "")) {
+    const fb = await runQuery(false);
+    products = fb.data;
+    error = fb.error;
+  }
   if (error) throw error;
   const rows = (products ?? []) as Array<{
     id: string;
@@ -39,6 +49,7 @@ export async function listProducts(filters?: {
     internal_reference: string | null;
     is_active: boolean;
     main_image_url: string | null;
+    show_in_calculator?: boolean;
   }>;
   if (rows.length === 0) return [];
 
@@ -56,7 +67,9 @@ export async function listProducts(filters?: {
       .in("product_id", productIds),
   ]);
 
-  const cats = new Map((catRes.data ?? []).map((c) => [(c as { id: string }).id, (c as { name: string }).name]));
+  const cats = new Map(
+    ((catRes.data ?? []) as Array<{ id: string; name: string }>).map((c) => [c.id, c.name]),
+  );
   const cashPrices = new Map(
     ((plansRes.data ?? []) as Array<{ product_id: string; total_price_cents: number }>).map(
       (p) => [p.product_id, p.total_price_cents],
@@ -65,6 +78,7 @@ export async function listProducts(filters?: {
 
   return rows.map((p) => ({
     ...p,
+    show_in_calculator: p.show_in_calculator ?? false,
     category_name: p.category_id ? cats.get(p.category_id) ?? null : null,
     cash_price_cents: cashPrices.get(p.id) ?? null,
   }));
@@ -275,4 +289,87 @@ export async function createProductAction(formData: FormData) {
 
   revalidatePath("/productos");
   redirect(`/productos/${productId}` as never);
+}
+
+export type ProductActionResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Actualiza datos generales y costes admin de un producto. Solo admin.
+ */
+export async function updateProductAction(
+  productId: string,
+  input: {
+    name?: string;
+    category_id?: string | null;
+    internal_reference?: string | null;
+    supplier_reference?: string | null;
+    short_description?: string | null;
+    long_description?: string | null;
+    cost_cents?: number | null;
+    supplier_price_cents?: number | null;
+    dim_width_mm?: number | null;
+    dim_height_mm?: number | null;
+    dim_depth_mm?: number | null;
+    weight_grams?: number | null;
+    stock_managed?: boolean;
+    stock_min?: number | null;
+    show_in_calculator?: boolean;
+  },
+): Promise<ProductActionResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo admin" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // Sanitizar: solo enviar las claves definidas
+    const payload: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (v !== undefined) payload[k] = v;
+    }
+
+    const { error } = await admin
+      .from("products")
+      .update(payload)
+      .eq("id", productId)
+      .eq("company_id", session.company_id);
+    if (error) {
+      // Defensa: show_in_calculator puede no existir si la migration no
+      // se aplicó. Reintentar sin esa columna.
+      if (
+        /show_in_calculator/i.test(error.message ?? "") ||
+        (error as { code?: string }).code === "42703"
+      ) {
+        delete payload.show_in_calculator;
+        const r2 = await admin
+          .from("products")
+          .update(payload)
+          .eq("id", productId)
+          .eq("company_id", session.company_id);
+        if (r2.error) return { ok: false, error: r2.error.message };
+      } else {
+        return { ok: false, error: error.message };
+      }
+    }
+    revalidatePath(`/productos/${productId}`);
+    revalidatePath("/productos");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    console.error("[updateProduct]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Toggle rápido del flag show_in_calculator desde el listado.
+ */
+export async function toggleShowInCalculatorAction(
+  productId: string,
+  value: boolean,
+): Promise<ProductActionResult> {
+  return updateProductAction(productId, { show_in_calculator: value });
 }

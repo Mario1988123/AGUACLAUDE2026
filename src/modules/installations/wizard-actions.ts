@@ -314,6 +314,7 @@ export async function reportInstallationIncidentAction(input: {
   installation_id: string;
   kind: "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other";
   description?: string;
+  pause_and_unschedule?: boolean;
 }): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -385,6 +386,29 @@ export async function reportInstallationIncidentAction(input: {
     payload: { kind: input.kind, description: input.description ?? null },
     actor_user_id: session.user_id,
   });
+
+  // Si la incidencia bloquea el trabajo: marcar la instalación como
+  // "incident_pending" y limpiar scheduled_at para que vuelva a aparecer
+  // como pendiente de reagendar tanto en /instalaciones como en /agenda.
+  if (input.pause_and_unschedule) {
+    await admin
+      .from("installations")
+      .update({
+        status: "incident_pending",
+        scheduled_at: null,
+      })
+      .eq("id", input.installation_id);
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "installation",
+      subject_id: input.installation_id,
+      kind: "installation.unscheduled_by_incident",
+      payload: { reason: input.kind },
+      actor_user_id: session.user_id,
+    });
+    revalidatePath("/agenda");
+    revalidatePath("/instalaciones");
+  }
 
   revalidatePath(`/instalaciones/${input.installation_id}`);
 }

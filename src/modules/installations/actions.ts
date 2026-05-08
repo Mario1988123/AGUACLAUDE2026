@@ -166,6 +166,66 @@ export async function listInstallations(filters?: {
   }));
 }
 
+/**
+ * Lista instalaciones sin agendar (scheduled_at IS NULL) que no están
+ * canceladas/completadas. Se usa en /agenda para mostrar todo lo pendiente
+ * de programar y en el dashboard del director técnico.
+ */
+export async function listUnscheduledInstallations(): Promise<InstallationRow[]> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  const isLevel1 =
+    session.is_superadmin || session.roles.includes("company_admin");
+  const isTechDirector = session.roles.includes("technical_director");
+  if (!isLevel1 && !isTechDirector) return [];
+
+  const { data, error } = await supabase
+    .from("installations")
+    .select(
+      "id, reference_code, status, kind, installer_user_id, customer_id, scheduled_at, started_at, completed_at, created_at, contract_id, address_id",
+    )
+    .is("deleted_at", null)
+    .is("scheduled_at", null)
+    .not("status", "in", "(completed,cancelled)")
+    .order("created_at", { ascending: true })
+    .limit(200);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<Omit<InstallationRow, "customer_name">>;
+  const customerIds = Array.from(
+    new Set(rows.map((r) => r.customer_id).filter(Boolean) as string[]),
+  );
+  let nameMap = new Map<string, string>();
+  if (customerIds.length > 0) {
+    const { data: cs } = await supabase
+      .from("customers")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .in("id", customerIds);
+    type CC = {
+      id: string;
+      party_kind: "individual" | "company";
+      legal_name: string | null;
+      trade_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    };
+    nameMap = new Map(
+      ((cs ?? []) as CC[]).map((c) => [
+        c.id,
+        c.party_kind === "company"
+          ? c.trade_name || c.legal_name || "Sin nombre"
+          : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre",
+      ]),
+    );
+  }
+  return rows.map((r) => ({
+    ...r,
+    customer_name: r.customer_id ? nameMap.get(r.customer_id) ?? null : null,
+  }));
+}
+
 export async function getInstallation(id: string) {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

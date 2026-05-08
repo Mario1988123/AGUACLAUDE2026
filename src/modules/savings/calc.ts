@@ -19,6 +19,9 @@ export interface CalcConfig {
   service_garrafa_size_liters: number; // 20
   service_cycles_per_year: number; // 13
   recommended_dispensers_threshold: number; // 15
+  enabled_plans?: { cash: boolean; rental: boolean; renting: boolean };
+  default_renting_duration_months?: number;
+  default_rental_permanence_months?: number;
 }
 
 export interface CalcInputs {

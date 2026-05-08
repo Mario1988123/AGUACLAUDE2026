@@ -456,9 +456,22 @@ export async function listWizardProducts(filters: {
   const session = await requireSession();
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  // Productos equipment activos con su categoría (incluye flag accepts_extras)
-  const { data: rows } = await supabase
+  const admin = createAdminClient() as any;
+  // Productos equipment activos. Si admin marcó alguno con
+  // show_in_calculator=true, filtramos por esos. Si NO marcó ninguno
+  // (caso típico al estrenar), mostramos todos los equipment para no
+  // dejar la calculadora vacía.
+  const { data: flagged } = await admin
+    .from("products")
+    .select("id")
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null)
+    .eq("kind", "equipment")
+    .eq("show_in_calculator", true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const flaggedIds = ((flagged as any[]) ?? []).map((p) => p.id);
+
+  let q = admin
     .from("products")
     .select(
       "id, name, category_id, kind, product_categories(id, name, accepts_extras, extra_role)",
@@ -466,6 +479,12 @@ export async function listWizardProducts(filters: {
     .eq("company_id", session.company_id)
     .is("deleted_at", null)
     .eq("kind", "equipment");
+  if (flaggedIds.length > 0) {
+    q = q.in("id", flaggedIds);
+  }
+  const { data: rows } = await q;
+
+  // Excluir productos cuya categoría sea de extras (tap/cooler)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const products = ((rows as any[]) ?? []).filter(
     (p) => !p.product_categories || p.product_categories.extra_role == null,
@@ -474,10 +493,12 @@ export async function listWizardProducts(filters: {
   if (products.length === 0) return [];
 
   const productIds = products.map((p) => p.id);
-  const { data: plans } = await supabase
+  // OJO: product_pricing_plans NO tiene deposit_cents ni install_price_cents.
+  // La fianza/instalación se gestiona aparte (en proposal_items o config).
+  const { data: plans } = await admin
     .from("product_pricing_plans")
     .select(
-      "product_id, plan_type, duration_months, monthly_price_cents, total_price_cents, deposit_cents, is_active",
+      "product_id, plan_type, duration_months, monthly_price_cents, total_price_cents, permanence_months, is_active",
     )
     .in("product_id", productIds)
     .eq("is_active", true);
@@ -487,8 +508,6 @@ export async function listWizardProducts(filters: {
   return products
     .map((p) => {
       const cat = p.product_categories;
-      // Heurística product_type_hint para usar en UI (icono):
-      // si la categoría tiene accepts_extras=true → "osmosis"; si no, "dispenser".
       const hint = cat?.accepts_extras ? "osmosis" : "dispenser";
       return {
         id: p.id,
@@ -504,7 +523,7 @@ export async function listWizardProducts(filters: {
             duration_months: pl.duration_months,
             monthly_cents: pl.monthly_price_cents,
             total_cents: pl.total_price_cents,
-            deposit_cents: pl.deposit_cents,
+            deposit_cents: null, // no existe en product_pricing_plans
           })),
       };
     })
@@ -536,7 +555,7 @@ export async function listWizardExtras(filters: {
     supabase
       .from("product_pricing_plans")
       .select(
-        "product_id, plan_type, duration_months, monthly_price_cents, total_price_cents, install_price_cents, deposit_cents, is_active",
+        "product_id, plan_type, duration_months, monthly_price_cents, total_price_cents, permanence_months, is_active",
       )
       .in("product_id", productIds)
       .eq("is_active", true),
@@ -557,8 +576,6 @@ export async function listWizardExtras(filters: {
       const productPlans = plansList.filter(
         (pl) => pl.product_id === p.id && pl.plan_type === filters.plan_type,
       );
-      // Coger el primer plan para extraer install_cents
-      const install = productPlans.find((pl) => pl.install_price_cents != null);
       const attrs: Record<string, string | number | null> = {};
       for (const a of attrsList.filter((x) => x.product_id === p.id)) {
         const k = a.product_attributes?.key;
@@ -576,9 +593,9 @@ export async function listWizardExtras(filters: {
           duration_months: pl.duration_months,
           monthly_cents: pl.monthly_price_cents,
           total_cents: pl.total_price_cents,
-          deposit_cents: pl.deposit_cents,
+          deposit_cents: null,
         })),
-        install_cents: install?.install_price_cents ?? null,
+        install_cents: null,
       };
     })
     .filter((e) => e.pricing.length > 0);

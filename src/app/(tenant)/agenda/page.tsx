@@ -5,8 +5,11 @@ import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { AgendaCalendar } from "@/modules/agenda/calendar";
 import { DraggableAgendaList } from "@/modules/agenda/draggable-list";
 import { AgendaWeekView } from "@/modules/agenda/week-view";
+import { listUnscheduledInstallations } from "@/modules/installations/actions";
+import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/installations/constants";
+import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
-import { Calendar, ListTodo, CalendarDays } from "lucide-react";
+import { Calendar, ListTodo, CalendarDays, AlertCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +28,12 @@ export default async function AgendaPage({
     sp.view === "list" ? "list" : sp.view === "week" ? "week" : "calendar";
 
   const now = new Date();
-  const [events, monthEvents, team, session] = await Promise.all([
+  const [events, monthEvents, team, session, unscheduled] = await Promise.all([
     listAgenda(14, { user_id: userFilter, kind: kindFilter }),
     listAgendaMonth(now.getFullYear(), now.getMonth()),
     listTeamMembers(),
     requireSession(),
+    listUnscheduledInstallations().catch(() => []),
   ]);
   // Reasignar tareas: nivel 1 (admin) y nivel 2 (directors).
   const canReassign =
@@ -62,6 +66,42 @@ export default async function AgendaPage({
         </div>
         <CreateAgendaButton teamMembers={team} />
       </div>
+
+      {unscheduled.length > 0 && (
+        <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertCircle className="h-5 w-5 text-amber-700" />
+            <h2 className="text-base font-bold text-amber-900">
+              Instalaciones sin agendar ({unscheduled.length})
+            </h2>
+          </div>
+          <p className="mb-3 text-xs text-amber-800">
+            Pendientes de programar fecha + instalador. Pulsa cada una para abrirla y agendarla.
+          </p>
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {unscheduled.map((it) => (
+              <li key={it.id}>
+                <Link
+                  href={`/instalaciones/${it.id}` as never}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-white p-3 hover:bg-amber-100"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold">
+                      {it.customer_name || "Sin cliente"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {it.reference_code ?? `#${it.id.slice(0, 8)}`}
+                    </div>
+                  </div>
+                  <Badge variant={STATUS_VARIANT[it.status] ?? "secondary"}>
+                    {STATUS_LABEL[it.status] ?? it.status}
+                  </Badge>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         {view !== "calendar" && <input type="hidden" name="view" value={view} />}

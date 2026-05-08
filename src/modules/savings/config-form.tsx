@@ -22,9 +22,18 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
     garrafa: initial.service_garrafa_size_liters.toString(),
     cycles: initial.service_cycles_per_year.toString(),
     threshold: initial.recommended_dispensers_threshold.toString(),
+    plan_cash: initial.enabled_plans?.cash ?? true,
+    plan_rental: initial.enabled_plans?.rental ?? true,
+    plan_renting: initial.enabled_plans?.renting ?? true,
+    default_renting_duration: String(initial.default_renting_duration_months ?? 48),
+    default_rental_permanence: String(initial.default_rental_permanence_months ?? 24),
   });
 
   function save() {
+    if (!form.plan_cash && !form.plan_rental && !form.plan_renting) {
+      notify.warning("Habilita al menos un plan");
+      return;
+    }
     startTransition(async () => {
       try {
         await saveSavingsConfigAction({
@@ -37,6 +46,13 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
           service_garrafa_size_liters: Number(form.garrafa),
           service_cycles_per_year: Number(form.cycles),
           recommended_dispensers_threshold: Number(form.threshold),
+          enabled_plans: {
+            cash: form.plan_cash,
+            rental: form.plan_rental,
+            renting: form.plan_renting,
+          },
+          default_renting_duration_months: Number(form.default_renting_duration) || 48,
+          default_rental_permanence_months: Number(form.default_rental_permanence) || 24,
         });
         notify.success("Guardado");
         router.refresh();
@@ -132,6 +148,61 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
               type="number"
               value={form.cycles}
               onChange={(e) => setForm({ ...form, cycles: e.target.value })}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+          Planes ofrecidos en la calculadora
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          Marca qué planes verá el comercial al usar el wizard.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[
+            { key: "plan_cash" as const, label: "Compra (contado)" },
+            { key: "plan_rental" as const, label: "Alquiler" },
+            { key: "plan_renting" as const, label: "Renting" },
+          ].map((p) => (
+            <label
+              key={p.key}
+              className={`flex items-center gap-2 rounded-xl border-2 p-3 cursor-pointer ${
+                form[p.key]
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-card hover:border-primary/40"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={form[p.key]}
+                onChange={(e) => setForm({ ...form, [p.key]: e.target.checked })}
+                className="h-4 w-4"
+              />
+              <span className="text-sm font-bold">{p.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 mt-3">
+          <Field label="Duración renting por defecto (meses)" hint="Sale preseleccionada al elegir Renting">
+            <select
+              value={form.default_renting_duration}
+              onChange={(e) => setForm({ ...form, default_renting_duration: e.target.value })}
+              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            >
+              {[12, 24, 36, 48, 60].map((m) => (
+                <option key={m} value={m}>
+                  {m} meses
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Permanencia alquiler por defecto (meses)">
+            <Input
+              type="number"
+              value={form.default_rental_permanence}
+              onChange={(e) => setForm({ ...form, default_rental_permanence: e.target.value })}
             />
           </Field>
         </div>

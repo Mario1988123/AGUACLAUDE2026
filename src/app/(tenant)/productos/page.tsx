@@ -4,6 +4,7 @@ import { listProducts, listCategories } from "@/modules/products/actions";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
+import { ShowInCalculatorToggle } from "@/modules/products/edit-form";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +118,7 @@ export default async function ProductsPage({
               <th className="px-4 py-3 text-left">Categoría</th>
               <th className="px-4 py-3 text-left">Ref.</th>
               <th className="px-4 py-3 text-right">Precio contado</th>
+              <th className="px-4 py-3 text-left">Calculadora</th>
               <th className="px-4 py-3 text-left">Estado</th>
               <th className="px-4 py-3 text-right">Acción</th>
             </tr>
@@ -124,7 +126,7 @@ export default async function ProductsPage({
           <tbody className="divide-y">
             {products.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   Sin productos con esos filtros.
                 </td>
               </tr>
@@ -146,6 +148,12 @@ export default async function ProductsPage({
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {formatCents(p.cash_price_cents)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <ShowInCalculatorToggle
+                      productId={p.id}
+                      value={p.show_in_calculator}
+                    />
                   </td>
                   <td className="px-4 py-3">
                     {p.is_active ? (

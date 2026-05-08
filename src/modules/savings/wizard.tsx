@@ -28,6 +28,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
+  type CalcConfig,
   type CalcInputs,
   type CalcResult,
   type ClientType,
@@ -47,17 +48,7 @@ interface Props {
   initialBrands: SavingsBrand[];
   initialProducts: { home: WizardProduct[]; office: WizardProduct[] } | null;
   initialExtras: WizardExtra[] | null;
-  config: {
-    osmosis_annual_cost_cents: number;
-    liters_per_person_day_home: number;
-    liters_per_person_day_office: number;
-    co2_per_bottle_kg: number;
-    plastic_per_bottle_kg: number;
-    default_bottle_size_liters: number;
-    service_garrafa_size_liters: number;
-    service_cycles_per_year: number;
-    recommended_dispensers_threshold: number;
-  };
+  config: CalcConfig;
   defaultLeadId?: string | null;
   defaultCustomerId?: string | null;
   defaultLeadName?: string | null;
@@ -108,7 +99,9 @@ export function SavingsWizard(props: Props) {
   const [garrafasPerMonth, setGarrafasPerMonth] = useState(3);
 
   const [planType, setPlanType] = useState<PlanType | null>(null);
-  const [duration, setDuration] = useState<number | null>(48);
+  const [duration, setDuration] = useState<number | null>(
+    config.default_renting_duration_months ?? 48,
+  );
 
   const [productId, setProductId] = useState<string | null>(null);
   const [extraTapId, setExtraTapId] = useState<string | null>(null);
@@ -685,7 +678,13 @@ export function SavingsWizard(props: Props) {
                   { val: "rental", label: "Alquiler", icon: Calendar },
                   { val: "renting", label: "Renting", icon: Calendar },
                 ] satisfies Array<{ val: PlanType; label: string; icon: typeof Banknote }>
-              ).map((o) => {
+              )
+                .filter((o) => {
+                  const ep = config.enabled_plans;
+                  if (!ep) return true;
+                  return ep[o.val];
+                })
+                .map((o) => {
                 const Icon = o.icon;
                 const sel = planType === o.val;
                 return (

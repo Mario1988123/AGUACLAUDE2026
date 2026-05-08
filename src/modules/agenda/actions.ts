@@ -348,9 +348,10 @@ export async function listTeamMembers(): Promise<{ user_id: string; full_name: s
 }
 
 /**
- * Lista solo usuarios con rol que pueda hacer instalaciones:
- * `installer` o `technical_director`. Para el filtro "Instalador" en
- * /instalaciones — los comerciales no deben salir.
+ * Lista usuarios capaces de hacer instalaciones:
+ * `installer`, `technical_director` o `company_admin` (admin puede
+ * asignarse a sí mismo o cubrir si todavía no hay instaladores).
+ * Excluye comerciales, telemarketers, directores comerciales puros.
  */
 export async function listInstallers(): Promise<{ user_id: string; full_name: string }[]> {
   const session = await requireSession();
@@ -358,17 +359,33 @@ export async function listInstallers(): Promise<{ user_id: string; full_name: st
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = (await createAdminClient()) as any;
-  // Usuarios con rol installer o technical_director (no revocados)
+  // Roles que pueden instalar
+  const validRoles = ["installer", "technical_director", "company_admin"];
   const { data: roles } = await admin
     .from("user_roles")
     .select("user_id")
     .eq("company_id", session.company_id)
-    .in("role_key", ["installer", "technical_director"])
+    .in("role_key", validRoles)
     .is("revoked_at", null);
-  const ids = Array.from(
+  let ids = Array.from(
     new Set(((roles as Array<{ user_id: string }> | null) ?? []).map((r) => r.user_id)),
   );
-  if (ids.length === 0) return [];
+
+  // Fallback: si NO hay nadie con esos roles (estado inicial sin
+  // configurar), incluir al usuario actual si es nivel 1/2 técnico
+  // para que pueda asignarse manualmente y desbloquear el listado.
+  if (ids.length === 0) {
+    if (
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director")
+    ) {
+      ids = [session.user_id];
+    } else {
+      return [];
+    }
+  }
+
   const { data } = await admin
     .from("user_profiles")
     .select("user_id, full_name")

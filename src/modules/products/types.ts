@@ -12,6 +12,7 @@ export interface ProductListItem {
   is_active: boolean;
   main_image_url: string | null;
   cash_price_cents: number | null;
+  show_in_calculator: boolean;
 }
 
 export interface ProductDetail {

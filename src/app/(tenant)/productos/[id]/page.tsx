@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProduct } from "@/modules/products/actions";
+import { getProduct, listCategories } from "@/modules/products/actions";
+import { ProductEditButton } from "@/modules/products/edit-form";
 import { listPricingPlans } from "@/modules/products/pricing-actions";
 import { PricingPlansPanel } from "@/modules/products/pricing-panel";
 import {
@@ -33,10 +34,11 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const [pricingPlans, attributes, attrValues] = await Promise.all([
+  const [pricingPlans, attributes, attrValues, categories] = await Promise.all([
     listPricingPlans(id),
     listAttributes((product as { category_id: string | null }).category_id),
     listProductAttributeValues(id),
+    listCategories().catch(() => []),
   ]);
 
   return (
@@ -54,6 +56,28 @@ export default async function ProductDetailPage({
           <p className="text-sm text-muted-foreground">{KIND_LABEL[product.kind]}</p>
         </div>
         <div className="flex items-center gap-3">
+          <ProductEditButton
+            productId={product.id}
+            initial={{
+              name: product.name,
+              category_id: (product as { category_id: string | null }).category_id,
+              internal_reference: product.internal_reference ?? null,
+              supplier_reference: product.supplier_reference ?? null,
+              short_description: product.short_description ?? null,
+              long_description: product.long_description ?? null,
+              cost_cents: product.cost_cents ?? null,
+              supplier_price_cents: product.supplier_price_cents ?? null,
+              dim_width_mm: product.dim_width_mm ?? null,
+              dim_height_mm: product.dim_height_mm ?? null,
+              dim_depth_mm: product.dim_depth_mm ?? null,
+              weight_grams: product.weight_grams ?? null,
+              stock_managed: product.stock_managed ?? false,
+              stock_min: product.stock_min ?? 0,
+              show_in_calculator:
+                (product as { show_in_calculator?: boolean }).show_in_calculator ?? false,
+            }}
+            categories={categories}
+          />
           <a
             href={`/api/pdf/product-datasheet/${product.id}`}
             target="_blank"

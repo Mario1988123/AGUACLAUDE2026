@@ -185,6 +185,7 @@ export function InstallationWizard(props: Props) {
   const [incidentOpen, setIncidentOpen] = useState(false);
   const [incidentKind, setIncidentKind] = useState<string>("missing_material");
   const [incidentDesc, setIncidentDesc] = useState("");
+  const [incidentUnschedule, setIncidentUnschedule] = useState(false);
 
   // Firma + encuesta
   const [satisfaction, setSatisfaction] = useState<number | null>(null);
@@ -513,11 +514,22 @@ export function InstallationWizard(props: Props) {
           installation_id: installationId,
           kind: incidentKind as "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other",
           description: incidentDesc || undefined,
+          pause_and_unschedule: incidentUnschedule,
         });
-        notify.success("Incidencia notificada a admin/dir. técnico");
+        notify.success(
+          incidentUnschedule
+            ? "Incidencia abierta. Instalación pendiente de reagendar"
+            : "Incidencia notificada a admin/dir. técnico",
+        );
         setIncidentOpen(false);
         setIncidentKind("missing_material");
         setIncidentDesc("");
+        setIncidentUnschedule(false);
+        if (incidentUnschedule) {
+          setStatus("incident_pending");
+          reset();
+          router.refresh();
+        }
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
       }
@@ -1195,6 +1207,22 @@ export function InstallationWizard(props: Props) {
                     className="w-full rounded-xl border border-input bg-background p-2 text-sm"
                     placeholder="Detalla qué ha pasado…"
                   />
+                  <label className="flex items-start gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={incidentUnschedule}
+                      onChange={(e) => setIncidentUnschedule(e.target.checked)}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span className="text-sm">
+                      <strong className="text-amber-900">Parar la instalación y dejarla pendiente de reagendar.</strong>
+                      <br />
+                      <span className="text-amber-800 text-xs">
+                        La incidencia se abre en el módulo de incidencias y la
+                        instalación vuelve a la lista «Sin agendar» de la agenda.
+                      </span>
+                    </span>
+                  </label>
                 </div>
                 <div className="flex justify-end gap-2 border-t p-3">
                   <Button variant="outline" onClick={() => setIncidentOpen(false)}>

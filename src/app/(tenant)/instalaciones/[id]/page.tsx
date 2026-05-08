@@ -18,7 +18,8 @@ import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/mo
 import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { BackButton } from "@/shared/components/back-button";
-import { listTeamMembers } from "@/modules/agenda/actions";
+import { listTeamMembers, listInstallers } from "@/modules/agenda/actions";
+import { ScheduleInstallationButton } from "@/modules/installations/schedule-button";
 import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -53,13 +54,14 @@ export default async function InstallationDetailPage({
     installer_user_id: string | null;
   };
 
-  const [items, photos, signatures, session, team, photosFull, signaturesFull] =
+  const [items, photos, signatures, session, team, installers, photosFull, signaturesFull] =
     await Promise.all([
       getInstallationItems(id).catch(() => []),
       getInstallationPhotos(id).catch(() => []),
       getInstallationSignatures(id).catch(() => []),
       requireSession(),
       listTeamMembers().catch(() => []),
+      listInstallers().catch(() => []),
       listInstallationPhotosFull(id).catch(() => []),
       listInstallationSignaturesFull(id).catch(() => []),
     ]);
@@ -161,6 +163,14 @@ export default async function InstallationDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
+          {i.status !== "completed" && i.status !== "cancelled" && (
+            <ScheduleInstallationButton
+              installationId={i.id}
+              currentScheduledAt={i.scheduled_at}
+              currentInstallerId={i.installer_user_id}
+              installers={installers}
+            />
+          )}
           {i.status !== "completed" && i.status !== "cancelled" && (
             <InstallationWizard
               installationId={i.id}
