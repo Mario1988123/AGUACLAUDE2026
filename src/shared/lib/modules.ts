@@ -78,6 +78,7 @@ export const MODULES: ModuleEntry[] = [
   { key: "customers", label: "Clientes", icon: "Users", href: "/clientes", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "proposals", label: "Propuestas", icon: "FileText", href: "/propuestas", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "free_trials", label: "Pruebas gratuitas", icon: "Gift", href: "/pruebas-gratuitas", configHref: "/configuracion/pruebas-gratuitas", group: "sales", rolesAllowed: SALES_ROLES },
+  { key: "savings_calculator", label: "Calculadora ahorro", icon: "Calculator", href: "/calculadora-ahorro", configHref: "/configuracion/calculadora-ahorro", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "contracts", label: "Contratos", icon: "FileSignature", href: "/contratos", configHref: "/configuracion/contratos", group: "sales", rolesAllowed: SALES_ROLES },
 
   // ===== 3. VENTAS (resultado) =====

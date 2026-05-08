@@ -20,6 +20,7 @@ const SECTIONS = [
   { href: "/configuracion/wallet", label: "Wallet", icon: "Wallet", desc: "Métodos cobro, validación, IBAN" },
   { href: "/configuracion/gocardless", label: "GoCardless", icon: "Banknote", desc: "Domiciliación SEPA · access token + webhook" },
   { href: "/configuracion/gastos", label: "Gastos comerciales", icon: "Receipt", desc: "Dietas, kilometraje, OCR Mindee, límites IRPF" },
+  { href: "/configuracion/calculadora-ahorro", label: "Calculadora ahorro", icon: "Calculator", desc: "Marcas de agua, scraper precios, parámetros eco" },
   { href: "/configuracion/notificaciones", label: "Notificaciones", icon: "Bell", desc: "Opt-in por evento y canal" },
   { href: "/configuracion/dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "KPIs por rol y período" },
   { href: "/configuracion/productos", label: "Productos", icon: "Package", desc: "Categorías y atributos" },
