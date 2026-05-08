@@ -310,7 +310,7 @@ export async function validateWalletEntryAction(id: string) {
   const admin = createAdminClient() as any;
   const { data: entry } = await admin
     .from("wallet_entries")
-    .select("id, contract_id, collected_by_user_id, concept, amount_cents")
+    .select("id, contract_id, collected_by_user_id, concept, amount_cents, method")
     .eq("id", id)
     .maybeSingle();
   const e = entry as
@@ -320,15 +320,21 @@ export async function validateWalletEntryAction(id: string) {
         collected_by_user_id: string | null;
         concept: string;
         amount_cents: number;
+        method: string;
       }
     | null;
   if (!e) throw new Error("Entrada no encontrada");
+  // Efectivo NUNCA llega al banco — el comercial entrega físicamente al
+  // admin → estado final = settled (liquidado).
+  // Tarjeta/transfer/bizum/SEPA → admin verifica en banco → validated.
+  const finalStatus = e.method === "cash" ? "settled" : "validated";
   const r = await admin
     .from("wallet_entries")
     .update({
-      status: "validated",
+      status: finalStatus,
       validated_at: new Date().toISOString(),
       validated_by_user_id: session.user_id,
+      ...(finalStatus === "settled" ? { settled_at: new Date().toISOString() } : {}),
     })
     .eq("id", id);
   if (r.error) throw new Error(r.error.message);
@@ -337,8 +343,8 @@ export async function validateWalletEntryAction(id: string) {
     company_id: session.company_id,
     subject_type: "wallet_entry",
     subject_id: id,
-    kind: "wallet.payment_validated",
-    payload: { amount_cents: e.amount_cents },
+    kind: finalStatus === "settled" ? "wallet.payment_settled" : "wallet.payment_validated",
+    payload: { amount_cents: e.amount_cents, method: e.method },
     actor_user_id: session.user_id,
   });
   if (e.collected_by_user_id && e.collected_by_user_id !== session.user_id) {
@@ -346,9 +352,9 @@ export async function validateWalletEntryAction(id: string) {
       await admin.from("notifications").insert({
         company_id: session.company_id,
         recipient_user_id: e.collected_by_user_id,
-        kind: "wallet.payment_validated",
+        kind: finalStatus === "settled" ? "wallet.payment_settled" : "wallet.payment_validated",
         severity: "success",
-        title: "Cobro validado",
+        title: finalStatus === "settled" ? "Efectivo liquidado" : "Confirmado en banco",
         body: e.concept,
         subject_type: "wallet_entry",
         subject_id: id,

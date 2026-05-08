@@ -73,23 +73,41 @@ export default async function WalletPage({
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-3xl font-extrabold tracking-tight">Wallet</h1>
-          <div className="mt-2 grid gap-1.5 text-xs text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <span className="font-bold text-amber-700">Sin cobrar</span> — el cliente todavía no
-              ha pagado.
+          <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+            <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3">
+              <div className="font-bold text-blue-900 mb-1">
+                💳 Tarjeta / Transferencia / Bizum / SEPA
+              </div>
+              <ul className="space-y-0.5 text-blue-900">
+                <li>
+                  <span className="font-semibold">Sin cobrar</span> → cliente no ha pagado.
+                </li>
+                <li>
+                  <span className="font-semibold">Cobrado · pdte. banco</span> → comercial tiene
+                  justificante (datáfono, captura transferencia/bizum). Falta que el admin lo vea
+                  llegar al banco.
+                </li>
+                <li>
+                  <span className="font-semibold">Confirmado en banco</span> → admin lo ha visto en
+                  el extracto. Estado final.
+                </li>
+              </ul>
             </div>
-            <div>
-              <span className="font-bold text-blue-700">Cobrado · pdte. banco</span> — comercial tiene
-              justificante (datáfono, transferencia…), pero el admin todavía no ha visto el dinero
-              en banco.
-            </div>
-            <div>
-              <span className="font-bold text-orange-700">Cobrado · pdte. liquidar</span> — efectivo
-              en mano del comercial; falta entregar a la empresa.
-            </div>
-            <div>
-              <span className="font-bold text-emerald-700">Confirmado en banco</span> — admin ha
-              verificado el ingreso. Estado final.
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+              <div className="font-bold text-emerald-900 mb-1">💶 Efectivo</div>
+              <ul className="space-y-0.5 text-emerald-900">
+                <li>
+                  <span className="font-semibold">Sin cobrar</span> → cliente no ha pagado.
+                </li>
+                <li>
+                  <span className="font-semibold">Cobrado · pdte. liquidar</span> → comercial cobró
+                  el efectivo y lo tiene en mano. Falta entregárselo al admin.
+                </li>
+                <li>
+                  <span className="font-semibold">Liquidado al admin</span> → admin recibió el
+                  efectivo. Estado final (no pasa por banco).
+                </li>
+              </ul>
             </div>
           </div>
         </div>

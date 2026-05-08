@@ -153,7 +153,7 @@ export function ValidateWalletButtons({
         {isCollected && canValidate && (
           <>
             <Button size="sm" variant="success" onClick={validate} disabled={pending}>
-              Validar
+              {method === "cash" ? "Recibí el efectivo" : "Confirmado en banco"}
             </Button>
             <Button
               size="sm"
