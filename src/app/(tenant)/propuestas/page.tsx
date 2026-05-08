@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { Eye, Download, Plus, Package } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { listProposals } from "@/modules/proposals/actions";
 import { Button } from "@/shared/ui/button";
 import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PROPOSAL_STATUS } from "@/modules/proposals/schemas";
+import { ProposalRowActions } from "@/modules/proposals/row-actions";
+import { formatDateES } from "@/shared/lib/format-date";
 
 const PROP_TONE: Record<
   string,
@@ -180,27 +182,14 @@ export default async function PropuestasPage({
                         />
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                        {p.validity_until ?? "—"}
+                        {formatDateES(p.validity_until)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Link
-                            href={`/propuestas/${p.id}` as never}
-                            title="Ver propuesta"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted text-foreground"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                          <a
-                            href={`/api/pdf/proposal/${p.id}`}
-                            target="_blank"
-                            rel="noopener"
-                            title="Descargar PDF"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted text-foreground"
-                          >
-                            <Download className="h-4 w-4" />
-                          </a>
-                        </div>
+                        <ProposalRowActions
+                          id={p.id}
+                          status={p.status}
+                          hasContract={p.has_contract ?? false}
+                        />
                       </td>
                     </tr>
                   );
@@ -267,20 +256,11 @@ function ProposalCard({
         )}
       </div>
       <div className="flex items-center justify-end gap-1.5 pt-1 border-t border-border/50">
-        <Link
-          href={`/propuestas/${p.id}` as never}
-          className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted"
-        >
-          <Eye className="h-3.5 w-3.5" /> Ver
-        </Link>
-        <a
-          href={`/api/pdf/proposal/${p.id}`}
-          target="_blank"
-          rel="noopener"
-          className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-3 text-xs font-semibold hover:bg-muted"
-        >
-          <Download className="h-3.5 w-3.5" /> PDF
-        </a>
+        <ProposalRowActions
+          id={p.id}
+          status={p.status}
+          hasContract={p.has_contract ?? false}
+        />
       </div>
     </div>
   );

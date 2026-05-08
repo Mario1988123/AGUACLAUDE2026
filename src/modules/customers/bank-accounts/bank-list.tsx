@@ -164,10 +164,6 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
               value={form.iban}
               onChange={(v) => setForm({ ...form, iban: v })}
             />
-            <p className="text-xs text-muted-foreground">
-              Si aún no tienes el IBAN del cliente, escribe <code className="font-mono">ES00</code>{" "}
-              y el contrato se podrá firmar quedando como «pendiente de número de cuenta».
-            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -177,12 +173,6 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
                 onChange={(e) => setForm({ ...form, account_holder_name: e.target.value })}
                 placeholder={defaultHolderName ?? ""}
               />
-              {defaultHolderName && (
-                <p className="text-xs text-muted-foreground">
-                  Por defecto el del cliente. Puedes cambiarlo si el titular es la pareja, otra
-                  persona u otra empresa.
-                </p>
-              )}
             </div>
             <div className="space-y-1.5">
               <Label>Banco</Label>

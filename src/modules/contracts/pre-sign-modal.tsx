@@ -1004,10 +1004,6 @@ function IbanAddForm({
       <div className="space-y-1">
         <Label className="text-xs">IBAN *</Label>
         <IbanInput value={iban} onChange={setIban} />
-        <p className="text-[11px] text-muted-foreground">
-          Si aún no lo tienes, escribe <code className="font-mono">ES00</code> y
-          se guardará como pendiente. El contrato se podrá firmar igualmente.
-        </p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="space-y-1">

@@ -11,6 +11,7 @@ import { ProposalActions } from "@/modules/proposals/actions-panel";
 import { requireSession } from "@/shared/lib/auth/session";
 import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
 import { BackButton } from "@/shared/components/back-button";
+import { formatDateES } from "@/shared/lib/format-date";
 import {
   Banknote,
   Calendar,
@@ -241,7 +242,7 @@ export default async function ProposalDetailPage({
             <CardTitle>Productos</CardTitle>
             {proposal.validity_until && (
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Coins className="h-3 w-3" /> Validez hasta {proposal.validity_until}
+                <Coins className="h-3 w-3" /> Validez hasta {formatDateES(proposal.validity_until)}
               </span>
             )}
           </div>

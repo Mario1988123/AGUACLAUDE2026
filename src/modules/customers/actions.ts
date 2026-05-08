@@ -57,6 +57,12 @@ export async function listCustomers(
     created_at: string;
   }>);
 
+  // Cargar equipos instalados (sólo activos) en paralelo a direcciones
+  const equipmentMap = new Map<
+    string,
+    { count: number; firstName: string | null }
+  >();
+
   // Cargar dirección primaria de cada cliente (1 query bulk)
   const addressMap = new Map<
     string,
@@ -70,12 +76,21 @@ export async function listCustomers(
   >();
   if (baseRows.length > 0) {
     const ids = baseRows.map((c) => c.id);
-    const { data: addrs } = await supabase
-      .from("addresses")
-      .select("customer_id, street, city, province, latitude, longitude, is_primary")
-      .in("customer_id", ids)
-      .order("is_primary", { ascending: false });
-    for (const a of ((addrs as Array<{
+    const [addrsRes, equipRes] = await Promise.all([
+      supabase
+        .from("addresses")
+        .select("customer_id, street, city, province, latitude, longitude, is_primary")
+        .in("customer_id", ids)
+        .order("is_primary", { ascending: false }),
+      supabase
+        .from("customer_equipment")
+        .select(
+          "customer_id, product_id, external_equipment_model_id, products(name), external_equipment_models(name)",
+        )
+        .in("customer_id", ids)
+        .eq("is_active", true),
+    ]);
+    for (const a of ((addrsRes.data as Array<{
       customer_id: string;
       street: string | null;
       city: string | null;
@@ -83,7 +98,6 @@ export async function listCustomers(
       latitude: number | null;
       longitude: number | null;
     }> | null) ?? [])) {
-      // El primero (is_primary desc) gana
       if (!addressMap.has(a.customer_id)) {
         addressMap.set(a.customer_id, {
           street: a.street,
@@ -94,10 +108,25 @@ export async function listCustomers(
         });
       }
     }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const e of ((equipRes.data as any[] | null) ?? [])) {
+      const cur = equipmentMap.get(e.customer_id) ?? { count: 0, firstName: null };
+      cur.count += 1;
+      if (!cur.firstName) {
+        cur.firstName = e.products?.name ?? e.external_equipment_models?.name ?? null;
+      }
+      equipmentMap.set(e.customer_id, cur);
+    }
   }
 
   return baseRows.map((c) => {
     const addr = addressMap.get(c.id);
+    const eq = equipmentMap.get(c.id);
+    let equipmentSummary: string | null = null;
+    if (eq && eq.count > 0) {
+      equipmentSummary = eq.firstName ?? "Equipo";
+      if (eq.count > 1) equipmentSummary += ` +${eq.count - 1}`;
+    }
     return {
       id: c.id,
       party_kind: c.party_kind,
@@ -118,6 +147,8 @@ export async function listCustomers(
       address_province: addr?.province ?? null,
       address_lat: addr?.lat ?? null,
       address_lng: addr?.lng ?? null,
+      equipment_summary: equipmentSummary,
+      equipment_count: eq?.count ?? 0,
     };
   });
 }

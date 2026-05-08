@@ -57,7 +57,7 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
   const customerIds = rows.map((r) => r.customer_id).filter(Boolean) as string[];
   const leadIds = rows.map((r) => r.lead_id).filter(Boolean) as string[];
 
-  const [custRes, leadRes, itemsRes] = await Promise.all([
+  const [custRes, leadRes, itemsRes, contractsRes] = await Promise.all([
     customerIds.length > 0
       ? supabase
           .from("customers")
@@ -75,6 +75,11 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
       .select("proposal_id, product_name_snapshot, quantity, display_order")
       .in("proposal_id", proposalIds)
       .order("display_order"),
+    supabase
+      .from("contracts")
+      .select("source_proposal_id")
+      .in("source_proposal_id", proposalIds)
+      .is("deleted_at", null),
   ]);
 
   type Party = {
@@ -107,6 +112,12 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
     itemsByProposal.set(it.proposal_id, list);
   }
 
+  const withContract = new Set(
+    ((contractsRes.data ?? []) as { source_proposal_id: string | null }[])
+      .map((c) => c.source_proposal_id)
+      .filter(Boolean) as string[],
+  );
+
   return rows.map((r) => {
     const items = itemsByProposal.get(r.id) ?? [];
     let summary: string | null = null;
@@ -132,6 +143,7 @@ export async function listProposals(filters?: { status?: string }): Promise<Prop
       chosen_plan_type: r.chosen_plan_type,
       duration_months: r.chosen_duration_months,
       monthly_cents: monthly,
+      has_contract: withContract.has(r.id),
     };
   });
 }
@@ -1033,4 +1045,83 @@ export async function markProposalRejected(id: string, reason?: string) {
     actor_user_id: session.user_id,
   });
   revalidatePath(`/propuestas/${id}`);
+  revalidatePath("/propuestas");
+}
+
+/**
+ * Soft-delete de una propuesta. Solo permitido si la propuesta NO ha
+ * generado contrato (no se puede borrar si ya pasó a contrato — eso
+ * dejaría el contrato huérfano).
+ */
+export type DeleteProposalResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteProposalAction(id: string): Promise<DeleteProposalResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // Comprobar que la propuesta es de la empresa y no tiene contrato
+    const { data: prop } = await admin
+      .from("proposals")
+      .select("id, company_id, status")
+      .eq("id", id)
+      .maybeSingle();
+    const p = prop as { id: string; company_id: string; status: string } | null;
+    if (!p) return { ok: false, error: "Propuesta no encontrada" };
+    if (p.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
+
+    const { count } = await admin
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("source_proposal_id", id)
+      .is("deleted_at", null);
+    if ((count ?? 0) > 0) {
+      return {
+        ok: false,
+        error: "No se puede eliminar: ya hay un contrato generado a partir de esta propuesta.",
+      };
+    }
+
+    const r = await admin
+      .from("proposals")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id);
+    if (r.error) return { ok: false, error: r.error.message };
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "proposal",
+      subject_id: id,
+      kind: "proposal.deleted",
+      payload: { from_status: p.status },
+      actor_user_id: session.user_id,
+    });
+
+    revalidatePath("/propuestas");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    console.error("[deleteProposal]", e);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * Versión result-type de markProposalRejected para llamar desde listado
+ * (en el detalle ya existe la versión que lanza throw).
+ */
+export async function rejectProposalFromListAction(
+  id: string,
+  reason?: string,
+): Promise<DeleteProposalResult> {
+  try {
+    await markProposalRejected(id, reason);
+    revalidatePath("/propuestas");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error desconocido";
+    return { ok: false, error: msg };
+  }
 }

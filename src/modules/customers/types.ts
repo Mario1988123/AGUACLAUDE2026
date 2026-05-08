@@ -14,6 +14,9 @@ export interface CustomerListItem {
   address_province: string | null;
   address_lat: number | null;
   address_lng: number | null;
+  /** Equipos instalados — primer producto + cantidad total. */
+  equipment_summary: string | null;
+  equipment_count: number;
 }
 
 export interface CustomerDetail {

@@ -2,7 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, Phone, Mail, MapPin, MessageSquare, Pencil } from "lucide-react";
+import {
+  Eye,
+  Phone,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Pencil,
+  Home,
+  Building2,
+  Wrench,
+} from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { CustomerBulkToolbar } from "./bulk-toolbar";
 import type { CustomerListItem } from "./types";
@@ -98,10 +108,11 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
                       />
                     </th>
                   )}
+                  <th className="w-10 px-3 py-3"></th>
                   <th className="px-3 py-3 text-left">Contacto</th>
                   <th className="px-3 py-3 text-left">Ubicación</th>
                   <th className="px-3 py-3 text-left">Provincia</th>
-                  <th className="px-3 py-3 text-left">Tipo</th>
+                  <th className="px-3 py-3 text-left">Equipos</th>
                   <th className="px-3 py-3 text-left">Estado</th>
                   <th className="px-3 py-3 text-right">Acciones</th>
                 </tr>
@@ -122,6 +133,23 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
                           />
                         </td>
                       )}
+                      <td className="px-3 py-2.5 w-10">
+                        <span
+                          className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${
+                            isCompany
+                              ? "bg-violet-100 text-violet-700"
+                              : "bg-emerald-100 text-emerald-700"
+                          }`}
+                          title={isCompany ? "Empresa" : "Particular"}
+                          aria-label={isCompany ? "Empresa" : "Particular"}
+                        >
+                          {isCompany ? (
+                            <Building2 className="h-5 w-5" />
+                          ) : (
+                            <Home className="h-5 w-5" />
+                          )}
+                        </span>
+                      </td>
                       <td className="px-3 py-2.5">
                         <Link
                           href={`/clientes/${c.id}` as never}
@@ -147,7 +175,19 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
                         {c.address_province ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 text-xs">
-                        {isCompany ? "Empresa" : "Particular"}
+                        {c.equipment_count > 0 ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-800"
+                            title={c.equipment_summary ?? ""}
+                          >
+                            <Wrench className="h-3 w-3" />
+                            <span className="truncate max-w-[140px]">
+                              {c.equipment_summary}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
                         {c.is_active ? (
@@ -251,30 +291,38 @@ function CustomerCard({
   const isCompany = c.party_kind === "company";
   return (
     <div className="rounded-xl border border-border bg-card p-3 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 flex items-start gap-2">
-          {onToggle && (
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggle}
-              className="h-4 w-4 mt-1"
-            />
+      <div className="flex items-start gap-3">
+        {onToggle && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggle}
+            className="h-4 w-4 mt-1.5"
+          />
+        )}
+        <span
+          className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+            isCompany
+              ? "bg-violet-100 text-violet-700"
+              : "bg-emerald-100 text-emerald-700"
+          }`}
+          aria-label={isCompany ? "Empresa" : "Particular"}
+        >
+          {isCompany ? <Building2 className="h-5 w-5" /> : <Home className="h-5 w-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <Link
+            href={`/clientes/${c.id}` as never}
+            className="font-bold hover:underline block truncate"
+          >
+            {c.display_name}
+          </Link>
+          {isCompany && c.contact_name && (
+            <div className="text-xs text-muted-foreground truncate">{c.contact_name}</div>
           )}
-          <div className="min-w-0 flex-1">
-            <Link
-              href={`/clientes/${c.id}` as never}
-              className="font-bold hover:underline block truncate"
-            >
-              {c.display_name}
-            </Link>
-            {isCompany && c.contact_name && (
-              <div className="text-xs text-muted-foreground truncate">{c.contact_name}</div>
-            )}
-            <div className="mt-1 text-xs text-muted-foreground truncate">
-              {c.address_city ?? "—"}
-              {c.address_province && ` · ${c.address_province}`}
-            </div>
+          <div className="mt-1 text-xs text-muted-foreground truncate">
+            {c.address_city ?? "—"}
+            {c.address_province && ` · ${c.address_province}`}
           </div>
         </div>
         {c.is_active ? (
@@ -287,6 +335,17 @@ function CustomerCard({
           </Badge>
         )}
       </div>
+      {c.equipment_count > 0 && (
+        <div className="text-xs">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-800"
+            title={c.equipment_summary ?? ""}
+          >
+            <Wrench className="h-3 w-3" />
+            <span className="truncate max-w-[200px]">{c.equipment_summary}</span>
+          </span>
+        </div>
+      )}
       <div className="pt-1 border-t border-border/50">
         <CustomerActions c={c} mapsUrl={mapsUrl} />
       </div>
