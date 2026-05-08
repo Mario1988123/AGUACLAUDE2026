@@ -157,12 +157,6 @@ export default async function ContractDetailPage({
       ibanIsPending = !b.is_validated || /^ES00/i.test(b.iban);
     }
   }
-  const planType = (c.chosen_plan_type ?? "cash") as string;
-  const needsValidation = planType === "rental" || planType === "renting";
-  const canValidate =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director");
   const canCancel = session.is_superadmin || session.roles.includes("company_admin");
 
   return (
@@ -378,13 +372,9 @@ export default async function ContractDetailPage({
                 customerId={c.customer_id ?? null}
                 status={contract.status}
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                validatedAt={(c as any).validated_at ?? null}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 cancelledAt={(c as any).cancelled_at ?? null}
                 hasIban={hasIban}
                 ibanIsPending={ibanIsPending}
-                needsValidation={needsValidation}
-                canValidate={canValidate}
                 canCancel={canCancel}
               />
             </div>

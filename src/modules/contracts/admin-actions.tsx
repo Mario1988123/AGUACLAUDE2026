@@ -2,43 +2,38 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Ban, Pencil } from "lucide-react";
+import { Ban, Pencil } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { validateContractAction, cancelContractAction } from "./actions";
+import { cancelContractAction } from "./actions";
 
 /**
  * Botones admin/director en el detalle de contrato:
- * - Validar (firma financiera OK) → solo cuando status signed/active
- * - Cancelar contrato → con modal de motivo, bloqueado si hay instalación
- *   en curso o completada (lo valida el server)
  * - Editar IBAN → link a la sección de IBAN del cliente para cambiarlo
- *   incluso después de firmado
+ *   incluso después de firmado.
+ * - Cancelar contrato → con modal de motivo, bloqueado si hay instalación
+ *   en curso o completada (lo valida el server).
+ *
+ * Renting/alquiler: si IBAN es ES00 (pendiente) el contrato queda firmado
+ * pero pendiente de datos. No hay validación de financiera (decisión
+ * usuario 2026-05-08: se revisa manual).
  */
 export function ContractAdminActions({
   contractId,
   customerId,
   status,
-  validatedAt,
   cancelledAt,
   hasIban,
   ibanIsPending,
-  needsValidation,
-  canValidate,
   canCancel,
 }: {
   contractId: string;
   customerId: string | null;
   status: string;
-  validatedAt: string | null;
   cancelledAt: string | null;
   hasIban: boolean;
   ibanIsPending: boolean;
-  /** true si plan = alquiler/renting (necesita validación financiera). */
-  needsValidation: boolean;
-  /** admin/director comercial puede validar */
-  canValidate: boolean;
   /** admin puede cancelar */
   canCancel: boolean;
 }) {
@@ -48,20 +43,6 @@ export function ContractAdminActions({
   const [reason, setReason] = useState("");
 
   const isCancelled = !!cancelledAt;
-  const isValidated = !!validatedAt;
-  const isSigned = status === "signed" || status === "active";
-
-  function validate() {
-    startTransition(async () => {
-      const r = await validateContractAction(contractId);
-      if (!r.ok) {
-        notify.error("No se pudo validar", r.error);
-        return;
-      }
-      notify.success("Contrato validado");
-      router.refresh();
-    });
-  }
 
   function cancel() {
     if (!reason.trim()) {
@@ -90,22 +71,10 @@ export function ContractAdminActions({
 
   return (
     <div className="space-y-2">
-      {/* Validar (renting/alquiler firmado pendiente de financiera) */}
-      {needsValidation && isSigned && !isValidated && canValidate && (
-        <Button
-          onClick={validate}
-          disabled={pending}
-          variant="success"
-          className="w-full gap-2"
-        >
-          <Check className="h-4 w-4" />
-          Validar (financiera OK)
-        </Button>
-      )}
-      {needsValidation && isValidated && (
-        <div className="rounded-xl border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-          ✓ Validado por financiera el{" "}
-          {new Date(validatedAt).toLocaleDateString("es-ES")}
+      {/* IBAN pendiente: aviso visible hasta que se complete */}
+      {ibanIsPending && hasIban && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          ⚠ Contrato firmado · pendiente de IBAN real (actual: ES00)
         </div>
       )}
 

@@ -558,14 +558,52 @@ export async function markContractSigned(id: string) {
   const admin = createAdminClient() as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const r = await admin
+
+  // Detectar si IBAN del cliente es ES00 (placeholder pendiente).
+  // En ese caso marcamos has_provisional_data + pending_fields para
+  // que se vea claramente que el contrato está firmado pero pendiente
+  // de IBAN real (decisión usuario 2026-05-08).
+  const { data: ctx } = await admin
     .from("contracts")
-    .update({
-      status: "signed",
-      signed_at: new Date().toISOString(),
-      signed_by_user_id: session.user_id,
-    })
-    .eq("id", id);
+    .select("customer_id, chosen_plan_type")
+    .eq("id", id)
+    .maybeSingle();
+  const ctxRow = ctx as
+    | { customer_id: string | null; chosen_plan_type: string | null }
+    | null;
+  let provisionalIban = false;
+  if (
+    ctxRow?.customer_id &&
+    (ctxRow.chosen_plan_type === "rental" || ctxRow.chosen_plan_type === "renting")
+  ) {
+    const { data: bk } = await admin
+      .from("customer_bank_accounts")
+      .select("iban, is_validated")
+      .eq("customer_id", ctxRow.customer_id)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const b = bk as { iban: string | null; is_validated: boolean | null } | null;
+    if (b?.iban && (/^ES00/i.test(b.iban) || !b.is_validated)) {
+      provisionalIban = true;
+    }
+  }
+
+  const updates: Record<string, unknown> = {
+    status: "signed",
+    signed_at: new Date().toISOString(),
+    signed_by_user_id: session.user_id,
+  };
+  if (provisionalIban) {
+    updates.has_provisional_data = true;
+    updates.pending_fields = ["iban"];
+  } else {
+    // Limpiar flags previos si ahora está completo
+    updates.has_provisional_data = false;
+    updates.pending_fields = [];
+  }
+
+  const r = await admin.from("contracts").update(updates).eq("id", id);
   if (r.error) throw new Error(r.error.message);
 
   // Cuando se firma el contrato, el lead origen (si existía) ya cumplió
