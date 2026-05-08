@@ -108,21 +108,61 @@ export async function createMandateRedirectFlowAction(input: {
   const admin = createAdminClient() as any;
   const { data: cust } = await admin
     .from("customers")
-    .select("id, name, email, address_street, address_city, address_postal_code")
+    .select("id, party_kind, legal_name, trade_name, first_name, last_name, email")
     .eq("id", input.customer_id)
     .eq("company_id", session.company_id)
     .maybeSingle();
   const customer = cust as
     | {
         id: string;
-        name: string;
+        party_kind: "person" | "company";
+        legal_name: string | null;
+        trade_name: string | null;
+        first_name: string | null;
+        last_name: string | null;
         email: string | null;
-        address_street: string | null;
-        address_city: string | null;
-        address_postal_code: string | null;
       }
     | null;
   if (!customer) throw new Error("Cliente no encontrado");
+
+  // Resolver dirección primaria (vive en tabla addresses, no en customers)
+  const { data: addr } = await admin
+    .from("addresses")
+    .select("street, street_number, postal_code, city, province")
+    .eq("customer_id", customer.id)
+    .eq("company_id", session.company_id)
+    .order("is_primary", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const address = addr as
+    | {
+        street: string | null;
+        street_number: string | null;
+        postal_code: string | null;
+        city: string | null;
+        province: string | null;
+      }
+    | null;
+
+  // Nombres GoCardless: para empresa usa razón social como given_name,
+  // para persona usa first/last si están, si no parte el legal_name.
+  let givenName = "";
+  let familyName = "";
+  if (customer.party_kind === "company") {
+    givenName = customer.trade_name || customer.legal_name || "Cliente";
+    familyName = customer.legal_name || customer.trade_name || "Empresa";
+  } else {
+    givenName = customer.first_name || customer.legal_name?.split(" ")[0] || "Cliente";
+    familyName =
+      customer.last_name ||
+      (customer.legal_name?.split(" ").slice(1).join(" ") || "") ||
+      givenName;
+  }
+  const displayName =
+    customer.trade_name ||
+    customer.legal_name ||
+    [customer.first_name, customer.last_name].filter(Boolean).join(" ") ||
+    "Cliente";
 
   const sessionToken = crypto.randomBytes(24).toString("hex");
   const baseUrl =
@@ -130,19 +170,23 @@ export async function createMandateRedirectFlowAction(input: {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
   const successRedirectUrl = `${baseUrl}/api/gocardless/callback?session_token=${sessionToken}&return_path=${encodeURIComponent(input.return_path ?? `/clientes/${customer.id}`)}`;
 
-  const [given, ...rest] = customer.name.split(" ");
-  const family = rest.join(" ").trim() || given;
+  const addressLine =
+    address?.street && address.street_number
+      ? `${address.street} ${address.street_number}`
+      : address?.street ?? undefined;
+
   const flow = await createRedirectFlow(settingsToConfig(settings), {
-    description: `Domiciliación bancaria — ${customer.name}`,
+    description: `Domiciliación bancaria — ${displayName}`,
     sessionToken,
     successRedirectUrl,
     customer: {
-      given_name: given,
-      family_name: family,
+      given_name: givenName,
+      family_name: familyName,
       email: customer.email ?? undefined,
-      address_line1: customer.address_street ?? undefined,
-      city: customer.address_city ?? undefined,
-      postal_code: customer.address_postal_code ?? undefined,
+      ...(customer.party_kind === "company" ? { company_name: customer.legal_name ?? customer.trade_name ?? undefined } : {}),
+      address_line1: addressLine,
+      city: address?.city ?? undefined,
+      postal_code: address?.postal_code ?? undefined,
       country_code: "ES",
     },
   });
