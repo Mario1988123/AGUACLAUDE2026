@@ -133,6 +133,121 @@ export async function upsertSavingsBrandAction(input: Partial<SavingsBrand> & { 
   revalidatePath("/configuracion/calculadora-ahorro");
 }
 
+// =============================================================================
+// Listado de propuestas guardadas
+// =============================================================================
+
+export interface SavingsProposalRow {
+  id: string;
+  reference_code: string | null;
+  customer_id: string | null;
+  customer_name: string | null;
+  lead_id: string | null;
+  lead_name: string | null;
+  client_type: "home" | "office";
+  num_people: number;
+  current_service: string;
+  current_monthly_cost_cents: number;
+  total_monthly_cost_cents: number;
+  total_saved_5y_cents: number | null;
+  payback_months: number | null;
+  product_name_snapshot: string | null;
+  plan_type: string;
+  status: "draft" | "sent" | "converted" | "archived";
+  converted_to_proposal_id: string | null;
+  sent_by_email_at: string | null;
+  created_at: string;
+}
+
+export async function listSavingsProposals(filters?: {
+  status?: string;
+  customer_id?: string;
+  lead_id?: string;
+}): Promise<SavingsProposalRow[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  let q = admin
+    .from("savings_proposals")
+    .select(
+      "id, reference_code, customer_id, lead_id, client_type, num_people, current_service, current_monthly_cost_cents, total_monthly_cost_cents, total_saved_5y_cents, payback_months, product_name_snapshot, plan_type, status, converted_to_proposal_id, sent_by_email_at, created_at, created_by, customers(legal_name, trade_name, first_name, last_name), leads(legal_name, trade_name, first_name, last_name)",
+    )
+    .eq("company_id", session.company_id)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (visibleUserIds) q = q.in("created_by", visibleUserIds);
+  if (filters?.status) q = q.eq("status", filters.status);
+  if (filters?.customer_id) q = q.eq("customer_id", filters.customer_id);
+  if (filters?.lead_id) q = q.eq("lead_id", filters.lead_id);
+  const { data } = await q;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = ((data as any[]) ?? []);
+
+  function nameOf(p: {
+    legal_name?: string | null;
+    trade_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null): string | null {
+    if (!p) return null;
+    return (
+      p.trade_name ||
+      p.legal_name ||
+      [p.first_name, p.last_name].filter(Boolean).join(" ") ||
+      null
+    );
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    reference_code: r.reference_code,
+    customer_id: r.customer_id,
+    customer_name: nameOf(r.customers),
+    lead_id: r.lead_id,
+    lead_name: nameOf(r.leads),
+    client_type: r.client_type,
+    num_people: r.num_people,
+    current_service: r.current_service,
+    current_monthly_cost_cents: r.current_monthly_cost_cents,
+    total_monthly_cost_cents: r.total_monthly_cost_cents,
+    total_saved_5y_cents: r.total_saved_5y_cents,
+    payback_months: r.payback_months,
+    product_name_snapshot: r.product_name_snapshot,
+    plan_type: r.plan_type,
+    status: r.status,
+    converted_to_proposal_id: r.converted_to_proposal_id,
+    sent_by_email_at: r.sent_by_email_at,
+    created_at: r.created_at,
+  }));
+}
+
+export async function deleteSavingsProposalAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { error } = await admin
+      .from("savings_proposals")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", session.company_id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/calculadora-ahorro");
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    return { ok: false, error: msg };
+  }
+}
+
 /**
  * Convierte una propuesta de ahorro (AH-XXX) en una propuesta comercial
  * (proposals) con el cliente/lead, plan, items y extras. Útil cuando el

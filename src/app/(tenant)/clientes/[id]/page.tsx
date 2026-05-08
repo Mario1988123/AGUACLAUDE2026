@@ -158,6 +158,13 @@ export default async function CustomerDetailPage({
             <Plus className="h-4 w-4" /> Nueva propuesta
           </Link>
           <Link
+            href={`/calculadora-ahorro/nueva?customer_id=${id}` as never}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            title="Calcular el ahorro vs su consumo actual"
+          >
+            📊 Calcular ahorro
+          </Link>
+          <Link
             href={`/propuestas/nueva?customer_id=${id}&direct=1` as never}
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-500 px-3 text-sm font-bold text-white hover:bg-amber-600"
             title="El cliente acepta de palabra — crea propuesta+contrato en un paso"

@@ -102,6 +102,12 @@ export default async function LeadDetailPage({
         {!isConverted && (
           <>
             <span className="hidden sm:inline-block h-8 w-px bg-border mx-1" aria-hidden />
+            <Link
+              href={`/calculadora-ahorro/nueva?lead_id=${lead.id}` as never}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-bold text-foreground hover:bg-muted hover:border-primary/40"
+            >
+              📊 Calcular ahorro
+            </Link>
             <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
             {!hasProposals && <ConvertLeadButton leadId={lead.id} alreadyConverted={false} />}
             {canReassign && (
