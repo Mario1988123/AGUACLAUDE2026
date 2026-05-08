@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Eye, Download } from "lucide-react";
 import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
@@ -102,12 +103,13 @@ export default async function ContratosPage({
               <th className="px-4 py-3 text-right">Total</th>
               <th className="px-4 py-3 text-right">Cuota</th>
               <th className="px-4 py-3 text-left">Firmado</th>
+              <th className="px-4 py-3 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {contracts.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   No hay contratos con esos filtros.
                 </td>
               </tr>
@@ -138,6 +140,26 @@ export default async function ContratosPage({
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
                     {c.signed_at ? new Date(c.signed_at).toLocaleDateString("es-ES") : "—"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <Link
+                        href={`/contratos/${c.id}` as never}
+                        title="Ver contrato"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <a
+                        href={`/api/pdf/contract/${c.id}`}
+                        target="_blank"
+                        rel="noopener"
+                        title="Descargar PDF"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    </div>
                   </td>
                 </tr>
               ))

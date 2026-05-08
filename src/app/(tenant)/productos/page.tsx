@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Eye, Pencil } from "lucide-react";
 import { listProducts, listCategories } from "@/modules/products/actions";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -154,12 +155,22 @@ export default async function ProductsPage({
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/productos/${p.id}` as never}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      Ver
-                    </Link>
+                    <div className="inline-flex items-center gap-1">
+                      <Link
+                        href={`/productos/${p.id}` as never}
+                        title="Ver producto"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <Link
+                        href={`/productos/${p.id}?edit=1` as never}
+                        title="Editar"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))

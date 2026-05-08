@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Eye, Download } from "lucide-react";
 import { listInvoices } from "@/modules/invoices/actions";
 import { listPendingInvoiceWalletEntries } from "@/modules/wallet/actions";
 import { Button } from "@/shared/ui/button";
@@ -167,7 +168,7 @@ export default async function InvoicesPage() {
                     <th className="py-2 text-right">Total</th>
                     <th className="py-2 text-right">Pendiente</th>
                     <th className="py-2 text-left">Estado</th>
-                    <th className="py-2 text-right">Ver</th>
+                    <th className="py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -206,12 +207,24 @@ export default async function InvoicesPage() {
                         />
                       </td>
                       <td className="py-2 text-right">
-                        <Link
-                          href={`/facturas/${i.id}` as never}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          Ver →
-                        </Link>
+                        <div className="inline-flex items-center gap-1">
+                          <Link
+                            href={`/facturas/${i.id}` as never}
+                            title="Ver factura"
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                          <a
+                            href={`/api/pdf/invoice/${i.id}`}
+                            target="_blank"
+                            rel="noopener"
+                            title="Descargar PDF"
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))}

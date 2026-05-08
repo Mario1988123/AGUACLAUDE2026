@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Eye } from "lucide-react";
 import { listMaintenance } from "@/modules/maintenance/actions";
 import { STATUS_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -150,6 +151,7 @@ export default async function MantenimientosPage({
                   <th className="py-2 text-left">Programado</th>
                   <th className="py-2 text-left">Estado</th>
                   <th className="py-2 text-right">Importe</th>
+                  <th className="py-2 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -171,6 +173,15 @@ export default async function MantenimientosPage({
                     </td>
                     <td className="py-2 text-right tabular-nums">
                       {j.is_charged ? formatCents(j.charge_cents) : <span className="text-xs text-muted-foreground">Incluido</span>}
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link
+                        href={`/mantenimientos/${j.id}` as never}
+                        title="Ver mantenimiento"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
                     </td>
                   </tr>
                 ))}

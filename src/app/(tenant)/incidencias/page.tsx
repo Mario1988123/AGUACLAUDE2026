@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Eye } from "lucide-react";
 import { listIncidents } from "@/modules/incidents/actions";
 import {
   STATUS_LABEL,
@@ -63,6 +64,7 @@ export default async function IncidenciasPage() {
                   <th className="py-2 text-left">Estado</th>
                   <th className="py-2 text-left">SLA</th>
                   <th className="py-2 text-left">Fecha</th>
+                  <th className="py-2 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -102,6 +104,15 @@ export default async function IncidenciasPage() {
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {new Date(i.created_at).toLocaleDateString("es-ES")}
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link
+                        href={`/incidencias/${i.id}` as never}
+                        title="Ver incidencia"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
                     </td>
                   </tr>
                 ))}
