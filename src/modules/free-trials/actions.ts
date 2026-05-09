@@ -242,6 +242,247 @@ export async function installFreeTrialAction(id: string) {
   revalidatePath("/pruebas-gratuitas");
 }
 
+/**
+ * Convierte una prueba aceptada en cliente + contrato real.
+ * Si la prueba estaba enlazada a un lead, lo convierte primero a customer.
+ * El contrato se crea en estado 'draft' para que el comercial complete
+ * planes y precios desde /contratos/[id]. La instalación, si ya estaba
+ * hecha, se enlaza al nuevo contract_id.
+ *
+ * Devuelve { contract_id, customer_id }.
+ */
+export async function acceptFreeTrialAction(input: {
+  trial_id: string;
+  // Plan tentativo (el comercial puede cambiarlo desde la ficha del contrato)
+  plan_type?: "cash" | "rental" | "renting";
+  monthly_cents?: number | null;
+  total_cents?: number | null;
+  duration_months?: number | null;
+}): Promise<
+  { ok: true; contract_id: string; customer_id: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // 1) Cargar prueba
+    const { data: trialRow } = await admin
+      .from("free_trials")
+      .select(
+        "id, company_id, customer_id, lead_id, installation_address_id, status, generated_contract_id",
+      )
+      .eq("id", input.trial_id)
+      .maybeSingle();
+    const trial = trialRow as
+      | {
+          id: string;
+          company_id: string;
+          customer_id: string | null;
+          lead_id: string | null;
+          installation_address_id: string | null;
+          status: string;
+          generated_contract_id: string | null;
+        }
+      | null;
+    if (!trial) return { ok: false, error: "Prueba no encontrada" };
+    if (trial.company_id !== session.company_id) {
+      return { ok: false, error: "Otra empresa" };
+    }
+    if (trial.status === "accepted" && trial.generated_contract_id) {
+      return {
+        ok: true,
+        contract_id: trial.generated_contract_id,
+        customer_id: trial.customer_id ?? "",
+      };
+    }
+    if (!["installed", "scheduled", "draft"].includes(trial.status)) {
+      return {
+        ok: false,
+        error: `No se puede aceptar una prueba en estado "${trial.status}"`,
+      };
+    }
+
+    // 2) Si era lead, convertirlo a cliente
+    let customerId = trial.customer_id;
+    if (!customerId && trial.lead_id) {
+      const { data: lead } = await admin
+        .from("leads")
+        .select(
+          "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, assigned_user_id",
+        )
+        .eq("id", trial.lead_id)
+        .maybeSingle();
+      if (!lead) return { ok: false, error: "Lead origen no encontrado" };
+      const l = lead as {
+        id: string;
+        party_kind: "individual" | "company";
+        legal_name: string | null;
+        trade_name: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        email: string | null;
+        phone_primary: string | null;
+        phone_company: string | null;
+        tax_id: string | null;
+        notes: string | null;
+        assigned_user_id: string | null;
+      };
+      const { data: createdCust, error: cErr } = await admin
+        .from("customers")
+        .insert({
+          company_id: session.company_id,
+          party_kind: l.party_kind,
+          legal_name: l.legal_name,
+          trade_name: l.trade_name,
+          first_name: l.first_name,
+          last_name: l.last_name,
+          email: l.email,
+          phone_primary: l.phone_primary,
+          phone_company: l.phone_company,
+          tax_id: l.tax_id,
+          notes: l.notes,
+          assigned_user_id: l.assigned_user_id,
+          source_lead_id: l.id,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (cErr) return { ok: false, error: `No se pudo crear cliente: ${cErr.message}` };
+      customerId = (createdCust as { id: string }).id;
+      // Marcar lead convertido y soft-delete (mismo flow que markContractSigned)
+      await admin
+        .from("leads")
+        .update({
+          status: "converted",
+          deleted_at: new Date().toISOString(),
+        })
+        .eq("id", l.id);
+    }
+    if (!customerId) return { ok: false, error: "Prueba sin cliente ni lead" };
+
+    // 3) Reference code C-YYYY-NNNN
+    const year = new Date().getFullYear();
+    const yearPrefix = `C-${year}-`;
+    const { data: lastCoded } = await admin
+      .from("contracts")
+      .select("reference_code")
+      .eq("company_id", session.company_id)
+      .like("reference_code", `${yearPrefix}%`)
+      .order("reference_code", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let nextNum = 1;
+    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
+    if (lastCode) {
+      const m = lastCode.match(/-(\d+)$/);
+      if (m) nextNum = parseInt(m[1]!, 10) + 1;
+    }
+    const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+
+    // 4) Crear contrato en draft
+    const { data: createdContract, error: kErr } = await admin
+      .from("contracts")
+      .insert({
+        company_id: session.company_id,
+        customer_id: customerId,
+        reference_code: referenceCode,
+        status: "draft",
+        plan_type: input.plan_type ?? "renting",
+        monthly_cents: input.monthly_cents ?? null,
+        total_cash_cents: input.total_cents ?? null,
+        duration_months: input.duration_months ?? null,
+        source_free_trial_id: trial.id,
+        created_by: session.user_id,
+      })
+      .select("id")
+      .single();
+    if (kErr) return { ok: false, error: `No se pudo crear contrato: ${kErr.message}` };
+    const contractId = (createdContract as { id: string }).id;
+
+    // 5) Copiar items de la prueba como contract_items (defensivo)
+    try {
+      const { data: items } = await admin
+        .from("free_trial_items")
+        .select("product_id, quantity, product_name_snapshot")
+        .eq("free_trial_id", trial.id);
+      const list = ((items ?? []) as Array<{
+        product_id: string;
+        quantity: number;
+        product_name_snapshot: string;
+      }>);
+      if (list.length > 0) {
+        await admin.from("contract_items").insert(
+          list.map((it) => ({
+            contract_id: contractId,
+            company_id: session.company_id,
+            product_id: it.product_id,
+            quantity: it.quantity,
+          })),
+        );
+      }
+    } catch (e) {
+      console.warn("[acceptFreeTrial] contract_items copy:", e);
+    }
+
+    // 6) Si ya hay installation enlazada (vía installations.free_trial_id),
+    // la enlazamos también al nuevo contract_id.
+    try {
+      await admin
+        .from("installations")
+        .update({ contract_id: contractId })
+        .eq("free_trial_id", trial.id)
+        .is("contract_id", null);
+    } catch {
+      /* no-op */
+    }
+
+    // 7) Marcar la prueba aceptada
+    await admin
+      .from("free_trials")
+      .update({
+        status: "accepted",
+        decided_at: new Date().toISOString(),
+        decided_outcome: "accepted",
+        generated_contract_id: contractId,
+      })
+      .eq("id", trial.id);
+
+    // 8) Eventos
+    try {
+      await admin.from("events").insert([
+        {
+          company_id: session.company_id,
+          subject_type: "free_trial",
+          subject_id: trial.id,
+          kind: "free_trial.accepted",
+          payload: { contract_id: contractId, customer_id: customerId },
+          actor_user_id: session.user_id,
+        },
+        {
+          company_id: session.company_id,
+          subject_type: "contract",
+          subject_id: contractId,
+          kind: "contract.created",
+          payload: { from_free_trial_id: trial.id },
+          actor_user_id: session.user_id,
+        },
+      ]);
+    } catch {
+      /* no-op */
+    }
+
+    revalidatePath(`/pruebas-gratuitas/${trial.id}`);
+    revalidatePath(`/contratos/${contractId}`);
+    revalidatePath(`/clientes/${customerId}`);
+    return { ok: true, contract_id: contractId, customer_id: customerId };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export async function rejectFreeTrialAction(id: string, reason: string) {
   const session = await requireSession();
   // Admin client: la policy ft_update bloquea si ya está
