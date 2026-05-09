@@ -10,6 +10,7 @@ import { CustomerMandatesPanel } from "@/modules/gocardless/customer-mandates-pa
 import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
+import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
@@ -54,6 +55,25 @@ export default async function CustomerDetailPage({
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
+  // Almacenes para destino al desinstalar (sugiere el marcado como
+  // is_used_equipment_default si existe).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sbWh = (await (await import("@/shared/lib/supabase/server")).createClient()) as any;
+  const { data: whRows } = await sbWh
+    .from("warehouses")
+    .select("id, name, is_used_equipment_default")
+    .is("deleted_at", null)
+    .order("kind")
+    .order("name");
+  const warehouseOptions = ((whRows ?? []) as Array<{
+    id: string;
+    name: string;
+    is_used_equipment_default?: boolean;
+  }>).map((w) => ({
+    id: w.id,
+    name: w.name,
+    is_used_default: !!w.is_used_equipment_default,
+  }));
   const [gcSettings, mandates] = await Promise.all([
     getGoCardlessSettings().catch(() => ({ configured: false, environment: null, enabled: false, hasWebhookSecret: false })),
     listCustomerMandates(id).catch(() => []),
@@ -246,10 +266,30 @@ export default async function CustomerDetailPage({
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
               <span>Equipos instalados ({equipment.length})</span>
-              <AddEquipmentButton
-                customerId={id}
-                ownProducts={ownProductsForEquipment}
-              />
+              <div className="flex items-center gap-2">
+                {(session.is_superadmin ||
+                  session.roles.includes("company_admin") ||
+                  session.roles.includes("technical_director")) &&
+                  equipment.some((e) => e.is_active) && (
+                    <UninstallEquipmentButton
+                      customerId={id}
+                      equipment={equipment
+                        .filter((e) => e.is_active)
+                        .map((e) => ({
+                          id: e.id,
+                          display_name:
+                            e.product_name ?? e.external_model_name ?? "Equipo",
+                          serial_number: e.serial_number,
+                          is_ours: !!e.product_name,
+                        }))}
+                      warehouses={warehouseOptions}
+                    />
+                  )}
+                <AddEquipmentButton
+                  customerId={id}
+                  ownProducts={ownProductsForEquipment}
+                />
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>

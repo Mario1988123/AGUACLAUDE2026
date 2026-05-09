@@ -25,4 +25,5 @@ export const KIND_LABEL: Record<string, string> = {
   normal: "Normal",
   free_trial: "Prueba gratuita",
   relocation: "Reubicación",
+  uninstall: "Desinstalación",
 };

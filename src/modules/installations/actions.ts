@@ -801,7 +801,7 @@ export async function completeInstallation(input: unknown) {
   // Calcular duración si tenemos started_at
   const { data: inst } = await admin
     .from("installations")
-    .select("started_at, contract_id, customer_id, address_id")
+    .select("started_at, contract_id, customer_id, address_id, kind, notes")
     .eq("id", parsed.id)
     .single();
   const startTs = (inst as { started_at: string | null })?.started_at;
@@ -822,15 +822,55 @@ export async function completeInstallation(input: unknown) {
     .eq("id", parsed.id);
   // installation_steps_log dropeada — los wizards escriben en `events`.
 
-  // Decrementar stock del almacén origen (no falla si no hay warehouse)
+  const i = inst as {
+    contract_id: string | null;
+    customer_id: string | null;
+    address_id: string | null;
+    kind: "normal" | "free_trial" | "relocation" | "uninstall";
+    notes: string | null;
+  };
+
+  // ===== Fork por tipo =====
+  if (i.kind === "uninstall") {
+    // Devuelve stock al almacén destino y desactiva los equipos.
+    try {
+      const mod = await import("@/modules/customers/uninstall-actions");
+      await mod.processUninstallCompletion(parsed.id);
+    } catch (e) {
+      console.error("[completeInstallation] uninstall flow:", e);
+    }
+    // No tocamos contratos ni mantenimientos en una desinstalación.
+    revalidatePath(`/instalaciones/${parsed.id}`);
+    revalidatePath(i.customer_id ? `/clientes/${i.customer_id}` : "/clientes");
+    return;
+  }
+
+  if (i.kind === "relocation") {
+    // No decrementa stock — el equipo solo cambia de dirección.
+    // Buscar customer_equipment_id en notas (lo metió relocateEquipmentAction)
+    const eqMatch = i.notes?.match(/customer_equipment_id=([0-9a-f-]{36})/i);
+    if (eqMatch && i.address_id) {
+      try {
+        await admin
+          .from("customer_equipment")
+          .update({ address_id: i.address_id })
+          .eq("id", eqMatch[1]);
+      } catch (e) {
+        console.error("[completeInstallation] relocation address update:", e);
+      }
+    }
+    revalidatePath(`/instalaciones/${parsed.id}`);
+    revalidatePath(i.customer_id ? `/clientes/${i.customer_id}` : "/clientes");
+    return;
+  }
+
+  // ===== Flujo normal: decrementar stock + crear customer_equipment =====
   try {
     await decrementStockForInstallation(parsed.id);
   } catch {
     /* no-op: stock no debe tumbar finalización */
   }
 
-  // Crear customer_equipment para cada item instalado (si hay contract)
-  const i = inst as { contract_id: string | null; customer_id: string | null; address_id: string | null };
   if (i.customer_id) {
     const { data: items } = await admin
       .from("installation_items")
