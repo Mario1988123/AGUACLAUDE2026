@@ -105,6 +105,7 @@ export async function setStockQuantityAction(input: {
   product_id: string;
   new_quantity: number;
   notes?: string;
+  reason?: string;
 }): Promise<void> {
   const session = await ensureCanManage();
   if (input.new_quantity < 0) throw new Error("La cantidad no puede ser negativa");
@@ -148,10 +149,74 @@ export async function setStockQuantityAction(input: {
     state_after: "new",
     performed_by: session.user_id,
     notes: input.notes ?? `Inventario: ${oldQty} → ${input.new_quantity}`,
+    reason: input.reason ?? null,
   });
 
   revalidatePath(`/almacenes/${input.warehouse_id}`);
   revalidatePath("/almacenes");
+}
+
+/**
+ * Crea o actualiza el umbral de stock (min/max) para un producto en un
+ * almacén concreto. Sobrescribe el stock_min global de products.
+ */
+export async function upsertStockThresholdAction(input: {
+  warehouse_id: string;
+  product_id: string;
+  stock_min: number;
+  stock_max: number | null;
+}): Promise<void> {
+  const session = await ensureCanManage();
+  if (input.stock_min < 0) throw new Error("Mínimo no puede ser negativo");
+  if (input.stock_max != null && input.stock_max < input.stock_min)
+    throw new Error("Máximo debe ser mayor o igual que el mínimo");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: existing } = await admin
+    .from("warehouse_stock_thresholds")
+    .select("id")
+    .eq("warehouse_id", input.warehouse_id)
+    .eq("product_id", input.product_id)
+    .maybeSingle();
+  if (existing) {
+    await admin
+      .from("warehouse_stock_thresholds")
+      .update({
+        stock_min: input.stock_min,
+        stock_max: input.stock_max,
+      })
+      .eq("id", (existing as { id: string }).id);
+  } else {
+    await admin.from("warehouse_stock_thresholds").insert({
+      company_id: session.company_id,
+      warehouse_id: input.warehouse_id,
+      product_id: input.product_id,
+      stock_min: input.stock_min,
+      stock_max: input.stock_max,
+    });
+  }
+  revalidatePath(`/almacenes/${input.warehouse_id}`);
+}
+
+export interface WarehouseThreshold {
+  warehouse_id: string;
+  product_id: string;
+  stock_min: number;
+  stock_max: number | null;
+}
+
+export async function listThresholds(
+  warehouseId: string,
+): Promise<WarehouseThreshold[]> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("warehouse_stock_thresholds")
+    .select("warehouse_id, product_id, stock_min, stock_max")
+    .eq("warehouse_id", warehouseId);
+  return (data ?? []) as WarehouseThreshold[];
 }
 
 export interface StockMovementRow {
@@ -165,23 +230,28 @@ export interface StockMovementRow {
   destination_warehouse_id: string | null;
   destination_warehouse_name: string | null;
   notes: string | null;
+  reason: string | null;
+  contract_id: string | null;
+  invoice_id: string | null;
+  purchase_id: string | null;
 }
 
 export async function listStockMovements(
   warehouseId: string,
-  limit: number = 100,
+  limit?: number,
 ): Promise<StockMovementRow[]> {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: movs } = await supabase
+  let q = supabase
     .from("stock_movements")
     .select(
-      "id, product_id, movement_type, quantity, performed_at, performed_by, destination_warehouse_id, notes",
+      "id, product_id, movement_type, quantity, performed_at, performed_by, destination_warehouse_id, notes, reason, contract_id, invoice_id, purchase_id",
     )
     .eq("warehouse_id", warehouseId)
-    .order("performed_at", { ascending: false })
-    .limit(limit);
+    .order("performed_at", { ascending: false });
+  if (typeof limit === "number" && limit > 0) q = q.limit(limit);
+  const { data: movs } = await q;
   type M = {
     id: string;
     product_id: string;
@@ -191,6 +261,10 @@ export async function listStockMovements(
     performed_by: string | null;
     destination_warehouse_id: string | null;
     notes: string | null;
+    reason: string | null;
+    contract_id: string | null;
+    invoice_id: string | null;
+    purchase_id: string | null;
   };
   const list = (movs ?? []) as M[];
   if (list.length === 0) return [];
@@ -241,5 +315,9 @@ export async function listStockMovements(
       ? wMap.get(m.destination_warehouse_id) ?? null
       : null,
     notes: m.notes,
+    reason: m.reason,
+    contract_id: m.contract_id,
+    invoice_id: m.invoice_id,
+    purchase_id: m.purchase_id,
   }));
 }

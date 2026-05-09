@@ -22,7 +22,7 @@ export default async function WarehouseDetailPage({
 
   const [stock, movements, products, allWarehouses] = await Promise.all([
     getWarehouseStockDetail(id).catch(() => []),
-    listStockMovements(id, 200).catch(() => []),
+    listStockMovements(id).catch(() => []),
     listProducts({ active_only: true }).catch(() => []),
     listWarehouses().catch(() => []),
   ]);

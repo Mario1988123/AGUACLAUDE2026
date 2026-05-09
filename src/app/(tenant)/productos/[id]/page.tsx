@@ -9,6 +9,11 @@ import {
   listProductAttributeValues,
 } from "@/modules/products/attributes-actions";
 import { AttributesPanel } from "@/modules/products/attributes-panel";
+import {
+  getProductSalesHistory,
+  getProductStockSummary,
+} from "@/modules/products/stock-actions";
+import { ProductStockPanel } from "@/modules/products/stock-panel";
 import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -34,12 +39,15 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const [pricingPlans, attributes, attrValues, categories] = await Promise.all([
-    listPricingPlans(id),
-    listAttributes((product as { category_id: string | null }).category_id),
-    listProductAttributeValues(id),
-    listCategories().catch(() => []),
-  ]);
+  const [pricingPlans, attributes, attrValues, categories, stockSummary, salesHistory] =
+    await Promise.all([
+      listPricingPlans(id),
+      listAttributes((product as { category_id: string | null }).category_id),
+      listProductAttributeValues(id),
+      listCategories().catch(() => []),
+      getProductStockSummary(id).catch(() => ({ total: 0, by_warehouse: [] })),
+      getProductSalesHistory(id, 90).catch(() => []),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -138,16 +146,27 @@ export default async function ProductDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Stock</CardTitle>
+            <CardTitle>Stock y predicción</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Row label="Gestionado" value={product.stock_managed ? "Sí" : "No"} />
-            <Row label="Stock mínimo" value={String(product.stock_min)} />
-            <p className="text-xs text-muted-foreground">
-              Listado por almacén disponible en el módulo Almacenes.
-            </p>
+          <CardContent>
+            <ProductStockPanel
+              productId={id}
+              initial={{
+                stock_managed: product.stock_managed ?? false,
+                stock_min: product.stock_min ?? 0,
+                stock_max:
+                  (product as { stock_max?: number | null }).stock_max ?? null,
+                lead_time_days:
+                  (product as { lead_time_days?: number | null }).lead_time_days ?? null,
+                default_supplier_name:
+                  (product as { default_supplier_name?: string | null })
+                    .default_supplier_name ?? null,
+              }}
+              summary={stockSummary}
+              history={salesHistory}
+            />
           </CardContent>
         </Card>
 

@@ -33,6 +33,9 @@ export interface ProductDetail {
   weight_grams: number | null;
   stock_managed: boolean;
   stock_min: number;
+  stock_max: number | null;
+  lead_time_days: number | null;
+  default_supplier_name: string | null;
   main_image_url: string | null;
   notes: string | null;
 }

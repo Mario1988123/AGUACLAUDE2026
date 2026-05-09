@@ -89,7 +89,9 @@ export interface WarehouseStockDetail {
   product_name: string;
   total: number;
   stock_min: number | null;
+  stock_max: number | null;
   is_low: boolean;
+  is_over: boolean;
 }
 
 export async function getWarehouseStockDetail(
@@ -104,6 +106,21 @@ export async function getWarehouseStockDetail(
     .eq("warehouse_id", warehouseId);
   type S = { product_id: string; quantity: number };
   const list = (stocks ?? []) as S[];
+
+  // Cargamos también los thresholds del almacén (override min/max)
+  // Defensivo si la migración aún no se aplicó
+  let thresholds: Array<{ product_id: string; stock_min: number; stock_max: number | null }> = [];
+  try {
+    const { data: th } = await supabase
+      .from("warehouse_stock_thresholds")
+      .select("product_id, stock_min, stock_max")
+      .eq("warehouse_id", warehouseId);
+    thresholds = (th ?? []) as typeof thresholds;
+  } catch {
+    /* tabla aún no migrada */
+  }
+  const thMap = new Map(thresholds.map((t) => [t.product_id, t]));
+
   if (list.length === 0) return [];
 
   const totals = new Map<string, number>();
@@ -111,30 +128,56 @@ export async function getWarehouseStockDetail(
     totals.set(s.product_id, (totals.get(s.product_id) ?? 0) + s.quantity);
   }
   const ids = Array.from(totals.keys());
-  const { data: prods } = await supabase
-    .from("products")
-    .select("id, name, stock_min, stock_managed")
-    .in("id", ids);
-  const prodMap = new Map(
-    ((prods ?? []) as Array<{
+  let prodCols = "id, name, stock_min, stock_managed, stock_max";
+  let prods: Array<{
+    id: string;
+    name: string;
+    stock_min: number;
+    stock_managed: boolean;
+    stock_max: number | null;
+  }> = [];
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select(prodCols)
+      .in("id", ids);
+    if (error && /stock_max/i.test(error.message ?? "")) throw error;
+    prods = (data ?? []) as typeof prods;
+  } catch {
+    prodCols = "id, name, stock_min, stock_managed";
+    const { data } = await supabase
+      .from("products")
+      .select(prodCols)
+      .in("id", ids);
+    prods = ((data ?? []) as Array<{
       id: string;
       name: string;
       stock_min: number;
       stock_managed: boolean;
-    }>).map((p) => [p.id, p]),
-  );
+    }>).map((p) => ({ ...p, stock_max: null }));
+  }
+  const prodMap = new Map(prods.map((p) => [p.id, p]));
 
   return ids
     .map((pid) => {
       const p = prodMap.get(pid);
       const total = totals.get(pid) ?? 0;
-      const min = p?.stock_managed ? p.stock_min : null;
+      const th = thMap.get(pid);
+      // El threshold por almacén tiene prioridad. Si no hay, usamos products.stock_min (si stock_managed).
+      const min = th
+        ? th.stock_min
+        : p?.stock_managed
+          ? p.stock_min
+          : null;
+      const max = th ? th.stock_max : p?.stock_max ?? null;
       return {
         product_id: pid,
         product_name: p?.name ?? pid.slice(0, 8),
         total,
         stock_min: min,
+        stock_max: max,
         is_low: min !== null && total <= min,
+        is_over: max !== null && total > max,
       };
     })
     .sort((a, b) => a.product_name.localeCompare(b.product_name));

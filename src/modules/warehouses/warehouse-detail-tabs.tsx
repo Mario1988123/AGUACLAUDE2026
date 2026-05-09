@@ -18,6 +18,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import {
   addStockAction,
   setStockQuantityAction,
+  upsertStockThresholdAction,
   type StockMovementRow,
 } from "./inventory-actions";
 import { transferStockAction } from "./transfer-actions";
@@ -235,32 +236,125 @@ function StockTab({
               <tr>
                 <th className="px-4 py-2 text-left">Producto</th>
                 <th className="px-4 py-2 text-right">Cantidad</th>
-                <th className="px-4 py-2 text-right">Mín.</th>
+                <th className="px-4 py-2 text-right">Mín / Máx</th>
                 <th className="px-4 py-2 text-left">Estado</th>
+                <th className="px-4 py-2 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {stock.map((s) => (
-                <tr key={s.product_id} className={s.is_low ? "bg-destructive/5" : ""}>
-                  <td className="px-4 py-2 font-medium">{s.product_name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums font-bold">{s.total}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                    {s.stock_min ?? "—"}
-                  </td>
-                  <td className="px-4 py-2">
-                    {s.is_low ? (
-                      <Badge variant="destructive">⚠ Bajo</Badge>
-                    ) : (
-                      <Badge variant="success">OK</Badge>
-                    )}
-                  </td>
-                </tr>
+                <StockRow key={s.product_id} warehouseId={warehouseId} row={s} />
               ))}
             </tbody>
           </table>
         </div>
       )}
     </div>
+  );
+}
+
+function StockRow({
+  warehouseId,
+  row,
+}: {
+  warehouseId: string;
+  row: WarehouseStockDetail;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [editing, setEditing] = useState(false);
+  const [min, setMin] = useState(String(row.stock_min ?? 0));
+  const [max, setMax] = useState(row.stock_max != null ? String(row.stock_max) : "");
+
+  function saveThreshold() {
+    const minN = Math.max(0, Math.floor(Number(min)));
+    const maxN = max.trim() === "" ? null : Math.max(0, Math.floor(Number(max)));
+    if (!Number.isFinite(minN)) {
+      notify.warning("Mínimo inválido");
+      return;
+    }
+    if (maxN != null && maxN < minN) {
+      notify.warning("Máximo debe ser ≥ mínimo");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        await upsertStockThresholdAction({
+          warehouse_id: warehouseId,
+          product_id: row.product_id,
+          stock_min: minN,
+          stock_max: maxN,
+        });
+        notify.success("Umbral guardado");
+        setEditing(false);
+        router.refresh();
+      } catch (err) {
+        notify.error("Error", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
+
+  return (
+    <tr className={row.is_low ? "bg-destructive/5" : row.is_over ? "bg-warning/10" : ""}>
+      <td className="px-4 py-2 font-medium">{row.product_name}</td>
+      <td className="px-4 py-2 text-right tabular-nums font-bold">{row.total}</td>
+      <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+        {editing ? (
+          <div className="inline-flex gap-1 items-center">
+            <Input
+              type="number"
+              min={0}
+              value={min}
+              onChange={(e) => setMin(e.target.value)}
+              className="h-8 w-16 text-right"
+            />
+            <span className="text-xs">/</span>
+            <Input
+              type="number"
+              min={0}
+              value={max}
+              onChange={(e) => setMax(e.target.value)}
+              placeholder="—"
+              className="h-8 w-16 text-right"
+            />
+          </div>
+        ) : (
+          <>
+            {row.stock_min ?? "—"} / {row.stock_max ?? "—"}
+          </>
+        )}
+      </td>
+      <td className="px-4 py-2">
+        {row.is_low ? (
+          <Badge variant="destructive">⚠ Bajo</Badge>
+        ) : row.is_over ? (
+          <Badge variant="warning">↑ Sobrestock</Badge>
+        ) : (
+          <Badge variant="success">OK</Badge>
+        )}
+      </td>
+      <td className="px-4 py-2 text-right">
+        {editing ? (
+          <div className="inline-flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEditing(false)}
+              disabled={pending}
+            >
+              Cancelar
+            </Button>
+            <Button size="sm" variant="success" onClick={saveThreshold} disabled={pending}>
+              Guardar
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+            Editar mín/máx
+          </Button>
+        )}
+      </td>
+    </tr>
   );
 }
 

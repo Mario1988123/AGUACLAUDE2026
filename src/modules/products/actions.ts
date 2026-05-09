@@ -353,6 +353,9 @@ export async function updateProductAction(
     weight_grams?: number | null;
     stock_managed?: boolean;
     stock_min?: number | null;
+    stock_max?: number | null;
+    lead_time_days?: number | null;
+    default_supplier_name?: string | null;
     show_in_calculator?: boolean;
   },
 ): Promise<ProductActionResult> {
@@ -377,13 +380,17 @@ export async function updateProductAction(
       .eq("id", productId)
       .eq("company_id", session.company_id);
     if (error) {
-      // Defensa: show_in_calculator puede no existir si la migration no
-      // se aplicó. Reintentar sin esa columna.
-      if (
-        /show_in_calculator/i.test(error.message ?? "") ||
-        (error as { code?: string }).code === "42703"
-      ) {
-        delete payload.show_in_calculator;
+      // Defensa: columnas nuevas pueden no existir si la migration no
+      // se aplicó. Reintentar quitando las que falten.
+      const newCols = [
+        "show_in_calculator",
+        "stock_max",
+        "lead_time_days",
+        "default_supplier_name",
+      ];
+      const re = new RegExp(`(${newCols.join("|")})`, "i");
+      if (re.test(error.message ?? "") || (error as { code?: string }).code === "42703") {
+        for (const col of newCols) delete payload[col];
         const r2 = await admin
           .from("products")
           .update(payload)
