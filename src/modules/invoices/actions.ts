@@ -387,6 +387,28 @@ export async function markInvoiceIssuedAction(invoiceId: string): Promise<void> 
     .eq("id", invoiceId)
     .eq("company_id", session.company_id)
     .eq("status", "draft");
+
+  // Trazabilidad: enlazar invoice_id en los stock_movements del contrato
+  // que aún no tengan factura. Fail-soft (la columna puede no existir si
+  // la migración Fase A no se aplicó).
+  try {
+    const { data: inv } = await admin
+      .from("invoices")
+      .select("contract_id")
+      .eq("id", invoiceId)
+      .maybeSingle();
+    const cid = (inv as { contract_id: string | null } | null)?.contract_id;
+    if (cid) {
+      await admin
+        .from("stock_movements")
+        .update({ invoice_id: invoiceId })
+        .eq("contract_id", cid)
+        .is("invoice_id", null);
+    }
+  } catch (e) {
+    console.warn("[markInvoiceIssued] no se pudo enlazar invoice_id a stock_movements:", e);
+  }
+
   revalidatePath(`/facturas/${invoiceId}`);
   revalidatePath("/facturas");
 }

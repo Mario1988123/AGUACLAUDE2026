@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Plus,
   ArrowRightLeft,
@@ -13,6 +14,7 @@ import {
   Trash2,
   Pencil,
   Truck,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -35,6 +37,7 @@ import {
 } from "./location-actions";
 import { PurchasesTab } from "./purchases-tab";
 import type { PurchaseRow, PurchaseDetail } from "./purchase-actions";
+import type { StockReservation } from "./reservation-actions";
 import type { WarehouseStockDetail } from "./stock-summary-actions";
 
 interface ProductLite {
@@ -52,6 +55,7 @@ const TAB_LABEL: Record<string, string> = {
   stock: "Stock",
   locations: "Ubicaciones",
   purchases: "Compras",
+  reservations: "Reservas",
   transfer: "Traspasos",
   inventory: "Inventario",
   history: "Histórico",
@@ -93,6 +97,7 @@ export function WarehouseDetailTabs({
   productLocations,
   purchases,
   purchaseDetails,
+  reservations,
 }: {
   warehouseId: string;
   stock: WarehouseStockDetail[];
@@ -103,36 +108,57 @@ export function WarehouseDetailTabs({
   productLocations: ProductLocation[];
   purchases: PurchaseRow[];
   purchaseDetails: Map<string, PurchaseDetail>;
+  reservations: StockReservation[];
 }) {
   const [tab, setTab] = useState<
-    "stock" | "locations" | "purchases" | "transfer" | "inventory" | "history"
+    | "stock"
+    | "locations"
+    | "purchases"
+    | "reservations"
+    | "transfer"
+    | "inventory"
+    | "history"
   >("stock");
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 border-b">
-        {(["stock", "locations", "purchases", "transfer", "inventory", "history"] as const).map(
-          (t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-                tab === t
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t === "stock" && <Boxes className="h-4 w-4" />}
-              {t === "locations" && <MapPin className="h-4 w-4" />}
-              {t === "purchases" && <Truck className="h-4 w-4" />}
-              {t === "transfer" && <ArrowRightLeft className="h-4 w-4" />}
-              {t === "inventory" && <ClipboardList className="h-4 w-4" />}
-              {t === "history" && <History className="h-4 w-4" />}
-              {TAB_LABEL[t]}
-            </button>
-          ),
-        )}
+        {(
+          [
+            "stock",
+            "locations",
+            "purchases",
+            "reservations",
+            "transfer",
+            "inventory",
+            "history",
+          ] as const
+        ).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setTab(t)}
+            className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+              tab === t
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t === "stock" && <Boxes className="h-4 w-4" />}
+            {t === "locations" && <MapPin className="h-4 w-4" />}
+            {t === "purchases" && <Truck className="h-4 w-4" />}
+            {t === "reservations" && <Lock className="h-4 w-4" />}
+            {t === "transfer" && <ArrowRightLeft className="h-4 w-4" />}
+            {t === "inventory" && <ClipboardList className="h-4 w-4" />}
+            {t === "history" && <History className="h-4 w-4" />}
+            {TAB_LABEL[t]}
+            {t === "reservations" && reservations.length > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {reservations.length}
+              </Badge>
+            )}
+          </button>
+        ))}
       </div>
 
       {tab === "stock" && (
@@ -155,6 +181,7 @@ export function WarehouseDetailTabs({
           products={products}
         />
       )}
+      {tab === "reservations" && <ReservationsTab reservations={reservations} />}
       {tab === "transfer" && (
         <TransferTab
           warehouseId={warehouseId}
@@ -924,6 +951,64 @@ function composePreview(
   if (parts.length === 0) return "";
   const allShort = parts.every((p) => p.length <= 1);
   return allShort ? parts.join("") : parts.join("-");
+}
+
+function ReservationsTab({
+  reservations,
+}: {
+  reservations: StockReservation[];
+}) {
+  if (reservations.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+        Sin reservas activas en este almacén. Cuando se firme un contrato,
+        sus equipos quedarán reservados aquí hasta instalarlos.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        {reservations.length} reserva(s) activa(s). El stock reservado sigue
+        físicamente en el almacén pero no está disponible para nuevas ventas.
+      </p>
+      <div className="overflow-hidden rounded-xl border">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="px-4 py-2 text-left">Producto</th>
+              <th className="px-4 py-2 text-right">Cant.</th>
+              <th className="px-4 py-2 text-left">Cliente</th>
+              <th className="px-4 py-2 text-left">Contrato</th>
+              <th className="px-4 py-2 text-left">Reservado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {reservations.map((r) => (
+              <tr key={r.id}>
+                <td className="px-4 py-2 font-medium">{r.product_name}</td>
+                <td className="px-4 py-2 text-right tabular-nums font-bold">
+                  {r.quantity}
+                </td>
+                <td className="px-4 py-2">{r.customer_name ?? "—"}</td>
+                <td className="px-4 py-2">
+                  <Link
+                    href={`/contratos/${r.contract_id}` as never}
+                    className="text-primary hover:underline"
+                  >
+                    {r.contract_reference ?? r.contract_id.slice(0, 8)}
+                  </Link>
+                </td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">
+                  {new Date(r.reserved_at).toLocaleString("es-ES")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 function HistoryTab({ movements }: { movements: StockMovementRow[] }) {

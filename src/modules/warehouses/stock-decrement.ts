@@ -17,6 +17,7 @@ interface DecrementInput {
   free_trial_id?: string | null;
   maintenance_id?: string | null;
   loading_request_id?: string | null;
+  contract_id?: string | null;
   performed_by?: string | null;
   notes?: string | null;
 }
@@ -53,7 +54,9 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
     moved += take;
   }
   if (moved > 0) {
-    await admin.from("stock_movements").insert({
+    // Insertamos el movimiento. Defensivo: contract_id puede no existir en
+    // schema cache si la migración Fase A no se aplicó todavía.
+    const movementPayload: Record<string, unknown> = {
       company_id: input.company_id,
       product_id: input.product_id,
       warehouse_id: input.warehouse_id,
@@ -63,9 +66,17 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
       free_trial_id: input.free_trial_id ?? null,
       maintenance_id: input.maintenance_id ?? null,
       loading_request_id: input.loading_request_id ?? null,
+      contract_id: input.contract_id ?? null,
       performed_by: input.performed_by ?? null,
       notes: input.notes ?? null,
-    });
+    };
+    let { error: mErr } = await admin.from("stock_movements").insert(movementPayload);
+    if (mErr && /contract_id/i.test(mErr.message ?? "")) {
+      delete movementPayload.contract_id;
+      const r2 = await admin.from("stock_movements").insert(movementPayload);
+      mErr = r2.error;
+    }
+    if (mErr) console.error("[decrementStock] movement insert:", mErr.message);
   }
   return moved;
 }
@@ -82,7 +93,7 @@ export async function decrementStockForInstallation(installationId: string): Pro
   const admin = createAdminClient() as any;
   const { data: inst } = await admin
     .from("installations")
-    .select("id, company_id, source_warehouse_id, installer_user_id")
+    .select("id, company_id, source_warehouse_id, installer_user_id, contract_id")
     .eq("id", installationId)
     .single();
   if (!inst) return { moved_total: 0, items: 0 };
@@ -91,6 +102,7 @@ export async function decrementStockForInstallation(installationId: string): Pro
     company_id: string;
     source_warehouse_id: string | null;
     installer_user_id: string | null;
+    contract_id: string | null;
   };
   if (!i.source_warehouse_id) return { moved_total: 0, items: 0 };
 
@@ -110,10 +122,24 @@ export async function decrementStockForInstallation(installationId: string): Pro
       quantity: it.quantity,
       movement_type: "outbound_install",
       installation_id: i.id,
+      contract_id: i.contract_id,
       performed_by: i.installer_user_id,
       notes: "Auto-decrement on installation completion",
     });
     total += moved;
   }
+
+  // Marcar reservas asociadas al contrato como cumplidas (fail-soft).
+  if (i.contract_id) {
+    try {
+      const { fulfillReservationsForContractAction } = await import(
+        "./reservation-actions"
+      );
+      await fulfillReservationsForContractAction(i.contract_id);
+    } catch (e) {
+      console.error("[decrementStockForInstallation] fulfill failed:", e);
+    }
+  }
+
   return { moved_total: total, items: list.length };
 }

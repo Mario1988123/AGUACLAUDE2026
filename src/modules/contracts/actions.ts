@@ -826,6 +826,21 @@ export async function markContractSigned(id: string) {
     /* fail-soft: la firma no se rompe por esto */
   }
 
+  // Reservar stock en almacén principal para todos los items del contrato.
+  // Fail-soft: si falla, no rompe la firma (puede ser por falta de almacén
+  // o tabla aún no migrada).
+  try {
+    const { reserveStockForContractAction } = await import(
+      "@/modules/warehouses/reservation-actions"
+    );
+    const r = await reserveStockForContractAction(id);
+    if (!r.ok && r.error) {
+      console.warn("[markContractSigned] reservas no creadas:", r.error);
+    }
+  } catch (e) {
+    console.error("[markContractSigned] reserveStock falló:", e);
+  }
+
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
@@ -1014,6 +1029,16 @@ export async function cancelContractAction(
       .eq("id", id);
     if (r.error) return { ok: false, error: r.error.message };
 
+    // Liberar reservas de stock activas asociadas al contrato (fail-soft)
+    try {
+      const { cancelReservationsForContractAction } = await import(
+        "@/modules/warehouses/reservation-actions"
+      );
+      await cancelReservationsForContractAction(id);
+    } catch (e) {
+      console.error("[cancelContract] cancelReservations falló:", e);
+    }
+
     await admin.from("events").insert({
       company_id: session.company_id,
       subject_type: "contract",
@@ -1025,6 +1050,7 @@ export async function cancelContractAction(
 
     revalidatePath("/contratos");
     revalidatePath("/instalaciones");
+    revalidatePath("/almacenes");
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";

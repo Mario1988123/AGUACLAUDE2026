@@ -7,6 +7,7 @@ import {
   listProductLocations,
 } from "@/modules/warehouses/location-actions";
 import { listPurchases, getPurchase } from "@/modules/warehouses/purchase-actions";
+import { listReservations } from "@/modules/warehouses/reservation-actions";
 import { createClient } from "@/shared/lib/supabase/server";
 import { listProducts } from "@/modules/products/actions";
 import { WarehouseDetailTabs } from "@/modules/warehouses/warehouse-detail-tabs";
@@ -26,16 +27,25 @@ export default async function WarehouseDetailPage({
   const wh = await getWarehouse(id);
   if (!wh) notFound();
 
-  const [stock, movements, products, allWarehouses, locations, productLocations, purchases] =
-    await Promise.all([
-      getWarehouseStockDetail(id).catch(() => []),
-      listStockMovements(id).catch(() => []),
-      listProducts({ active_only: true }).catch(() => []),
-      listWarehouses().catch(() => []),
-      listWarehouseLocations(id).catch(() => []),
-      listProductLocations(id).catch(() => []),
-      listPurchases(id).catch(() => []),
-    ]);
+  const [
+    stock,
+    movements,
+    products,
+    allWarehouses,
+    locations,
+    productLocations,
+    purchases,
+    reservations,
+  ] = await Promise.all([
+    getWarehouseStockDetail(id).catch(() => []),
+    listStockMovements(id).catch(() => []),
+    listProducts({ active_only: true }).catch(() => []),
+    listWarehouses().catch(() => []),
+    listWarehouseLocations(id).catch(() => []),
+    listProductLocations(id).catch(() => []),
+    listPurchases(id).catch(() => []),
+    listReservations({ warehouse_id: id, status: "active" }).catch(() => []),
+  ]);
 
   // Detalles de compras (carga upfront — cuando crezca, paginar / lazy)
   const purchaseDetailsList = await Promise.all(
@@ -110,6 +120,7 @@ export default async function WarehouseDetailPage({
             productLocations={productLocations}
             purchases={purchases}
             purchaseDetails={purchaseDetails}
+            reservations={reservations}
           />
         </CardContent>
       </Card>
