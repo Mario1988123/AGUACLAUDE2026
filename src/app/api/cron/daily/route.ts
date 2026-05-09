@@ -75,43 +75,94 @@ export async function GET(req: NextRequest) {
   }
 
   // 1) Leads caducados ----------------------------------------------------------
+  // Decisión 2026-05-09: caducidad diferenciada por origen.
+  //   - origin='tmk' → lead_expiry_days_tmk (default 15).
+  //   - resto → lead_expiry_days_commercial (default 30).
+  // Al caducar: status='expired' + DESASIGNAR (assigned_user_id=null) +
+  // evento con previous user para el timeline + alerta a nivel 1/2.
   const { data: companies } = await admin
     .from("company_settings")
-    .select("company_id, lead_expiry_days");
+    .select(
+      "company_id, lead_expiry_days, lead_expiry_days_tmk, lead_expiry_days_commercial",
+    );
   for (const cs of (companies ?? []) as Array<{
     company_id: string;
     lead_expiry_days: number;
+    lead_expiry_days_tmk: number | null;
+    lead_expiry_days_commercial: number | null;
   }>) {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - cs.lead_expiry_days);
+    const tmkDays = cs.lead_expiry_days_tmk ?? cs.lead_expiry_days ?? 15;
+    const commercialDays = cs.lead_expiry_days_commercial ?? cs.lead_expiry_days ?? 30;
+    const maxDays = Math.max(tmkDays, commercialDays);
+    const upperCutoff = new Date();
+    upperCutoff.setDate(upperCutoff.getDate() - Math.min(tmkDays, commercialDays));
+
+    // Cargamos un buffer amplio (todos los que pueden caducar por TMK) y
+    // filtramos por origen + sus días específicos en memoria.
+    const bufferCutoff = new Date();
+    bufferCutoff.setDate(bufferCutoff.getDate() - Math.min(tmkDays, commercialDays));
     const { data: stale } = await admin
       .from("leads")
-      .select("id, legal_name, trade_name, first_name, last_name, party_kind")
+      .select(
+        "id, legal_name, trade_name, first_name, last_name, party_kind, origin, assigned_user_id, assigned_at",
+      )
       .eq("company_id", cs.company_id)
       .in("status", ["new", "contacted", "qualified"])
-      .lt("assigned_at", cutoff.toISOString())
+      .lt("assigned_at", bufferCutoff.toISOString())
       .is("expired_at", null)
       .is("deleted_at", null)
       .limit(500);
-    const list = (stale ?? []) as Array<{
+    type StaleLead = {
       id: string;
       legal_name: string | null;
       trade_name: string | null;
       first_name: string | null;
       last_name: string | null;
       party_kind: "company" | "individual";
-    }>;
-    if (list.length === 0) continue;
+      origin: string;
+      assigned_user_id: string | null;
+      assigned_at: string | null;
+    };
+    const staleList = (stale ?? []) as StaleLead[];
+    const toExpire = staleList.filter((l) => {
+      if (!l.assigned_at) return false;
+      const days = l.origin === "tmk" ? tmkDays : commercialDays;
+      const cut = new Date();
+      cut.setDate(cut.getDate() - days);
+      return new Date(l.assigned_at) < cut;
+    });
+    if (toExpire.length === 0) continue;
 
-    await admin
-      .from("leads")
-      .update({ status: "expired", expired_at: new Date().toISOString() })
-      .in(
-        "id",
-        list.map((l) => l.id),
-      );
+    for (const l of toExpire) {
+      // Update individual para guardar previous_assigned_user_id en payload
+      await admin
+        .from("leads")
+        .update({
+          status: "expired",
+          expired_at: new Date().toISOString(),
+          assigned_user_id: null,
+          assigned_at: null,
+        })
+        .eq("id", l.id);
 
-    for (const l of list) {
+      // Evento timeline con el comercial anterior
+      try {
+        await admin.from("events").insert({
+          company_id: cs.company_id,
+          subject_type: "lead",
+          subject_id: l.id,
+          kind: "lead.unassigned_by_expiry",
+          payload: {
+            previous_assigned_user_id: l.assigned_user_id,
+            origin: l.origin,
+            days_threshold: l.origin === "tmk" ? tmkDays : commercialDays,
+          },
+          actor_user_id: null,
+        });
+      } catch {
+        /* no-op */
+      }
+
       const name =
         l.party_kind === "company"
           ? l.trade_name || l.legal_name || "Sin nombre"
@@ -119,12 +170,17 @@ export async function GET(req: NextRequest) {
       try {
         await notifyByRoles(
           cs.company_id,
-          ["company_admin", "telemarketing_director", "commercial_director"],
+          [
+            "company_admin",
+            "commercial_director",
+            "telemarketing_director",
+            "technical_director",
+          ],
           {
             kind: "lead.expired",
             severity: "warning",
-            title: "Lead caducado",
-            body: name,
+            title: "Lead caducado y desasignado",
+            body: `${name} (${l.origin === "tmk" ? "TMK" : "comercial"}). Reasignar desde /leads.`,
             subject_type: "lead",
             subject_id: l.id,
             action_url: `/leads/${l.id}`,
@@ -135,6 +191,9 @@ export async function GET(req: NextRequest) {
       }
       stats.leads_expired += 1;
     }
+    // silenciar variables no usadas
+    void maxDays;
+    void upperCutoff;
   }
 
   // 2) Instalaciones para mañana -----------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -16,7 +16,6 @@ import {
 import { LeadBulkToolbar } from "./bulk-toolbar";
 import { STATUS_LABEL, ORIGIN_LABEL } from "./schemas";
 import { StatusPill } from "@/shared/components/status-pill";
-import { Input } from "@/shared/ui/input";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
@@ -59,7 +58,6 @@ function rowBg(status: string): string {
 
 export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [search, setSearch] = useState("");
   const [pending, startTransition] = useTransition();
   const ask = useConfirm();
   const router = useRouter();
@@ -120,29 +118,10 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
     );
   }
 
-  // Filtro de búsqueda. IMPORTANTE: filtra también por legal_name aunque la
-  // razón social no se muestre visualmente (el usuario teclea "salor de
-  // relojeria sl" y aparece "Turmalina" porque su razón social coincide).
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return leads;
-    return leads.filter((l) => {
-      const haystack = [
-        l.display_name,
-        l.legal_name,
-        l.contact_name,
-        l.email,
-        l.phone_primary,
-        l.address_street,
-        l.address_city,
-        l.address_province,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [leads, search]);
+  // La búsqueda se hace ahora server-side desde el formulario de filtros
+  // del listado (`q=`). Mantenemos `visible` como alias de `leads` para no
+  // romper el resto del render.
+  const visible = leads;
 
   return (
     <div className="space-y-3">
@@ -154,17 +133,8 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
         />
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="Buscar (razón social, nombre, email, teléfono, ciudad…)"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-9 max-w-md"
-        />
-        <span className="text-xs text-muted-foreground">
-          {visible.length} de {leads.length}
-        </span>
-      </div>
+      {/* Búsqueda eliminada — se hace desde el formulario de filtros del
+          listado (server-side) para no duplicar UX. */}
 
       {lostReasonOpen && (
         <div

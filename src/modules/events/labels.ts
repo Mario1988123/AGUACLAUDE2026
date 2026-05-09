@@ -18,6 +18,7 @@ export const EVENT_LABEL: Record<string, string> = {
   "maintenance.completed": "Mantenimiento completado",
   "wallet.payment_recorded": "Pago registrado",
   "lead.expired": "Lead caducado",
+  "lead.unassigned_by_expiry": "Lead desasignado por caducidad",
   "lead.reassigned": "Lead reasignado",
   "lead.reopened_from_lost": "Lead reabierto desde venta perdida",
   "lead.tampered": "Cambios sospechosos en lead",

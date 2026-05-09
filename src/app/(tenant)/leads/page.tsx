@@ -15,7 +15,12 @@ export const dynamic = "force-dynamic";
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; scope?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    scope?: string;
+    assigned?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const session = await requireSession();
@@ -27,8 +32,14 @@ export default async function LeadsPage({
     session.roles.includes("telemarketing_director") ||
     session.roles.includes("technical_director");
   const scope = isUpperLevel ? (sp.scope === "mine" ? "mine" : "all") : "mine";
+  const assignedFilter = isUpperLevel && sp.assigned ? sp.assigned : undefined;
   const [leads, team] = await Promise.all([
-    listLeads({ status, q: sp.q, scope }),
+    listLeads({
+      status,
+      q: sp.q,
+      scope,
+      assigned_user_id: assignedFilter as string | "unassigned" | undefined,
+    }),
     isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
   ]);
 
@@ -101,6 +112,21 @@ export default async function LeadsPage({
             </option>
           ))}
         </select>
+        {isUpperLevel && (
+          <select
+            name="assigned"
+            defaultValue={assignedFilter ?? ""}
+            className="flex h-11 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">Cualquier comercial</option>
+            <option value="unassigned">⚠ Sin asignar</option>
+            {team.map((u) => (
+              <option key={u.user_id} value={u.user_id}>
+                {u.full_name}
+              </option>
+            ))}
+          </select>
+        )}
         <Button type="submit" variant="outline">
           Filtrar
         </Button>

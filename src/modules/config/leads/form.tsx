@@ -8,14 +8,19 @@ import { notify } from "@/shared/hooks/use-toast";
 import { updateLeadsConfigAction, type LeadsConfig } from "./actions";
 
 export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
-  const [days, setDays] = useState(initial.expiry_days);
+  const [tmkDays, setTmkDays] = useState(initial.expiry_days_tmk);
+  const [commercialDays, setCommercialDays] = useState(initial.expiry_days_commercial);
   const [pending, startTransition] = useTransition();
 
   function save(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
       try {
-        await updateLeadsConfigAction({ expiry_days: days });
+        await updateLeadsConfigAction({
+          expiry_days_tmk: tmkDays,
+          expiry_days_commercial: commercialDays,
+          expiry_days: commercialDays, // legacy fallback
+        });
         notify.success("Configuración guardada");
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
@@ -24,22 +29,44 @@ export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
   }
 
   return (
-    <form onSubmit={save} className="space-y-4">
-      <div className="space-y-1.5">
-        <Label htmlFor="days">Días máx. sin acción antes de marcar como caducado</Label>
-        <Input
-          id="days"
-          type="number"
-          min={1}
-          max={365}
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-          className="max-w-[160px]"
-        />
-        <p className="text-xs text-muted-foreground">
-          Si un lead lleva más de este número de días sin contacto ni cambio de estado, queda
-          marcado como caducado y nivel 2 puede reasignarlo o enviarlo a ventas perdidas.
-        </p>
+    <form onSubmit={save} className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="tmk">Leads de TMK (días)</Label>
+          <Input
+            id="tmk"
+            type="number"
+            min={1}
+            max={365}
+            value={tmkDays}
+            onChange={(e) => setTmkDays(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground">
+            Default: 15 días. Pasados estos días sin acción, el lead se
+            desasigna y queda visible para nivel 1/2.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="comm">Leads creados por comercial (días)</Label>
+          <Input
+            id="comm"
+            type="number"
+            min={1}
+            max={365}
+            value={commercialDays}
+            onChange={(e) => setCommercialDays(Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground">
+            Default: 30 días. Aplica a leads con cualquier origen distinto
+            de TMK.
+          </p>
+        </div>
+      </div>
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        ⚠ Al caducar: el lead se marca como <strong>caducado</strong>, se
+        <strong> desasigna del comercial</strong>, queda en el evento del
+        timeline el comercial anterior y se notifica a admin / dirección
+        comercial / dirección TMK / dirección técnica para que reasignen.
       </div>
       <div className="flex justify-end">
         <Button type="submit" disabled={pending}>

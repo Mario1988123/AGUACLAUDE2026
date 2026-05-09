@@ -11,6 +11,7 @@ const ICON_MAP: Record<string, keyof typeof Icons> = {
   "lead.created": "UserPlus",
   "lead.contacted": "Phone",
   "lead.status_changed": "RefreshCw",
+  "lead.unassigned_by_expiry": "UserMinus",
   "customer.created": "Users",
   "customer.updated": "Pencil",
   "proposal.created": "FileText",
@@ -60,6 +61,20 @@ export async function Timeline({ subjectType, subjectId }: Props) {
               {ev.actor_name && (
                 <div className="mt-0.5 text-xs text-muted-foreground">por {ev.actor_name}</div>
               )}
+              {ev.kind === "lead.unassigned_by_expiry" &&
+                (ev.payload as { previous_assigned_user_name?: string | null } | null)
+                  ?.previous_assigned_user_name && (
+                  <div className="mt-0.5 text-xs text-amber-700">
+                    Estaba asignado a:{" "}
+                    <strong>
+                      {(
+                        ev.payload as {
+                          previous_assigned_user_name?: string | null;
+                        }
+                      ).previous_assigned_user_name}
+                    </strong>
+                  </div>
+                )}
             </div>
           </li>
         );

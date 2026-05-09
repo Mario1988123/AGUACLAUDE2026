@@ -16,6 +16,7 @@ export async function listLeads(filters?: {
   status?: LeadStatus;
   q?: string;
   scope?: "mine" | "all";
+  assigned_user_id?: string | "unassigned";
 }): Promise<LeadListItem[]> {
   const session = await requireSession();
   const { resolveVisibleUserIds, isLevel1 } = await import("@/shared/lib/auth/role-scope");
@@ -64,6 +65,14 @@ export async function listLeads(filters?: {
     query = query.or(
       `legal_name.ilike.%${q}%,trade_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone_primary.ilike.%${q}%`,
     );
+  }
+
+  // Filtro por comercial asignado (solo nivel 1/2 puede usarlo de verdad —
+  // niveles 3 ya están restringidos arriba a sus propios leads).
+  if (filters?.assigned_user_id === "unassigned") {
+    query = query.is("assigned_user_id", null);
+  } else if (filters?.assigned_user_id) {
+    query = query.eq("assigned_user_id", filters.assigned_user_id);
   }
 
   const { data, error } = await query;
