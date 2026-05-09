@@ -108,6 +108,13 @@ export default async function LeadDetailPage({
             >
               📊 Calcular ahorro
             </Link>
+            <Link
+              href={`/pruebas-gratuitas/nueva?lead_id=${lead.id}` as never}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-bold text-foreground hover:bg-muted hover:border-primary/40"
+              title="Entregar equipo en prueba sin contrato"
+            >
+              🎁 Prueba gratuita
+            </Link>
             <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
             {!hasProposals && <ConvertLeadButton leadId={lead.id} alreadyConverted={false} />}
             {canReassign && (

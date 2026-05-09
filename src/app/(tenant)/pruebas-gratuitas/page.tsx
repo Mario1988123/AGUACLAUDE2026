@@ -3,6 +3,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { NewFreeTrialButton } from "@/modules/free-trials/new-trial-button";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +50,12 @@ export default async function PruebasGratuitasPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Pruebas gratuitas</h1>
-        <p className="text-sm text-muted-foreground">{rows.length} pruebas</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Pruebas gratuitas</h1>
+          <p className="text-sm text-muted-foreground">{rows.length} pruebas</p>
+        </div>
+        <NewFreeTrialButton />
       </div>
 
       <Card>
