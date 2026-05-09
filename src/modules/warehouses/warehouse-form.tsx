@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Plus, Pencil, Trash2, Eye } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -73,6 +74,11 @@ export function WarehousesManager({ warehouses, teamMembers = [] }: Props) {
               </div>
             </div>
             <div className="flex gap-1.5">
+              <Button variant="ghost" size="icon" asChild aria-label="Ver almacén">
+                <Link href={`/almacenes/${w.id}` as never} title="Ver stock, traspasos, inventario, historial">
+                  <Eye className="h-4 w-4" />
+                </Link>
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => setEditing(w)} aria-label="Editar">
                 <Pencil className="h-4 w-4" />
               </Button>
