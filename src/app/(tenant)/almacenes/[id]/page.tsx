@@ -8,6 +8,8 @@ import {
 } from "@/modules/warehouses/location-actions";
 import { listPurchases, getPurchase } from "@/modules/warehouses/purchase-actions";
 import { listReservations } from "@/modules/warehouses/reservation-actions";
+import { listNonNewStock } from "@/modules/warehouses/used-stock-actions";
+import { UsedStockPanel } from "@/modules/warehouses/used-stock-panel";
 import { createClient } from "@/shared/lib/supabase/server";
 import { listProducts } from "@/modules/products/actions";
 import { WarehouseDetailTabs } from "@/modules/warehouses/warehouse-detail-tabs";
@@ -46,6 +48,7 @@ export default async function WarehouseDetailPage({
     listPurchases(id).catch(() => []),
     listReservations({ warehouse_id: id, status: "active" }).catch(() => []),
   ]);
+  const usedStock = await listNonNewStock(id).catch(() => []);
 
   // Detalles de compras (carga upfront — cuando crezca, paginar / lazy)
   const purchaseDetailsList = await Promise.all(
@@ -124,6 +127,19 @@ export default async function WarehouseDetailPage({
           />
         </CardContent>
       </Card>
+
+      {usedStock.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              ♻ Stock no-nuevo (usado / dañado / reacondicionado)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <UsedStockPanel rows={usedStock} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

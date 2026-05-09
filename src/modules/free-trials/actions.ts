@@ -158,11 +158,20 @@ export async function installFreeTrialAction(id: string) {
   const now = new Date();
   const { data: trial } = await supabase
     .from("free_trials")
-    .select("id, duration_days, status, assigned_installer_user_id")
+    .select(
+      "id, duration_days, status, assigned_installer_user_id, customer_id, lead_id, installation_address_id",
+    )
     .eq("id", id)
     .single();
   if (!trial) throw new Error("No encontrada");
-  const t = trial as { duration_days: number; status: string; assigned_installer_user_id: string | null };
+  const t = trial as {
+    duration_days: number;
+    status: string;
+    assigned_installer_user_id: string | null;
+    customer_id: string | null;
+    lead_id: string | null;
+    installation_address_id: string | null;
+  };
   if (t.status === "installed" || t.status === "accepted") {
     throw new Error("Ya instalada");
   }
@@ -230,16 +239,106 @@ export async function installFreeTrialAction(id: string) {
     }
   }
 
+  // Crear installation kind='free_trial' status='completed' enlazada
+  // a la prueba (installations.free_trial_id existe en schema). Con
+  // customer_id si lo conocemos. Esto permite que aparezca en
+  // /instalaciones, en el timeline y se enlace al contrato al aceptar.
+  let createdInstallationId: string | null = null;
+  try {
+    const year = now.getFullYear();
+    const yearPrefix = `I-${year}-`;
+    const { data: lastCoded } = await admin
+      .from("installations")
+      .select("reference_code")
+      .eq("company_id", session.company_id)
+      .like("reference_code", `${yearPrefix}%`)
+      .order("reference_code", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let nextNum = 1;
+    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
+    if (lastCode) {
+      const m = lastCode.match(/-(\d+)$/);
+      if (m) nextNum = parseInt(m[1]!, 10) + 1;
+    }
+    const refCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    const { data: inst, error: instErr } = await admin
+      .from("installations")
+      .insert({
+        company_id: session.company_id,
+        kind: "free_trial",
+        status: "completed",
+        reference_code: refCode,
+        customer_id: t.customer_id,
+        free_trial_id: id,
+        address_id: t.installation_address_id,
+        installer_user_id: installerId,
+        scheduled_at: now.toISOString(),
+        started_at: now.toISOString(),
+        completed_at: now.toISOString(),
+        notes: "Instalación de prueba gratuita",
+      })
+      .select("id")
+      .single();
+    if (!instErr && inst) {
+      createdInstallationId = (inst as { id: string }).id;
+      // installation_items
+      const { data: ftItems } = await admin
+        .from("free_trial_items")
+        .select("product_id, quantity, serial_number")
+        .eq("free_trial_id", id);
+      const ftList = ((ftItems ?? []) as Array<{
+        product_id: string;
+        quantity: number;
+        serial_number: string | null;
+      }>);
+      if (ftList.length > 0) {
+        await admin.from("installation_items").insert(
+          ftList.map((it) => ({
+            installation_id: createdInstallationId,
+            company_id: session.company_id,
+            product_id: it.product_id,
+            quantity: it.quantity,
+            serial_number: it.serial_number,
+          })),
+        );
+
+        // customer_equipment SOLO si la prueba ya tiene customer_id.
+        // Si es lead, se crearán al aceptar (acceptFreeTrialAction).
+        if (t.customer_id) {
+          await admin.from("customer_equipment").insert(
+            ftList.map((it) => ({
+              company_id: session.company_id,
+              customer_id: t.customer_id,
+              product_id: it.product_id,
+              installation_id: createdInstallationId,
+              address_id: t.installation_address_id,
+              serial_number: it.serial_number,
+              installed_at: now.toISOString().slice(0, 10),
+              notes: "Equipo en prueba gratuita",
+            })),
+          );
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[installFreeTrial] installation create:", e);
+  }
+
   await supabase.from("events").insert({
     company_id: session.company_id,
     subject_type: "free_trial",
     subject_id: id,
     kind: "free_trial.installed",
-    payload: { expires_at: expires.toISOString() },
+    payload: {
+      expires_at: expires.toISOString(),
+      installation_id: createdInstallationId,
+    },
     actor_user_id: session.user_id,
   });
   revalidatePath(`/pruebas-gratuitas/${id}`);
   revalidatePath("/pruebas-gratuitas");
+  if (t.customer_id) revalidatePath(`/clientes/${t.customer_id}`);
 }
 
 /**
@@ -428,15 +527,73 @@ export async function acceptFreeTrialAction(input: {
     }
 
     // 6) Si ya hay installation enlazada (vía installations.free_trial_id),
-    // la enlazamos también al nuevo contract_id.
+    // la enlazamos también al nuevo contract_id Y al customer_id (que
+    // puede no existir aún si la prueba era de un lead).
     try {
       await admin
         .from("installations")
-        .update({ contract_id: contractId })
-        .eq("free_trial_id", trial.id)
-        .is("contract_id", null);
+        .update({ contract_id: contractId, customer_id: customerId })
+        .eq("free_trial_id", trial.id);
     } catch {
       /* no-op */
+    }
+
+    // 7) Backfill customer_equipment para pruebas a lead: ahora que el
+    // customer existe, creamos los equipos del cliente apuntando a la
+    // installation que se creó al instalar la prueba. Idempotente: si ya
+    // existe (prueba a customer), no duplicamos.
+    try {
+      const { data: existingCE } = await admin
+        .from("customer_equipment")
+        .select("id")
+        .eq("customer_id", customerId)
+        .in(
+          "installation_id",
+          [
+            ...(
+              (await admin
+                .from("installations")
+                .select("id")
+                .eq("free_trial_id", trial.id)
+                .then((r: { data: Array<{ id: string }> | null }) => r.data ?? [])) as Array<{ id: string }>
+            ).map((x) => x.id),
+          ],
+        );
+      if (((existingCE ?? []) as Array<unknown>).length === 0) {
+        const { data: instRow } = await admin
+          .from("installations")
+          .select("id, address_id")
+          .eq("free_trial_id", trial.id)
+          .maybeSingle();
+        const inst = instRow as { id: string; address_id: string | null } | null;
+        if (inst) {
+          const { data: ftItems } = await admin
+            .from("free_trial_items")
+            .select("product_id, quantity, serial_number")
+            .eq("free_trial_id", trial.id);
+          const list = ((ftItems ?? []) as Array<{
+            product_id: string;
+            quantity: number;
+            serial_number: string | null;
+          }>);
+          if (list.length > 0) {
+            await admin.from("customer_equipment").insert(
+              list.map((it) => ({
+                company_id: session.company_id,
+                customer_id: customerId,
+                product_id: it.product_id,
+                installation_id: inst.id,
+                address_id: inst.address_id ?? trial.installation_address_id,
+                serial_number: it.serial_number,
+                installed_at: new Date().toISOString().slice(0, 10),
+                notes: "Equipo de prueba gratuita aceptada",
+              })),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[acceptFreeTrial] customer_equipment backfill:", e);
     }
 
     // 7) Marcar la prueba aceptada
