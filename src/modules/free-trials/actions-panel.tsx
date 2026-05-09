@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Play, X, Undo2, Check, FileSignature } from "lucide-react";
+import { Play, X, Undo2, Check, FileSignature, FileDown, Wrench } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
@@ -16,19 +16,25 @@ import {
 export function FreeTrialActionsPanel({
   trialId,
   status,
+  isProvisional,
 }: {
   trialId: string;
   status: string;
+  isProvisional?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [reason, setReason] = useState("");
 
-  function install() {
+  function install(opts: { is_provisional: boolean }) {
     startTransition(async () => {
       try {
-        await installFreeTrialAction(trialId);
-        notify.success("Prueba instalada");
+        await installFreeTrialAction(trialId, opts);
+        notify.success(
+          opts.is_provisional
+            ? "Instalada provisionalmente"
+            : "Instalada definitivamente",
+        );
         location.reload();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
@@ -64,10 +70,48 @@ export function FreeTrialActionsPanel({
 
   if (status === "draft" || status === "scheduled") {
     return (
-      <Button onClick={install} disabled={pending} size="lg" className="w-full">
-        <Play className="h-5 w-5" />
-        {pending ? "Instalando..." : "Marcar instalada"}
-      </Button>
+      <div className="space-y-3">
+        <a
+          href={`/api/pdf/free-trial/${trialId}`}
+          target="_blank"
+          rel="noopener"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-sm font-semibold hover:bg-muted"
+        >
+          <FileDown className="h-4 w-4" /> Imprimir albarán para firmar
+        </a>
+        <div className="rounded-xl border-2 border-success/40 bg-success/5 p-3 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Instalación <strong>definitiva</strong>: trabajo profesional
+            desde el principio. Si el cliente acepta, no hay que volver a
+            tocar nada.
+          </p>
+          <Button
+            onClick={() => install({ is_provisional: false })}
+            disabled={pending}
+            size="lg"
+            className="w-full gap-2"
+            variant="success"
+          >
+            <Play className="h-5 w-5" /> Instalar definitivamente
+          </Button>
+        </div>
+        <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-3 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Instalación <strong>provisional</strong>: conexión rápida para
+            que el cliente pruebe. Si acepta, habrá que reubicar/instalar
+            bien antes de validar el contrato.
+          </p>
+          <Button
+            onClick={() => install({ is_provisional: true })}
+            disabled={pending}
+            size="lg"
+            className="w-full gap-2"
+            variant="warning"
+          >
+            <Play className="h-5 w-5" /> Instalar provisionalmente
+          </Button>
+        </div>
+      </div>
     );
   }
   function accept() {
@@ -88,6 +132,22 @@ export function FreeTrialActionsPanel({
   if (status === "installed") {
     return (
       <div className="space-y-4">
+        {isProvisional && (
+          <div className="rounded-xl border-2 border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground">
+            <Wrench className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />
+            <strong>Instalación provisional.</strong> Al aceptar, recuerda
+            crear una orden de <strong>reubicación</strong> desde la ficha
+            del cliente para hacer la instalación definitiva.
+          </div>
+        )}
+        <a
+          href={`/api/pdf/free-trial/${trialId}`}
+          target="_blank"
+          rel="noopener"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-sm font-semibold hover:bg-muted"
+        >
+          <FileDown className="h-4 w-4" /> Albarán de entrega
+        </a>
         <Button
           onClick={accept}
           disabled={pending}

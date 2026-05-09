@@ -63,6 +63,10 @@ export default async function FreeTrialDetailPage({
             <Badge variant={STATUS_VARIANT[trial.status]}>
               {STATUS_LABEL[trial.status] ?? trial.status}
             </Badge>
+            {(trial as { is_provisional_install?: boolean })
+              .is_provisional_install && (
+              <Badge variant="warning">⚙ Instalación provisional</Badge>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {trial.duration_days} días de prueba
@@ -139,7 +143,14 @@ export default async function FreeTrialDetailPage({
             <CardTitle>Acciones</CardTitle>
           </CardHeader>
           <CardContent>
-            <FreeTrialActionsPanel trialId={trial.id} status={trial.status} />
+            <FreeTrialActionsPanel
+              trialId={trial.id}
+              status={trial.status}
+              isProvisional={
+                (trial as { is_provisional_install?: boolean })
+                  .is_provisional_install ?? false
+              }
+            />
           </CardContent>
         </Card>
       </div>

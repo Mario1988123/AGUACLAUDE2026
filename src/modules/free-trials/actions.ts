@@ -77,21 +77,31 @@ export async function getFreeTrial(id: string): Promise<FreeTrialRow & { items: 
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const [{ data: trial, error: e1 }, { data: items }] = await Promise.all([
-    supabase
+  const cols =
+    "id, reference_code, status, customer_id, lead_id, installation_address_id, scheduled_at, installed_at, expires_at, decided_at, decided_outcome, removed_at, rejected_reason, generated_contract_id, duration_days, conditions_text, conditions_signed, assigned_installer_user_id, notes, created_at, is_provisional_install";
+  const colsLegacy =
+    "id, reference_code, status, customer_id, lead_id, installation_address_id, scheduled_at, installed_at, expires_at, decided_at, decided_outcome, removed_at, rejected_reason, generated_contract_id, duration_days, conditions_text, conditions_signed, assigned_installer_user_id, notes, created_at";
+  let trialRes = await supabase
+    .from("free_trials")
+    .select(cols)
+    .eq("id", id)
+    .single();
+  if (
+    trialRes.error &&
+    /is_provisional_install/i.test(trialRes.error.message ?? "")
+  ) {
+    trialRes = await supabase
       .from("free_trials")
-      .select(
-        "id, reference_code, status, customer_id, lead_id, installation_address_id, scheduled_at, installed_at, expires_at, decided_at, decided_outcome, removed_at, rejected_reason, generated_contract_id, duration_days, conditions_text, conditions_signed, assigned_installer_user_id, notes, created_at",
-      )
+      .select(colsLegacy)
       .eq("id", id)
-      .single(),
-    supabase
-      .from("free_trial_items")
-      .select("id, product_id, product_name_snapshot, quantity, serial_number")
-      .eq("free_trial_id", id),
-  ]);
-  if (e1) throw e1;
-  return { ...(trial as FreeTrialRow), items: (items ?? []) } as never;
+      .single();
+  }
+  if (trialRes.error) throw trialRes.error;
+  const { data: items } = await supabase
+    .from("free_trial_items")
+    .select("id, product_id, product_name_snapshot, quantity, serial_number")
+    .eq("free_trial_id", id);
+  return { ...(trialRes.data as FreeTrialRow), items: (items ?? []) } as never;
 }
 
 export async function createFreeTrialAction(input: unknown) {
@@ -150,7 +160,10 @@ export async function createFreeTrialAction(input: unknown) {
   return id;
 }
 
-export async function installFreeTrialAction(id: string) {
+export async function installFreeTrialAction(
+  id: string,
+  options?: { is_provisional?: boolean },
+) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -183,14 +196,21 @@ export async function installFreeTrialAction(id: string) {
   // prueba ANTES de que el técnico marcara como instalada → silent fail.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const r = await admin
-    .from("free_trials")
-    .update({
-      status: "installed",
-      installed_at: now.toISOString(),
-      expires_at: expires.toISOString(),
-    })
-    .eq("id", id);
+  const updatePayload: Record<string, unknown> = {
+    status: "installed",
+    installed_at: now.toISOString(),
+    expires_at: expires.toISOString(),
+  };
+  if (options?.is_provisional !== undefined) {
+    updatePayload.is_provisional_install = options.is_provisional;
+  }
+  let r = await admin.from("free_trials").update(updatePayload).eq("id", id);
+  // Defensa: si la columna is_provisional_install no existe (migración no
+  // aplicada), reintentar sin ella.
+  if (r.error && /is_provisional_install/i.test(r.error.message ?? "")) {
+    delete updatePayload.is_provisional_install;
+    r = await admin.from("free_trials").update(updatePayload).eq("id", id);
+  }
   if (r.error) throw new Error(r.error.message);
   const installerId = t.assigned_installer_user_id;
   let warehouseId: string | null = null;
