@@ -400,6 +400,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 5) Recalcular alertas inteligentes de stock por empresa
+  const stockAlertsStats = { companies: 0, alerts: 0, failed: 0 };
+  try {
+    const { data: companiesAll } = await admin
+      .from("companies")
+      .select("id")
+      .is("deleted_at", null);
+    const { recomputeStockAlertsForCompany } = await import(
+      "@/modules/warehouses/alert-actions"
+    );
+    for (const c of (companiesAll ?? []) as Array<{ id: string }>) {
+      const r = await recomputeStockAlertsForCompany(c.id);
+      stockAlertsStats.companies += 1;
+      if (r.ok) stockAlertsStats.alerts += r.total;
+      else stockAlertsStats.failed += 1;
+    }
+  } catch (e) {
+    console.error("[cron/daily] stock alerts recompute failed:", e);
+  }
+
   // Procesar cola Verifactu pendiente (envíos a AEAT). En Vercel Hobby
   // solo tenemos 1 cron diario → lo invocamos desde aquí. Para mayor
   // frecuencia (cada 5-15min) hace falta cron externo o Vercel Pro.
@@ -432,7 +452,12 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    stats: { ...stats, verifactu, savings_scraper: scraperStats },
+    stats: {
+      ...stats,
+      verifactu,
+      savings_scraper: scraperStats,
+      stock_alerts: stockAlertsStats,
+    },
     ranAt: new Date().toISOString(),
   });
 }

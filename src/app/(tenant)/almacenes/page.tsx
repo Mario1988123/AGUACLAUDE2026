@@ -9,16 +9,19 @@ import { WarehousesManager } from "@/modules/warehouses/warehouse-form";
 import { StockSummaryCards } from "@/modules/warehouses/stock-summary-cards";
 import { CreateLoadingRequestButton } from "@/modules/warehouses/loading-request-form";
 import { DeliverLoadingRequestButton } from "@/modules/warehouses/deliver-button";
+import { listStockAlerts } from "@/modules/warehouses/alert-actions";
+import { StockAlertsPanel } from "@/modules/warehouses/alerts-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function AlmacenesPage() {
-  const [warehouses, requests, team, stockSummary, products] = await Promise.all([
+  const [warehouses, requests, team, stockSummary, products, alerts] = await Promise.all([
     listWarehouses(),
     listLoadingRequests(),
     listTeamMembers(),
     listWarehouseStockSummary().catch(() => []),
     listProducts().catch(() => []),
+    listStockAlerts({ status: "active" }).catch(() => []),
   ]);
   const whMap = new Map(warehouses.map((w) => [w.id, w.name]));
   const totalAlerts = stockSummary.reduce((s, w) => s + w.low_stock_alerts, 0);
@@ -32,6 +35,20 @@ export default async function AlmacenesPage() {
           {totalAlerts > 0 && ` · ${totalAlerts} alertas stock bajo`}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            🧠 Alertas inteligentes
+            {alerts.length > 0 && (
+              <Badge variant="destructive">{alerts.length}</Badge>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <StockAlertsPanel alerts={alerts} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
