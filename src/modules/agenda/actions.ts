@@ -395,6 +395,46 @@ export async function listInstallers(): Promise<{ user_id: string; full_name: st
   return ((data as { user_id: string; full_name: string }[] | null) ?? []);
 }
 
+/**
+ * Usuarios elegibles para asignárseles una furgoneta.
+ *
+ * Decisión usuario 2026-05-09: incluye admin, director técnico,
+ * instalador, director comercial y comercial (porque a veces llevan
+ * piezas pequeñas al cliente). EXCLUYE telemarketer y director TMK.
+ */
+export async function listVanCandidates(): Promise<{ user_id: string; full_name: string }[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = (await createAdminClient()) as any;
+  const validRoles = [
+    "company_admin",
+    "technical_director",
+    "installer",
+    "commercial_director",
+    "sales_rep",
+  ];
+  const { data: roles } = await admin
+    .from("user_roles")
+    .select("user_id")
+    .eq("company_id", session.company_id)
+    .in("role_key", validRoles)
+    .is("revoked_at", null);
+  const ids = Array.from(
+    new Set(((roles as Array<{ user_id: string }> | null) ?? []).map((r) => r.user_id)),
+  );
+  if (ids.length === 0) return [];
+
+  const { data } = await admin
+    .from("user_profiles")
+    .select("user_id, full_name")
+    .eq("company_id", session.company_id)
+    .in("user_id", ids)
+    .order("full_name");
+  return ((data as { user_id: string; full_name: string }[] | null) ?? []);
+}
+
 export async function createAgendaEventAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");

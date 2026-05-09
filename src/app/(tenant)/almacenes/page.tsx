@@ -1,6 +1,6 @@
 import { listLoadingRequests, listWarehouses } from "@/modules/warehouses/actions";
 import { listWarehouseStockSummary } from "@/modules/warehouses/stock-summary-actions";
-import { listTeamMembers } from "@/modules/agenda/actions";
+import { listVanCandidates } from "@/modules/agenda/actions";
 import { listProducts } from "@/modules/products/actions";
 import { STATUS_LABEL_LR } from "@/modules/warehouses/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -20,7 +20,7 @@ export default async function AlmacenesPage() {
     await Promise.all([
       listWarehouses(),
       listLoadingRequests(),
-      listTeamMembers(),
+      listVanCandidates(),
       listWarehouseStockSummary().catch(() => []),
       listProducts().catch(() => []),
       listStockAlerts({ status: "active" }).catch(() => []),
