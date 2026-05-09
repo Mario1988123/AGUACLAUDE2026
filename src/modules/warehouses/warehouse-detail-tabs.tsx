@@ -12,6 +12,7 @@ import {
   MapPin,
   Trash2,
   Pencil,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -32,11 +33,15 @@ import {
   type WarehouseLocation,
   type ProductLocation,
 } from "./location-actions";
+import { PurchasesTab } from "./purchases-tab";
+import type { PurchaseRow, PurchaseDetail } from "./purchase-actions";
 import type { WarehouseStockDetail } from "./stock-summary-actions";
 
 interface ProductLite {
   id: string;
   name: string;
+  default_supplier_name?: string | null;
+  cost_cents?: number | null;
 }
 interface WarehouseLite {
   id: string;
@@ -46,6 +51,7 @@ interface WarehouseLite {
 const TAB_LABEL: Record<string, string> = {
   stock: "Stock",
   locations: "Ubicaciones",
+  purchases: "Compras",
   transfer: "Traspasos",
   inventory: "Inventario",
   history: "Histórico",
@@ -56,6 +62,7 @@ const MOVEMENT_LABEL: Record<string, string> = {
   outbound_install: "Salida instalación",
   outbound_trial: "Salida prueba",
   outbound_maintenance: "Salida mantenimiento",
+  outbound_return_supplier: "Devolución proveedor",
   transfer_out: "Traspaso salida",
   transfer_in: "Traspaso entrada",
   return: "Devolución",
@@ -68,6 +75,7 @@ const MOVEMENT_VARIANT: Record<string, "default" | "secondary" | "success" | "wa
   outbound_install: "warning",
   outbound_trial: "warning",
   outbound_maintenance: "warning",
+  outbound_return_supplier: "destructive",
   transfer_out: "secondary",
   transfer_in: "default",
   return: "default",
@@ -83,6 +91,8 @@ export function WarehouseDetailTabs({
   otherWarehouses,
   locations,
   productLocations,
+  purchases,
+  purchaseDetails,
 }: {
   warehouseId: string;
   stock: WarehouseStockDetail[];
@@ -91,33 +101,38 @@ export function WarehouseDetailTabs({
   otherWarehouses: WarehouseLite[];
   locations: WarehouseLocation[];
   productLocations: ProductLocation[];
+  purchases: PurchaseRow[];
+  purchaseDetails: Map<string, PurchaseDetail>;
 }) {
   const [tab, setTab] = useState<
-    "stock" | "locations" | "transfer" | "inventory" | "history"
+    "stock" | "locations" | "purchases" | "transfer" | "inventory" | "history"
   >("stock");
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 border-b">
-        {(["stock", "locations", "transfer", "inventory", "history"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-              tab === t
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t === "stock" && <Boxes className="h-4 w-4" />}
-            {t === "locations" && <MapPin className="h-4 w-4" />}
-            {t === "transfer" && <ArrowRightLeft className="h-4 w-4" />}
-            {t === "inventory" && <ClipboardList className="h-4 w-4" />}
-            {t === "history" && <History className="h-4 w-4" />}
-            {TAB_LABEL[t]}
-          </button>
-        ))}
+        {(["stock", "locations", "purchases", "transfer", "inventory", "history"] as const).map(
+          (t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              className={`inline-flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
+                tab === t
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t === "stock" && <Boxes className="h-4 w-4" />}
+              {t === "locations" && <MapPin className="h-4 w-4" />}
+              {t === "purchases" && <Truck className="h-4 w-4" />}
+              {t === "transfer" && <ArrowRightLeft className="h-4 w-4" />}
+              {t === "inventory" && <ClipboardList className="h-4 w-4" />}
+              {t === "history" && <History className="h-4 w-4" />}
+              {TAB_LABEL[t]}
+            </button>
+          ),
+        )}
       </div>
 
       {tab === "stock" && (
@@ -131,6 +146,14 @@ export function WarehouseDetailTabs({
       )}
       {tab === "locations" && (
         <LocationsTab warehouseId={warehouseId} locations={locations} />
+      )}
+      {tab === "purchases" && (
+        <PurchasesTab
+          warehouseId={warehouseId}
+          purchases={purchases}
+          details={purchaseDetails}
+          products={products}
+        />
       )}
       {tab === "transfer" && (
         <TransferTab

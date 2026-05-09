@@ -6,6 +6,8 @@ import {
   listWarehouseLocations,
   listProductLocations,
 } from "@/modules/warehouses/location-actions";
+import { listPurchases, getPurchase } from "@/modules/warehouses/purchase-actions";
+import { createClient } from "@/shared/lib/supabase/server";
 import { listProducts } from "@/modules/products/actions";
 import { WarehouseDetailTabs } from "@/modules/warehouses/warehouse-detail-tabs";
 import { KIND_LABEL } from "@/modules/warehouses/constants";
@@ -24,7 +26,7 @@ export default async function WarehouseDetailPage({
   const wh = await getWarehouse(id);
   if (!wh) notFound();
 
-  const [stock, movements, products, allWarehouses, locations, productLocations] =
+  const [stock, movements, products, allWarehouses, locations, productLocations, purchases] =
     await Promise.all([
       getWarehouseStockDetail(id).catch(() => []),
       listStockMovements(id).catch(() => []),
@@ -32,10 +34,49 @@ export default async function WarehouseDetailPage({
       listWarehouses().catch(() => []),
       listWarehouseLocations(id).catch(() => []),
       listProductLocations(id).catch(() => []),
+      listPurchases(id).catch(() => []),
     ]);
 
+  // Detalles de compras (carga upfront — cuando crezca, paginar / lazy)
+  const purchaseDetailsList = await Promise.all(
+    purchases.map((p) => getPurchase(p.id).catch(() => null)),
+  );
+  const purchaseDetails = new Map(
+    purchaseDetailsList
+      .filter((d): d is NonNullable<typeof d> => d !== null)
+      .map((d) => [d.id, d]),
+  );
+
   const otherWarehouses = allWarehouses.filter((w) => w.id !== id);
-  const productLite = products.map((p) => ({ id: p.id, name: p.name }));
+  // Para la tab Compras precargamos coste actual + proveedor habitual
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = (await createClient()) as any;
+  let extra: Array<{
+    id: string;
+    cost_cents: number | null;
+    default_supplier_name: string | null;
+  }> = [];
+  if (products.length > 0) {
+    try {
+      const { data } = await sb
+        .from("products")
+        .select("id, cost_cents, default_supplier_name")
+        .in(
+          "id",
+          products.map((p) => p.id),
+        );
+      extra = (data ?? []) as typeof extra;
+    } catch {
+      /* migración aún no aplicada */
+    }
+  }
+  const extraMap = new Map(extra.map((e) => [e.id, e]));
+  const productLite = products.map((p) => ({
+    id: p.id,
+    name: p.name,
+    cost_cents: extraMap.get(p.id)?.cost_cents ?? null,
+    default_supplier_name: extraMap.get(p.id)?.default_supplier_name ?? null,
+  }));
 
   return (
     <div className="space-y-6">
@@ -67,6 +108,8 @@ export default async function WarehouseDetailPage({
             otherWarehouses={otherWarehouses.map((w) => ({ id: w.id, name: w.name }))}
             locations={locations}
             productLocations={productLocations}
+            purchases={purchases}
+            purchaseDetails={purchaseDetails}
           />
         </CardContent>
       </Card>
