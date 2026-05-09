@@ -253,7 +253,29 @@ export default async function CustomerDetailPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <CustomerEquipmentList equipment={equipment} />
+            <CustomerEquipmentList
+              equipment={equipment}
+              customerId={id}
+              addresses={addresses.map((a) => ({
+                id: a.id,
+                label: [
+                  a.label,
+                  a.street_type ?? "",
+                  a.street ?? "",
+                  a.street_number ?? "",
+                  a.city ? `· ${a.city}` : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .trim() || "Dirección",
+              }))}
+              canRelocate={
+                session.is_superadmin ||
+                session.roles.includes("company_admin") ||
+                session.roles.includes("technical_director") ||
+                session.roles.includes("commercial_director")
+              }
+            />
           </CardContent>
         </Card>
 

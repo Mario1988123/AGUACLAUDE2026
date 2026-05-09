@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Wrench, Package, MapPin, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
+import { RelocateEquipmentButton } from "./relocate-button";
 import type { CustomerEquipmentRow } from "./equipment-actions";
 
 function fmtDate(d: string | null) {
@@ -13,7 +14,22 @@ function isWarrantyActive(until: string | null): boolean {
   return new Date(until).getTime() > Date.now();
 }
 
-export function CustomerEquipmentList({ equipment }: { equipment: CustomerEquipmentRow[] }) {
+interface AddressOption {
+  id: string;
+  label: string;
+}
+
+export function CustomerEquipmentList({
+  equipment,
+  customerId,
+  addresses = [],
+  canRelocate = false,
+}: {
+  equipment: CustomerEquipmentRow[];
+  customerId?: string;
+  addresses?: AddressOption[];
+  canRelocate?: boolean;
+}) {
   if (equipment.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -75,14 +91,25 @@ export function CustomerEquipmentList({ equipment }: { equipment: CustomerEquipm
                   )}
                 </div>
               </div>
-              {e.installation_id && (
-                <Link
-                  href={`/instalaciones/${e.installation_id}`}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Ver instalación →
-                </Link>
-              )}
+              <div className="flex flex-col items-end gap-2">
+                {e.installation_id && (
+                  <Link
+                    href={`/instalaciones/${e.installation_id}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Ver instalación →
+                  </Link>
+                )}
+                {canRelocate && e.is_active && customerId && isOurs && (
+                  <RelocateEquipmentButton
+                    customerId={customerId}
+                    equipmentId={e.id}
+                    equipmentName={name}
+                    currentAddressId={e.address_id}
+                    addresses={addresses}
+                  />
+                )}
+              </div>
             </div>
           </li>
         );

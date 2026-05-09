@@ -7,6 +7,9 @@ import { requireSession } from "@/shared/lib/auth/session";
 
 export interface CustomerEquipmentRow {
   id: string;
+  customer_id: string;
+  product_id: string | null;
+  address_id: string | null;
   serial_number: string | null;
   installed_at: string | null;
   warranty_until: string | null;
@@ -28,6 +31,9 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     .select(
       `
         id,
+        customer_id,
+        product_id,
+        address_id,
         serial_number,
         installed_at,
         warranty_until,
@@ -44,6 +50,9 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
 
   const rows = (equipment ?? []) as Array<{
     id: string;
+    customer_id: string;
+    product_id: string | null;
+    address_id: string | null;
     serial_number: string | null;
     installed_at: string | null;
     warranty_until: string | null;
@@ -74,6 +83,9 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
 
   return rows.map((r) => ({
     id: r.id,
+    customer_id: r.customer_id,
+    product_id: r.product_id,
+    address_id: r.address_id,
     serial_number: r.serial_number,
     installed_at: r.installed_at,
     warranty_until: r.warranty_until,
