@@ -226,6 +226,69 @@ export async function listSavingsProposals(filters?: {
   }));
 }
 
+/**
+ * Crea un lead minimal desde el modal de la calculadora de ahorro y
+ * devuelve su id + display_name para asociar la propuesta inmediatamente.
+ *
+ * Bypassea la validación estricta de dirección (que sí aplica al alta
+ * normal de leads): la calculadora se usa muchas veces en frío, sin
+ * dirección, y el comercial completa luego desde la ficha del lead.
+ */
+export async function createQuickLeadFromSavingsAction(input: {
+  party_kind: "individual" | "company";
+  display_name: string;
+  email?: string | null;
+  phone_primary?: string | null;
+}): Promise<
+  { ok: true; id: string; name: string } | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const name = (input.display_name ?? "").trim();
+    if (name.length < 2) return { ok: false, error: "Nombre mínimo 2 caracteres" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const isLevel3 =
+      session.roles.includes("sales_rep") || session.roles.includes("telemarketer");
+
+    const payload: Record<string, unknown> = {
+      company_id: session.company_id,
+      party_kind: input.party_kind,
+      origin: "other",
+      potential: "medium",
+      assigned_user_id: isLevel3 ? session.user_id : null,
+      assigned_at: isLevel3 ? new Date().toISOString() : null,
+      created_by: session.user_id,
+      email: input.email?.trim() || null,
+      phone_primary: input.phone_primary?.trim() || null,
+    };
+    if (input.party_kind === "company") {
+      payload.trade_name = name;
+    } else {
+      // Particular: dividir en first/last name por simplicidad
+      const parts = name.split(/\s+/);
+      payload.first_name = parts[0] ?? name;
+      payload.last_name = parts.slice(1).join(" ") || null;
+    }
+
+    const { data, error } = await admin
+      .from("leads")
+      .insert(payload)
+      .select("id")
+      .single();
+    if (error) return { ok: false, error: error.message };
+    return {
+      ok: true,
+      id: (data as { id: string }).id,
+      name,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export async function deleteSavingsProposalAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

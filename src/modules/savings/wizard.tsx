@@ -39,6 +39,7 @@ import {
 import {
   convertSavingsToProposalAction,
   saveSavingsProposalAction,
+  createQuickLeadFromSavingsAction,
   type SavingsBrand,
   type WizardExtra,
   type WizardProduct,
@@ -112,6 +113,12 @@ export function SavingsWizard(props: Props) {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [converting, setConverting] = useState(false);
+
+  // Lead asociado: viene como prop si entras desde /leads/[id], pero también
+  // se puede crear desde el modal final del wizard.
+  const [leadId, setLeadId] = useState<string | null>(defaultLeadId ?? null);
+  const [leadName, setLeadName] = useState<string | null>(defaultLeadName ?? null);
+  const [creatingLead, setCreatingLead] = useState(false);
 
   const products =
     clientType === "home"
@@ -345,7 +352,7 @@ export function SavingsWizard(props: Props) {
     startTransition(async () => {
       const r = await saveSavingsProposalAction({
         customer_id: defaultCustomerId,
-        lead_id: defaultLeadId,
+        lead_id: leadId,
         inputs,
         brand_id: chosenBrand?.id ?? null,
         brand_name_snapshot:
@@ -363,6 +370,33 @@ export function SavingsWizard(props: Props) {
       setSavedId(r.id);
       notify.success("Propuesta de ahorro guardada", "Ya puedes descargar el PDF o enviarla por email.");
     });
+  }
+
+  async function createLead(input: {
+    party_kind: "individual" | "company";
+    display_name: string;
+    email: string;
+    phone_primary: string;
+  }): Promise<boolean> {
+    setCreatingLead(true);
+    try {
+      const r = await createQuickLeadFromSavingsAction({
+        party_kind: input.party_kind,
+        display_name: input.display_name,
+        email: input.email || null,
+        phone_primary: input.phone_primary || null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo crear el lead", r.error);
+        return false;
+      }
+      setLeadId(r.id);
+      setLeadName(r.name);
+      notify.success("Lead creado", `Asignado: ${r.name}`);
+      return true;
+    } finally {
+      setCreatingLead(false);
+    }
   }
 
   function convertToProposal() {
@@ -866,7 +900,11 @@ export function SavingsWizard(props: Props) {
             result={result}
             planType={planType ?? "cash"}
             productName={selectedProduct?.name ?? ""}
-            leadName={defaultLeadName ?? null}
+            leadId={leadId}
+            leadName={leadName}
+            hasCustomer={!!defaultCustomerId}
+            onCreateLead={createLead}
+            creatingLead={creatingLead}
             onSave={save}
             saving={pending}
             savedId={savedId}
@@ -949,7 +987,11 @@ function ResultPanel({
   result,
   planType,
   productName,
+  leadId,
   leadName,
+  hasCustomer,
+  onCreateLead,
+  creatingLead,
   onSave,
   saving,
   savedId,
@@ -961,7 +1003,16 @@ function ResultPanel({
   result: CalcResult | null;
   planType: PlanType;
   productName: string;
+  leadId: string | null;
   leadName: string | null;
+  hasCustomer: boolean;
+  onCreateLead: (input: {
+    party_kind: "individual" | "company";
+    display_name: string;
+    email: string;
+    phone_primary: string;
+  }) => Promise<boolean>;
+  creatingLead: boolean;
   onSave: () => void;
   saving: boolean;
   savedId: string | null;
@@ -970,6 +1021,31 @@ function ResultPanel({
   onConvert: () => void;
   converting: boolean;
 }) {
+  const [showCreateLead, setShowCreateLead] = useState(false);
+  const [newLeadKind, setNewLeadKind] = useState<"individual" | "company">("individual");
+  const [newLeadName, setNewLeadName] = useState("");
+  const [newLeadEmail, setNewLeadEmail] = useState("");
+  const [newLeadPhone, setNewLeadPhone] = useState("");
+
+  async function submitNewLead() {
+    if (newLeadName.trim().length < 2) {
+      notify.warning("Indica un nombre");
+      return;
+    }
+    const ok = await onCreateLead({
+      party_kind: newLeadKind,
+      display_name: newLeadName,
+      email: newLeadEmail,
+      phone_primary: newLeadPhone,
+    });
+    if (ok) {
+      setShowCreateLead(false);
+      setNewLeadName("");
+      setNewLeadEmail("");
+      setNewLeadPhone("");
+    }
+  }
+
   if (!result) {
     return (
       <div className="text-center py-12">
@@ -982,8 +1058,138 @@ function ResultPanel({
     <div className="space-y-4">
       <div>
         <h2 className="text-2xl font-bold">Comparativa de ahorro</h2>
-        {leadName && (
-          <p className="text-sm text-muted-foreground">Para {leadName}</p>
+      </div>
+
+      {/* Asignación de lead */}
+      <div
+        className={`rounded-2xl border-2 p-3 ${
+          leadId || hasCustomer
+            ? "border-emerald-300 bg-emerald-50"
+            : "border-amber-300 bg-amber-50"
+        }`}
+      >
+        {hasCustomer ? (
+          <p className="text-sm text-emerald-900">
+            ✓ Esta propuesta se asociará al cliente actual.
+          </p>
+        ) : leadId ? (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-emerald-900">
+              ✓ Asignada al lead: <strong>{leadName}</strong>
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowCreateLead(true)}
+              type="button"
+            >
+              Cambiar
+            </Button>
+          </div>
+        ) : !showCreateLead ? (
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-amber-900">
+              ⚠ Sin lead asignado. Crea uno para que la propuesta quede
+              asociada y aparezca en el listado.
+            </p>
+            <Button
+              size="sm"
+              variant="success"
+              onClick={() => setShowCreateLead(true)}
+              type="button"
+            >
+              + Crear lead
+            </Button>
+          </div>
+        ) : null}
+
+        {showCreateLead && (
+          <div className="mt-3 space-y-3 rounded-xl bg-card p-3 border">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setNewLeadKind("individual")}
+                className={`flex-1 rounded-lg border-2 p-2 text-sm font-bold ${
+                  newLeadKind === "individual"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background"
+                }`}
+              >
+                Particular
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewLeadKind("company")}
+                className={`flex-1 rounded-lg border-2 p-2 text-sm font-bold ${
+                  newLeadKind === "company"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background"
+                }`}
+              >
+                Empresa
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="space-y-1 sm:col-span-3">
+                <label className="text-xs font-bold uppercase text-muted-foreground">
+                  {newLeadKind === "company" ? "Nombre comercial" : "Nombre y apellidos"}
+                </label>
+                <input
+                  type="text"
+                  value={newLeadName}
+                  onChange={(e) => setNewLeadName(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  placeholder={newLeadKind === "company" ? "Hostelería ACME" : "Juan Pérez"}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-muted-foreground">
+                  Teléfono
+                </label>
+                <input
+                  type="tel"
+                  value={newLeadPhone}
+                  onChange={(e) => setNewLeadPhone(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs font-bold uppercase text-muted-foreground">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={newLeadEmail}
+                  onChange={(e) => setNewLeadEmail(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              La dirección no es obligatoria aquí. Podrás completarla más tarde
+              desde la ficha del lead.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowCreateLead(false)}
+                disabled={creatingLead}
+                type="button"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                variant="success"
+                onClick={submitNewLead}
+                disabled={creatingLead}
+                type="button"
+              >
+                {creatingLead ? "Creando…" : "Crear y asociar"}
+              </Button>
+            </div>
+          </div>
         )}
       </div>
 

@@ -119,7 +119,8 @@ export default async function CalculadoraAhorroListPage({
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b">
                     <th className="py-2 text-left">Ref</th>
-                    <th className="py-2 text-left">Destinatario</th>
+                    <th className="py-2 text-left">Cliente</th>
+                    <th className="py-2 text-left">Lead</th>
                     <th className="py-2 text-left">Producto</th>
                     <th className="py-2 text-left">Consumo actual</th>
                     <th className="py-2 text-right">Coste actual</th>
@@ -132,31 +133,38 @@ export default async function CalculadoraAhorroListPage({
                 </thead>
                 <tbody className="divide-y">
                   {list.map((s) => {
-                    const recipient = s.customer_id
-                      ? s.customer_name ?? "Cliente"
-                      : s.lead_name
-                        ? `Lead: ${s.lead_name}`
-                        : "—";
-                    const recipientHref = s.customer_id
-                      ? `/clientes/${s.customer_id}`
-                      : s.lead_id
-                        ? `/leads/${s.lead_id}`
-                        : null;
                     const positiveSavings =
                       (s.total_saved_5y_cents ?? 0) > 0 && s.payback_months != null;
                     return (
                       <tr key={s.id} className="hover:bg-muted/30">
                         <td className="py-2 font-mono text-xs">{s.reference_code ?? "—"}</td>
                         <td className="py-2">
-                          {recipientHref ? (
+                          {s.customer_id ? (
                             <Link
-                              href={recipientHref as never}
+                              href={`/clientes/${s.customer_id}` as never}
                               className="font-medium text-primary hover:underline"
                             >
-                              {recipient}
+                              {s.customer_name ?? "Cliente"}
                             </Link>
                           ) : (
-                            recipient
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="py-2">
+                          {s.lead_id ? (
+                            <Link
+                              href={`/leads/${s.lead_id}` as never}
+                              className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                            >
+                              <Badge variant="secondary" className="text-[10px]">
+                                LEAD
+                              </Badge>
+                              {s.lead_name ?? "Lead"}
+                            </Link>
+                          ) : s.customer_id ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <span className="text-xs text-amber-700">⚠ sin asignar</span>
                           )}
                         </td>
                         <td className="py-2 text-xs">
