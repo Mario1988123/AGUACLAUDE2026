@@ -36,6 +36,7 @@ import {
   type ProductLocation,
 } from "./location-actions";
 import { PurchasesTab } from "./purchases-tab";
+import { CsvImportButton } from "./csv-import-button";
 import type { PurchaseRow, PurchaseDetail } from "./purchase-actions";
 import type { StockReservation } from "./reservation-actions";
 import type { WarehouseStockDetail } from "./stock-summary-actions";
@@ -250,13 +251,16 @@ function StockTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm text-muted-foreground">
           {stock.length} producto(s) con stock
         </p>
-        <Button onClick={() => setShowAdd((v) => !v)} variant="success" size="sm">
-          <Plus className="h-4 w-4" /> Añadir stock
-        </Button>
+        <div className="flex gap-2">
+          <CsvImportButton warehouseId={warehouseId} />
+          <Button onClick={() => setShowAdd((v) => !v)} variant="success" size="sm">
+            <Plus className="h-4 w-4" /> Añadir stock
+          </Button>
+        </div>
       </div>
 
       {showAdd && (

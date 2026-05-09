@@ -11,18 +11,35 @@ import { CreateLoadingRequestButton } from "@/modules/warehouses/loading-request
 import { DeliverLoadingRequestButton } from "@/modules/warehouses/deliver-button";
 import { listStockAlerts } from "@/modules/warehouses/alert-actions";
 import { StockAlertsPanel } from "@/modules/warehouses/alerts-panel";
+import { getInventoryValuation } from "@/modules/warehouses/import-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AlmacenesPage() {
-  const [warehouses, requests, team, stockSummary, products, alerts] = await Promise.all([
-    listWarehouses(),
-    listLoadingRequests(),
-    listTeamMembers(),
-    listWarehouseStockSummary().catch(() => []),
-    listProducts().catch(() => []),
-    listStockAlerts({ status: "active" }).catch(() => []),
-  ]);
+  const [warehouses, requests, team, stockSummary, products, alerts, valuation] =
+    await Promise.all([
+      listWarehouses(),
+      listLoadingRequests(),
+      listTeamMembers(),
+      listWarehouseStockSummary().catch(() => []),
+      listProducts().catch(() => []),
+      listStockAlerts({ status: "active" }).catch(() => []),
+      getInventoryValuation().catch(() => []),
+    ]);
+  const totalValuationCents = valuation.reduce(
+    (s, v) => s + v.total_value_cents,
+    0,
+  );
+  const fmtEur = (cents: number) =>
+    new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(
+      cents / 100,
+    );
+  const KIND_BADGE: Record<string, string> = {
+    main: "Principal",
+    secondary: "Secundario",
+    vehicle: "Furgoneta",
+    external_supplier: "Proveedor",
+  };
   const whMap = new Map(warehouses.map((w) => [w.id, w.name]));
   const totalAlerts = stockSummary.reduce((s, w) => s + w.low_stock_alerts, 0);
 
@@ -49,6 +66,46 @@ export default async function AlmacenesPage() {
           <StockAlertsPanel alerts={alerts} />
         </CardContent>
       </Card>
+
+      {valuation.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+              <span>💰 Valoración del inventario</span>
+              <span className="text-2xl font-extrabold tabular-nums">
+                {fmtEur(totalValuationCents)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Suma de unidades × coste medio ponderado (CMP) por almacén.
+              Refleja el capital inmovilizado.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {valuation.map((v) => (
+                <div
+                  key={v.warehouse_id}
+                  className="rounded-xl border bg-card p-3"
+                >
+                  <div className="text-xs font-bold uppercase text-muted-foreground">
+                    {KIND_BADGE[v.warehouse_kind] ?? v.warehouse_kind}
+                  </div>
+                  <div className="font-bold">{v.warehouse_name}</div>
+                  <div className="mt-1 flex items-baseline justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      {v.total_units} ud
+                    </span>
+                    <span className="text-lg font-extrabold tabular-nums">
+                      {fmtEur(v.total_value_cents)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
