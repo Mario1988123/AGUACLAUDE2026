@@ -256,8 +256,9 @@ export async function createProductAction(formData: FormData) {
       supplier_reference: parsed.supplier_reference || null,
       short_description: parsed.short_description || null,
       long_description: parsed.long_description || null,
-      cost_cents: parsed.cost_cents,
-      supplier_price_cents: parsed.supplier_price_cents,
+      // Coste real = CMP de compras. NO se introduce a mano (decisión 2026-05-09).
+      cost_cents: null,
+      supplier_price_cents: null,
       dim_width_mm: parsed.dim_width_mm,
       dim_height_mm: parsed.dim_height_mm,
       dim_depth_mm: parsed.dim_depth_mm,
@@ -365,6 +366,11 @@ export async function updateProductAction(
     if (!session.is_superadmin && !session.roles.includes("company_admin")) {
       return { ok: false, error: "Solo admin" };
     }
+    // El coste real se gestiona por CMP desde compras: ignoramos cualquier
+    // intento de actualizarlo a mano (decisión usuario 2026-05-09).
+    delete (input as Record<string, unknown>).cost_cents;
+    delete (input as Record<string, unknown>).supplier_price_cents;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 

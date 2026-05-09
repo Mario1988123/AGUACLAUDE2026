@@ -37,9 +37,8 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
   const [depth, setDepth] = useState("");
   const [weight, setWeight] = useState("");
 
-  // Paso 2
-  const [cost, setCost] = useState("");
-  const [supplierPrice, setSupplierPrice] = useState("");
+  // Paso 2 — el coste real ya NO se introduce: se calcula como CMP a partir
+  // de las facturas de compra. Aquí solo definimos PVP y datos de stock.
   const [stockMin, setStockMin] = useState("0");
   const [stockManaged, setStockManaged] = useState(true);
   const [cashTotal, setCashTotal] = useState("");
@@ -110,8 +109,8 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
       if (!Number.isFinite(n)) return "";
       return String(Math.round(n * 100));
     };
-    fd.set("cost_cents", eurToCents(cost));
-    fd.set("supplier_price_cents", eurToCents(supplierPrice));
+    // No enviamos cost_cents ni supplier_price_cents: el coste se calcula
+    // automáticamente desde las compras (CMP).
     fd.set("stock_min", stockMin);
     if (stockManaged) fd.set("stock_managed", "on");
     fd.set("cash_total_cents", eurToCents(cashTotal));
@@ -274,29 +273,14 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
 
       {step === 2 && (
         <div className="space-y-5">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label>Coste (€)</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="200,63"
-                value={cost}
-                onChange={(e) => setCost(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Precio proveedor (€)</Label>
-              <Input
-                type="number"
-                min={0}
-                step="0.01"
-                placeholder="200,63"
-                value={supplierPrice}
-                onChange={(e) => setSupplierPrice(e.target.value)}
-              />
-            </div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+            💡 El <strong>coste real del producto</strong> se calcula
+            automáticamente como coste medio ponderado (CMP) a partir de
+            las facturas de compra que registres en el almacén. Por eso
+            aquí solo defines el <strong>precio de venta</strong> (PVP) y
+            la gestión de stock.
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Stock mínimo</Label>
               <Input
@@ -306,7 +290,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
                 onChange={(e) => setStockMin(e.target.value)}
               />
             </div>
-            <label className="flex items-center gap-2 self-end rounded-xl border border-border bg-muted/30 p-3 sm:col-span-3">
+            <label className="flex items-center gap-2 self-end rounded-xl border border-border bg-muted/30 p-3">
               <input
                 type="checkbox"
                 checked={stockManaged}

@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { BackButton } from "@/shared/components/back-button";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const [pricingPlans, attributes, attrValues, categories, stockSummary, salesHistory] =
+  const [pricingPlans, attributes, attrValues, categories, stockSummary, salesHistory, session] =
     await Promise.all([
       listPricingPlans(id),
       listAttributes((product as { category_id: string | null }).category_id),
@@ -47,7 +48,14 @@ export default async function ProductDetailPage({
       listCategories().catch(() => []),
       getProductStockSummary(id).catch(() => ({ total: 0, by_warehouse: [] })),
       getProductSalesHistory(id, 90).catch(() => []),
+      requireSession(),
     ]);
+  // El coste real es CMP calculado desde las compras y SOLO lo ve el admin
+  // (incluido director comercial). Los niveles 3 nunca lo ven.
+  const canSeeCost =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
 
   return (
     <div className="space-y-6">
@@ -73,8 +81,6 @@ export default async function ProductDetailPage({
               supplier_reference: product.supplier_reference ?? null,
               short_description: product.short_description ?? null,
               long_description: product.long_description ?? null,
-              cost_cents: product.cost_cents ?? null,
-              supplier_price_cents: product.supplier_price_cents ?? null,
               dim_width_mm: product.dim_width_mm ?? null,
               dim_height_mm: product.dim_height_mm ?? null,
               dim_depth_mm: product.dim_depth_mm ?? null,
@@ -136,15 +142,25 @@ export default async function ProductDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Costes (admin)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <Row label="Coste" value={formatCents(product.cost_cents)} />
-            <Row label="Precio proveedor" value={formatCents(product.supplier_price_cents)} />
-          </CardContent>
-        </Card>
+        {canSeeCost && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                💰 Coste real (CMP)
+                <Badge variant="secondary">solo admin</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <Row label="Coste medio ponderado" value={formatCents(product.cost_cents)} />
+              <p className="text-xs text-muted-foreground">
+                Calculado automáticamente a partir de las facturas de
+                compra registradas. Si necesitas ajustarlo, registra una
+                nueva compra con el coste correcto en el almacén
+                correspondiente.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="lg:col-span-2">
           <CardHeader>

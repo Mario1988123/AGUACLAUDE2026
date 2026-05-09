@@ -22,8 +22,6 @@ export function ProductEditButton({
     supplier_reference: string | null;
     short_description: string | null;
     long_description: string | null;
-    cost_cents: number | null;
-    supplier_price_cents: number | null;
     dim_width_mm: number | null;
     dim_height_mm: number | null;
     dim_depth_mm: number | null;
@@ -44,12 +42,6 @@ export function ProductEditButton({
     supplier_reference: initial.supplier_reference ?? "",
     short_description: initial.short_description ?? "",
     long_description: initial.long_description ?? "",
-    cost_eur:
-      initial.cost_cents != null ? (initial.cost_cents / 100).toFixed(2) : "",
-    supplier_price_eur:
-      initial.supplier_price_cents != null
-        ? (initial.supplier_price_cents / 100).toFixed(2)
-        : "",
     dim_w: initial.dim_width_mm?.toString() ?? "",
     dim_h: initial.dim_height_mm?.toString() ?? "",
     dim_d: initial.dim_depth_mm?.toString() ?? "",
@@ -72,12 +64,6 @@ export function ProductEditButton({
         supplier_reference: form.supplier_reference || null,
         short_description: form.short_description || null,
         long_description: form.long_description || null,
-        cost_cents: form.cost_eur
-          ? Math.round(Number(form.cost_eur.replace(",", ".")) * 100)
-          : null,
-        supplier_price_cents: form.supplier_price_eur
-          ? Math.round(Number(form.supplier_price_eur.replace(",", ".")) * 100)
-          : null,
         dim_width_mm: form.dim_w ? Number(form.dim_w) : null,
         dim_height_mm: form.dim_h ? Number(form.dim_h) : null,
         dim_depth_mm: form.dim_d ? Number(form.dim_d) : null,
@@ -204,30 +190,10 @@ export function ProductEditButton({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 space-y-3">
-                <div className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                  Costes (solo admin)
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label>Coste (€)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={form.cost_eur}
-                      onChange={(e) => setForm({ ...form, cost_eur: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Precio proveedor (€)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={form.supplier_price_eur}
-                      onChange={(e) => setForm({ ...form, supplier_price_eur: e.target.value })}
-                    />
-                  </div>
-                </div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                💡 El coste del producto se calcula automáticamente como{" "}
+                <strong>coste medio ponderado (CMP)</strong> a partir de las
+                facturas de compra registradas. Ya no se introduce a mano.
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
