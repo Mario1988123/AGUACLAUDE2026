@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -9,15 +9,21 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createProductAction } from "./actions";
 import { KIND_LABEL, PRODUCT_KIND } from "./schemas";
+import { listAttributes, type ProductAttribute } from "./attributes-actions";
 import type { CategoryItem } from "./types";
 
 /**
- * Wizard 2 pasos: datos básicos + dimensiones / costes y pricing inicial.
- * Tablet-first.
+ * Wizard 3 pasos: datos básicos + costes/pricing + atributos por categoría.
+ * Tablet-first. El paso 3 carga los atributos definidos en la categoría
+ * (product_attributes con category_id = categoría elegida) y permite
+ * rellenarlos en bloque antes de crear el producto.
  */
 export function ProductCreateForm({ categories }: { categories: CategoryItem[] }) {
   const [step, setStep] = useState(1);
   const [pending, startTransition] = useTransition();
+  const [categoryAttrs, setCategoryAttrs] = useState<ProductAttribute[]>([]);
+  const [attrLoading, setAttrLoading] = useState(false);
+  const [attrValues, setAttrValues] = useState<Record<string, string>>({});
 
   // Paso 1
   const [name, setName] = useState("");
@@ -50,11 +56,36 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
 
   function next() {
     if (step === 1 && !validateStep1()) return;
-    setStep((s) => Math.min(2, s + 1));
+    setStep((s) => Math.min(3, s + 1));
   }
   function back() {
     setStep((s) => Math.max(1, s - 1));
   }
+
+  // Cuando llegamos al paso 3, cargamos atributos de la categoría elegida.
+  // Si el usuario cambia de categoría, se vuelve a cargar.
+  useEffect(() => {
+    if (step !== 3) return;
+    let cancelled = false;
+    setAttrLoading(true);
+    listAttributes(categoryId || null)
+      .then((rows) => {
+        if (cancelled) return;
+        setCategoryAttrs(rows);
+        setAttrValues((prev) => {
+          const next: Record<string, string> = {};
+          for (const a of rows) next[a.id] = prev[a.id] ?? "";
+          return next;
+        });
+      })
+      .catch(() => setCategoryAttrs([]))
+      .finally(() => {
+        if (!cancelled) setAttrLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, categoryId]);
 
   function submit() {
     if (!validateStep1()) {
@@ -86,6 +117,29 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
     fd.set("cash_total_cents", eurToCents(cashTotal));
     fd.set("cash_min_authorized_cents", eurToCents(cashMin));
     fd.set("cash_absolute_min_cents", eurToCents(cashAbsMin));
+
+    // Atributos por categoría: serializar como JSON respetando el data_type
+    if (categoryAttrs.length > 0) {
+      const payload = categoryAttrs
+        .map((a) => {
+          const raw = (attrValues[a.id] ?? "").trim();
+          if (raw === "") return null;
+          if (a.data_type === "boolean") {
+            return { attribute_id: a.id, value_boolean: raw === "true" };
+          }
+          if (a.data_type === "number" || a.data_type === "dimension") {
+            const n = Number(raw.replace(",", "."));
+            if (!Number.isFinite(n)) return null;
+            return { attribute_id: a.id, value_number: n };
+          }
+          return { attribute_id: a.id, value_text: raw };
+        })
+        .filter(Boolean);
+      if (payload.length > 0) {
+        fd.set("attribute_values", JSON.stringify(payload));
+      }
+    }
+
     startTransition(async () => {
       try {
         await createProductAction(fd);
@@ -103,7 +157,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
     <div className="space-y-4 rounded-2xl border bg-card p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          {[1, 2].map((n) => (
+          {[1, 2, 3].map((n) => (
             <div key={n} className="flex items-center gap-2">
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
@@ -116,12 +170,17 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
               >
                 {n < step ? <Check className="h-4 w-4" /> : n}
               </div>
-              {n < 2 && <div className={`h-0.5 w-8 ${n < step ? "bg-success" : "bg-muted"}`} />}
+              {n < 3 && <div className={`h-0.5 w-8 ${n < step ? "bg-success" : "bg-muted"}`} />}
             </div>
           ))}
         </div>
         <div className="text-sm text-muted-foreground">
-          Paso {step} de 2 · {step === 1 ? "Datos básicos" : "Costes, stock y precio"}
+          Paso {step} de 3 ·{" "}
+          {step === 1
+            ? "Datos básicos"
+            : step === 2
+              ? "Costes, stock y precio"
+              : "Atributos de la categoría"}
         </div>
       </div>
 
@@ -303,6 +362,95 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
         </div>
       )}
 
+      {step === 3 && (
+        <div className="space-y-4">
+          {!categoryId && (
+            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              No has elegido categoría — por eso no hay atributos predefinidos.
+              Puedes crear el producto y añadirlos manualmente desde la ficha.
+            </div>
+          )}
+          {categoryId && attrLoading && (
+            <p className="text-sm text-muted-foreground">Cargando atributos…</p>
+          )}
+          {categoryId && !attrLoading && categoryAttrs.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 text-sm">
+              Esta categoría aún no tiene atributos definidos.
+              <br />
+              Puedes crear el producto y añadir atributos desde la ficha, o
+              definirlos primero en{" "}
+              <Link
+                href="/configuracion/productos"
+                className="font-semibold text-primary hover:underline"
+              >
+                Configuración → Productos
+              </Link>
+              .
+            </div>
+          )}
+          {categoryId && !attrLoading && categoryAttrs.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Rellena los atributos que correspondan. Los que dejes vacíos no
+                se guardarán y podrás añadirlos más tarde desde la ficha.
+              </p>
+              {categoryAttrs.map((a) => (
+                <div key={a.id} className="grid gap-2 sm:grid-cols-3 sm:items-center">
+                  <Label className="sm:col-span-1">
+                    {a.name}
+                    {a.unit ? ` (${a.unit})` : ""}
+                    {a.is_required && <span className="text-destructive"> *</span>}
+                  </Label>
+                  <div className="sm:col-span-2">
+                    {a.data_type === "boolean" ? (
+                      <select
+                        value={attrValues[a.id] ?? ""}
+                        onChange={(e) =>
+                          setAttrValues((p) => ({ ...p, [a.id]: e.target.value }))
+                        }
+                        className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                      >
+                        <option value="">—</option>
+                        <option value="true">Sí</option>
+                        <option value="false">No</option>
+                      </select>
+                    ) : a.data_type === "enum" && a.enum_values?.length ? (
+                      <select
+                        value={attrValues[a.id] ?? ""}
+                        onChange={(e) =>
+                          setAttrValues((p) => ({ ...p, [a.id]: e.target.value }))
+                        }
+                        className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                      >
+                        <option value="">— Elegir —</option>
+                        {a.enum_values.map((v) => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input
+                        type={
+                          a.data_type === "number" || a.data_type === "dimension"
+                            ? "number"
+                            : "text"
+                        }
+                        step="any"
+                        value={attrValues[a.id] ?? ""}
+                        onChange={(e) =>
+                          setAttrValues((p) => ({ ...p, [a.id]: e.target.value }))
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 border-t pt-4">
         {step > 1 ? (
           <Button variant="outline" onClick={back} disabled={pending}>
@@ -313,7 +461,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
             <Link href="/productos">Cancelar</Link>
           </Button>
         )}
-        {step < 2 ? (
+        {step < 3 ? (
           <Button onClick={next} disabled={pending}>
             Siguiente <ChevronRight className="h-4 w-4" />
           </Button>

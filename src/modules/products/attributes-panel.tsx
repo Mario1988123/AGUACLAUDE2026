@@ -36,11 +36,28 @@ export function AttributesPanel({ productId, attributes, values }: Props) {
   const [adding, setAdding] = useState(false);
   const featuredCount = values.filter((v) => v.is_featured).length;
 
+  const missingFromCategory = attributes.filter(
+    (a) => !values.some((v) => v.attribute_id === a.id),
+  );
+
   return (
     <div className="space-y-3">
       {values.length === 0 && !adding && (
         <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-          Sin atributos asignados a este producto.
+          {attributes.length > 0
+            ? `Esta categoría define ${attributes.length} atributo(s). Pulsa «Añadir atributo» para empezar a rellenarlos.`
+            : "Sin atributos asignados a este producto."}
+        </div>
+      )}
+
+      {values.length > 0 && missingFromCategory.length > 0 && (
+        <div className="rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3 text-xs text-blue-900">
+          Faltan por rellenar {missingFromCategory.length} atributo(s) que la
+          categoría define:{" "}
+          <strong>
+            {missingFromCategory.map((a) => a.name).join(", ")}
+          </strong>
+          . Pulsa «Añadir atributo» para añadirlos.
         </div>
       )}
 

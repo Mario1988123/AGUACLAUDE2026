@@ -287,6 +287,46 @@ export async function createProductAction(formData: FormData) {
     } as never);
   }
 
+  // Atributos precargados desde la categoría: vienen como JSON string.
+  // Estructura: [{attribute_id, value_text?, value_number?, value_boolean?}]
+  const attrValuesRaw = formData.get("attribute_values");
+  if (typeof attrValuesRaw === "string" && attrValuesRaw.trim().length > 0) {
+    try {
+      const items = JSON.parse(attrValuesRaw) as Array<{
+        attribute_id: string;
+        value_text?: string | null;
+        value_number?: number | null;
+        value_boolean?: boolean | null;
+      }>;
+      const rows = items
+        .filter(
+          (x) =>
+            (x.value_text != null && x.value_text !== "") ||
+            x.value_number != null ||
+            x.value_boolean != null,
+        )
+        .map((x, i) => ({
+          product_id: productId,
+          attribute_id: x.attribute_id,
+          company_id: session.company_id,
+          value_text: x.value_text ?? null,
+          value_number: x.value_number ?? null,
+          value_boolean: x.value_boolean ?? null,
+          is_visible: true,
+          is_featured: false,
+          display_order: i,
+        }));
+      if (rows.length > 0) {
+        const { error: avErr } = await admin
+          .from("product_attribute_values")
+          .insert(rows);
+        if (avErr) console.error("[create product] attribute values insert:", avErr.message);
+      }
+    } catch (e) {
+      console.error("[create product] bad attribute_values JSON:", e);
+    }
+  }
+
   revalidatePath("/productos");
   redirect(`/productos/${productId}` as never);
 }
