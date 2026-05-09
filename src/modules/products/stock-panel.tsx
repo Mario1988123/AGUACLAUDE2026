@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
+import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { updateProductAction } from "./actions";
 import type { SalesHistoryPoint, ProductStockSummary } from "./stock-actions";
@@ -22,6 +22,11 @@ interface Props {
   };
   summary: ProductStockSummary;
   history: SalesHistoryPoint[];
+  /**
+   * Si es false, ocultamos cantidades: el comercial solo ve "Hay stock /
+   * Sin stock" sin números. Solo admin / dir comercial ven cantidades.
+   */
+  canSeeCost?: boolean;
 }
 
 const KIND_BADGE: Record<string, string> = {
@@ -31,7 +36,13 @@ const KIND_BADGE: Record<string, string> = {
   external_supplier: "Proveedor",
 };
 
-export function ProductStockPanel({ productId, initial, summary, history }: Props) {
+export function ProductStockPanel({
+  productId,
+  initial,
+  summary,
+  history,
+  canSeeCost = false,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -83,62 +94,66 @@ export function ProductStockPanel({ productId, initial, summary, history }: Prop
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label>Proveedor habitual</Label>
-          <Input
-            value={supplier}
-            onChange={(e) => setSupplier(e.target.value)}
-            placeholder="Senda Aguas, Filtros XYZ…"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Plazo reposición (días)</Label>
-          <Input
-            type="number"
-            min={0}
-            value={leadTime}
-            onChange={(e) => setLeadTime(e.target.value)}
-            placeholder="Ej: 4"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Stock mínimo (global)</Label>
-          <Input
-            type="number"
-            min={0}
-            value={stockMin}
-            onChange={(e) => setStockMin(e.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Stock máximo (informativo)</Label>
-          <Input
-            type="number"
-            min={0}
-            value={stockMax}
-            onChange={(e) => setStockMax(e.target.value)}
-            placeholder="Sin límite"
-          />
-        </div>
-      </div>
-      <label className="flex items-center gap-2 rounded-xl border bg-muted/30 p-3">
-        <input
-          type="checkbox"
-          checked={stockManaged}
-          onChange={(e) => setStockManaged(e.target.checked)}
-          className="h-4 w-4"
-        />
-        <span className="text-sm font-semibold">
-          Controlar stock de este producto (alertas + predicción)
-        </span>
-      </label>
-      <div className="flex justify-end">
-        <Button onClick={save} disabled={pending} variant="success">
-          <Save className="h-4 w-4" />
-          {pending ? "Guardando…" : "Guardar"}
-        </Button>
-      </div>
+      {canSeeCost && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Proveedor habitual</Label>
+              <Input
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
+                placeholder="Senda Aguas, Filtros XYZ…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Plazo reposición (días)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={leadTime}
+                onChange={(e) => setLeadTime(e.target.value)}
+                placeholder="Ej: 4"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Stock mínimo (global)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={stockMin}
+                onChange={(e) => setStockMin(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Stock máximo (informativo)</Label>
+              <Input
+                type="number"
+                min={0}
+                value={stockMax}
+                onChange={(e) => setStockMax(e.target.value)}
+                placeholder="Sin límite"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 rounded-xl border bg-muted/30 p-3">
+            <input
+              type="checkbox"
+              checked={stockManaged}
+              onChange={(e) => setStockManaged(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span className="text-sm font-semibold">
+              Controlar stock de este producto (alertas + predicción)
+            </span>
+          </label>
+          <div className="flex justify-end">
+            <Button onClick={save} disabled={pending} variant="success">
+              <Save className="h-4 w-4" />
+              {pending ? "Guardando…" : "Guardar"}
+            </Button>
+          </div>
+        </>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border bg-card p-4">
@@ -146,12 +161,21 @@ export function ProductStockPanel({ productId, initial, summary, history }: Prop
             Stock por almacén
           </h3>
           <div className="space-y-2">
-            <div className="flex items-baseline justify-between">
-              <span className="text-sm">Total</span>
-              <span className="text-2xl font-extrabold tabular-nums">
-                {summary.total}
-              </span>
-            </div>
+            {canSeeCost ? (
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm">Total</span>
+                <span className="text-2xl font-extrabold tabular-nums">
+                  {summary.total}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Disponibilidad</span>
+                <Badge variant={summary.total > 0 ? "success" : "destructive"}>
+                  {summary.total > 0 ? "Hay stock" : "Sin stock"}
+                </Badge>
+              </div>
+            )}
             {summary.by_warehouse.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 Sin stock en ningún almacén.
@@ -166,7 +190,13 @@ export function ProductStockPanel({ productId, initial, summary, history }: Prop
                         {KIND_BADGE[w.warehouse_kind] ?? w.warehouse_kind}
                       </div>
                     </div>
-                    <span className="text-lg font-bold tabular-nums">{w.quantity}</span>
+                    {canSeeCost ? (
+                      <span className="text-lg font-bold tabular-nums">{w.quantity}</span>
+                    ) : (
+                      <Badge variant={w.quantity > 0 ? "success" : "secondary"}>
+                        {w.quantity > 0 ? "✓" : "—"}
+                      </Badge>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -260,7 +290,7 @@ function Sparkline({ history }: { history: SalesHistoryPoint[] }) {
   if (history.length === 0) {
     return (
       <p className="mt-3 text-xs text-muted-foreground">
-        Sin salidas registradas en los últimos 90 días.
+        Sin datos suficientes para calcular ritmo de salidas.
       </p>
     );
   }

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProduct, listCategories } from "@/modules/products/actions";
 import { ProductEditButton } from "@/modules/products/edit-form";
@@ -15,7 +14,7 @@ import {
 } from "@/modules/products/stock-actions";
 import { ProductStockPanel } from "@/modules/products/stock-panel";
 import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { CollapsibleCard } from "@/modules/products/collapsible-card";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { BackButton } from "@/shared/components/back-button";
@@ -57,19 +56,46 @@ export default async function ProductDetailPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
 
+  // Etiqueta de stock al lado del título.
+  // - Comerciales (level 3): solo "Hay stock" / "Sin stock", sin cantidad.
+  // - Admin / dir comercial: ven la cantidad total.
+  const hasStock = stockSummary.total > 0;
+  const isLow =
+    product.stock_managed &&
+    product.stock_min > 0 &&
+    stockSummary.total <= product.stock_min;
+  const stockBadge = isLow
+    ? { variant: "destructive" as const, label: hasStock ? "⚠ Stock bajo" : "Sin stock" }
+    : hasStock
+      ? { variant: "success" as const, label: "Hay stock" }
+      : { variant: "destructive" as const, label: "Sin stock" };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-extrabold tracking-tight">{product.name}</h1>
             {product.is_active ? (
               <Badge variant="success">Activo</Badge>
             ) : (
               <Badge variant="secondary">Inactivo</Badge>
             )}
+            <Badge variant={stockBadge.variant}>{stockBadge.label}</Badge>
+            {canSeeCost && hasStock && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                ({stockSummary.total} ud)
+              </span>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground">{KIND_LABEL[product.kind]}</p>
+          {product.short_description && (
+            <p className="mt-1 text-sm text-muted-foreground">
+              {product.short_description}
+            </p>
+          )}
+          <p className="mt-0.5 text-xs uppercase tracking-wide text-muted-foreground">
+            {KIND_LABEL[product.kind]}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <ProductEditButton
@@ -104,21 +130,13 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Foto principal</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />
-        </CardContent>
-      </Card>
+      <CollapsibleCard title="Foto principal">
+        <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />
+      </CollapsibleCard>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Datos generales</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+        <CollapsibleCard title="Datos generales">
+          <div className="space-y-3 text-sm">
             <Row label="Referencia interna" value={product.internal_reference} />
             <Row label="Referencia proveedor" value={product.supplier_reference} />
             <Row label="Descripción corta" value={product.short_description} />
@@ -139,74 +157,59 @@ export default async function ProductDetailPage({
                 <p className="mt-1 whitespace-pre-wrap">{product.long_description}</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
 
         {canSeeCost && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                💰 Coste real (CMP)
-                <Badge variant="secondary">solo admin</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
+          <CollapsibleCard
+            title={<span>💰 Coste real (CMP)</span>}
+            badge={<Badge variant="secondary">solo admin</Badge>}
+          >
+            <div className="space-y-3 text-sm">
               <Row label="Coste medio ponderado" value={formatCents(product.cost_cents)} />
-              <p className="text-xs text-muted-foreground">
-                Calculado automáticamente a partir de las facturas de
-                compra registradas. Si necesitas ajustarlo, registra una
-                nueva compra con el coste correcto en el almacén
-                correspondiente.
-              </p>
-            </CardContent>
-          </Card>
+            </div>
+          </CollapsibleCard>
         )}
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Stock y predicción</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProductStockPanel
-              productId={id}
-              initial={{
-                stock_managed: product.stock_managed ?? false,
-                stock_min: product.stock_min ?? 0,
-                stock_max:
-                  (product as { stock_max?: number | null }).stock_max ?? null,
-                lead_time_days:
-                  (product as { lead_time_days?: number | null }).lead_time_days ?? null,
-                default_supplier_name:
-                  (product as { default_supplier_name?: string | null })
-                    .default_supplier_name ?? null,
-              }}
-              summary={stockSummary}
-              history={salesHistory}
-            />
-          </CardContent>
-        </Card>
+        <CollapsibleCard title="Stock y predicción" className="lg:col-span-2">
+          <ProductStockPanel
+            productId={id}
+            initial={{
+              stock_managed: product.stock_managed ?? false,
+              stock_min: product.stock_min ?? 0,
+              stock_max:
+                (product as { stock_max?: number | null }).stock_max ?? null,
+              lead_time_days:
+                (product as { lead_time_days?: number | null }).lead_time_days ?? null,
+              default_supplier_name:
+                (product as { default_supplier_name?: string | null })
+                  .default_supplier_name ?? null,
+            }}
+            summary={stockSummary}
+            history={salesHistory}
+            canSeeCost={canSeeCost}
+          />
+        </CollapsibleCard>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Planes de precio ({pricingPlans.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PricingPlansPanel productId={id} plans={pricingPlans} />
-          </CardContent>
-        </Card>
+        <CollapsibleCard
+          title={`Planes de precio (${pricingPlans.length})`}
+          defaultOpen={false}
+          className="lg:col-span-2"
+        >
+          <PricingPlansPanel productId={id} plans={pricingPlans} />
+        </CollapsibleCard>
 
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Atributos ({attrValues.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <AttributesPanel
-              productId={id}
-              attributes={attributes}
-              values={attrValues}
-            />
-          </CardContent>
-        </Card>
+        <CollapsibleCard
+          title={`Atributos (${attrValues.length})`}
+          defaultOpen={false}
+          className="lg:col-span-2"
+        >
+          <AttributesPanel
+            productId={id}
+            attributes={attributes}
+            values={attrValues}
+          />
+        </CollapsibleCard>
       </div>
     </div>
   );

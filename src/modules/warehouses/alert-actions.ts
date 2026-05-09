@@ -113,6 +113,24 @@ export async function recomputeStockAlertsAction(): Promise<{
       outsByProduct.get(m.product_id)!.push(m);
     }
 
+    // Primer movimiento (cualquier tipo) por producto, para no marcar
+    // "sin rotación 90d" en stock recién creado: si la primera entrada
+    // tiene < 90 días, el producto aún no ha tenido tiempo de moverse.
+    const { data: firstMovs } = await admin
+      .from("stock_movements")
+      .select("product_id, performed_at")
+      .in("product_id", productIds)
+      .order("performed_at", { ascending: true });
+    const firstMovementByProduct = new Map<string, string>();
+    for (const m of (firstMovs ?? []) as Array<{
+      product_id: string;
+      performed_at: string;
+    }>) {
+      if (!firstMovementByProduct.has(m.product_id)) {
+        firstMovementByProduct.set(m.product_id, m.performed_at);
+      }
+    }
+
     // 4) Estacionalidad: mismo mes año pasado vs año pasado completo
     const now = new Date();
     const ly1 = new Date(now);
@@ -235,8 +253,12 @@ export async function recomputeStockAlertsAction(): Promise<{
         });
       }
 
-      // no_rotation_90d (con stock pero 0 salidas en 90d)
-      if (total > 0 && outs.length === 0) {
+      // no_rotation_90d: stock>0 y 0 salidas en 90d, PERO solo si la
+      // primera entrada del producto fue hace >90d. Si el producto se
+      // creó/inició stock hace menos, aún no ha tenido tiempo de moverse.
+      const firstMov = firstMovementByProduct.get(p.id);
+      const stockedLongAgo = firstMov ? new Date(firstMov) <= since90 : false;
+      if (total > 0 && outs.length === 0 && stockedLongAgo) {
         newAlerts.push({
           company_id: session.company_id,
           product_id: p.id,
@@ -378,6 +400,24 @@ export async function recomputeStockAlertsForCompany(
       outsByProduct.get(m.product_id)!.push(m);
     }
 
+    // Primer movimiento (cualquier tipo) por producto, para no marcar
+    // "sin rotación 90d" en stock recién creado: si la primera entrada
+    // tiene < 90 días, el producto aún no ha tenido tiempo de moverse.
+    const { data: firstMovs } = await admin
+      .from("stock_movements")
+      .select("product_id, performed_at")
+      .in("product_id", productIds)
+      .order("performed_at", { ascending: true });
+    const firstMovementByProduct = new Map<string, string>();
+    for (const m of (firstMovs ?? []) as Array<{
+      product_id: string;
+      performed_at: string;
+    }>) {
+      if (!firstMovementByProduct.has(m.product_id)) {
+        firstMovementByProduct.set(m.product_id, m.performed_at);
+      }
+    }
+
     const now = new Date();
     const ly1 = new Date(now);
     ly1.setFullYear(ly1.getFullYear() - 1);
@@ -481,7 +521,9 @@ export async function recomputeStockAlertsForCompany(
           payload: { total, stock_max: p.stock_max },
         });
       }
-      if (total > 0 && outs.length === 0) {
+      const firstMov = firstMovementByProduct.get(p.id);
+      const stockedLongAgo = firstMov ? new Date(firstMov) <= since90 : false;
+      if (total > 0 && outs.length === 0 && stockedLongAgo) {
         newAlerts.push({
           company_id: companyId,
           product_id: p.id,
