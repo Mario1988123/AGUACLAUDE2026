@@ -75,7 +75,20 @@ export async function createPurchaseAction(input: {
       })
       .select("id")
       .single();
-    if (pErr) return { ok: false, error: pErr.message };
+    if (pErr) {
+      const msg = pErr.message ?? "";
+      if (
+        /schema cache|Could not find the table/i.test(msg) ||
+        (pErr as { code?: string }).code === "PGRST205"
+      ) {
+        return {
+          ok: false,
+          error:
+            "PostgREST aún no ve la tabla 'purchases'. Aplica la migración 20260515150000_pgrst_reload_warehouse_intel.sql o ejecuta en el SQL editor de Supabase: NOTIFY pgrst, 'reload schema'; y vuelve a intentarlo.",
+        };
+      }
+      return { ok: false, error: msg };
+    }
     const purchaseId = (purchase as { id: string }).id;
 
     // 2) Líneas

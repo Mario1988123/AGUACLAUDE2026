@@ -99,3 +99,5 @@ comment on table public.purchases is
   'Albarán/factura de compra al proveedor. Una compra = un almacén destino + N items. Genera entradas (inbound) en stock_movements con purchase_id.';
 comment on table public.purchase_items is
   'Línea de compra: producto + cantidad + coste unitario. El coste alimenta el CMP de products.cost_cents.';
+
+notify pgrst, 'reload schema';

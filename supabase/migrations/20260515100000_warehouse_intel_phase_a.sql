@@ -83,3 +83,6 @@ comment on column public.stock_movements.invoice_id is
   'Factura emitida que corresponde a esta salida (se enlaza al facturar).';
 comment on column public.stock_movements.reason is
   'Motivo libre del movimiento o motivo del ajuste de inventario (rotura, robo, error de carga…).';
+
+-- Refrescar PostgREST schema cache para que vea las nuevas tablas/columnas
+notify pgrst, 'reload schema';

@@ -33,3 +33,5 @@ comment on column public.warehouse_locations.shelf is 'Estantería (texto libre,
 comment on column public.warehouse_locations."level" is 'Altura dentro de la estantería';
 comment on column public.warehouse_locations.slot is 'Hueco/posición horizontal';
 comment on column public.warehouse_locations.code is 'Código compuesto compacto generado por la app (ej. "22C"). Se mantiene para facilitar búsquedas y mostrar en etiquetas.';
+
+notify pgrst, 'reload schema';

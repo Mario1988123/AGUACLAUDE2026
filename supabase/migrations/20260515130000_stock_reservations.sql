@@ -63,3 +63,5 @@ create policy stockres_modify on public.stock_reservations for all to authentica
 
 comment on table public.stock_reservations is
   'Reservas de stock activas por contrato. El stock disponible para vender = warehouse_stock − SUM(reservas activas).';
+
+notify pgrst, 'reload schema';

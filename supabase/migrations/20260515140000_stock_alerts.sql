@@ -66,3 +66,5 @@ create policy stockalerts_modify on public.stock_alerts for all to authenticated
     and (app.has_role('company_admin') or app.has_role('technical_director'))
   )
   with check (company_id = app.current_company_id());
+
+notify pgrst, 'reload schema';
