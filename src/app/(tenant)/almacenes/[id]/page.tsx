@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 import { listWarehouses } from "@/modules/warehouses/actions";
 import { getWarehouse, listStockMovements } from "@/modules/warehouses/inventory-actions";
 import { getWarehouseStockDetail } from "@/modules/warehouses/stock-summary-actions";
+import {
+  listWarehouseLocations,
+  listProductLocations,
+} from "@/modules/warehouses/location-actions";
 import { listProducts } from "@/modules/products/actions";
 import { WarehouseDetailTabs } from "@/modules/warehouses/warehouse-detail-tabs";
 import { KIND_LABEL } from "@/modules/warehouses/constants";
@@ -20,12 +24,15 @@ export default async function WarehouseDetailPage({
   const wh = await getWarehouse(id);
   if (!wh) notFound();
 
-  const [stock, movements, products, allWarehouses] = await Promise.all([
-    getWarehouseStockDetail(id).catch(() => []),
-    listStockMovements(id).catch(() => []),
-    listProducts({ active_only: true }).catch(() => []),
-    listWarehouses().catch(() => []),
-  ]);
+  const [stock, movements, products, allWarehouses, locations, productLocations] =
+    await Promise.all([
+      getWarehouseStockDetail(id).catch(() => []),
+      listStockMovements(id).catch(() => []),
+      listProducts({ active_only: true }).catch(() => []),
+      listWarehouses().catch(() => []),
+      listWarehouseLocations(id).catch(() => []),
+      listProductLocations(id).catch(() => []),
+    ]);
 
   const otherWarehouses = allWarehouses.filter((w) => w.id !== id);
   const productLite = products.map((p) => ({ id: p.id, name: p.name }));
@@ -58,6 +65,8 @@ export default async function WarehouseDetailPage({
             movements={movements}
             products={productLite}
             otherWarehouses={otherWarehouses.map((w) => ({ id: w.id, name: w.name }))}
+            locations={locations}
+            productLocations={productLocations}
           />
         </CardContent>
       </Card>
