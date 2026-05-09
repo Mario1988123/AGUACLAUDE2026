@@ -400,6 +400,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 4b) Generar órdenes de carga sugeridas para mañana (furgonetas)
+  let loadingStats = { companies: 0, requests_created: 0, errors: 0 };
+  try {
+    const { generateLoadingRequestsForTomorrow } = await import(
+      "@/modules/warehouses/auto-loading"
+    );
+    loadingStats = await generateLoadingRequestsForTomorrow();
+  } catch (e) {
+    console.error("[cron/daily] auto-loading failed:", e);
+  }
+
   // 5) Recalcular alertas inteligentes de stock por empresa
   const stockAlertsStats = { companies: 0, alerts: 0, failed: 0 };
   try {
@@ -457,6 +468,7 @@ export async function GET(req: NextRequest) {
       verifactu,
       savings_scraper: scraperStats,
       stock_alerts: stockAlertsStats,
+      auto_loading: loadingStats,
     },
     ranAt: new Date().toISOString(),
   });

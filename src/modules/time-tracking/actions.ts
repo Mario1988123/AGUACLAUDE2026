@@ -74,6 +74,54 @@ export async function punchAction(input: PunchInput): Promise<{ kind: PunchKind 
     }
   }
 
+  // Si es entrada de jornada y hay loading_request asignada al técnico para
+  // hoy, notificarle. Fail-soft (no bloquea el fichaje).
+  if (kind === "clock_in") {
+    try {
+      const { data: lr } = await admin
+        .from("loading_requests")
+        .select("id, destination_warehouse_id, needed_for")
+        .eq("company_id", session.company_id)
+        .in("status", ["requested", "preparing", "prepared"])
+        .lte("needed_for", new Date().toISOString().slice(0, 10))
+        .order("needed_for", { ascending: true });
+      const reqs = (lr ?? []) as Array<{
+        id: string;
+        destination_warehouse_id: string;
+        needed_for: string | null;
+      }>;
+      if (reqs.length > 0) {
+        const destIds = Array.from(new Set(reqs.map((r) => r.destination_warehouse_id)));
+        const { data: vans } = await admin
+          .from("warehouses")
+          .select("id, assigned_user_id")
+          .in("id", destIds);
+        const myVan = ((vans ?? []) as Array<{
+          id: string;
+          assigned_user_id: string | null;
+        }>).find((w) => w.assigned_user_id === session.user_id);
+        if (myVan) {
+          const myReqs = reqs.filter((r) => r.destination_warehouse_id === myVan.id);
+          if (myReqs.length > 0) {
+            await admin.from("notifications").insert({
+              company_id: session.company_id,
+              recipient_user_id: session.user_id,
+              kind: "loading.pending",
+              severity: "info",
+              title: "Tienes carga pendiente",
+              body: `${myReqs.length} orden(es) de carga lista(s) para tu furgoneta. Pasa por el almacén antes de salir.`,
+              subject_type: "loading_request",
+              subject_id: myReqs[0]!.id,
+              action_url: `/almacenes/${myVan.id}`,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[punchAction] loading notif failed:", e);
+    }
+  }
+
   revalidatePath("/fichajes");
   revalidatePath("/", "layout");
   return { kind };

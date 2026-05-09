@@ -206,6 +206,30 @@ export interface WarehouseThreshold {
   stock_max: number | null;
 }
 
+/**
+ * Descarga rápida desde una furgoneta a otro almacén (típicamente principal).
+ * Es un alias semántico de transferencia con notas claras.
+ */
+export async function unloadFromVanAction(input: {
+  van_warehouse_id: string;
+  destination_warehouse_id: string;
+  product_id: string;
+  quantity: number;
+  notes?: string;
+}): Promise<void> {
+  // Reusamos la transferencia existente para no duplicar lógica.
+  const { transferStockAction } = await import("./transfer-actions");
+  await transferStockAction({
+    from_warehouse_id: input.van_warehouse_id,
+    to_warehouse_id: input.destination_warehouse_id,
+    product_id: input.product_id,
+    quantity: input.quantity,
+    notes: input.notes ?? "Descarga de furgoneta",
+  });
+  revalidatePath(`/almacenes/${input.van_warehouse_id}`);
+  revalidatePath(`/almacenes/${input.destination_warehouse_id}`);
+}
+
 export async function listThresholds(
   warehouseId: string,
 ): Promise<WarehouseThreshold[]> {
