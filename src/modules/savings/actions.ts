@@ -520,31 +520,19 @@ export async function listWizardProducts(filters: {
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  // Productos equipment activos. Si admin marcó alguno con
-  // show_in_calculator=true, filtramos por esos. Si NO marcó ninguno
-  // (caso típico al estrenar), mostramos todos los equipment para no
-  // dejar la calculadora vacía.
-  const { data: flagged } = await admin
-    .from("products")
-    .select("id")
-    .eq("company_id", session.company_id)
-    .is("deleted_at", null)
-    .eq("kind", "equipment")
-    .eq("show_in_calculator", true);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const flaggedIds = ((flagged as any[]) ?? []).map((p) => p.id);
-
-  let q = admin
+  // STRICT: SOLO los productos equipment activos cuyo admin marcó
+  // explícitamente con show_in_calculator=true. Sin fallback "muestra
+  // todos si nadie está marcado" — si la calculadora sale vacía, es
+  // porque el admin tiene que marcar productos en /productos.
+  const q = admin
     .from("products")
     .select(
       "id, name, category_id, kind, product_categories(id, name, accepts_extras, extra_role)",
     )
     .eq("company_id", session.company_id)
     .is("deleted_at", null)
-    .eq("kind", "equipment");
-  if (flaggedIds.length > 0) {
-    q = q.in("id", flaggedIds);
-  }
+    .eq("kind", "equipment")
+    .eq("show_in_calculator", true);
   const { data: rows } = await q;
 
   // Excluir productos cuya categoría sea de extras (tap/cooler)
