@@ -10,6 +10,12 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { LeadDetail, LeadListItem, LeadStatus } from "./types";
 import { notifyLeadCreated } from "@/modules/notifications/notifier";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
+import { normalizeSpanishPhone } from "@/shared/lib/validations/spanish";
+
+function normalizePhoneSafe(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return normalizeSpanishPhone(v) ?? v;
+}
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 export async function listLeads(filters?: {
@@ -246,8 +252,8 @@ export async function createLeadAction(formData: FormData) {
     first_name: parsed.first_name || null,
     last_name: parsed.last_name || null,
     email: parsed.email || null,
-    phone_primary: parsed.phone_primary || null,
-    phone_company: parsed.phone_company || null,
+    phone_primary: normalizePhoneSafe(parsed.phone_primary),
+    phone_company: normalizePhoneSafe(parsed.phone_company),
     tax_id: parsed.tax_id || null,
     origin: parsed.origin,
     potential: parsed.potential,

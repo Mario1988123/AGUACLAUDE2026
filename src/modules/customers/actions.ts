@@ -9,6 +9,13 @@ import { customerCreateSchema, customerUpdateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
+import { normalizeSpanishPhone } from "@/shared/lib/validations/spanish";
+
+// Helper local: normaliza si el formato es válido, sino devuelve original
+function normalizePhoneSafe(v: string | null | undefined): string | null {
+  if (!v) return null;
+  return normalizeSpanishPhone(v) ?? v;
+}
 
 export async function listCustomers(
   q?: string,
@@ -201,8 +208,8 @@ export async function createCustomerAction(formData: FormData) {
     first_name: parsed.first_name || null,
     last_name: parsed.last_name || null,
     email: parsed.email || null,
-    phone_primary: parsed.phone_primary || null,
-    phone_secondary: parsed.phone_secondary || null,
+    phone_primary: normalizePhoneSafe(parsed.phone_primary),
+    phone_secondary: normalizePhoneSafe(parsed.phone_secondary),
     tax_id: parsed.tax_id || null,
     notes: parsed.notes || null,
     source_lead_id: parsed.source_lead_id || null,

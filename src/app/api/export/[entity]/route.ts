@@ -41,6 +41,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  // Audit log RGPD: registrar quién y cuándo descarga datos personales.
+  // Estos exports incluyen tax_id/email/teléfono → trazabilidad obligatoria.
+  const PERSONAL_DATA_ENTITIES = new Set<Entity>([
+    "leads",
+    "customers",
+    "wallet",
+    "payments",
+  ]);
+  if (PERSONAL_DATA_ENTITIES.has(entity as Entity)) {
+    try {
+      await supabase.from("events").insert({
+        company_id: session.company_id,
+        subject_type: "company",
+        subject_id: session.company_id,
+        kind: "personal_data.exported",
+        payload: { entity, format: "csv" },
+        actor_user_id: session.user_id,
+      });
+    } catch {
+      /* no-op: el log no debe bloquear la descarga */
+    }
+  }
+
   let csv = "";
   switch (entity as Entity) {
     case "leads": {
