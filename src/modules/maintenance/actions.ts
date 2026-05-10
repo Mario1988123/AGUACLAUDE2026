@@ -190,7 +190,9 @@ export async function completeMaintenanceAction(input: unknown) {
 
   const { data: prev } = await supabase
     .from("maintenance_jobs")
-    .select("started_at, technician_user_id, company_id")
+    .select(
+      "started_at, technician_user_id, company_id, customer_equipment_id, customer_id",
+    )
     .eq("id", parsed.id)
     .single();
   const startTs = (prev as { started_at: string | null } | null)?.started_at;
@@ -271,6 +273,10 @@ export async function completeMaintenanceAction(input: unknown) {
       }
     }
   }
+
+  // Nota: customer_equipment.last_maintenance_at NO es columna real;
+  // se calcula como max(maintenance_jobs.completed_at) en
+  // equipment-actions.ts → no hace falta update extra.
 
   await supabase.from("events").insert({
     company_id: session.company_id!,

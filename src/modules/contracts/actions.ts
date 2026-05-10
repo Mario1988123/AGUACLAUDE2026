@@ -841,6 +841,140 @@ export async function markContractSigned(id: string) {
     console.error("[markContractSigned] reserveStock falló:", e);
   }
 
+  // === Sales record + puntos ==============================================
+  // Al firmar el contrato:
+  //  1. Insertamos sales_records (uno por cada item) para que el dashboard
+  //     y los objetivos vean la venta.
+  //  2. Otorgamos puntos al comercial (assigned_user_id del contrato) y
+  //     al TMK (origen del lead) según points_settings de la empresa.
+  // Fail-soft: si algo falla NO se rompe la firma.
+  try {
+    const { data: contractFull } = await admin
+      .from("contracts")
+      .select(
+        "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, assigned_user_id",
+      )
+      .eq("id", id)
+      .single();
+    const cf = contractFull as {
+      id: string;
+      customer_id: string | null;
+      plan_type: "cash" | "rental" | "renting";
+      total_cash_cents: number | null;
+      monthly_cents: number | null;
+      duration_months: number | null;
+      assigned_user_id: string | null;
+    };
+
+    // TMK origen: si el cliente vino de un lead con origin_tmk_user_id
+    let tmkUserId: string | null = null;
+    if (cf.customer_id) {
+      const { data: cust } = await admin
+        .from("customers")
+        .select("source_lead_id")
+        .eq("id", cf.customer_id)
+        .maybeSingle();
+      const sourceLeadId = (cust as { source_lead_id: string | null } | null)
+        ?.source_lead_id;
+      if (sourceLeadId) {
+        const { data: l } = await admin
+          .from("leads")
+          .select("origin_tmk_user_id")
+          .eq("id", sourceLeadId)
+          .maybeSingle();
+        tmkUserId =
+          (l as { origin_tmk_user_id: string | null } | null)
+            ?.origin_tmk_user_id ?? null;
+      }
+    }
+
+    // Importe total de la venta (lo que se usa para el objetivo €)
+    let totalCents = 0;
+    if (cf.plan_type === "cash") {
+      totalCents = cf.total_cash_cents ?? 0;
+    } else {
+      totalCents = (cf.monthly_cents ?? 0) * (cf.duration_months ?? 0);
+    }
+
+    // Items para crear un sales_record por cada uno
+    const { data: contractItems } = await admin
+      .from("contract_items")
+      .select("id, product_id, quantity")
+      .eq("contract_id", id);
+    const items = ((contractItems ?? []) as Array<{
+      id: string;
+      product_id: string;
+      quantity: number;
+    }>);
+
+    const periodYear = new Date().getFullYear();
+    const periodMonth = new Date().getMonth() + 1;
+
+    // Si no hay items (raro), creamos 1 sales_record genérico para que
+    // el contrato cuente al menos como 1 unidad.
+    const recordRows = (items.length > 0 ? items : [null]).map((it) => ({
+      company_id: session.company_id!,
+      contract_id: id,
+      contract_item_id: it?.id ?? null,
+      sales_user_id: cf.assigned_user_id,
+      tmk_user_id: tmkUserId,
+      installer_user_id: null,
+      plan_type: cf.plan_type,
+      total_cents:
+        items.length > 0
+          ? Math.round(totalCents / items.length) // reparto simple
+          : totalCents,
+      monthly_cents: cf.monthly_cents,
+      duration_months: cf.duration_months,
+      period_year: periodYear,
+      period_month: periodMonth,
+    }));
+    await admin.from("sales_records").insert(recordRows);
+
+    // Puntos
+    if (cf.assigned_user_id) {
+      const { awardPoints, getPointsSettings } = await import(
+        "@/modules/points/award"
+      );
+      const settings = await getPointsSettings(session.company_id!);
+      const totalUnits = items.reduce((s, it) => s + it.quantity, 0) || 1;
+      const basePoints =
+        settings.points_per_equipment_sold * Math.max(1, totalUnits);
+
+      await awardPoints({
+        company_id: session.company_id!,
+        user_id: cf.assigned_user_id,
+        points: basePoints,
+        reason: "contract_signed",
+        subject_type: "contract",
+        subject_id: id,
+        contract_id: id,
+        metadata: { units: totalUnits, plan_type: cf.plan_type },
+      });
+
+      if (tmkUserId && tmkUserId !== cf.assigned_user_id) {
+        const tmkPoints = Math.round(
+          (basePoints * (settings.tmk_split_percent ?? 0)) / 100,
+        );
+        if (tmkPoints > 0) {
+          await awardPoints({
+            company_id: session.company_id!,
+            user_id: tmkUserId,
+            points: tmkPoints,
+            reason: "contract_signed_tmk_split",
+            subject_type: "contract",
+            subject_id: id,
+            contract_id: id,
+            metadata: { split_percent: settings.tmk_split_percent },
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[markContractSigned] sales_record/points falló:", e);
+  }
+  // ========================================================================
+
   await supabase.from("events").insert({
     company_id: session.company_id!,
     subject_type: "contract",
@@ -1039,6 +1173,22 @@ export async function cancelContractAction(
       console.error("[cancelContract] cancelReservations falló:", e);
     }
 
+    // Anular sales_records + reverse de puntos (fail-soft)
+    try {
+      await admin.from("sales_records").delete().eq("contract_id", id);
+      const { reversePointsForSubject } = await import(
+        "@/modules/points/award"
+      );
+      await reversePointsForSubject(
+        session.company_id!,
+        "contract",
+        id,
+        `contract_cancelled: ${reason}`,
+      );
+    } catch (e) {
+      console.error("[cancelContract] reverse sales/points falló:", e);
+    }
+
     await admin.from("events").insert({
       company_id: session.company_id,
       subject_type: "contract",
@@ -1051,6 +1201,7 @@ export async function cancelContractAction(
     revalidatePath("/contratos");
     revalidatePath("/instalaciones");
     revalidatePath("/almacenes");
+    revalidatePath("/dashboard");
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
