@@ -533,6 +533,21 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] verifactu queue failed:", e);
   }
 
+  // GoCardless — reintentar pagos fallidos + webhook events no procesados
+  const gcRetry = {
+    payments: { attempted: 0, succeeded: 0, exhausted: 0 },
+    webhooks: { attempted: 0, succeeded: 0 },
+  };
+  try {
+    const { retryFailedPayments, retryFailedWebhookEvents } = await import(
+      "@/modules/gocardless/retry"
+    );
+    gcRetry.payments = await retryFailedPayments();
+    gcRetry.webhooks = await retryFailedWebhookEvents();
+  } catch (e) {
+    console.error("[cron/daily] gocardless retry failed:", e);
+  }
+
   // SLA INCIDENCIAS — notificar a admin/dir cuando incidente abierto
   // pasó su deadline_at y aún no se resolvió. Idempotente: una notif
   // por incidencia (kind='incident.sla_breach' subject_id=incident.id)
@@ -610,6 +625,7 @@ export async function GET(req: NextRequest) {
       stock_alerts: stockAlertsStats,
       auto_loading: loadingStats,
       incident_sla_breaches: slaBreaches,
+      gocardless_retry: gcRetry,
     },
     ranAt: new Date().toISOString(),
   });
