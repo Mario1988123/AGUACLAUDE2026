@@ -13,6 +13,8 @@ import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
 import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
 import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-button";
 import { listInstallers } from "@/modules/agenda/actions";
+import { CustomerConsentsCard } from "@/modules/customers/consents-card";
+import { getCustomerConsents } from "@/modules/customers/consents-actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
@@ -93,6 +95,7 @@ export default async function CustomerDetailPage({
   const customerProposals = await listProposalsByCustomer(id).catch(() => []);
   const contracts = await listContractsByCustomer(id).catch(() => []);
   const installations = await listInstallationsByCustomer(id).catch(() => []);
+  const customerConsents = await getCustomerConsents(id).catch(() => []);
 
   // Bandera "cliente en riesgo": incidencia abierta con prioridad
   // critical/high + al menos un contrato activo.
@@ -299,6 +302,10 @@ export default async function CustomerDetailPage({
             />
           </CardContent>
         </Card>
+
+        <div className="lg:col-span-2">
+          <CustomerConsentsCard customerId={id} consents={customerConsents} />
+        </div>
 
         <Card className="lg:col-span-2">
           <CardHeader>
