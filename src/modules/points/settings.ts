@@ -20,6 +20,12 @@ export interface PointsSettings {
   /** Conversión informativa: € que vale cada punto. 0 = comisiones desactivadas. */
   euros_per_point: number;
   /**
+   * Día del mes en que cierra el ciclo de comisiones.
+   * 0 = fin de mes natural (cada 1 a 30/31 del mes).
+   * 1-28 = ciclo del día X al día X-1 del mes siguiente (ej. 25 → del 25/05 al 24/06 cierra como ciclo "junio").
+   */
+  cycle_close_day: number;
+  /**
    * Hitos / bonus por metas conseguidas en el mes. Se otorgan al alcanzar el
    * umbral indicado de puntos (sólo se aplica si llega al 100% del threshold).
    * Lista ordenada de menor a mayor threshold.
@@ -43,6 +49,7 @@ export const DEFAULT_POINTS_SETTINGS: PointsSettings = {
   points_per_maintenance: 15,
   points_per_incident: 20,
   euros_per_point: 0,
+  cycle_close_day: 0,
   monthly_milestones: [
     { threshold: 100, bonus_points: 25, label: "100 puntos" },
     { threshold: 250, bonus_points: 75, label: "250 puntos" },

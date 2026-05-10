@@ -114,6 +114,26 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
               Cálculo informativo. 0 desactiva el desglose en €. Ej: 0,10 € → 100 puntos = 10 €.
             </p>
           </div>
+          <div className="space-y-1.5">
+            <Label>Cierre del ciclo de comisiones</Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={String(v.cycle_close_day)}
+              onChange={(e) => set("cycle_close_day", Number(e.target.value))}
+            >
+              <option value="0">Fin de mes natural (1 → 30/31)</option>
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={String(d)}>
+                  Día {d} (cada día {d} → día {d === 1 ? 28 : d - 1})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Define cuándo se cierra el ciclo y se totalizan puntos para llevar a nómina.
+              Las empresas con nómina mes vencido suelen usar &laquo;Fin de mes&raquo;; las que pagan a mes vencido
+              desde el día X (típicamente 25) usan ese día.
+            </p>
+          </div>
         </div>
       </section>
 

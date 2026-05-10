@@ -84,6 +84,7 @@ export const MODULES: ModuleEntry[] = [
   // ===== 3. VENTAS (resultado) =====
   { key: "sales", label: "Objetivos", icon: "Target", href: "/objetivos", configHref: "/configuracion/objetivos", group: "revenue", rolesAllowed: SALES_ROLES },
   { key: "lost_sales", label: "Ventas perdidas", icon: "TrendingDown", href: "/ventas-perdidas", group: "revenue", rolesAllowed: SALES_ROLES },
+  { key: "commissions", label: "Comisiones", icon: "Coins", href: "/comisiones", configHref: "/configuracion/puntos", group: "revenue", rolesAllowed: ["company_admin", "commercial_director"] },
   // mailing — pendiente desarrollo (próxima iteración)
   // { key: "mailing", label: "Campañas", icon: "Mail", href: "/mailing", group: "revenue", rolesAllowed: SALES_ROLES },
 
