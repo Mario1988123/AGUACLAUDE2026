@@ -424,7 +424,7 @@ export async function validateWalletEntryAction(id: string) {
   const admin = createAdminClient() as any;
   const { data: entry } = await admin
     .from("wallet_entries")
-    .select("id, contract_id, collected_by_user_id, concept, amount_cents, method")
+    .select("id, contract_id, collected_by_user_id, concept, amount_cents, method, status")
     .eq("id", id)
     .maybeSingle();
   const e = entry as
@@ -435,9 +435,20 @@ export async function validateWalletEntryAction(id: string) {
         concept: string;
         amount_cents: number;
         method: string;
+        status: string;
       }
     | null;
   if (!e) throw new Error("Entrada no encontrada");
+  // Guard: solo se valida desde collected / pending_settlement. Esto evita
+  // doble validación si el admin pulsa dos veces.
+  if (
+    e.status !== "collected" &&
+    e.status !== "pending_settlement"
+  ) {
+    throw new Error(
+      `No se puede validar este cobro (estado actual: ${e.status}). Solo se valida desde 'cobrado' o 'pendiente de liquidación'.`,
+    );
+  }
   // Efectivo NUNCA llega al banco — el comercial entrega físicamente al
   // admin → estado final = settled (liquidado).
   // Tarjeta/transfer/bizum/SEPA → admin verifica en banco → validated.

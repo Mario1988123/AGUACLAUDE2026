@@ -11,6 +11,8 @@ import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
 import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
+import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-button";
+import { listInstallers } from "@/modules/agenda/actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
@@ -302,24 +304,37 @@ export default async function CustomerDetailPage({
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
               <span>Equipos instalados ({equipment.length})</span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {(session.is_superadmin ||
                   session.roles.includes("company_admin") ||
                   session.roles.includes("technical_director")) &&
                   equipment.some((e) => e.is_active) && (
-                    <UninstallEquipmentButton
-                      customerId={id}
-                      equipment={equipment
-                        .filter((e) => e.is_active)
-                        .map((e) => ({
-                          id: e.id,
-                          display_name:
-                            e.product_name ?? e.external_model_name ?? "Equipo",
-                          serial_number: e.serial_number,
-                          is_ours: !!e.product_name,
-                        }))}
-                      warehouses={warehouseOptions}
-                    />
+                    <>
+                      <CreateMaintenanceButton
+                        customerId={id}
+                        equipment={equipment
+                          .filter((e) => e.is_active)
+                          .map((e) => ({
+                            id: e.id,
+                            display_name:
+                              e.product_name ?? e.external_model_name ?? "Equipo",
+                          }))}
+                        technicians={await listInstallers().catch(() => [])}
+                      />
+                      <UninstallEquipmentButton
+                        customerId={id}
+                        equipment={equipment
+                          .filter((e) => e.is_active)
+                          .map((e) => ({
+                            id: e.id,
+                            display_name:
+                              e.product_name ?? e.external_model_name ?? "Equipo",
+                            serial_number: e.serial_number,
+                            is_ours: !!e.product_name,
+                          }))}
+                        warehouses={warehouseOptions}
+                      />
+                    </>
                   )}
                 <AddEquipmentButton
                   customerId={id}
