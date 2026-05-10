@@ -1,0 +1,186 @@
+"use server";
+
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { awardPoints, getPointsSettings } from "./award";
+
+/**
+ * Otorga el bundle completo de puntos por una venta al cerrar el ciclo
+ * (cuando se completa la instalación). Llamar UNA SOLA VEZ por contrato
+ * (idempotente: si ya hay asientos sale/sale_with_discount/sale_tmk_split
+ * para el contrato, no duplica).
+ *
+ * Cálculo:
+ *  - basePoints = points_per_equipment_sold × Σ contract_items.quantity
+ *  - Si la propuesta origen tiene algún item con descuento bajo el
+ *    mín_authorized → aplicar discount_penalty_percent al base.
+ *  - Si hay TMK origen (lead.origin_tmk_user_id):
+ *      tmkPoints = base × tmk_split_percent / 100
+ *      commercialPoints = base − tmkPoints
+ *    Si no hay TMK: comercial recibe todo el base.
+ *
+ * NO incluye los puntos del instalador (esos se gestionan en su acción).
+ */
+export async function awardSalesBundleOnInstall(
+  installationId: string,
+): Promise<{ awarded: boolean; reason?: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Cargar la installation y su contract
+  const { data: inst } = await admin
+    .from("installations")
+    .select("id, company_id, contract_id, kind")
+    .eq("id", installationId)
+    .maybeSingle();
+  const i = inst as
+    | {
+        id: string;
+        company_id: string;
+        contract_id: string | null;
+        kind: string;
+      }
+    | null;
+  if (!i || !i.contract_id) {
+    return { awarded: false, reason: "sin_contrato" };
+  }
+  // Solo damos puntos por instalaciones 'normal' (las free_trial no, las
+  // relocation/uninstall tampoco — esas son operativas, no ventas)
+  if (i.kind !== "normal") {
+    return { awarded: false, reason: `kind_${i.kind}_no_aplica` };
+  }
+
+  // Idempotencia: si ya hay puntos otorgados para este contrato con
+  // razones de venta, no repetimos.
+  const { count: priorCount } = await admin
+    .from("points_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("contract_id", i.contract_id)
+    .in("reason", [
+      "sale",
+      "sale_with_discount",
+      "sale_tmk_split",
+    ]);
+  if ((priorCount ?? 0) > 0) {
+    return { awarded: false, reason: "ya_otorgados" };
+  }
+
+  // Cargar contrato + assigned_user_id
+  const { data: contract } = await admin
+    .from("contracts")
+    .select("id, assigned_user_id, customer_id")
+    .eq("id", i.contract_id)
+    .maybeSingle();
+  const c = contract as
+    | { id: string; assigned_user_id: string | null; customer_id: string | null }
+    | null;
+  if (!c?.assigned_user_id) {
+    return { awarded: false, reason: "sin_comercial_asignado" };
+  }
+
+  // Resolver TMK origen: customer.source_lead_id → lead.origin_tmk_user_id
+  let tmkUserId: string | null = null;
+  if (c.customer_id) {
+    const { data: cust } = await admin
+      .from("customers")
+      .select("source_lead_id")
+      .eq("id", c.customer_id)
+      .maybeSingle();
+    const sourceLeadId = (cust as { source_lead_id: string | null } | null)
+      ?.source_lead_id;
+    if (sourceLeadId) {
+      const { data: l } = await admin
+        .from("leads")
+        .select("origin_tmk_user_id")
+        .eq("id", sourceLeadId)
+        .maybeSingle();
+      tmkUserId =
+        (l as { origin_tmk_user_id: string | null } | null)
+          ?.origin_tmk_user_id ?? null;
+    }
+  }
+
+  // Contar items + cantidad total
+  const { data: items } = await admin
+    .from("contract_items")
+    .select("product_id, quantity, unit_price_cents")
+    .eq("contract_id", c.id);
+  type CI = {
+    product_id: string;
+    quantity: number;
+    unit_price_cents: number | null;
+  };
+  const itemList = ((items ?? []) as CI[]);
+  const totalEquipments = itemList.reduce((s, it) => s + it.quantity, 0) || 1;
+
+  // Detectar descuento: si algún unit_price_cents < min_authorized del
+  // pricing plan cash del producto
+  const productIds = itemList.map((it) => it.product_id);
+  let hasDiscount = false;
+  if (productIds.length > 0) {
+    const { data: plans } = await admin
+      .from("product_pricing_plans")
+      .select("product_id, min_authorized_cents")
+      .in("product_id", productIds)
+      .eq("plan_type", "cash");
+    const minMap = new Map(
+      ((plans ?? []) as Array<{
+        product_id: string;
+        min_authorized_cents: number | null;
+      }>).map((p) => [p.product_id, p.min_authorized_cents]),
+    );
+    for (const it of itemList) {
+      const min = minMap.get(it.product_id);
+      if (
+        min != null &&
+        it.unit_price_cents != null &&
+        it.unit_price_cents < min
+      ) {
+        hasDiscount = true;
+        break;
+      }
+    }
+  }
+
+  const cfg = await getPointsSettings(i.company_id);
+  const base = totalEquipments * cfg.points_per_equipment_sold;
+  const adjusted = hasDiscount
+    ? Math.round((base * (100 - cfg.discount_penalty_percent)) / 100)
+    : base;
+
+  const tmkPct = tmkUserId && tmkUserId !== c.assigned_user_id ? cfg.tmk_split_percent : 0;
+  const tmkPoints = Math.round((adjusted * tmkPct) / 100);
+  const commercialPoints = adjusted - tmkPoints;
+
+  if (commercialPoints > 0) {
+    await awardPoints({
+      company_id: i.company_id,
+      user_id: c.assigned_user_id,
+      points: commercialPoints,
+      reason: hasDiscount ? "sale_with_discount" : "sale",
+      subject_type: "contract",
+      subject_id: c.id,
+      contract_id: c.id,
+      installation_id: installationId,
+      metadata: {
+        equipments: totalEquipments,
+        has_discount: hasDiscount,
+        tmk_split_pct: tmkPct,
+      },
+    });
+  }
+  if (tmkPoints > 0 && tmkUserId) {
+    await awardPoints({
+      company_id: i.company_id,
+      user_id: tmkUserId,
+      points: tmkPoints,
+      reason: "sale_tmk_split",
+      subject_type: "contract",
+      subject_id: c.id,
+      contract_id: c.id,
+      installation_id: installationId,
+      metadata: { split_pct: tmkPct, has_discount: hasDiscount },
+    });
+  }
+
+  return { awarded: true };
+}

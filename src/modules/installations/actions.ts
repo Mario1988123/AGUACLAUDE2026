@@ -986,6 +986,19 @@ export async function completeInstallation(input: unknown) {
     }
   }
 
+  // CIERRE DE CICLO DE VENTA: al completar la instalación se otorgan los
+  // puntos acumulados (lead → propuesta → contrato → instalación) al
+  // comercial y al TMK origen. Idempotente: si ya se otorgaron, no
+  // duplica.
+  try {
+    const { awardSalesBundleOnInstall } = await import(
+      "@/modules/points/sales-bundle"
+    );
+    await awardSalesBundleOnInstall(parsed.id);
+  } catch (e) {
+    console.error("[completeInstallation] sales bundle:", e);
+  }
+
   revalidatePath(`/instalaciones/${parsed.id}`);
   revalidatePath("/instalaciones");
 }

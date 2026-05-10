@@ -931,77 +931,15 @@ export async function markContractSigned(id: string) {
     }));
     await admin.from("sales_records").insert(recordRows);
 
-    // Puntos. Si ya se otorgaron en la propuesta origen (markProposalAccepted)
-    // damos solo un pequeño "cierre" para no duplicar.
-    if (cf.assigned_user_id) {
-      const { awardPoints, getPointsSettings } = await import(
-        "@/modules/points/award"
-      );
-      const settings = await getPointsSettings(session.company_id!);
-      const totalUnits = items.reduce((s, it) => s + it.quantity, 0) || 1;
-      const basePoints =
-        settings.points_per_equipment_sold * Math.max(1, totalUnits);
-
-      let alreadyAwardedAtProposal = false;
-      try {
-        const { data: srcProp } = await admin
-          .from("proposals")
-          .select("id")
-          .eq("converted_to_contract_id", id)
-          .maybeSingle();
-        const srcPropId = (srcProp as { id: string } | null)?.id;
-        if (srcPropId) {
-          const { count } = await admin
-            .from("points_ledger")
-            .select("id", { count: "exact", head: true })
-            .eq("subject_type", "proposal")
-            .eq("subject_id", srcPropId)
-            .in("reason", ["sale", "sale_with_discount"]);
-          if ((count ?? 0) > 0) alreadyAwardedAtProposal = true;
-        }
-      } catch {
-        /* no-op */
-      }
-
-      const points = alreadyAwardedAtProposal
-        ? Math.round(basePoints * 0.1)
-        : basePoints;
-
-      await awardPoints({
-        company_id: session.company_id!,
-        user_id: cf.assigned_user_id,
-        points,
-        reason: alreadyAwardedAtProposal
-          ? "contract_closure_bonus"
-          : "contract_signed",
-        subject_type: "contract",
-        subject_id: id,
-        contract_id: id,
-        metadata: {
-          units: totalUnits,
-          plan_type: cf.plan_type,
-          dedup_proposal: alreadyAwardedAtProposal,
-        },
-      });
-
-      if (tmkUserId && tmkUserId !== cf.assigned_user_id) {
-        const tmkPoints = Math.round(
-          (basePoints * (settings.tmk_split_percent ?? 0)) / 100,
-        );
-        if (tmkPoints > 0) {
-          await awardPoints({
-            company_id: session.company_id!,
-            user_id: tmkUserId,
-            points: tmkPoints,
-            reason: "contract_signed_tmk_split",
-            subject_type: "contract",
-            subject_id: id,
-            contract_id: id,
-            metadata: { split_percent: settings.tmk_split_percent },
-          });
-        }
-      }
-    }
+    // PUNTOS: decisión usuario 2026-05-10 — los puntos por la venta NO
+    // se otorgan al firmar el contrato. Quedan "pendientes" y se
+    // entregan cuando se completa la instalación (cierre real del
+    // ciclo). Aquí solo registramos el sales_record para que aparezca
+    // en dashboard de objetivos. Si el contrato se cancela antes de
+    // instalar, los puntos nunca llegan. Cuando se instale, el hook
+    // awardSalesBundleOnInstall() dentro de completeInstallation hará
+    // los cálculos completos usando contract.assigned_user_id (sales),
+    // tmk_user_id (TMK split), items y points_settings.
   } catch (e) {
     console.error("[markContractSigned] sales_record/points falló:", e);
   }

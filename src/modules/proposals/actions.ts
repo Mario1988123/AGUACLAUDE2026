@@ -927,8 +927,16 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
     }
   }
 
-  // Puntos: comercial + (si origen TMK) telemarketer
-  if (session.company_id) {
+  // PUNTOS: decisión usuario 2026-05-10 — los puntos se otorgan SOLO al
+  // completar la instalación (cuando se cierra el ciclo entero). Aceptar
+  // propuesta es un hito INFORMATIVO: queda en eventos pero NO suma
+  // puntos. Si el ciclo se interrumpe (cancelación), el comercial nunca
+  // cobra los puntos por esta propuesta.
+  // El bloque siguiente queda desactivado a propósito; lo dejo
+  // documentado por si se quisiera revertir la decisión en el futuro.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _DISABLED_PROPOSAL_POINTS = false;
+  if (_DISABLED_PROPOSAL_POINTS && session.company_id) {
     try {
       const cfg = await getPointsSettings(session.company_id);
       // Detalles del lead (si lo había) para origen tmk + assigned_user
