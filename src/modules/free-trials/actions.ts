@@ -501,7 +501,22 @@ export async function acceptFreeTrialAction(input: {
     }
     const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
 
-    // 4) Crear contrato en draft
+    // 3.5) Construir customer_snapshot inmutable para el contrato
+    let customerSnapshot: Record<string, unknown> = {};
+    try {
+      const { data: cust } = await admin
+        .from("customers")
+        .select(
+          "party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, tax_id",
+        )
+        .eq("id", customerId)
+        .maybeSingle();
+      if (cust) customerSnapshot = cust as Record<string, unknown>;
+    } catch {
+      /* fail-soft */
+    }
+
+    // 4) Crear contrato en draft con customer_snapshot
     const { data: createdContract, error: kErr } = await admin
       .from("contracts")
       .insert({
@@ -514,6 +529,7 @@ export async function acceptFreeTrialAction(input: {
         total_cash_cents: input.total_cents ?? null,
         duration_months: input.duration_months ?? null,
         source_free_trial_id: trial.id,
+        customer_snapshot: customerSnapshot,
         created_by: session.user_id,
       })
       .select("id")
@@ -521,7 +537,9 @@ export async function acceptFreeTrialAction(input: {
     if (kErr) return { ok: false, error: `No se pudo crear contrato: ${kErr.message}` };
     const contractId = (createdContract as { id: string }).id;
 
-    // 5) Copiar items de la prueba como contract_items (defensivo)
+    // 5) Copiar items de la prueba como contract_items con todos los
+    // campos NOT NULL: product_name_snapshot, product_kind_snapshot,
+    // unit_price_cents (lo cogemos del pricing plan o cost del producto).
     try {
       const { data: items } = await admin
         .from("free_trial_items")
@@ -533,14 +551,56 @@ export async function acceptFreeTrialAction(input: {
         product_name_snapshot: string;
       }>);
       if (list.length > 0) {
-        await admin.from("contract_items").insert(
-          list.map((it) => ({
+        const productIds = list.map((it) => it.product_id);
+        // Cargamos kind y precio de cada producto
+        const { data: prods } = await admin
+          .from("products")
+          .select("id, kind, cost_cents")
+          .in("id", productIds);
+        const prodMap = new Map(
+          ((prods ?? []) as Array<{
+            id: string;
+            kind: string;
+            cost_cents: number | null;
+          }>).map((p) => [p.id, p]),
+        );
+        // Precios cash actuales desde product_pricing_plans para el
+        // unit_price_cents (si no hay, usamos cost_cents como fallback)
+        const { data: plans } = await admin
+          .from("product_pricing_plans")
+          .select("product_id, total_price_cents")
+          .in("product_id", productIds)
+          .eq("plan_type", "cash")
+          .eq("is_active", true);
+        const priceMap = new Map(
+          ((plans ?? []) as Array<{
+            product_id: string;
+            total_price_cents: number;
+          }>).map((p) => [p.product_id, p.total_price_cents]),
+        );
+
+        const rows = list.map((it, idx) => {
+          const p = prodMap.get(it.product_id);
+          const unitPrice =
+            priceMap.get(it.product_id) ?? p?.cost_cents ?? 0;
+          return {
             contract_id: contractId,
             company_id: session.company_id,
             product_id: it.product_id,
             quantity: it.quantity,
-          })),
-        );
+            product_name_snapshot: it.product_name_snapshot,
+            product_kind_snapshot: p?.kind ?? "equipment",
+            unit_price_cents: unitPrice,
+            installation_address_id: trial.installation_address_id,
+            display_order: idx,
+          };
+        });
+        const { error: ciErr } = await admin
+          .from("contract_items")
+          .insert(rows);
+        if (ciErr) {
+          console.error("[acceptFreeTrial] contract_items insert:", ciErr.message);
+        }
       }
     } catch (e) {
       console.warn("[acceptFreeTrial] contract_items copy:", e);
