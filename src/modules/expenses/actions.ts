@@ -112,6 +112,111 @@ export async function listExpenseCategories(): Promise<ExpenseCategory[]> {
   return ((data as ExpenseCategory[] | null) ?? []);
 }
 
+export interface ExpenseCategoryAdmin extends ExpenseCategory {
+  is_active: boolean;
+}
+
+/**
+ * Listado completo (incluye inactivas) para la UI de configuración.
+ * Solo accesible para admin.
+ */
+export async function listExpenseCategoriesAdmin(): Promise<ExpenseCategoryAdmin[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    throw new Error("Solo admin puede ver/editar categorías");
+  }
+  await ensureCategoriesSeeded(session.company_id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("expense_categories")
+    .select(
+      "id, code, name, group_code, vat_deductible, irpf_exempt_logic, default_max_amount_cents, requires_client_link, display_order, icon, is_active",
+    )
+    .eq("company_id", session.company_id)
+    .order("display_order");
+  return ((data as ExpenseCategoryAdmin[] | null) ?? []);
+}
+
+export interface UpsertExpenseCategoryInput {
+  id?: string | null;
+  code: string;
+  name: string;
+  group_code: string;
+  vat_deductible: boolean;
+  irpf_exempt_logic?: string | null;
+  default_max_amount_cents?: number | null;
+  requires_client_link: boolean;
+  display_order: number;
+  icon?: string | null;
+  is_active: boolean;
+}
+
+export async function upsertExpenseCategoryAction(
+  input: UpsertExpenseCategoryInput,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    throw new Error("Solo admin puede editar categorías");
+  }
+  if (!input.code.trim() || !input.name.trim() || !input.group_code.trim()) {
+    throw new Error("Código, nombre y grupo son obligatorios");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const payload = {
+    company_id: session.company_id,
+    code: input.code.trim(),
+    name: input.name.trim(),
+    group_code: input.group_code.trim(),
+    vat_deductible: input.vat_deductible,
+    irpf_exempt_logic: input.irpf_exempt_logic ?? null,
+    default_max_amount_cents: input.default_max_amount_cents ?? null,
+    requires_client_link: input.requires_client_link,
+    display_order: input.display_order,
+    icon: input.icon ?? null,
+    is_active: input.is_active,
+  };
+  if (input.id) {
+    const { error } = await admin
+      .from("expense_categories")
+      .update(payload)
+      .eq("id", input.id)
+      .eq("company_id", session.company_id);
+    if (error) throw new Error(error.message);
+  } else {
+    const { error } = await admin.from("expense_categories").insert(payload);
+    if (error) {
+      if (/duplicate key|unique/i.test(error.message)) {
+        throw new Error(`Ya existe una categoría con código "${input.code}"`);
+      }
+      throw new Error(error.message);
+    }
+  }
+  revalidatePath("/configuracion/gastos");
+}
+
+export async function toggleExpenseCategoryActiveAction(
+  categoryId: string,
+  isActive: boolean,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    throw new Error("Solo admin puede editar categorías");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin
+    .from("expense_categories")
+    .update({ is_active: isActive })
+    .eq("id", categoryId)
+    .eq("company_id", session.company_id);
+  revalidatePath("/configuracion/gastos");
+}
+
 // =============================================================================
 // OCR
 // =============================================================================

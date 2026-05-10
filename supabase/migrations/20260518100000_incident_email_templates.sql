@@ -67,10 +67,11 @@ begin
 end $$;
 
 -- Backfill: ejecutar para todas las empresas existentes
+-- (companies no tiene deleted_at — usa status/cancelled_at).
 do $$
 declare c record;
 begin
-  for c in select id from public.companies where deleted_at is null loop
+  for c in select id from public.companies where cancelled_at is null loop
     perform public.seed_incident_email_templates(c.id);
   end loop;
 end $$;

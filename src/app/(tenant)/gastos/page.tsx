@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { Plus, Receipt } from "lucide-react";
-import { listExpenses, getExpenseSummary } from "@/modules/expenses/actions";
+import { listExpenses, getExpenseSummary, getExpenseSettings } from "@/modules/expenses/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KpiCard } from "@/shared/components/kpi-card";
 import { requireSession } from "@/shared/lib/auth/session";
+import { MileageButton } from "@/modules/expenses/mileage-button";
+import { PerDiemButton } from "@/modules/expenses/per-diem-button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,9 +50,10 @@ export default async function ExpensesPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
 
-  const [expenses, summary] = await Promise.all([
+  const [expenses, summary, expenseSettings] = await Promise.all([
     listExpenses({ status: sp.status, fromDate: sp.from, toDate: sp.to }),
     getExpenseSummary(),
+    getExpenseSettings(),
   ]);
 
   return (
@@ -62,12 +65,23 @@ export default async function ExpensesPage({
             Tickets, dietas y kilometraje. Sube la foto y rellenamos los datos.
           </p>
         </div>
-        <Link
-          href="/gastos/nuevo"
-          className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" /> Nuevo gasto
-        </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <PerDiemButton
+            amounts={{
+              national_overnight_cents: expenseSettings.per_diem_overnight_cents,
+              national_no_overnight_cents: expenseSettings.per_diem_no_overnight_cents,
+              eu_overnight_cents: expenseSettings.per_diem_eu_overnight_cents,
+              eu_no_overnight_cents: expenseSettings.per_diem_eu_no_overnight_cents,
+            }}
+          />
+          <MileageButton />
+          <Link
+            href="/gastos/nuevo"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="h-4 w-4" /> Nuevo gasto
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -476,7 +476,7 @@ export async function GET(req: NextRequest) {
     const { data: companiesAll } = await admin
       .from("companies")
       .select("id")
-      .is("deleted_at", null);
+      .is("cancelled_at", null);
     const { recomputeStockAlertsForCompany } = await import(
       "@/modules/warehouses/alert-actions"
     );

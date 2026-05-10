@@ -1,13 +1,20 @@
-import { getExpenseSettings } from "@/modules/expenses/actions";
+import {
+  getExpenseSettings,
+  listExpenseCategoriesAdmin,
+} from "@/modules/expenses/actions";
 import { isMindeeConfigured } from "@/modules/expenses/mindee";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { ExpenseSettingsForm } from "@/modules/expenses/settings-form";
+import { CategoriesManager } from "@/modules/expenses/categories-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function ExpenseSettingsPage() {
-  const settings = await getExpenseSettings();
+  const [settings, categories] = await Promise.all([
+    getExpenseSettings(),
+    listExpenseCategoriesAdmin().catch(() => []),
+  ]);
   const ocrConfigured = isMindeeConfigured();
 
   return (
@@ -72,10 +79,13 @@ export default async function ExpenseSettingsPage() {
         <CardHeader>
           <CardTitle>Categorías</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Las categorías se generan automáticamente con el set base del sector (combustible, peajes,
-          parking, comidas, hotel, repuestos, EPI, formación…) la primera vez que un comercial entra
-          en /gastos. Podrás editarlas próximamente desde aquí.
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Set base del sector cargado automáticamente (combustible, peajes, parking,
+            comidas, hotel, repuestos, EPI, formación…). Puedes añadir, editar o
+            desactivar categorías aquí.
+          </p>
+          <CategoriesManager initial={categories} />
         </CardContent>
       </Card>
     </div>
