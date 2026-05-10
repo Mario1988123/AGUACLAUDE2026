@@ -9,6 +9,7 @@ import { RegisterPaymentButton } from "@/modules/wallet/register-button";
 import { ValidateWalletButtons } from "@/modules/wallet/validate-buttons";
 import { PaymentMethodBadge } from "@/modules/wallet/payment-method-badge";
 import { WalletInfoButton } from "@/modules/wallet/info-modal";
+import { Pagination } from "@/shared/components/pagination";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export default async function WalletPage({
     period_year?: string;
     period_month?: string;
     history_year?: string;
+    page?: string;
   }>;
 }) {
   const session = await requireSession();
@@ -64,6 +66,9 @@ export default async function WalletPage({
   const periodYear = sp.period_year ? parseInt(sp.period_year, 10) : now.getFullYear();
   const periodMonth = sp.period_month ? parseInt(sp.period_month, 10) : now.getMonth() + 1;
   const historyYear = sp.history_year ? parseInt(sp.history_year, 10) : now.getFullYear();
+  const PAGE_SIZE = 50;
+  const page = Math.max(1, Number(sp.page ?? 1));
+  const offset = (page - 1) * PAGE_SIZE;
 
   const canValidate =
     session.is_superadmin ||
@@ -73,7 +78,15 @@ export default async function WalletPage({
   const isAdmin = canInvoice;
 
   const [entries, summary, yearHistory] = await Promise.all([
-    listWalletEntries({ method, status, fromDate, toDate, notInvoiced }),
+    listWalletEntries({
+      method,
+      status,
+      fromDate,
+      toDate,
+      notInvoiced,
+      limit: PAGE_SIZE + 1,
+      offset,
+    }),
     getWalletSummary({ year: periodYear, month: periodMonth }),
     isAdmin ? getWalletYearlyHistory({ year: historyYear }) : Promise.resolve([]),
   ]);
@@ -371,7 +384,7 @@ export default async function WalletPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Movimientos ({entries.length})</CardTitle>
+          <CardTitle>Movimientos (página {page})</CardTitle>
         </CardHeader>
         <CardContent>
           {entries.length === 0 ? (
@@ -380,7 +393,7 @@ export default async function WalletPage({
             <>
               {/* MÓVIL: cards apiladas */}
               <div className="space-y-3 lg:hidden">
-                {entries.map((e) => (
+                {entries.slice(0, PAGE_SIZE).map((e) => (
                   <div
                     key={e.id}
                     className="rounded-xl border border-border bg-card/50 p-3 space-y-2"
@@ -466,7 +479,7 @@ export default async function WalletPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {entries.map((e) => (
+                    {entries.slice(0, PAGE_SIZE).map((e) => (
                       <tr key={e.id} className="hover:bg-muted/30">
                         <td className="py-2 pr-3 text-xs text-muted-foreground whitespace-nowrap">
                           {new Date(e.created_at).toLocaleDateString("es-ES", {
@@ -553,6 +566,22 @@ export default async function WalletPage({
               </div>
             </>
           )}
+          <Pagination
+            basePath="/wallet"
+            page={page}
+            pageSize={PAGE_SIZE}
+            hasMore={entries.length > PAGE_SIZE}
+            preserveParams={{
+              method,
+              status,
+              from: sp.from,
+              to: sp.to,
+              invoice: sp.invoice,
+              period_year: sp.period_year,
+              period_month: sp.period_month,
+              history_year: sp.history_year,
+            }}
+          />
         </CardContent>
       </Card>
     </div>

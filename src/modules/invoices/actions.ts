@@ -131,11 +131,15 @@ export async function listInvoices(filters?: {
   kind?: InvoiceKind;
   customer_id?: string;
   q?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<InvoiceListItem[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  const limit = Math.min(500, filters?.limit ?? 50);
+  const offset = Math.max(0, filters?.offset ?? 0);
   let query = admin
     .from("invoices")
     .select(
@@ -143,7 +147,7 @@ export async function listInvoices(filters?: {
     )
     .eq("company_id", session.company_id)
     .order("issue_date", { ascending: false })
-    .limit(500);
+    .range(offset, offset + limit - 1);
   if (filters?.status) query = query.eq("status", filters.status);
   if (filters?.kind) query = query.eq("kind", filters.kind);
   if (filters?.customer_id) query = query.eq("customer_id", filters.customer_id);

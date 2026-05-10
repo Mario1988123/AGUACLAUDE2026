@@ -12,8 +12,11 @@ import {
   getVerifactuQueue,
   VerifactuQueueCard,
 } from "@/modules/invoices/verifactu-queue-card";
+import { Pagination } from "@/shared/components/pagination";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 50;
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Borrador",
@@ -47,12 +50,21 @@ function eur(c: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
 }
 
-export default async function InvoicesPage() {
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const sp = await searchParams;
+  const page = Math.max(1, Number(sp.page ?? 1));
+  const offset = (page - 1) * PAGE_SIZE;
   const [invoices, pendingInvoice, vfQueue] = await Promise.all([
-    listInvoices(),
+    listInvoices({ limit: PAGE_SIZE + 1, offset }),
     listPendingInvoiceWalletEntries(),
     getVerifactuQueue().catch(() => ({ pending: [], failed: [] })),
   ]);
+  const hasMore = invoices.length > PAGE_SIZE;
+  const visibleInvoices = invoices.slice(0, PAGE_SIZE);
 
   const totalPending = invoices
     .filter((i) => i.status === "issued" || i.status === "overdue")
@@ -160,7 +172,7 @@ export default async function InvoicesPage() {
           <CardTitle>Listado</CardTitle>
         </CardHeader>
         <CardContent>
-          {invoices.length === 0 ? (
+          {visibleInvoices.length === 0 ? (
             <p className="text-sm text-muted-foreground py-6 text-center">
               Aún no hay facturas. Pulsa &laquo;Nueva factura&raquo; o genera la mensualidad
               automática de los contratos recurrentes.
@@ -182,7 +194,7 @@ export default async function InvoicesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {invoices.map((i) => (
+                  {visibleInvoices.map((i) => (
                     <tr key={i.id} className="hover:bg-muted/30">
                       <td className="py-2 font-mono text-xs">
                         <Link
@@ -242,6 +254,12 @@ export default async function InvoicesPage() {
               </table>
             </div>
           )}
+          <Pagination
+            basePath="/facturas"
+            page={page}
+            pageSize={PAGE_SIZE}
+            hasMore={hasMore}
+          />
         </CardContent>
       </Card>
     </div>

@@ -33,6 +33,8 @@ export async function listWalletEntries(filters?: {
   fromDate?: string;
   toDate?: string;
   notInvoiced?: boolean;
+  limit?: number;
+  offset?: number;
 }): Promise<WalletEntryRow[]> {
   const session = await requireSession();
   const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
@@ -41,6 +43,8 @@ export async function listWalletEntries(filters?: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  const limit = Math.min(500, filters?.limit ?? 50);
+  const offset = Math.max(0, filters?.offset ?? 0);
   // Defensa-en-profundidad: la columna invoice_id se añadió en
   // 20260511100000. Si la migración no se ha aplicado, hacemos fallback
   // sin esa columna en lugar de reventar la página.
@@ -50,7 +54,7 @@ export async function listWalletEntries(filters?: {
       "id, concept, amount_cents, method, status, collected_by_user_id, collected_at, validated_at, contract_id, customer_id, invoice_id, created_at, contracts(reference_code), customers(legal_name, trade_name, first_name, last_name), invoices(full_reference, status)",
     )
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(offset, offset + limit - 1);
   if (visibleUserIds) {
     query = query.in("collected_by_user_id", visibleUserIds);
   }
@@ -70,7 +74,7 @@ export async function listWalletEntries(filters?: {
         "id, concept, amount_cents, method, status, collected_by_user_id, collected_at, validated_at, contract_id, customer_id, created_at, contracts(reference_code), customers(legal_name, trade_name, first_name, last_name)",
       )
       .order("created_at", { ascending: false })
-      .limit(200);
+      .range(offset, offset + limit - 1);
     if (visibleUserIds) q2 = q2.in("collected_by_user_id", visibleUserIds);
     if (filters?.method) q2 = q2.eq("method", filters.method);
     if (filters?.status) q2 = q2.eq("status", filters.status);
