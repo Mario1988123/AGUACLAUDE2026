@@ -26,6 +26,12 @@ import {
   CriticalIncidentsCard,
   getCriticalOpenIncidents,
 } from "@/modules/incidents/critical-card";
+import {
+  PendingTrialsCard,
+  getPendingTrials,
+  CriticalStockAlertsCard,
+  getCriticalStockAlerts,
+} from "@/modules/dashboard/pending-cards";
 import { getMonthlyEvolution } from "@/modules/dashboard/evolution-actions";
 import { EvolutionChart } from "@/modules/dashboard/evolution-chart";
 
@@ -150,13 +156,21 @@ async function renderDashboard({
     listTeamMembers().catch(() => []),
   ]);
 
-  const [upcomingMaintenance, upcomingInstallations, criticalIncidents, evolution] =
-    await Promise.all([
-      getUpcomingMaintenance().catch(() => []),
-      getUpcomingInstallations().catch(() => []),
-      getCriticalOpenIncidents().catch(() => []),
-      getMonthlyEvolution().catch(() => []),
-    ]);
+  const [
+    upcomingMaintenance,
+    upcomingInstallations,
+    criticalIncidents,
+    evolution,
+    pendingTrials,
+    criticalStockAlerts,
+  ] = await Promise.all([
+    getUpcomingMaintenance().catch(() => []),
+    getUpcomingInstallations().catch(() => []),
+    getCriticalOpenIncidents().catch(() => []),
+    getMonthlyEvolution().catch(() => []),
+    getPendingTrials().catch(() => []),
+    getCriticalStockAlerts().catch(() => []),
+  ]);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
     (s, r) => s + r.total_cents,
@@ -306,6 +320,12 @@ async function renderDashboard({
       </div>
 
       <CriticalIncidentsCard items={criticalIncidents} />
+
+      {/* Pruebas pendientes + Alertas de stock */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <PendingTrialsCard items={pendingTrials} />
+        <CriticalStockAlertsCard items={criticalStockAlerts} />
+      </div>
 
       {/* Próximas instalaciones + mantenimientos */}
       <div className="grid gap-5 lg:grid-cols-2">
