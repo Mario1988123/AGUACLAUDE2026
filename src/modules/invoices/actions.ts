@@ -578,32 +578,45 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
   if (con.status === "cancelled") {
     throw new Error("No se puede facturar un contrato cancelado.");
   }
-  if (con.plan_type === "cash") {
-    // Cash: requiere instalación. Status 'signed' = firmado pero NO instalado.
-    if (con.status !== "active" && con.status !== "completed") {
-      throw new Error(
-        "No se puede facturar una venta hasta que el equipo esté instalado. Completa la instalación primero.",
-      );
-    }
-  } else {
-    // Rental/Renting: el contrato entra en vigor en service_start_date si está
-    // indicada; si no, en la fecha de firma (signed_at). Si tampoco hay
-    // signed_at (raro: contrato sin firmar), bloqueamos.
-    const effectiveStart = con.service_start_date ?? con.signed_at;
-    if (!effectiveStart) {
-      throw new Error(
-        "El contrato no tiene fecha de firma ni de inicio de servicio. Firma el contrato primero.",
-      );
-    }
+  // Tanto venta como alquiler/renting REQUIEREN instalación completada
+  // (decisión usuario 2026-05-10: "el alquiler entra en vigor desde la fecha
+  // de instalación"). Buscamos la instalación 'normal' completada del
+  // contrato. Otros kinds (uninstall/relocation/free_trial) no cuentan.
+  const { data: instRows } = await admin
+    .from("installations")
+    .select("id, status, completed_at, kind")
+    .eq("contract_id", contractId)
+    .in("kind", ["normal"])
+    .order("completed_at", { ascending: false });
+  type InstRow = {
+    id: string;
+    status: string;
+    completed_at: string | null;
+    kind: string;
+  };
+  const completedInstall = ((instRows ?? []) as InstRow[]).find(
+    (i) => i.status === "completed" && i.completed_at,
+  );
+  if (!completedInstall) {
+    throw new Error(
+      con.plan_type === "cash"
+        ? "No se puede facturar la venta hasta que la instalación esté completada."
+        : "No se puede facturar el alquiler hasta que la instalación esté completada (entra en vigor desde la fecha de instalación).",
+    );
+  }
+  // Si rental/renting tiene service_start_date EXPLÍCITA en futuro respecto
+  // a la instalación, esa fecha manda (caso "instalo el día 18 pero arranca
+  // el 1 del mes siguiente"). Si no hay override, vale la fecha de instalación.
+  if (con.plan_type !== "cash" && con.service_start_date) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const startDate = new Date(effectiveStart);
+    const startDate = new Date(con.service_start_date);
     startDate.setHours(0, 0, 0, 0);
     if (startDate.getTime() > today.getTime()) {
       throw new Error(
-        `Este ${con.plan_type === "rental" ? "alquiler" : "renting"} entra en vigor el ${startDate.toLocaleDateString(
+        `Este ${con.plan_type === "rental" ? "alquiler" : "renting"} arranca el ${startDate.toLocaleDateString(
           "es-ES",
-        )}. No se puede facturar antes de esa fecha.`,
+        )} (fecha pactada). No se puede facturar antes.`,
       );
     }
   }
