@@ -559,6 +559,58 @@ export async function markContractSigned(id: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  // Guard: contrato debe tener al menos un item antes de firmar (audit
+  // final 2026-05-10). Antes se firmaba un contrato vacío y el flujo
+  // posterior (sales_records, instalación) fallaba.
+  const { count: itemsCount } = await admin
+    .from("contract_items")
+    .select("id", { count: "exact", head: true })
+    .eq("contract_id", id);
+  if ((itemsCount ?? 0) === 0) {
+    throw new Error(
+      "El contrato no tiene productos. Añade al menos un equipo antes de firmar.",
+    );
+  }
+  // Guard adicional: si el contrato es de domiciliación y el IBAN es
+  // placeholder ES00, NO firmar. Antes se permitía y luego GoCardless
+  // fallaba al intentar cobrar.
+  // (la detección ES00 ya existe abajo — la reutilizamos para BLOQUEAR
+  // el firmado si el plan es renting/rental)
+  const { data: ctxValidate } = await admin
+    .from("contracts")
+    .select("customer_id, chosen_plan_type")
+    .eq("id", id)
+    .maybeSingle();
+  const cv = ctxValidate as
+    | { customer_id: string | null; chosen_plan_type: string | null }
+    | null;
+  if (
+    cv?.customer_id &&
+    (cv.chosen_plan_type === "rental" || cv.chosen_plan_type === "renting")
+  ) {
+    const { data: bk } = await admin
+      .from("customer_bank_accounts")
+      .select("iban")
+      .eq("customer_id", cv.customer_id)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const iban = (bk as { iban: string | null } | null)?.iban ?? null;
+    if (!iban) {
+      throw new Error(
+        "Falta IBAN del cliente para domiciliar la cuota. Añade una cuenta bancaria antes de firmar.",
+      );
+    }
+    // ES00 sigue permitiéndose como pendiente (decisión 2026-05-08): el
+    // contrato se firma con flag has_provisional_data y se completa
+    // luego. Validar formato básico ES + 22 chars.
+    if (!/^ES\d{2}[\dA-Z]{20}$/i.test(iban.replace(/\s+/g, ""))) {
+      throw new Error(
+        "El IBAN del cliente no tiene formato español válido (ES + 22 caracteres).",
+      );
+    }
+  }
+
   // Detectar si IBAN del cliente es ES00 (placeholder pendiente).
   // En ese caso marcamos has_provisional_data + pending_fields para
   // que se vea claramente que el contrato está firmado pero pendiente

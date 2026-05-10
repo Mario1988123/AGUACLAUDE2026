@@ -100,6 +100,17 @@ async function processEvent(admin: any, companyId: string, ev: GcEvent) {
   if (ev.resource_type === "mandates" && ev.links?.mandate) {
     const mandateStatus = mapMandateAction(ev.action);
     if (mandateStatus) {
+      // Cargar mandato actual para sacar customer_id antes del update
+      const { data: prevMandate } = await admin
+        .from("gocardless_mandates")
+        .select("id, customer_id, status")
+        .eq("gocardless_mandate_id", ev.links.mandate)
+        .eq("company_id", companyId)
+        .maybeSingle();
+      const pm = prevMandate as
+        | { id: string; customer_id: string | null; status: string }
+        | null;
+
       await admin
         .from("gocardless_mandates")
         .update({
@@ -108,6 +119,58 @@ async function processEvent(admin: any, companyId: string, ev: GcEvent) {
         })
         .eq("gocardless_mandate_id", ev.links.mandate)
         .eq("company_id", companyId);
+
+      // Notificar a admin si el mandato pasó a cancelled/failed/expired —
+      // estados terminales en los que el cliente ya no podrá ser cobrado
+      // por SEPA. El admin debe contactar para regularizar.
+      if (
+        pm &&
+        pm.status !== mandateStatus &&
+        ["cancelled", "failed", "expired"].includes(mandateStatus)
+      ) {
+        try {
+          let customerName = "cliente";
+          if (pm.customer_id) {
+            const { data: c } = await admin
+              .from("customers")
+              .select(
+                "party_kind, legal_name, trade_name, first_name, last_name",
+              )
+              .eq("id", pm.customer_id)
+              .maybeSingle();
+            const cu = c as
+              | {
+                  party_kind: "individual" | "company";
+                  legal_name: string | null;
+                  trade_name: string | null;
+                  first_name: string | null;
+                  last_name: string | null;
+                }
+              | null;
+            if (cu) {
+              customerName =
+                cu.party_kind === "company"
+                  ? cu.trade_name || cu.legal_name || "cliente"
+                  : `${cu.first_name ?? ""} ${cu.last_name ?? ""}`.trim() ||
+                    "cliente";
+            }
+          }
+          const { notifyByRoles } = await import(
+            "@/modules/notifications/notifier"
+          );
+          await notifyByRoles(companyId, ["company_admin"], {
+            kind: "gocardless.mandate_lost",
+            severity: "error",
+            title: `Mandato SEPA ${mandateStatus}`,
+            body: `El mandato de domiciliación de ${customerName} ha pasado a ${mandateStatus}. Contacta para reactivar.`,
+            subject_type: "customer",
+            subject_id: pm.customer_id ?? undefined,
+            action_url: pm.customer_id ? `/clientes/${pm.customer_id}` : "/clientes",
+          });
+        } catch (e) {
+          console.error("[gocardless webhook] notify mandate lost:", e);
+        }
+      }
     }
   }
   if (ev.resource_type === "payments" && ev.links?.payment) {

@@ -738,6 +738,42 @@ export async function createInvoiceFromWalletAction(
       };
     }
     if (w.invoice_id) return { ok: false, error: "Este cobro ya está facturado" };
+
+    // Guard: AEAT exige domicilio fiscal. Si el cliente no tiene dirección
+    // ni tax_id, la factura quedaría inválida. Validar antes de generarla.
+    const { data: cust } = await admin
+      .from("customers")
+      .select("tax_id, legal_name, trade_name, first_name, last_name, party_kind")
+      .eq("id", w.customer_id)
+      .maybeSingle();
+    const cu = cust as
+      | {
+          tax_id: string | null;
+          legal_name: string | null;
+          trade_name: string | null;
+          first_name: string | null;
+          last_name: string | null;
+          party_kind: "individual" | "company";
+        }
+      | null;
+    if (!cu?.tax_id) {
+      return {
+        ok: false,
+        error:
+          "El cliente no tiene DNI/CIF. Complétalo en su ficha antes de facturar.",
+      };
+    }
+    const { count: addrCount } = await admin
+      .from("addresses")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", w.customer_id);
+    if ((addrCount ?? 0) === 0) {
+      return {
+        ok: false,
+        error:
+          "El cliente no tiene dirección. Añade una dirección fiscal antes de facturar.",
+      };
+    }
     if (!["collected", "pending_settlement", "validated", "settled"].includes(w.status)) {
       return {
         ok: false,

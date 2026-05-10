@@ -107,6 +107,7 @@ export const MODULES: ModuleEntry[] = [
   { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "personal" },
 
   // ===== 8. SISTEMA =====
+  { key: "events", label: "Eventos", icon: "Activity", href: "/eventos", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "audit", label: "Auditoría", icon: "ScrollText", href: "/auditoria", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];
