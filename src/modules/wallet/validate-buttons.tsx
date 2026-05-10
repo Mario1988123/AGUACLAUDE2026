@@ -11,6 +11,7 @@ import {
   Ban,
   ArrowLeft,
   Coins,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
@@ -262,7 +263,11 @@ export function ValidateWalletButtons({
             disabled={pending}
             className="inline-flex h-8 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            <primary.icon className="h-3.5 w-3.5" />
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <primary.icon className="h-3.5 w-3.5" />
+            )}
             <span className="hidden sm:inline">{primary.label}</span>
           </button>
         )}
@@ -275,7 +280,11 @@ export function ValidateWalletButtons({
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted disabled:opacity-50"
               aria-label="Más acciones"
             >
-              <MoreVertical className="h-4 w-4" />
+              {pending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreVertical className="h-4 w-4" />
+              )}
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full z-50 mt-1 w-52 overflow-hidden rounded-xl border border-border bg-card shadow-xl">

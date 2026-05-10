@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Wrench, ShieldCheck, Calendar, MapPin, Clock } from "lucide-react";
+import { Wrench, ShieldCheck, Calendar, MapPin, Clock, ArrowRight } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getMyDayItems } from "@/modules/my-day/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -123,17 +123,38 @@ export default async function MiDiaPage() {
                           <div className="text-xs text-muted-foreground">{it.subtitle}</div>
                         )}
                       </div>
-                      {mapsUrl && (
-                        <a
-                          href={mapsUrl}
-                          target="_blank"
-                          rel="noopener"
-                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:opacity-90"
-                          aria-label="Abrir ruta en Google Maps"
+                      <div className="flex flex-col shrink-0 gap-1.5">
+                        <Link
+                          href={it.href as never}
+                          className="flex h-12 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+                          aria-label={
+                            it.kind === "installation"
+                              ? "Abrir parte de instalación"
+                              : it.kind === "maintenance"
+                                ? "Abrir mantenimiento"
+                                : "Abrir tarea"
+                          }
                         >
-                          <MapPin className="h-5 w-5" />
-                        </a>
-                      )}
+                          {it.kind === "installation"
+                            ? "Iniciar parte"
+                            : it.kind === "maintenance"
+                              ? "Abrir"
+                              : "Ver"}
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                        {mapsUrl && (
+                          <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener"
+                            className="flex h-9 items-center justify-center gap-1 rounded-xl border border-border bg-card px-2 text-xs font-bold hover:bg-muted"
+                            aria-label="Abrir ruta en Google Maps"
+                          >
+                            <MapPin className="h-4 w-4" />
+                            Ruta
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </li>
                 );
