@@ -362,6 +362,99 @@ export async function installFreeTrialAction(
 }
 
 /**
+ * Firma + instala una prueba gratuita en un solo paso. Recibe firmas en
+ * data URL (PNG base64), las sube al bucket privado free-trial-signatures
+ * y guarda los paths en free_trials. Después delega en installFreeTrialAction
+ * para el resto del flujo (decremento stock, crear installation, etc.).
+ *
+ * scheduled_for: si null, instala AHORA (now). Si es una fecha futura,
+ * solo deja la prueba como 'scheduled' con scheduled_at — el técnico
+ * marcará "Instalada" cuando llegue el día.
+ */
+export async function signAndInstallFreeTrialAction(input: {
+  trial_id: string;
+  is_provisional: boolean;
+  scheduled_for: string | null;
+  customer_signer_name: string;
+  customer_signer_tax_id?: string | null;
+  customer_signature_data_url: string;
+  representative_signature_data_url: string;
+}): Promise<{ ok: true; status: "scheduled" | "installed" }> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+
+  if (!input.customer_signer_name?.trim())
+    throw new Error("Falta el nombre del firmante");
+  if (!input.customer_signature_data_url?.startsWith("data:image/"))
+    throw new Error("Falta la firma del cliente");
+  if (!input.representative_signature_data_url?.startsWith("data:image/"))
+    throw new Error("Falta la firma del comercial");
+
+  const { ensureBucket } = await import("@/shared/lib/supabase/storage-buckets");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const BUCKET = "free-trial-signatures";
+  const ok = await ensureBucket(admin, BUCKET);
+  if (!ok) throw new Error("No se pudo preparar el bucket de firmas");
+
+  function dataUrlToBuffer(dataUrl: string): Buffer {
+    const base64 = dataUrl.split(",")[1] ?? "";
+    return Buffer.from(base64, "base64");
+  }
+  const ts = Date.now();
+  const customerPath = `${session.company_id}/${input.trial_id}/customer-${ts}.png`;
+  const repPath = `${session.company_id}/${input.trial_id}/representative-${ts}.png`;
+  const upCust = await admin.storage.from(BUCKET).upload(
+    customerPath,
+    dataUrlToBuffer(input.customer_signature_data_url),
+    { contentType: "image/png", upsert: false, cacheControl: "3600" },
+  );
+  if (upCust.error) throw new Error(`Firma cliente: ${upCust.error.message}`);
+  const upRep = await admin.storage.from(BUCKET).upload(
+    repPath,
+    dataUrlToBuffer(input.representative_signature_data_url),
+    { contentType: "image/png", upsert: false, cacheControl: "3600" },
+  );
+  if (upRep.error) throw new Error(`Firma comercial: ${upRep.error.message}`);
+
+  // Guardar metadata de firmas + flag de instalación provisional / definitiva
+  const nowIso = new Date().toISOString();
+  const metaPayload: Record<string, unknown> = {
+    customer_signature_path: customerPath,
+    customer_signer_name: input.customer_signer_name.trim(),
+    customer_signer_tax_id: input.customer_signer_tax_id?.trim() || null,
+    customer_signed_at: nowIso,
+    representative_signature_path: repPath,
+    representative_user_id: session.user_id,
+    representative_signed_at: nowIso,
+    conditions_signed: true,
+    is_provisional_install: input.is_provisional,
+  };
+  if (input.scheduled_for) {
+    metaPayload.scheduled_at = input.scheduled_for;
+    metaPayload.status = "scheduled";
+  }
+  let upd = await admin.from("free_trials").update(metaPayload).eq("id", input.trial_id);
+  // Defensa por si is_provisional_install no existe aún (migración pendiente)
+  if (upd.error && /is_provisional_install/i.test(upd.error.message ?? "")) {
+    delete metaPayload.is_provisional_install;
+    upd = await admin.from("free_trials").update(metaPayload).eq("id", input.trial_id);
+  }
+  if (upd.error) throw new Error(upd.error.message);
+
+  // Si es para instalar ahora → ejecutamos installFreeTrialAction
+  if (!input.scheduled_for) {
+    await installFreeTrialAction(input.trial_id, {
+      is_provisional: input.is_provisional,
+    });
+    revalidatePath(`/pruebas-gratuitas/${input.trial_id}`);
+    return { ok: true, status: "installed" };
+  }
+  revalidatePath(`/pruebas-gratuitas/${input.trial_id}`);
+  return { ok: true, status: "scheduled" };
+}
+
+/**
  * Convierte una prueba aceptada en cliente + contrato real.
  * Si la prueba estaba enlazada a un lead, lo convierte primero a customer.
  * El contrato se crea en estado 'draft' para que el comercial complete

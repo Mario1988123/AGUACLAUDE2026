@@ -28,6 +28,8 @@ export const STORAGE_BUCKETS = {
   "company-logos": { public: true },
   /** Tickets/recibos de gastos comerciales. Privados. */
   expenses: { public: false },
+  /** Firmas digitalizadas del albarán de prueba gratuita. Privadas. */
+  "free-trial-signatures": { public: false },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;

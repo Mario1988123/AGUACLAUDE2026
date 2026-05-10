@@ -2,45 +2,34 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Play, X, Undo2, Check, FileSignature, FileDown, Wrench } from "lucide-react";
+import { X, Undo2, Check, FileSignature, FileDown, Wrench } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  installFreeTrialAction,
   rejectFreeTrialAction,
   markReturnedAction,
   acceptFreeTrialAction,
 } from "./actions";
+import { SignAndInstallButton } from "./sign-install-modal";
 
 export function FreeTrialActionsPanel({
   trialId,
   status,
   isProvisional,
+  customerName,
+  customerTaxId,
 }: {
   trialId: string;
   status: string;
   isProvisional?: boolean;
+  customerName: string;
+  customerTaxId: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [reason, setReason] = useState("");
 
-  function install(opts: { is_provisional: boolean }) {
-    startTransition(async () => {
-      try {
-        await installFreeTrialAction(trialId, opts);
-        notify.success(
-          opts.is_provisional
-            ? "Instalada provisionalmente"
-            : "Instalada definitivamente",
-        );
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
-      }
-    });
-  }
   function reject() {
     if (!reason.trim()) {
       notify.warning("Indica motivo de rechazo");
@@ -77,40 +66,18 @@ export function FreeTrialActionsPanel({
           rel="noopener"
           className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-sm font-semibold hover:bg-muted"
         >
-          <FileDown className="h-4 w-4" /> Imprimir albarán para firmar
+          <FileDown className="h-4 w-4" /> Vista previa albarán
         </a>
-        <div className="rounded-xl border-2 border-success/40 bg-success/5 p-3 space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Instalación <strong>definitiva</strong>: trabajo profesional
-            desde el principio. Si el cliente acepta, no hay que volver a
-            tocar nada.
-          </p>
-          <Button
-            onClick={() => install({ is_provisional: false })}
-            disabled={pending}
-            size="lg"
-            className="w-full gap-2"
-            variant="success"
-          >
-            <Play className="h-5 w-5" /> Instalar definitivamente
-          </Button>
-        </div>
-        <div className="rounded-xl border-2 border-warning/40 bg-warning/5 p-3 space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Instalación <strong>provisional</strong>: conexión rápida para
-            que el cliente pruebe. Si acepta, habrá que reubicar/instalar
-            bien antes de validar el contrato.
-          </p>
-          <Button
-            onClick={() => install({ is_provisional: true })}
-            disabled={pending}
-            size="lg"
-            className="w-full gap-2"
-            variant="warning"
-          >
-            <Play className="h-5 w-5" /> Instalar provisionalmente
-          </Button>
-        </div>
+        <SignAndInstallButton
+          trialId={trialId}
+          defaultCustomerName={customerName}
+          defaultCustomerTaxId={customerTaxId}
+        />
+        <p className="text-xs text-muted-foreground">
+          El wizard pide cuándo, tipo (provisional/definitiva), datos del
+          firmante y captura las dos firmas (cliente + comercial). Tras
+          confirmar, la prueba queda firmada e instalada (o programada).
+        </p>
       </div>
     );
   }
@@ -146,7 +113,7 @@ export function FreeTrialActionsPanel({
           rel="noopener"
           className="flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card p-2 text-sm font-semibold hover:bg-muted"
         >
-          <FileDown className="h-4 w-4" /> Albarán de entrega
+          <FileDown className="h-4 w-4" /> Albarán de entrega firmado
         </a>
         <Button
           onClick={accept}

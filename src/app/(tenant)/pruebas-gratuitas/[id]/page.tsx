@@ -52,6 +52,43 @@ export default async function FreeTrialDetailPage({
       ? { href: `/leads/${trial.lead_id}`, label: "lead" }
       : null;
 
+  // Cargar nombre + DNI del owner para el modal sign+install
+  let ownerName = "Cliente";
+  let ownerTaxId: string | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supa = (await (await import("@/shared/lib/supabase/server")).createClient()) as any;
+    if (trial.customer_id) {
+      const { data } = await supa
+        .from("customers")
+        .select("party_kind, legal_name, trade_name, first_name, last_name, tax_id")
+        .eq("id", trial.customer_id)
+        .maybeSingle();
+      if (data) {
+        ownerName =
+          data.party_kind === "company"
+            ? data.trade_name || data.legal_name || "Cliente"
+            : `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim() || "Cliente";
+        ownerTaxId = data.tax_id;
+      }
+    } else if (trial.lead_id) {
+      const { data } = await supa
+        .from("leads")
+        .select("party_kind, legal_name, trade_name, first_name, last_name, tax_id")
+        .eq("id", trial.lead_id)
+        .maybeSingle();
+      if (data) {
+        ownerName =
+          data.party_kind === "company"
+            ? data.trade_name || data.legal_name || "Cliente"
+            : `${data.first_name ?? ""} ${data.last_name ?? ""}`.trim() || "Cliente";
+        ownerTaxId = data.tax_id;
+      }
+    }
+  } catch {
+    /* fail-soft */
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -150,6 +187,8 @@ export default async function FreeTrialDetailPage({
                 (trial as { is_provisional_install?: boolean })
                   .is_provisional_install ?? false
               }
+              customerName={ownerName}
+              customerTaxId={ownerTaxId}
             />
           </CardContent>
         </Card>
