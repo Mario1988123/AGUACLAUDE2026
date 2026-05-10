@@ -91,7 +91,13 @@ async function getOrSeedSeries(companyId: string, kind: InvoiceKind): Promise<Se
     .limit(1)
     .maybeSingle();
   if (!data) {
-    await admin.rpc("seed_default_invoice_series", { p_company_id: companyId });
+    // Intento sembrar la serie default desde RPC. Si la RPC no existe o falla,
+    // capturamos el error para no tumbar el flujo con un error críptico.
+    try {
+      await admin.rpc("seed_default_invoice_series", { p_company_id: companyId });
+    } catch (e) {
+      console.error("[getOrSeedSeries] seed RPC failed:", e);
+    }
     const r = await admin
       .from("invoice_series")
       .select("id, kind, series_code")
@@ -103,7 +109,17 @@ async function getOrSeedSeries(companyId: string, kind: InvoiceKind): Promise<Se
       .maybeSingle();
     data = r.data;
   }
-  if (!data) throw new Error(`No existe serie para ${kind}`);
+  if (!data) {
+    const kindLabel: Record<string, string> = {
+      invoice: "factura",
+      proforma: "factura proforma",
+      credit_note: "factura rectificativa",
+      simplified: "factura simplificada",
+    };
+    throw new Error(
+      `No tienes configurada una serie de facturación para ${kindLabel[kind] ?? kind}. Ve a Configuración → Facturación y crea al menos una serie activa.`,
+    );
+  }
   return data as SeriesRow;
 }
 
@@ -530,7 +546,9 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
   const admin = createAdminClient() as any;
   const { data: c } = await admin
     .from("contracts")
-    .select("id, customer_id, total_cash_cents, monthly_cents, plan_type")
+    .select(
+      "id, customer_id, total_cash_cents, monthly_cents, plan_type, status, service_start_date, signed_at, reference_code",
+    )
     .eq("id", contractId)
     .maybeSingle();
   if (!c) throw new Error("Contrato no encontrado");
@@ -539,8 +557,53 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
     customer_id: string;
     total_cash_cents: number | null;
     monthly_cents: number | null;
-    plan_type: string;
+    plan_type: "cash" | "rental" | "renting";
+    status: string;
+    service_start_date: string | null;
+    signed_at: string | null;
+    reference_code: string | null;
   };
+
+  // Guard: no se puede facturar un contrato que no esté en vigor.
+  // - Para CASH (compra al contado): requiere instalación completada
+  //   (contract.status='active' tras completeInstallation o cron de
+  //   activación por service_start_date).
+  // - Para RENTAL/RENTING: el alquiler/renting entra en vigor con la fecha
+  //   pactada (service_start_date). No se puede facturar antes de esa fecha.
+  if (con.status === "draft" || con.status === "pending_data") {
+    throw new Error(
+      `El contrato ${con.reference_code ?? ""} no está firmado todavía. Firma primero.`.trim(),
+    );
+  }
+  if (con.status === "cancelled") {
+    throw new Error("No se puede facturar un contrato cancelado.");
+  }
+  if (con.plan_type === "cash") {
+    // Cash: requiere instalación. Status 'signed' = firmado pero NO instalado.
+    if (con.status !== "active" && con.status !== "completed") {
+      throw new Error(
+        "No se puede facturar una venta hasta que el equipo esté instalado. Completa la instalación primero.",
+      );
+    }
+  } else {
+    // Rental/Renting: requiere fecha de inicio de servicio alcanzada.
+    if (!con.service_start_date) {
+      throw new Error(
+        "El contrato no tiene fecha de inicio de servicio. Indícala en el contrato antes de facturar.",
+      );
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const startDate = new Date(con.service_start_date);
+    startDate.setHours(0, 0, 0, 0);
+    if (startDate.getTime() > today.getTime()) {
+      throw new Error(
+        `Este ${con.plan_type === "rental" ? "alquiler" : "renting"} entra en vigor el ${startDate.toLocaleDateString(
+          "es-ES",
+        )}. No se puede facturar antes de esa fecha.`,
+      );
+    }
+  }
 
   const { data: items } = await admin
     .from("contract_items")

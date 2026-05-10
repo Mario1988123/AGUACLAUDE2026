@@ -16,7 +16,7 @@ export function ViewA4Button({ contractId }: { contractId: string }) {
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
-        <Eye className="h-4 w-4" /> Ver A4
+        <Eye className="h-4 w-4" /> Ver contrato
       </Button>
 
       {open && (

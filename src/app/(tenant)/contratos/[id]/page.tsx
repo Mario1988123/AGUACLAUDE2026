@@ -27,7 +27,6 @@ import { ContractPhotosCard } from "@/modules/contracts/photo-uploader";
 import { SignaturesCard } from "@/modules/contracts/signature-pad";
 import { InstallPreference } from "@/modules/contracts/install-preference";
 import { ViewA4Button } from "@/modules/contracts/view-a4-button";
-import { ContractPreviewButton } from "@/modules/contracts/preview-modal-button";
 import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 import { BackButton } from "@/shared/components/back-button";
@@ -235,65 +234,11 @@ export default async function ContractDetailPage({
             }}
           />
           )}
-          <ContractPreviewButton
-            contractRef={contract.reference_code ?? "(sin código)"}
-            customerName={customerName}
-            customerTaxId={customerSnap.tax_id ?? null}
-            planLabel={PLAN_TYPE_LABEL[contract.plan_type] ?? contract.plan_type}
-            durationMonths={contract.duration_months}
-            totalCash={contract.total_cash_cents}
-            monthly={contract.monthly_cents}
-            items={items.map((it) => ({
-              product_name_snapshot: it.product_name_snapshot,
-              quantity: it.quantity,
-              unit_price_cents: it.unit_price_cents,
-            }))}
-            payments={payments.map((p) => ({
-              concept: p.concept,
-              amount_cents: p.amount_cents,
-              method: p.method,
-              moment: p.moment,
-            }))}
-            clauses={clauses}
-            signatures={signatures.map((s) => ({
-              signer_role: s.signer_role,
-              signer_name: s.signer_name,
-              signer_tax_id: s.signer_tax_id,
-              signature_data_url: s.signature_data_url,
-            }))}
-            companyIban={fiscal?.fiscal_iban ?? null}
-            companyName={fiscal?.fiscal_legal_name ?? null}
-            preferredSlotLabel={(() => {
-              const parts: string[] = [];
-              const slot = c.preferred_install_time_slot as string | null;
-              if (slot === "morning") parts.push("Mañana (9–14h)");
-              else if (slot === "afternoon") parts.push("Tarde (16–20h)");
-              else if (slot === "any") parts.push("Cualquier hora");
-              else if (slot === "custom" && c.preferred_install_time_notes) parts.push(c.preferred_install_time_notes);
-              const dows = c.preferred_install_days_of_week as number[] | null;
-              if (dows && dows.length > 0) {
-                const map = ["", "L", "M", "X", "J", "V", "S", "D"];
-                parts.push(`Días: ${dows.map((d) => map[d]).join(", ")}`);
-              }
-              const dates = c.preferred_install_dates as string[] | null;
-              if (dates && dates.length > 0) {
-                parts.push(
-                  `Fechas: ${dates
-                    .map((d) =>
-                      new Date(d).toLocaleDateString("es-ES", {
-                        day: "numeric",
-                        month: "short",
-                      }),
-                    )
-                    .join(", ")}`,
-                );
-              }
-              return parts.length > 0 ? parts.join(" · ") : null;
-            })()}
-          />
           <ViewA4Button contractId={contract.id} />
-          {contract.status === "signed" && <InvoiceFromContractButton contractId={contract.id} />}
-          {(contract.status === "signed" || contract.status === "active") && (
+          {(contract.status === "signed" || contract.status === "active" || contract.status === "completed") && (
+            <InvoiceFromContractButton contractId={contract.id} />
+          )}
+          {(contract.status === "signed" || contract.status === "active" || contract.status === "completed") && (
             <SendByEmailButton documentId={contract.id} kind="contract" short />
           )}
           <BackButton href="/contratos" />
