@@ -16,12 +16,10 @@ import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { collectContractPaymentAction } from "./actions";
 
-// "now" = el técnico cobra in situ ahora.
-// "at_office" = el cliente pasará por la oficina a pagar más tarde.
-// Antes había una tercera opción "on_installation" que en el contexto
-// del wizard era idéntica a "now" (ya estás en la instalación). La
-// hemos eliminado por confusa. El backend sigue aceptando ambas y
-// "at_office" se sigue persistiendo como when=on_installation con notas.
+// "now" = se cobra ahora (firma o instalación).
+// "at_office" = se pospone (puede ser en la instalación posterior, en
+// la oficina, o más tarde). El backend lo persiste como
+// when=on_installation con nota "pendiente de cobro real".
 type When = "now" | "at_office";
 type Method = "cash" | "card" | "bizum" | "transfer";
 
@@ -74,15 +72,14 @@ export function CollectInline({
     startTransition(async () => {
       try {
         if (when === "at_office") {
-          // Reusa el flujo "diferido" pero deja anotado que el cobro es
-          // en oficina — no materializa wallet entry hasta que el
-          // comercial lo confirme cuando reciba el dinero.
+          // "Posponer": flujo diferido — no materializa wallet entry
+          // hasta que el comercial lo confirme cuando reciba el dinero.
           await collectContractPaymentAction(paymentId, {
             when: "on_installation",
             method,
-            notes: "Pago en oficina · pendiente de cobro real",
+            notes: "Cobro pospuesto · pendiente de validación",
           });
-          notify.success("Marcado: pago en oficina pendiente");
+          notify.success("Cobro pospuesto registrado");
         } else {
           await collectContractPaymentAction(paymentId, { when: "now", method });
           notify.success("Cobrado · pendiente de validar");
@@ -132,7 +129,7 @@ export function CollectInline({
                 : "border-border bg-card hover:border-emerald-300"
             }`}
           >
-            <Coins className="h-4 w-4" /> Ahora (in situ)
+            <Coins className="h-4 w-4" /> Ahora
           </button>
           <button
             type="button"
@@ -143,14 +140,14 @@ export function CollectInline({
                 : "border-border bg-card hover:border-blue-300"
             }`}
           >
-            <Briefcase className="h-4 w-4" /> En oficina (después)
+            <Briefcase className="h-4 w-4" /> Posponer
           </button>
         </div>
       </div>
       {when === "at_office" && (
         <p className="rounded-lg border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-800">
-          ℹ El cliente pagará en oficina. Queda registrado como pendiente — el
-          comercial validará el cobro cuando reciba el dinero.
+          ℹ El cobro queda como pendiente. Se podrá materializar más adelante
+          (en la instalación, en la oficina, o cuando el cliente lo abone).
         </p>
       )}
       <div>

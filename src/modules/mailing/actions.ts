@@ -332,6 +332,23 @@ export async function sendTransactionalEmail(
     return { ok: false, error: `Plantilla "${input.template_key}" no encontrada` };
   }
 
+  // RGPD — si la plantilla es de marketing y el destinatario es un cliente
+  // identificado, comprobamos que tenga concedido el consentimiento
+  // 'commercial'. Si lo revocó, NO se manda — aunque el flujo lo pidiera.
+  if (
+    (tpl as { kind: string }).kind === "marketing" &&
+    input.customer_id
+  ) {
+    const { hasActiveConsent } = await import("@/modules/customers/consents-actions");
+    const allowed = await hasActiveConsent(input.customer_id, "commercial");
+    if (!allowed) {
+      return {
+        ok: false,
+        error: "Cliente sin consentimiento para comunicaciones comerciales (RGPD)",
+      };
+    }
+  }
+
   // Settings del usuario (su email empresa)
   const { data: userSettings } = await admin
     .from("email_user_settings")

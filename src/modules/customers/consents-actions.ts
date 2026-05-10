@@ -67,3 +67,31 @@ export async function getCustomerConsents(customerId: string): Promise<ConsentRo
   }
   return latest;
 }
+
+/**
+ * Comprueba si un cliente tiene activo un consentimiento concreto. Devuelve
+ * `false` si nunca lo ha concedido o si lo ha revocado. Se usa como guard
+ * antes de enviar comunicaciones comerciales para cumplir RGPD: si el
+ * cliente revocó, NO se le manda — aunque el flujo lo pidiera.
+ *
+ * Importante: data_processing es obligatorio para que cualquier comunicación
+ * transaccional sea posible. Si está revocado, la empresa NO debería ni
+ * facturar (sería una decisión legal-administrativa, no un guard técnico).
+ */
+export async function hasActiveConsent(
+  customerId: string,
+  kind: ConsentKind,
+): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("customer_consents")
+    .select("granted")
+    .eq("customer_id", customerId)
+    .eq("kind", kind)
+    .order("granted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return false;
+  return (data as { granted: boolean }).granted === true;
+}

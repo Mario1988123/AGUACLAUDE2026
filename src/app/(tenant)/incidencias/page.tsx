@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Eye } from "lucide-react";
+import { Eye, BarChart3 } from "lucide-react";
 import { listIncidents } from "@/modules/incidents/actions";
+import { requireSession } from "@/shared/lib/auth/session";
 import {
   STATUS_LABEL,
   PRIORITY_LABEL,
@@ -35,15 +36,34 @@ const INCIDENT_TONE: Record<
 export const dynamic = "force-dynamic";
 
 export default async function IncidenciasPage() {
-  const incidents = await listIncidents();
+  const [incidents, session] = await Promise.all([
+    listIncidents(),
+    requireSession(),
+  ]);
+  const canSeeStats =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Incidencias</h1>
           <p className="mt-1 text-sm text-muted-foreground">{incidents.length} incidencias</p>
         </div>
-        <CreateIncidentButton />
+        <div className="flex items-center gap-2 flex-wrap">
+          {canSeeStats && (
+            <Link
+              href="/incidencias/cumplimiento"
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            >
+              <BarChart3 className="h-4 w-4" /> Cumplimiento SLA
+            </Link>
+          )}
+          <CreateIncidentButton />
+        </div>
       </div>
 
       <Card>

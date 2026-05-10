@@ -521,63 +521,80 @@ function ItemEditor({
           <span className="text-sm font-bold">Mantenimiento incluido</span>
         </label>
         {item.maintenance_included ? (
-          <div className="mt-2 space-y-2">
-            <Label className="text-xs">Cubierto hasta fecha</Label>
-            <div className="flex flex-wrap items-center gap-2">
-              {[12, 24, 36, 48].map((m) => {
-                const isContractDuration = duration === m;
-                // Detectar si este botón es el que está seleccionado:
-                // calculamos la fecha que generaría y comparamos (con tolerancia
-                // de ±2 días para absorber pequeñas diferencias de cuando se
-                // pulsó el botón vs ahora).
-                let isSelected = false;
-                if (item.maintenance_until_date) {
-                  const target = new Date();
-                  target.setMonth(target.getMonth() + m);
-                  const current = new Date(item.maintenance_until_date);
-                  const diffDays =
-                    Math.abs(current.getTime() - target.getTime()) / (1000 * 60 * 60 * 24);
-                  isSelected = diffDays < 5;
-                }
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setMonth(d.getMonth() + m);
-                      onChange({
-                        maintenance_until_date: d.toISOString().slice(0, 10),
-                      });
-                    }}
-                    className={`rounded-lg border-2 px-3 py-1.5 text-xs font-bold transition ${
-                      isSelected
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border bg-card hover:border-primary/40"
-                    }`}
-                    title={
-                      isContractDuration
-                        ? `★ Coincide con duración del contrato (${m} meses)`
-                        : `${m} meses desde hoy`
-                    }
-                  >
-                    {m} meses{isContractDuration ? " ★" : ""}
-                  </button>
-                );
-              })}
-              <Input
-                type="date"
-                value={item.maintenance_until_date ?? ""}
-                onChange={(e) => onChange({ maintenance_until_date: e.target.value || null })}
-                className="max-w-[180px]"
-              />
+          <div className="mt-2 space-y-3">
+            <div className="space-y-2">
+              <Label className="text-xs">Cubierto hasta fecha</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {[12, 24, 36, 48].map((m) => {
+                  const isContractDuration = duration === m;
+                  let isSelected = false;
+                  if (item.maintenance_until_date) {
+                    const target = new Date();
+                    target.setMonth(target.getMonth() + m);
+                    const current = new Date(item.maintenance_until_date);
+                    const diffDays =
+                      Math.abs(current.getTime() - target.getTime()) / (1000 * 60 * 60 * 24);
+                    isSelected = diffDays < 5;
+                  }
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() + m);
+                        onChange({
+                          maintenance_until_date: d.toISOString().slice(0, 10),
+                        });
+                      }}
+                      className={`rounded-lg border-2 px-3 py-1.5 text-xs font-bold transition ${
+                        isSelected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card hover:border-primary/40"
+                      }`}
+                      title={
+                        isContractDuration
+                          ? `★ Coincide con duración del contrato (${m} meses)`
+                          : `${m} meses desde hoy`
+                      }
+                    >
+                      {m} meses{isContractDuration ? " ★" : ""}
+                    </button>
+                  );
+                })}
+                <Input
+                  type="date"
+                  value={item.maintenance_until_date ?? ""}
+                  onChange={(e) => onChange({ maintenance_until_date: e.target.value || null })}
+                  className="max-w-[180px]"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Pulsa un botón para calcular fecha rápida o edita a mano.{" "}
+                {duration
+                  ? `★ marca la duración del contrato (${duration} meses).`
+                  : null}
+              </p>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Pulsa un botón para calcular fecha rápida o edita a mano.{" "}
-              {duration
-                ? `★ marca la duración del contrato (${duration} meses).`
-                : null}
-            </p>
+            <div className="space-y-1">
+              <Label className="text-xs">Periodicidad (cada cuántos meses)</Label>
+              <select
+                value={item.maintenance_periodicity_months ?? 12}
+                onChange={(e) =>
+                  onChange({ maintenance_periodicity_months: Number(e.target.value) })
+                }
+                className="h-10 w-full max-w-[180px] rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {PERIODICITY_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    cada {m} meses
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-muted-foreground">
+                Cuántos meses pasan entre un mantenimiento y el siguiente.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="mt-2 grid gap-2 sm:grid-cols-2">

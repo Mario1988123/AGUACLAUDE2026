@@ -548,55 +548,139 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] gocardless retry failed:", e);
   }
 
-  // SLA INCIDENCIAS — notificar a admin/dir cuando incidente abierto
-  // pasó su deadline_at y aún no se resolvió. Idempotente: una notif
-  // por incidencia (kind='incident.sla_breach' subject_id=incident.id)
+  // SLA INCIDENCIAS — escalado progresivo (decisión usuario 2026-05-10):
+  //   75% del SLA agotado → recordatorio al técnico asignado
+  //   100% (vencido)      → notificación a admin + director técnico
+  //   150% del SLA        → aviso de urgencia adicional al admin
+  // Idempotente: una notif por (incidencia, etapa) por día.
   let slaBreaches = 0;
+  let slaWarnings = 0;
+  let slaCritical = 0;
   try {
-    const { data: breached } = await admin
+    const now = new Date();
+    const { data: openIncidents } = await admin
       .from("incidents")
-      .select("id, company_id, title, priority")
-      .lt("deadline_at", new Date().toISOString())
+      .select(
+        "id, company_id, title, priority, created_at, deadline_at, assigned_user_id, customer_id",
+      )
       .in("status", ["open", "assigned", "in_progress"])
-      .limit(200);
-    for (const inc of (breached ?? []) as Array<{
+      .not("deadline_at", "is", null)
+      .limit(500);
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+
+    type Inc = {
       id: string;
       company_id: string;
       title: string;
       priority: string;
-    }>) {
-      // Idempotencia: ya notificada hoy?
-      const since = new Date();
-      since.setHours(0, 0, 0, 0);
-      const { count } = await admin
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", inc.company_id)
-        .eq("kind", "incident.sla_breach")
-        .eq("subject_id", inc.id)
-        .gte("created_at", since.toISOString());
-      if ((count ?? 0) > 0) continue;
-      try {
-        await notifyByRoles(
-          inc.company_id,
-          ["company_admin", "technical_director", "commercial_director"],
-          {
-            kind: "incident.sla_breach",
+      created_at: string;
+      deadline_at: string;
+      assigned_user_id: string | null;
+      customer_id: string | null;
+    };
+
+    for (const inc of (openIncidents ?? []) as Inc[]) {
+      const created = new Date(inc.created_at).getTime();
+      const deadline = new Date(inc.deadline_at).getTime();
+      const totalMs = deadline - created;
+      if (totalMs <= 0) continue;
+      const elapsed = now.getTime() - created;
+      const pct = elapsed / totalMs;
+
+      async function alreadySent(kind: string): Promise<boolean> {
+        const { count } = await admin
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("company_id", inc.company_id)
+          .eq("kind", kind)
+          .eq("subject_id", inc.id)
+          .gte("created_at", since.toISOString());
+        return (count ?? 0) > 0;
+      }
+
+      // 150% (50% pasado de plazo) — urgente
+      if (pct >= 1.5) {
+        if (await alreadySent("incident.sla_critical")) continue;
+        try {
+          await notifyByRoles(
+            inc.company_id,
+            ["company_admin"],
+            {
+              kind: "incident.sla_critical",
+              severity: "error",
+              title: `[URGENTE] Incidencia [${inc.priority}] muy retrasada`,
+              body: `${inc.title} — pasó +50% del plazo SLA. Resolver ya.`,
+              subject_type: "incident",
+              subject_id: inc.id,
+              action_url: `/incidencias/${inc.id}`,
+            },
+          );
+          slaCritical += 1;
+        } catch {
+          /* no-op */
+        }
+        continue;
+      }
+
+      // 100% (vencido)
+      if (pct >= 1.0) {
+        if (await alreadySent("incident.sla_breach")) continue;
+        try {
+          await notifyByRoles(
+            inc.company_id,
+            ["company_admin", "technical_director", "commercial_director"],
+            {
+              kind: "incident.sla_breach",
+              severity: "warning",
+              title: `Incidencia [${inc.priority}] fuera de plazo SLA`,
+              body: inc.title,
+              subject_type: "incident",
+              subject_id: inc.id,
+              action_url: `/incidencias/${inc.id}`,
+            },
+          );
+          slaBreaches += 1;
+        } catch {
+          /* no-op */
+        }
+        continue;
+      }
+
+      // 75% — recordatorio al técnico asignado
+      if (pct >= 0.75 && inc.assigned_user_id) {
+        if (await alreadySent("incident.sla_warning")) continue;
+        try {
+          await admin.from("notifications").insert({
+            company_id: inc.company_id,
+            recipient_user_id: inc.assigned_user_id,
+            kind: "incident.sla_warning",
             severity: "warning",
-            title: `Incidencia [${inc.priority}] fuera de plazo SLA`,
-            body: inc.title,
+            title: `Tu incidencia [${inc.priority}] vence pronto`,
+            body: `${inc.title} — quedan ${Math.max(0, Math.round((deadline - now.getTime()) / (1000 * 60 * 60)))}h del SLA.`,
             subject_type: "incident",
             subject_id: inc.id,
             action_url: `/incidencias/${inc.id}`,
-          },
-        );
-        slaBreaches += 1;
-      } catch {
-        /* no-op */
+          });
+          slaWarnings += 1;
+          // Email al cliente al 50% del SLA si está sin tocar
+          if (inc.customer_id) {
+            try {
+              const { sendIncidentEmailFromCron } = await import(
+                "@/modules/incidents/email-from-cron"
+              );
+              await sendIncidentEmailFromCron(inc.id, "incident_sla_warning");
+            } catch (e) {
+              console.error("[cron/daily] sla email failed:", e);
+            }
+          }
+        } catch {
+          /* no-op */
+        }
       }
     }
   } catch (e) {
-    console.error("[cron/daily] SLA breaches:", e);
+    console.error("[cron/daily] SLA escalation:", e);
   }
 
   // ============================================================================
@@ -718,6 +802,11 @@ export async function GET(req: NextRequest) {
       incident_sla_breaches: slaBreaches,
       gocardless_retry: gcRetry,
       cycles_pending_review: cyclesPending,
+      sla: {
+        breaches: slaBreaches,
+        warnings: slaWarnings,
+        critical: slaCritical,
+      },
     },
     ranAt: new Date().toISOString(),
   });

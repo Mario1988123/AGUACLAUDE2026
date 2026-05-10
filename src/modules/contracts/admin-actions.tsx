@@ -74,17 +74,16 @@ export function ContractAdminActions({
       {/* IBAN pendiente: aviso visible hasta que se complete */}
       {ibanIsPending && hasIban && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          ⚠ Contrato firmado · pendiente de IBAN real (actual: ES00)
+          ⚠ Contrato firmado · pendiente de IBAN (actual: ES00)
         </div>
       )}
 
-      {/* Editar IBAN — siempre disponible si hay cliente, especialmente útil
-          si el IBAN actual es ES00 (pending) */}
+      {/* Editar IBAN — siempre disponible si hay cliente */}
       {customerId && (
         <Button asChild variant="outline" className="w-full gap-2">
           <Link href={`/clientes/${customerId}#iban` as never}>
             <Pencil className="h-4 w-4" />
-            {ibanIsPending || !hasIban ? "Añadir IBAN real" : "Editar IBAN"}
+            {ibanIsPending || !hasIban ? "Añadir IBAN" : "Editar IBAN"}
           </Link>
         </Button>
       )}

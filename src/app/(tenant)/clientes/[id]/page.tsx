@@ -22,6 +22,7 @@ import { listContractsByCustomer, listInstallationsByCustomer } from "@/modules/
 import { CustomerContractsCard } from "@/modules/customers/contracts-card";
 import { CustomerInstallationsCard } from "@/modules/customers/installations-card";
 import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
+import { EditCustomerDataButton } from "@/modules/customers/edit-data-button";
 import { FromProposalBanner } from "@/modules/customers/from-proposal-banner";
 import { Timeline } from "@/modules/events/timeline";
 import { Plus } from "lucide-react";
@@ -204,26 +205,12 @@ export default async function CustomerDetailPage({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <Link
             href={`/propuestas/nueva?customer_id=${id}` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700 shadow-sm"
           >
             <Plus className="h-4 w-4" /> Nueva propuesta
-          </Link>
-          <Link
-            href={`/calculadora-ahorro/nueva?customer_id=${id}` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-            title="Calcular el ahorro vs su consumo actual"
-          >
-            📊 Calcular ahorro
-          </Link>
-          <Link
-            href={`/pruebas-gratuitas/nueva?customer_id=${id}` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-            title="Entregar equipo en prueba sin contrato"
-          >
-            🎁 Prueba gratuita
           </Link>
           <Link
             href={`/propuestas/nueva?customer_id=${id}&direct=1` as never}
@@ -231,6 +218,20 @@ export default async function CustomerDetailPage({
             title="El cliente acepta de palabra — crea propuesta+contrato en un paso"
           >
             ⚡ Contrato directo
+          </Link>
+          <Link
+            href={`/calculadora-ahorro/nueva?customer_id=${id}` as never}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            title="Calcular el ahorro vs su consumo actual"
+          >
+            📊 Calcular
+          </Link>
+          <Link
+            href={`/pruebas-gratuitas/nueva?customer_id=${id}` as never}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+            title="Entregar equipo en prueba sin contrato"
+          >
+            🎁 Prueba
           </Link>
           <BackButton href="/clientes" />
         </div>
@@ -247,9 +248,40 @@ export default async function CustomerDetailPage({
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Datos</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle>Datos</CardTitle>
+              <EditCustomerDataButton
+                customerId={id}
+                initial={{
+                  party_kind: customer.party_kind,
+                  legal_name: customer.legal_name,
+                  trade_name: customer.trade_name,
+                  first_name: customer.first_name,
+                  last_name: customer.last_name,
+                  email: customer.email,
+                  phone_primary: customer.phone_primary,
+                  phone_secondary: customer.phone_secondary,
+                  tax_id: customer.tax_id,
+                  notes: customer.notes,
+                }}
+              />
+            </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
+            <Row label="Tipo" value={customer.party_kind === "company" ? "Empresa" : "Particular"} />
+            {customer.party_kind === "company" ? (
+              <>
+                <Row label="Razón social" value={customer.legal_name} />
+                <Row label="Nombre comercial" value={customer.trade_name} />
+                <Row label="CIF" value={customer.tax_id} />
+              </>
+            ) : (
+              <>
+                <Row label="Nombre" value={customer.first_name} />
+                <Row label="Apellidos" value={customer.last_name} />
+                <Row label="DNI/NIE" value={customer.tax_id} />
+              </>
+            )}
             <Row label="Email" value={customer.email} />
             <Row label="Teléfono" value={customer.phone_primary} />
             <Row label="Tel. secundario" value={customer.phone_secondary} />
@@ -302,10 +334,6 @@ export default async function CustomerDetailPage({
             />
           </CardContent>
         </Card>
-
-        <div className="lg:col-span-2">
-          <CustomerConsentsCard customerId={id} consents={customerConsents} />
-        </div>
 
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -411,6 +439,8 @@ export default async function CustomerDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      <CustomerConsentsCard customerId={id} consents={customerConsents} />
 
       <Card>
         <CardHeader>

@@ -148,8 +148,9 @@ export default async function ProposalDetailPage({
         const initialTotal = initialPayments.reduce((s, p) => s + p.cents, 0);
 
         const hasMaintenance = items.some((it) => it.maintenance_included);
-        const maintenancePeriodicity = items.find((it) => it.maintenance_included)
-          ?.maintenance_periodicity_months;
+        const firstMaintItem = items.find((it) => it.maintenance_included);
+        const maintenancePeriodicity = firstMaintItem?.maintenance_periodicity_months;
+        const maintenanceUntilDate = firstMaintItem?.maintenance_until_date;
 
         return (
           <div className={`rounded-2xl border-2 p-5 ${colors.bg} ${colors.border}`}>
@@ -208,6 +209,11 @@ export default async function ProposalDetailPage({
                       </span>
                     )}
                   </div>
+                  {maintenanceUntilDate && (
+                    <div className={`mt-0.5 text-xs ${colors.text} opacity-80`}>
+                      Cubierto hasta {formatDateES(maintenanceUntilDate)}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

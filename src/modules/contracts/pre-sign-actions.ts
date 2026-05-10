@@ -140,29 +140,16 @@ export async function getContractPreSignReadiness(
     .limit(1)
     .maybeSingle();
 
-  // Defensivo: si la tabla contract_photos no está en el schema cache
-  // (migración pendiente) hacemos fallback a 0 fotos en lugar de reventar.
   let photoCount = 0;
   try {
     const r = await admin
-      .from("contract_photos")
+      .from("documents")
       .select("id", { count: "exact", head: true })
-      .eq("contract_id", contractId)
-      .eq("kind", "id_card");
-    if (r.error) {
-      const code = (r.error as { code?: string }).code;
-      const msg = (r.error as { message?: string }).message ?? "";
-      if (
-        code !== "PGRST205" &&
-        code !== "42P01" &&
-        !/could not find the table|does not exist/i.test(msg)
-      ) {
-        throw r.error;
-      }
-      console.warn("[pre-sign-actions] contract_photos no disponible:", msg);
-    } else {
-      photoCount = r.count ?? 0;
-    }
+      .eq("subject_type", "contract")
+      .eq("subject_id", contractId)
+      .eq("kind", "contract.id_card")
+      .is("deleted_at", null);
+    if (!r.error) photoCount = r.count ?? 0;
   } catch (e) {
     console.error("[pre-sign-actions] photo count failed:", e);
   }

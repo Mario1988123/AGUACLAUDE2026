@@ -43,6 +43,7 @@ import { upsertAddressAction } from "@/modules/addresses/actions";
 import { createBankAccountAction } from "@/modules/customers/bank-accounts/actions";
 import { uploadContractPhotoAction } from "./photo-actions";
 import { markContractSigned } from "./actions";
+import { recordCustomerConsent } from "@/modules/customers/consents-actions";
 
 interface Props {
   contractId: string;
@@ -65,6 +66,12 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
   const [step, setStep] = useState<Step>(1);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  // RGPD — el cliente debe consentir el tratamiento de datos (obligatorio
+  // para poder facturar y atender). Comunicaciones comerciales y perfilado
+  // son OPCIONALES — el cliente puede aceptar o rechazar.
+  const [consentDataProcessing, setConsentDataProcessing] = useState(true);
+  const [consentCommercial, setConsentCommercial] = useState(false);
+  const [consentProfiling, setConsentProfiling] = useState(false);
 
   async function reload() {
     setLoading(true);
@@ -90,8 +97,40 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
       );
       return;
     }
+    if (!consentDataProcessing) {
+      notify.warning(
+        "Falta consentimiento obligatorio",
+        "El cliente debe aceptar el tratamiento de datos para poder facturar y atender.",
+      );
+      return;
+    }
     startTransition(async () => {
       try {
+        // Registrar consentimientos ANTES de firmar — si fallan, no firma
+        const cid = readiness.customer.id;
+        await Promise.all([
+          recordCustomerConsent({
+            customer_id: cid,
+            kind: "data_processing",
+            granted: true,
+            source: "contract_sign",
+            source_ref_id: contractId,
+          }),
+          recordCustomerConsent({
+            customer_id: cid,
+            kind: "commercial",
+            granted: consentCommercial,
+            source: "contract_sign",
+            source_ref_id: contractId,
+          }),
+          recordCustomerConsent({
+            customer_id: cid,
+            kind: "profiling",
+            granted: consentProfiling,
+            source: "contract_sign",
+            source_ref_id: contractId,
+          }),
+        ]);
         await markContractSigned(contractId);
         notify.success("Contrato firmado");
         onClose();
@@ -399,6 +438,55 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                     </ul>
                   </div>
                 )}
+                {/* RGPD — bloque obligatorio antes de firmar */}
+                <div className="space-y-2 rounded-xl border-2 border-primary/30 bg-primary/5 p-3">
+                  <h3 className="flex items-center gap-1.5 text-sm font-bold">
+                    🛡 Consentimientos RGPD del cliente
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    El cliente debe aceptar/rechazar antes de firmar. Quedan
+                    registrados con fecha + origen contrato.
+                  </p>
+                  <label className="flex items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={consentDataProcessing}
+                      onChange={(e) => setConsentDataProcessing(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <span>
+                      <strong>Tratamiento de datos (obligatorio)</strong> —
+                      Necesario para el contrato. Sin esto no se puede firmar.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={consentCommercial}
+                      onChange={(e) => setConsentCommercial(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <span>
+                      <strong>Comunicaciones comerciales (opcional)</strong> —
+                      Permite enviar emails / WhatsApp con ofertas, novedades y
+                      promociones.
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={consentProfiling}
+                      onChange={(e) => setConsentProfiling(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    />
+                    <span>
+                      <strong>Perfilado para marketing (opcional)</strong> —
+                      Permite usar datos para segmentar campañas (productos
+                      relevantes, ofertas).
+                    </span>
+                  </label>
+                </div>
+
                 {readiness.warnings.length > 0 && (
                   <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
                     <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">

@@ -143,9 +143,109 @@ export async function assignIncidentAction(id: string, userId: string) {
     } catch {
       /* no-op */
     }
+
+    // Email al cliente avisando que su incidencia se está atendiendo
+    try {
+      await sendIncidentEmail(id, "incident_assigned");
+    } catch (e) {
+      console.error("[assignIncident] email failed:", e);
+    }
   }
   revalidatePath(`/incidencias`);
   revalidatePath(`/incidencias/${id}`);
+}
+
+/**
+ * Envía email al cliente de la incidencia con la plantilla indicada.
+ * Fail-soft: si no hay plantilla, cliente sin email, etc., no rompe.
+ */
+async function sendIncidentEmail(
+  incidentId: string,
+  templateKey: "incident_assigned" | "incident_sla_warning" | "incident_resolved",
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: inc } = await admin
+    .from("incidents")
+    .select(
+      "id, company_id, customer_id, title, deadline_at, created_at, resolved_at, assigned_user_id",
+    )
+    .eq("id", incidentId)
+    .maybeSingle();
+  if (!inc) return;
+  const i = inc as {
+    id: string;
+    company_id: string;
+    customer_id: string | null;
+    title: string;
+    deadline_at: string | null;
+    created_at: string;
+    resolved_at: string | null;
+    assigned_user_id: string | null;
+  };
+  if (!i.customer_id) return;
+
+  const { data: cust } = await admin
+    .from("customers")
+    .select("email, first_name, last_name, trade_name, legal_name, party_kind")
+    .eq("id", i.customer_id)
+    .maybeSingle();
+  const c = cust as {
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    trade_name: string | null;
+    legal_name: string | null;
+    party_kind: "individual" | "company";
+  } | null;
+  if (!c?.email) return;
+  const customerName =
+    c.party_kind === "company"
+      ? c.trade_name || c.legal_name || "Cliente"
+      : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente";
+
+  let technicianName = "Nuestro técnico";
+  if (i.assigned_user_id) {
+    const { data: t } = await admin
+      .from("user_profiles")
+      .select("full_name")
+      .eq("user_id", i.assigned_user_id)
+      .maybeSingle();
+    technicianName = (t as { full_name?: string } | null)?.full_name ?? technicianName;
+  }
+
+  const { data: cs } = await admin
+    .from("company_settings")
+    .select("fiscal_phone")
+    .eq("company_id", i.company_id)
+    .maybeSingle();
+
+  const variables: Record<string, string | number> = {
+    customer_name: customerName,
+    incident_title: i.title,
+    technician_name: technicianName,
+    deadline_at: i.deadline_at
+      ? new Date(i.deadline_at).toLocaleString("es-ES")
+      : "—",
+    company_phone: (cs as { fiscal_phone?: string } | null)?.fiscal_phone ?? "—",
+  };
+  if (templateKey === "incident_resolved" && i.resolved_at) {
+    const hours =
+      (new Date(i.resolved_at).getTime() - new Date(i.created_at).getTime()) /
+      (1000 * 60 * 60);
+    variables.resolution_hours = hours.toFixed(1);
+  }
+
+  const { sendTransactionalEmail } = await import("@/modules/mailing/actions");
+  await sendTransactionalEmail({
+    template_key: templateKey,
+    to_email: c.email,
+    to_name: customerName,
+    customer_id: i.customer_id,
+    variables,
+    related_subject_type: "incident",
+    related_subject_id: i.id,
+  });
 }
 
 export async function resolveIncidentAction(id: string, notes: string) {
@@ -217,6 +317,13 @@ export async function resolveIncidentAction(id: string, notes: string) {
           action_url: `/incidencias/${id}`,
         },
       );
+
+      // Email al cliente notificando resolución
+      try {
+        await sendIncidentEmail(id, "incident_resolved");
+      } catch (e) {
+        console.error("[resolveIncident] email failed:", e);
+      }
     } catch {
       /* no-op */
     }
