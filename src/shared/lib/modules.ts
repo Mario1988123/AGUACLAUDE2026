@@ -82,7 +82,7 @@ export const MODULES: ModuleEntry[] = [
   { key: "contracts", label: "Contratos", icon: "FileSignature", href: "/contratos", configHref: "/configuracion/contratos", group: "sales", rolesAllowed: SALES_ROLES },
 
   // ===== 3. VENTAS (resultado) =====
-  { key: "sales", label: "Objetivos", icon: "Target", href: "/ventas", configHref: "/configuracion/objetivos", group: "revenue", rolesAllowed: SALES_ROLES },
+  { key: "sales", label: "Objetivos", icon: "Target", href: "/objetivos", configHref: "/configuracion/objetivos", group: "revenue", rolesAllowed: SALES_ROLES },
   { key: "lost_sales", label: "Ventas perdidas", icon: "TrendingDown", href: "/ventas-perdidas", group: "revenue", rolesAllowed: SALES_ROLES },
   // mailing — pendiente desarrollo (próxima iteración)
   // { key: "mailing", label: "Campañas", icon: "Mail", href: "/mailing", group: "revenue", rolesAllowed: SALES_ROLES },
