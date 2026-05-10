@@ -499,8 +499,87 @@ export async function GET(req: NextRequest) {
       "@/modules/invoices/verifactu-queue"
     );
     verifactu = await processVerifactuQueue();
+    // Notificar a admin si hay rechazos AEAT en la cola (status='failed')
+    if (verifactu.failed > 0) {
+      const { data: failedRecords } = await admin
+        .from("verifactu_queue")
+        .select("company_id, count:id")
+        .eq("status", "failed")
+        .order("company_id");
+      // Agrupar manualmente por empresa
+      const byCompany = new Map<string, number>();
+      for (const r of (failedRecords ?? []) as Array<{
+        company_id: string;
+      }>) {
+        byCompany.set(r.company_id, (byCompany.get(r.company_id) ?? 0) + 1);
+      }
+      for (const [cid, cnt] of byCompany) {
+        try {
+          await notifyByRoles(cid, ["company_admin"], {
+            kind: "verifactu.failed",
+            severity: "error",
+            title: `${cnt} factura(s) rechazadas por AEAT`,
+            body: "Revisa la cola Verifactu en /facturas para ver el motivo y reintentar.",
+            action_url: "/facturas",
+          });
+        } catch {
+          /* no-op */
+        }
+      }
+    }
   } catch (e) {
     console.error("[cron/daily] verifactu queue failed:", e);
+  }
+
+  // SLA INCIDENCIAS — notificar a admin/dir cuando incidente abierto
+  // pasó su deadline_at y aún no se resolvió. Idempotente: una notif
+  // por incidencia (kind='incident.sla_breach' subject_id=incident.id)
+  let slaBreaches = 0;
+  try {
+    const { data: breached } = await admin
+      .from("incidents")
+      .select("id, company_id, title, priority")
+      .lt("deadline_at", new Date().toISOString())
+      .in("status", ["open", "assigned", "in_progress"])
+      .limit(200);
+    for (const inc of (breached ?? []) as Array<{
+      id: string;
+      company_id: string;
+      title: string;
+      priority: string;
+    }>) {
+      // Idempotencia: ya notificada hoy?
+      const since = new Date();
+      since.setHours(0, 0, 0, 0);
+      const { count } = await admin
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", inc.company_id)
+        .eq("kind", "incident.sla_breach")
+        .eq("subject_id", inc.id)
+        .gte("created_at", since.toISOString());
+      if ((count ?? 0) > 0) continue;
+      try {
+        await notifyByRoles(
+          inc.company_id,
+          ["company_admin", "technical_director", "commercial_director"],
+          {
+            kind: "incident.sla_breach",
+            severity: "warning",
+            title: `Incidencia [${inc.priority}] fuera de plazo SLA`,
+            body: inc.title,
+            subject_type: "incident",
+            subject_id: inc.id,
+            action_url: `/incidencias/${inc.id}`,
+          },
+        );
+        slaBreaches += 1;
+      } catch {
+        /* no-op */
+      }
+    }
+  } catch (e) {
+    console.error("[cron/daily] SLA breaches:", e);
   }
 
   // ============================================================================
@@ -528,6 +607,7 @@ export async function GET(req: NextRequest) {
       savings_scraper: scraperStats,
       stock_alerts: stockAlertsStats,
       auto_loading: loadingStats,
+      incident_sla_breaches: slaBreaches,
     },
     ranAt: new Date().toISOString(),
   });
