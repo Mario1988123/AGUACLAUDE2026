@@ -939,7 +939,7 @@ function drawFooters(
     });
     // Estado: sólo en footer (NO superpuesto al título)
     if (opts.signedAt) {
-      const stamp = `✓ Documento firmado el ${opts.signedAt}`;
+      const stamp = `Documento firmado el ${opts.signedAt}`;
       const sw = d.bold.widthOfTextAtSize(stamp, 7.5);
       p.drawText(stamp, {
         x: PAGE_W / 2 - sw / 2,
@@ -1236,10 +1236,10 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
   drawSummaryTiles(doc, tiles);
 
   // ---------- DIRECCIÓN INSTALACIÓN ----------
+  // (sin emojis: pdf-lib StandardFonts solo soporta WinAnsi, no Unicode emoji)
   if (installAddrLine !== "—") {
     drawCallout(doc, {
       title: "DIRECCIÓN DE INSTALACIÓN",
-      icon: "📍",
       tone: "info",
       body: installAddrLine,
     });
@@ -1252,7 +1252,6 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
   ) {
     drawCallout(doc, {
       title: "DOMICILIACIÓN BANCARIA",
-      icon: "🏦",
       tone: "success",
       rows: [
         ["IBAN", ibanData.iban || "ES00"],

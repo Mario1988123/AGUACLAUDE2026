@@ -586,15 +586,18 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
       );
     }
   } else {
-    // Rental/Renting: requiere fecha de inicio de servicio alcanzada.
-    if (!con.service_start_date) {
+    // Rental/Renting: el contrato entra en vigor en service_start_date si está
+    // indicada; si no, en la fecha de firma (signed_at). Si tampoco hay
+    // signed_at (raro: contrato sin firmar), bloqueamos.
+    const effectiveStart = con.service_start_date ?? con.signed_at;
+    if (!effectiveStart) {
       throw new Error(
-        "El contrato no tiene fecha de inicio de servicio. Indícala en el contrato antes de facturar.",
+        "El contrato no tiene fecha de firma ni de inicio de servicio. Firma el contrato primero.",
       );
     }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const startDate = new Date(con.service_start_date);
+    const startDate = new Date(effectiveStart);
     startDate.setHours(0, 0, 0, 0);
     if (startDate.getTime() > today.getTime()) {
       throw new Error(
