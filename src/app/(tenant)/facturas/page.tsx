@@ -8,6 +8,10 @@ import { StatusPill } from "@/shared/components/status-pill";
 import { Badge } from "@/shared/ui/badge";
 import { GenerateMonthlyButton } from "@/modules/invoices/generate-monthly-button";
 import { InvoiceFromWalletButton } from "@/modules/wallet/invoice-from-wallet-button";
+import {
+  getVerifactuQueue,
+  VerifactuQueueCard,
+} from "@/modules/invoices/verifactu-queue-card";
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +48,10 @@ function eur(c: number): string {
 }
 
 export default async function InvoicesPage() {
-  const [invoices, pendingInvoice] = await Promise.all([
+  const [invoices, pendingInvoice, vfQueue] = await Promise.all([
     listInvoices(),
     listPendingInvoiceWalletEntries(),
+    getVerifactuQueue().catch(() => ({ pending: [], failed: [] })),
   ]);
 
   const totalPending = invoices
@@ -69,6 +74,11 @@ export default async function InvoicesPage() {
           </Button>
         </div>
       </div>
+
+      <VerifactuQueueCard
+        pending={vfQueue.pending}
+        failed={vfQueue.failed}
+      />
 
       {pendingInvoice.length > 0 && (
         <Card className="border-amber-300 bg-amber-50/40">

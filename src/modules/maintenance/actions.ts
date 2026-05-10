@@ -52,6 +52,81 @@ export async function getMaintenance(id: string) {
   };
 }
 
+/**
+ * Reasigna un mantenimiento a otro técnico. Solo nivel 1/2 técnico.
+ */
+export async function reassignMaintenanceAction(
+  id: string,
+  newTechnicianUserId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (
+      !session.is_superadmin &&
+      !session.roles.includes("company_admin") &&
+      !session.roles.includes("technical_director")
+    ) {
+      return { ok: false, error: "Solo admin o director técnico" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: prev } = await admin
+      .from("maintenance_jobs")
+      .select("technician_user_id, company_id")
+      .eq("id", id)
+      .maybeSingle();
+    const p = prev as
+      | { technician_user_id: string | null; company_id: string }
+      | null;
+    if (!p) return { ok: false, error: "Mantenimiento no encontrado" };
+    if (p.company_id !== session.company_id)
+      return { ok: false, error: "Otra empresa" };
+
+    const { error } = await admin
+      .from("maintenance_jobs")
+      .update({ technician_user_id: newTechnicianUserId })
+      .eq("id", id);
+    if (error) return { ok: false, error: error.message };
+
+    await admin.from("events").insert({
+      company_id: session.company_id!,
+      subject_type: "maintenance",
+      subject_id: id,
+      kind: "maintenance.reassigned",
+      payload: {
+        previous_user_id: p.technician_user_id,
+        new_user_id: newTechnicianUserId,
+      },
+      actor_user_id: session.user_id,
+    });
+
+    // Notificar al nuevo técnico si lo hay
+    if (newTechnicianUserId) {
+      try {
+        await admin.from("notifications").insert({
+          company_id: session.company_id,
+          recipient_user_id: newTechnicianUserId,
+          kind: "maintenance.assigned",
+          severity: "info",
+          title: "Mantenimiento asignado",
+          body: "Se te ha asignado un mantenimiento. Revisa /mantenimientos.",
+          subject_type: "maintenance",
+          subject_id: id,
+          action_url: `/mantenimientos/${id}`,
+        });
+      } catch {
+        /* fail-soft */
+      }
+    }
+
+    revalidatePath(`/mantenimientos/${id}`);
+    revalidatePath("/mantenimientos");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export async function startMaintenanceAction(id: string) {
   const session = await requireSession();
   // Admin client: si el técnico_user_id de este job no coincide con el

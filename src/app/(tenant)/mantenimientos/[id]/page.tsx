@@ -8,6 +8,9 @@ import { Badge } from "@/shared/ui/badge";
 import { Timeline } from "@/modules/events/timeline";
 import { MaintenanceCompleteForm } from "@/modules/maintenance/complete-form";
 import { StartMaintenanceButton } from "@/modules/maintenance/start-button";
+import { ReassignMaintenanceButton } from "@/modules/maintenance/reassign-button";
+import { listInstallers } from "@/modules/agenda/actions";
+import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { BackButton } from "@/shared/components/back-button";
 
@@ -47,6 +50,14 @@ export default async function MaintenanceDetailPage({
       : `${cu.first_name ?? ""} ${cu.last_name ?? ""}`.trim() || "—";
 
   const products = await listProducts().catch(() => []);
+  const session = await requireSession();
+  const canReassign =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
+  const technicians = canReassign
+    ? await listInstallers().catch(() => [])
+    : [];
 
   // Items reemplazados ya registrados (si completado)
   const { data: replaced } = await supabase
@@ -76,7 +87,16 @@ export default async function MaintenanceDetailPage({
               ` · Programado ${new Date(job.scheduled_at).toLocaleString("es-ES")}`}
           </p>
         </div>
-        <BackButton href="/mantenimientos" />
+        <div className="flex items-center gap-2">
+          {canReassign && job.status !== "completed" && (
+            <ReassignMaintenanceButton
+              maintenanceId={id}
+              currentUserId={job.technician_user_id}
+              technicians={technicians}
+            />
+          )}
+          <BackButton href="/mantenimientos" />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

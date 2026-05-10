@@ -92,6 +92,30 @@ export default async function CustomerDetailPage({
   const contracts = await listContractsByCustomer(id).catch(() => []);
   const installations = await listInstallationsByCustomer(id).catch(() => []);
 
+  // Bandera "cliente en riesgo": incidencia abierta con prioridad
+  // critical/high + al menos un contrato activo.
+  let isAtRisk = false;
+  let atRiskCount = 0;
+  try {
+    const hasActiveContract = contracts.some(
+      (k) => k.status === "active" || k.status === "signed",
+    );
+    if (hasActiveContract) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sbRisk = (await (await import("@/shared/lib/supabase/server")).createClient()) as any;
+      const { count } = await sbRisk
+        .from("incidents")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", id)
+        .in("priority", ["critical", "high"])
+        .in("status", ["open", "assigned", "in_progress"]);
+      atRiskCount = count ?? 0;
+      isAtRisk = atRiskCount > 0;
+    }
+  } catch {
+    /* fail-soft */
+  }
+
   // Resolver nombre del comercial asignado
   let assignedName: string | null = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,6 +182,11 @@ export default async function CustomerDetailPage({
               <Badge variant="success">Activo</Badge>
             ) : (
               <Badge variant="secondary">Inactivo</Badge>
+            )}
+            {isAtRisk && (
+              <Badge variant="destructive" title="Incidencias críticas o altas abiertas con contrato activo">
+                ⚠ En riesgo ({atRiskCount})
+              </Badge>
             )}
           </div>
           <div className="mt-1 text-sm text-muted-foreground">

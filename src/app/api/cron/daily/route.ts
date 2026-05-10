@@ -501,11 +501,13 @@ export async function GET(req: NextRequest) {
     verifactu = await processVerifactuQueue();
     // Notificar a admin si hay rechazos AEAT en la cola (status='failed')
     if (verifactu.failed > 0) {
+      const since = new Date();
+      since.setDate(since.getDate() - 1);
       const { data: failedRecords } = await admin
-        .from("verifactu_queue")
-        .select("company_id, count:id")
+        .from("invoice_aeat_submissions")
+        .select("company_id")
         .eq("status", "failed")
-        .order("company_id");
+        .gte("responded_at", since.toISOString());
       // Agrupar manualmente por empresa
       const byCompany = new Map<string, number>();
       for (const r of (failedRecords ?? []) as Array<{
