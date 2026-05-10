@@ -293,14 +293,6 @@ export default async function ContractDetailPage({
           />
           <ViewA4Button contractId={contract.id} />
           {contract.status === "signed" && <InvoiceFromContractButton contractId={contract.id} />}
-          <a
-            href={`/api/pdf/contract/${contract.id}`}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-          >
-            📄 PDF
-          </a>
           {(contract.status === "signed" || contract.status === "active") && (
             <SendByEmailButton documentId={contract.id} kind="contract" short />
           )}

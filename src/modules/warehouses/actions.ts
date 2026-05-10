@@ -14,6 +14,13 @@ const warehouseUpsertSchema = z.object({
   vehicle_plate: z.string().optional().default(""),
   assigned_user_id: z.string().uuid().optional().nullable(),
   notes: z.string().optional().default(""),
+  // Dirección física (no aplica a vehicle ni external_supplier necesariamente)
+  address_street: z.string().optional().default(""),
+  address_postal_code: z.string().optional().default(""),
+  address_city: z.string().optional().default(""),
+  address_province: z.string().optional().default(""),
+  latitude: z.coerce.number().nullish(),
+  longitude: z.coerce.number().nullish(),
 });
 
 async function ensureCanManageWarehouses() {
@@ -32,6 +39,35 @@ export async function upsertWarehouseAction(input: unknown) {
   const parsed = parseOrFriendly(warehouseUpsertSchema, input, "Almacén");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // Geocoding automático: si hay calle+ciudad pero no coords, geocodear.
+  // Si el usuario las puso a mano, las respetamos.
+  let lat = parsed.latitude ?? null;
+  let lng = parsed.longitude ?? null;
+  let geoSource: string | null = null;
+  if (lat == null && lng == null && parsed.address_street && parsed.address_city) {
+    try {
+      const { forwardGeocodeAction } = await import("@/shared/lib/geocoding/actions");
+      const queryParts = [
+        parsed.address_street,
+        parsed.address_postal_code,
+        parsed.address_city,
+        parsed.address_province,
+        "España",
+      ].filter(Boolean);
+      const r = await forwardGeocodeAction(queryParts.join(", "));
+      if (r) {
+        lat = r.lat;
+        lng = r.lng;
+        geoSource = "geocoded";
+      }
+    } catch (e) {
+      console.error("[upsertWarehouse] geocode falló:", e);
+    }
+  } else if (lat != null && lng != null) {
+    geoSource = "user_pin";
+  }
+
   const payload = {
     company_id: session.company_id,
     name: parsed.name,
@@ -39,6 +75,13 @@ export async function upsertWarehouseAction(input: unknown) {
     vehicle_plate: parsed.vehicle_plate || null,
     assigned_user_id: parsed.assigned_user_id || null,
     notes: parsed.notes || null,
+    address_street: parsed.address_street || null,
+    address_postal_code: parsed.address_postal_code || null,
+    address_city: parsed.address_city || null,
+    address_province: parsed.address_province || null,
+    latitude: lat,
+    longitude: lng,
+    geo_source: geoSource,
     is_active: true,
   };
   if (parsed.id) {
@@ -86,6 +129,12 @@ export interface WarehouseRow {
   vehicle_plate: string | null;
   assigned_user_id: string | null;
   is_active: boolean;
+  address_street: string | null;
+  address_postal_code: string | null;
+  address_city: string | null;
+  address_province: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export async function listWarehouses(): Promise<WarehouseRow[]> {
@@ -93,7 +142,9 @@ export async function listWarehouses(): Promise<WarehouseRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("warehouses")
-    .select("id, name, kind, vehicle_plate, assigned_user_id, is_active")
+    .select(
+      "id, name, kind, vehicle_plate, assigned_user_id, is_active, address_street, address_postal_code, address_city, address_province, latitude, longitude",
+    )
     .is("deleted_at", null)
     .order("kind")
     .order("name");

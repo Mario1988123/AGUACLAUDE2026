@@ -117,6 +117,10 @@ function WarehouseForm({
     kind: (initial?.kind ?? "main") as "main" | "secondary" | "vehicle" | "external_supplier",
     vehicle_plate: initial?.vehicle_plate ?? "",
     assigned_user_id: initial?.assigned_user_id ?? "",
+    address_street: initial?.address_street ?? "",
+    address_postal_code: initial?.address_postal_code ?? "",
+    address_city: initial?.address_city ?? "",
+    address_province: initial?.address_province ?? "",
   });
 
   function handleSubmit(e: React.FormEvent) {
@@ -129,6 +133,10 @@ function WarehouseForm({
           kind: form.kind,
           vehicle_plate: form.vehicle_plate,
           assigned_user_id: form.assigned_user_id || null,
+          address_street: form.address_street,
+          address_postal_code: form.address_postal_code,
+          address_city: form.address_city,
+          address_province: form.address_province,
         });
         notify.success("Guardado");
         onDone();
@@ -137,6 +145,8 @@ function WarehouseForm({
       }
     });
   }
+
+  const showAddressFields = form.kind === "main" || form.kind === "secondary";
 
   return (
     <Card>
@@ -199,6 +209,59 @@ function WarehouseForm({
                     </option>
                   ))}
                 </select>
+              </div>
+            </div>
+          )}
+          {showAddressFields && (
+            <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
+              <p className="text-xs font-bold uppercase text-muted-foreground">
+                Dirección física
+              </p>
+              <p className="text-[11px] text-muted-foreground -mt-2">
+                Necesaria para el origen de las rutas. Las coordenadas se calculan
+                automáticamente al guardar.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="address_street">Calle y número</Label>
+                <Input
+                  id="address_street"
+                  value={form.address_street}
+                  onChange={(e) => setForm({ ...form, address_street: e.target.value })}
+                  placeholder="Ej. Calle Mayor 12"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="address_postal_code">CP</Label>
+                  <Input
+                    id="address_postal_code"
+                    value={form.address_postal_code}
+                    onChange={(e) =>
+                      setForm({ ...form, address_postal_code: e.target.value })
+                    }
+                    placeholder="28001"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="address_city">Ciudad</Label>
+                  <Input
+                    id="address_city"
+                    value={form.address_city}
+                    onChange={(e) => setForm({ ...form, address_city: e.target.value })}
+                    placeholder="Madrid"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="address_province">Provincia</Label>
+                  <Input
+                    id="address_province"
+                    value={form.address_province}
+                    onChange={(e) =>
+                      setForm({ ...form, address_province: e.target.value })
+                    }
+                    placeholder="Madrid"
+                  />
+                </div>
               </div>
             </div>
           )}

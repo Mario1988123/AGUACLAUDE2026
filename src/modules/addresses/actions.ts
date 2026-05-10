@@ -71,6 +71,37 @@ export async function upsertAddressAction(input: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // Geocoding automático server-side: si vienen lat/lng vacíos pero hay
+  // calle + ciudad mínimas, intentamos geocodificar con Nominatim. No
+  // bloqueante: si falla, se guarda sin coords (el técnico lo verá luego).
+  let lat = parsed.latitude;
+  let lng = parsed.longitude;
+  let geoSource: string | null = null;
+  if (lat == null && lng == null && parsed.street && parsed.city) {
+    try {
+      const { forwardGeocodeAction } = await import("@/shared/lib/geocoding/actions");
+      const queryParts = [
+        parsed.street_type,
+        parsed.street,
+        parsed.street_number,
+        parsed.postal_code,
+        parsed.city,
+        parsed.province,
+        "España",
+      ].filter(Boolean);
+      const r = await forwardGeocodeAction(queryParts.join(", "));
+      if (r) {
+        lat = r.lat;
+        lng = r.lng;
+        geoSource = "geocoded";
+      }
+    } catch (e) {
+      console.error("[upsertAddress] geocode falló:", e);
+    }
+  } else if (lat != null && lng != null) {
+    geoSource = "user_pin";
+  }
+
   const payload = {
     company_id: session.company_id,
     lead_id: parsed.lead_id || null,
@@ -89,8 +120,9 @@ export async function upsertAddressAction(input: unknown) {
     postal_code: parsed.postal_code || null,
     city: parsed.city || null,
     province: parsed.province || null,
-    latitude: parsed.latitude,
-    longitude: parsed.longitude,
+    latitude: lat,
+    longitude: lng,
+    geo_source: geoSource,
     notes: parsed.notes || null,
   };
 
