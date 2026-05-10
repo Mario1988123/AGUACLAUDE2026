@@ -210,6 +210,9 @@ export async function createLeadAction(formData: FormData) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
 
+  const { rateLimit } = await import("@/shared/lib/rate-limit");
+  rateLimit(`lead_create:${session.user_id}`, 30, 60_000);
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = parseOrFriendly(leadCreateSchema, raw, "Lead");
 

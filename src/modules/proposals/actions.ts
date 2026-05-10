@@ -360,6 +360,10 @@ export async function getProposalItems(proposalId: string): Promise<ProposalItem
 export async function createProposalAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
+
+  const { rateLimit } = await import("@/shared/lib/rate-limit");
+  rateLimit(`proposal_create:${session.user_id}`, 20, 60_000);
+
   const parsed = parseOrFriendly(proposalCreateSchema, input, "Propuesta");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

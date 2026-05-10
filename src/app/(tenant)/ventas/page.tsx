@@ -16,10 +16,21 @@ const PLAN_LABEL: Record<string, string> = {
   rental: "Alquiler",
 };
 
-export default async function VentasPage() {
+const MONTH_NAMES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+];
+
+export default async function VentasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; month?: string }>;
+}) {
+  const sp = await searchParams;
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth() + 1;
+  const y = Number(sp.year) || now.getFullYear();
+  const m = Number(sp.month) || now.getMonth() + 1;
+
   const [sales, achievements] = await Promise.all([
     listSales(y, m),
     listObjectivesAchievement(y, m),
@@ -29,6 +40,9 @@ export default async function VentasPage() {
   const monthlyMonth = sales.reduce((s, x) => s + (x.monthly_cents ?? 0), 0);
   const financierMonth = sales.reduce((s, x) => s + (x.financier_payment_cents ?? 0), 0);
 
+  // Build options: current year and 4 previous
+  const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i);
+
   return (
     <div className="space-y-6">
       <div>
@@ -37,6 +51,43 @@ export default async function VentasPage() {
           Período {String(m).padStart(2, "0")}/{y} · {sales.length} registros
         </p>
       </div>
+
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Mes</label>
+          <select
+            name="month"
+            defaultValue={String(m)}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            {MONTH_NAMES.map((name, idx) => (
+              <option key={idx} value={String(idx + 1)}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Año</label>
+          <select
+            name="year"
+            defaultValue={String(y)}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            {years.map((yr) => (
+              <option key={yr} value={String(yr)}>
+                {yr}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+        >
+          Ver período
+        </button>
+      </form>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <KpiCard label="Total vendido (mes)" value={formatCents(totalMonth)} />

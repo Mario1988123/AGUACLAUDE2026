@@ -4,6 +4,7 @@ import { eventLabel, subjectLink, SUBJECT_TYPE_LABEL } from "@/modules/events/la
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
+import { listTeamMembers } from "@/modules/agenda/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,9 @@ export default async function EventosPage({
   searchParams: Promise<{
     subject_type?: string;
     kind?: string;
+    actor_user_id?: string;
+    from?: string;
+    to?: string;
     page?: string;
   }>;
 }) {
@@ -35,19 +39,34 @@ export default async function EventosPage({
   const limit = 50;
   const page = Math.max(1, Number(sp.page ?? 1));
   const offset = (page - 1) * limit;
-  const { rows, total } = await listGlobalEventsPage({
-    subject_type: sp.subject_type,
-    kind: sp.kind,
-    limit,
-    offset,
-  });
+
+  // Convert from/to (YYYY-MM-DD) to ISO timestamp boundaries
+  const fromIso = sp.from ? new Date(`${sp.from}T00:00:00`).toISOString() : undefined;
+  const toIso = sp.to ? new Date(`${sp.to}T23:59:59.999`).toISOString() : undefined;
+
+  const [{ rows, total }, members] = await Promise.all([
+    listGlobalEventsPage({
+      subject_type: sp.subject_type,
+      kind: sp.kind,
+      actor_user_id: sp.actor_user_id,
+      from: fromIso,
+      to: toIso,
+      limit,
+      offset,
+    }),
+    listTeamMembers(),
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasFilters = !!(sp.subject_type || sp.kind || sp.actor_user_id || sp.from || sp.to);
 
   function buildHref(extra: Record<string, string | undefined>): string {
     const params = new URLSearchParams();
     if (sp.subject_type) params.set("subject_type", sp.subject_type);
     if (sp.kind) params.set("kind", sp.kind);
+    if (sp.actor_user_id) params.set("actor_user_id", sp.actor_user_id);
+    if (sp.from) params.set("from", sp.from);
+    if (sp.to) params.set("to", sp.to);
     Object.entries(extra).forEach(([k, v]) => {
       if (v) params.set(k, v);
       else params.delete(k);
@@ -91,13 +110,46 @@ export default async function EventosPage({
             className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
           />
         </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Usuario</label>
+          <select
+            name="actor_user_id"
+            defaultValue={sp.actor_user_id ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            {members.map((m) => (
+              <option key={m.user_id} value={m.user_id}>
+                {m.full_name || m.user_id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Desde</label>
+          <input
+            type="date"
+            name="from"
+            defaultValue={sp.from ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Hasta</label>
+          <input
+            type="date"
+            name="to"
+            defaultValue={sp.to ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
         <button
           type="submit"
           className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Filtrar
         </button>
-        {(sp.subject_type || sp.kind) && (
+        {hasFilters && (
           <Link href="/eventos" className="text-sm text-muted-foreground hover:underline">
             Limpiar
           </Link>

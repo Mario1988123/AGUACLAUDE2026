@@ -172,6 +172,9 @@ export async function createContractFromProposal(proposalId: string) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
 
+  const { rateLimit } = await import("@/shared/lib/rate-limit");
+  rateLimit(`contract_create:${session.user_id}`, 20, 60_000);
+
   const supabase = await createClient();
 
   // Idempotencia: si ya existe un contrato no eliminado generado a partir

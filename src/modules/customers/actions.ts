@@ -176,6 +176,10 @@ export async function getCustomer(id: string): Promise<CustomerDetail> {
 export async function createCustomerAction(formData: FormData) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
+
+  const { rateLimit } = await import("@/shared/lib/rate-limit");
+  rateLimit(`customer_create:${session.user_id}`, 20, 60_000);
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = parseOrFriendly(customerCreateSchema, raw, "Cliente");
 
