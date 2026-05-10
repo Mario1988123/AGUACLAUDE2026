@@ -3,8 +3,11 @@ import { Eye, Download } from "lucide-react";
 import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
+import { Pagination } from "@/shared/components/pagination";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 50;
 
 const CONTRACT_TONE: Record<
   string,
@@ -27,12 +30,21 @@ function formatCents(cents: number | null) {
 export default async function ContratosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; plan?: string }>;
+  searchParams: Promise<{ status?: string; plan?: string; page?: string }>;
 }) {
   const sp = await searchParams;
   const status = CONTRACT_STATUS.includes(sp.status as never) ? sp.status : undefined;
   const planType = sp.plan === "cash" || sp.plan === "renting" || sp.plan === "rental" ? sp.plan : undefined;
-  const contracts = await listContracts({ status, plan_type: planType });
+  const page = Math.max(1, Number(sp.page ?? 1));
+  const offset = (page - 1) * PAGE_SIZE;
+  const contractsAll = await listContracts({
+    status,
+    plan_type: planType,
+    limit: PAGE_SIZE + 1,
+    offset,
+  });
+  const hasMore = contractsAll.length > PAGE_SIZE;
+  const contracts = contractsAll.slice(0, PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -167,6 +179,13 @@ export default async function ContratosPage({
           </tbody>
         </table>
       </div>
+      <Pagination
+        basePath="/contratos"
+        page={page}
+        pageSize={PAGE_SIZE}
+        hasMore={hasMore}
+        preserveParams={{ status, plan: planType }}
+      />
     </div>
   );
 }

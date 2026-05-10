@@ -12,6 +12,8 @@ import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-s
 export async function listContracts(filters?: {
   status?: string;
   plan_type?: string;
+  limit?: number;
+  offset?: number;
 }): Promise<ContractListItem[]> {
   const session = await requireSession();
   const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
@@ -20,6 +22,8 @@ export async function listContracts(filters?: {
   if (visibleUserIds && visibleUserIds.length === 0) return [];
 
   const supabase = await createClient();
+  const limit = Math.min(500, filters?.limit ?? 50);
+  const offset = Math.max(0, filters?.offset ?? 0);
   let query = supabase
     .from("contracts")
     .select(
@@ -27,7 +31,7 @@ export async function listContracts(filters?: {
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(offset, offset + limit - 1);
   // Filtro de scope: nivel 3 ve solo los suyos (created_by); nivel 2
   // ve los suyos + los de su equipo. Nivel 1 ve todos.
   if (visibleUserIds) {

@@ -396,6 +396,15 @@ export async function createPaymentAction(input: {
   contract_payment_id?: string | null;
 }): Promise<CreatePaymentResult> {
   try {
+    // Rate limit: máximo 5 cobros/min por usuario.
+    const session = await requireSession();
+    const { rateLimit } = await import("@/shared/lib/rate-limit");
+    rateLimit(
+      `gocardless_payment:${session.user_id}`,
+      5,
+      60_000,
+      "Demasiados cobros en el último minuto. Espera unos segundos.",
+    );
     return await _createPayment(input);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error desconocido";
