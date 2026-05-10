@@ -2,6 +2,14 @@ import Link from "next/link";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getMyPoints, getPointsRanking } from "@/modules/points/ranking-actions";
 import { PointsRankingCard } from "@/modules/points/ranking-card";
+import {
+  getMyMilestones,
+  getMyPointsHistory,
+} from "@/modules/points/milestones-actions";
+import {
+  MilestonesCard,
+  PointsHistoryCard,
+} from "@/modules/points/milestones-card";
 import { KpiCard } from "@/shared/components/kpi-card";
 
 export const dynamic = "force-dynamic";
@@ -68,9 +76,11 @@ export default async function PuntosPage({
     scopeArgs = { scope: "department", department: myDept ?? "sales" };
   }
 
-  const [my, ranking] = await Promise.all([
+  const [my, ranking, milestones, history] = await Promise.all([
     getMyPoints(),
     getPointsRanking(scopeArgs),
+    getMyMilestones(),
+    getMyPointsHistory(12),
   ]);
 
   const rankingTitle =
@@ -137,6 +147,11 @@ export default async function PuntosPage({
           />
         </div>
       )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <MilestonesCard data={milestones} />
+        <PointsHistoryCard data={history} />
+      </div>
 
       <PointsRankingCard
         rows={ranking}
