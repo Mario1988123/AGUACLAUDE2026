@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import { bulkReassignLeadsAction } from "./bulk-actions";
 
@@ -38,38 +45,43 @@ export function ReassignLeadButton({
     });
   }
 
-  if (!open) {
-    return (
-      <Button variant="outline" size="sm" className="w-full" onClick={() => setOpen(true)}>
+  return (
+    <>
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <UserPlus className="h-4 w-4" /> Reasignar
       </Button>
-    );
-  }
 
-  return (
-    <div className="space-y-2 rounded-xl border-2 border-primary bg-primary/5 p-3">
-      <Label className="text-xs">Asignar a</Label>
-      <select
-        value={target}
-        onChange={(e) => setTarget(e.target.value)}
-        disabled={pending}
-        className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
-      >
-        <option value="">— Sin asignar —</option>
-        {team.map((u) => (
-          <option key={u.user_id} value={u.user_id}>
-            {u.full_name}
-          </option>
-        ))}
-      </select>
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={pending}>
-          Cancelar
-        </Button>
-        <Button size="sm" onClick={save} disabled={pending}>
-          {pending ? "..." : "Guardar"}
-        </Button>
-      </div>
-    </div>
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reasignar lead</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Asignar a</Label>
+            <select
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              disabled={pending}
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            >
+              <option value="">— Sin asignar —</option>
+              {team.map((u) => (
+                <option key={u.user_id} value={u.user_id}>
+                  {u.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
+              Cancelar
+            </Button>
+            <Button onClick={save} disabled={pending}>
+              {pending ? "..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

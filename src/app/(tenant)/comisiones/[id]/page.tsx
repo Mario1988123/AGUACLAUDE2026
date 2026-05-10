@@ -72,17 +72,31 @@ export default async function CycleDetailPage({
               : `Día ${detail.cycle.close_day}`}
           </p>
         </div>
-        <Badge
-          variant={
-            cycleClosed
-              ? "outline"
-              : detail.cycle.status === "pending_review"
-                ? "secondary"
-                : "success"
-          }
-        >
-          {STATUS_LABEL[detail.cycle.status] ?? detail.cycle.status}
-        </Badge>
+        <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href={`/api/comisiones/${detail.cycle.id}/export?format=csv`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-bold hover:bg-muted"
+          >
+            ↓ CSV
+          </a>
+          <a
+            href={`/api/comisiones/${detail.cycle.id}/export?format=pdf`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-card px-3 text-xs font-bold hover:bg-muted"
+          >
+            ↓ PDF
+          </a>
+          <Badge
+            variant={
+              cycleClosed
+                ? "outline"
+                : detail.cycle.status === "pending_review"
+                  ? "secondary"
+                  : "success"
+            }
+          >
+            {STATUS_LABEL[detail.cycle.status] ?? detail.cycle.status}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">

@@ -4,9 +4,15 @@ import { useState, useTransition } from "react";
 import { Phone, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import { updateLeadStatus } from "./actions";
-import { STATUS_LABEL } from "./schemas";
 import type { LeadStatus } from "./types";
 
 interface Props {
@@ -15,15 +21,8 @@ interface Props {
 }
 
 /**
- * El estado de leads se gestiona automáticamente:
- *  - Llamar/WhatsApp/Email → contacted
- *  - Crear propuesta → proposal_created
- *  - Enviar propuesta → proposal_sent
- *  - Aceptar propuesta o pulsar "Convertir" → converted (+ crea cliente)
- *
- * Aquí sólo dejamos lo que NO es automático:
- *  - "Marcar contactado" manual (si entra ya contactado por canal externo)
- *  - "Marcar como perdido" (terminal)
+ * Botones inline (size="sm") para que entren en la toolbar del header.
+ * Estados terminales (lost / converted) → no renderiza nada.
  */
 export function LeadStatusActions({ leadId, currentStatus }: Props) {
   const [pending, startTransition] = useTransition();
@@ -53,67 +52,55 @@ export function LeadStatusActions({ leadId, currentStatus }: Props) {
       try {
         await updateLeadStatus(leadId, "lost", lostReason);
         notify.success("Marcado como venta perdida");
+        setShowLost(false);
+        setLostReason("");
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
       }
     });
   }
 
-  if (isTerminal) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Estado: <strong>{STATUS_LABEL[currentStatus]}</strong>
-      </p>
-    );
-  }
+  if (isTerminal) return null;
 
   return (
-    <div className="space-y-3">
-      <div className="text-sm">
-        Estado actual: <strong>{STATUS_LABEL[currentStatus]}</strong>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        El estado avanza solo: al llamar/whatsapp/email pasa a contactado, al crear o
-        enviar propuesta avanza, y al aceptar propuesta o pulsar &quot;Convertir&quot; pasa a
-        cliente.
-      </p>
-
+    <>
       {showMarkContacted && (
         <Button
           variant="outline"
           size="sm"
-          className="w-full"
           onClick={markContacted}
           disabled={pending}
         >
-          <Phone className="h-4 w-4" /> Marcar contactado
+          <Phone className="h-4 w-4" /> Contactado
         </Button>
       )}
+      <Button
+        variant="destructive"
+        size="sm"
+        onClick={() => setShowLost(true)}
+        disabled={pending}
+      >
+        <X className="h-4 w-4" /> Venta perdida
+      </Button>
 
-      {!showLost ? (
-        <Button
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={() => setShowLost(true)}
-          disabled={pending}
-        >
-          <X className="h-4 w-4" /> Marcar venta perdida
-        </Button>
-      ) : (
-        <div className="space-y-2 rounded-md border border-destructive bg-destructive/5 p-3">
-          <Label className="text-sm font-medium">Motivo de la pérdida</Label>
-          <textarea
-            value={lostReason}
-            onChange={(e) => setLostReason(e.target.value)}
-            rows={2}
-            className="w-full rounded-md border border-input bg-background p-2 text-sm"
-            placeholder="Precio, competencia, no interesa..."
-          />
-          <div className="flex gap-2">
+      <Dialog open={showLost} onOpenChange={(o) => !o && setShowLost(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marcar venta perdida</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Motivo de la pérdida</Label>
+            <textarea
+              value={lostReason}
+              onChange={(e) => setLostReason(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-input bg-background p-2 text-sm"
+              placeholder="Precio, competencia, no interesa..."
+            />
+          </div>
+          <DialogFooter>
             <Button
-              variant="outline"
-              size="sm"
+              variant="ghost"
               onClick={() => {
                 setShowLost(false);
                 setLostReason("");
@@ -122,12 +109,12 @@ export function LeadStatusActions({ leadId, currentStatus }: Props) {
             >
               Cancelar
             </Button>
-            <Button variant="destructive" size="sm" onClick={confirmLost} disabled={pending}>
+            <Button variant="destructive" onClick={confirmLost} disabled={pending}>
               Confirmar
             </Button>
-          </div>
-        </div>
-      )}
-    </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

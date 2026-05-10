@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UserPlus } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
@@ -13,11 +13,7 @@ export function ConvertLeadButton({ leadId, alreadyConverted }: { leadId: string
   const router = useRouter();
   const ask = useConfirm();
 
-  if (alreadyConverted) {
-    return (
-      <p className="text-sm text-success">✓ Ya convertido a cliente</p>
-    );
-  }
+  if (alreadyConverted) return null;
 
   async function convert() {
     const ok = await ask({
@@ -38,9 +34,9 @@ export function ConvertLeadButton({ leadId, alreadyConverted }: { leadId: string
   }
 
   return (
-    <Button onClick={convert} disabled={pending} size="lg" variant="success" className="w-full">
-      <UserPlus className="h-5 w-5" />
-      {pending ? "Convirtiendo..." : "Convertir a cliente"}
+    <Button onClick={convert} disabled={pending} size="sm" variant="success">
+      <ArrowRight className="h-4 w-4" />
+      {pending ? "Convirtiendo..." : "Cliente"}
     </Button>
   );
 }

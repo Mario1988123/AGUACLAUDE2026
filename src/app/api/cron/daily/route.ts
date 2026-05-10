@@ -600,6 +600,97 @@ export async function GET(req: NextRequest) {
   }
 
   // ============================================================================
+  // PUNTOS — detectar ciclos cuyo periodo ya terminó y marcarlos como
+  // pending_review + notificar al director comercial. NUNCA cierra
+  // automáticamente: el cierre exige confirmación humana.
+  // ============================================================================
+  let cyclesPending = 0;
+  try {
+    const { computeCycleRange } = await import("@/modules/points/cycles-utils");
+    const { data: pointSettings } = await admin
+      .from("company_settings")
+      .select("company_id, points_settings");
+    type PS = {
+      company_id: string;
+      points_settings: { cycle_close_day?: number } | null;
+    };
+    for (const row of (pointSettings ?? []) as PS[]) {
+      const closeDay = row.points_settings?.cycle_close_day ?? 0;
+      const now = new Date();
+      // Periodo anterior al actual
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const prevRange = computeCycleRange(yesterday, closeDay);
+      // Solo si el rango anterior YA cerró (end_at < ahora)
+      if (prevRange.end_at.getTime() > now.getTime()) continue;
+
+      // Buscar el ciclo de ese periodo
+      const { data: cycle } = await admin
+        .from("points_cycles")
+        .select("id, status")
+        .eq("company_id", row.company_id)
+        .eq("cycle_year", prevRange.cycle_year)
+        .eq("cycle_month", prevRange.cycle_month)
+        .maybeSingle();
+      if (!cycle) {
+        // Crear el ciclo en pending_review directamente
+        const { data: created } = await admin
+          .from("points_cycles")
+          .insert({
+            company_id: row.company_id,
+            cycle_year: prevRange.cycle_year,
+            cycle_month: prevRange.cycle_month,
+            cycle_start_at: prevRange.start_at.toISOString(),
+            cycle_end_at: prevRange.end_at.toISOString(),
+            close_day: closeDay,
+            status: "pending_review",
+          })
+          .select("id")
+          .single();
+        if (created) {
+          cyclesPending += 1;
+          await notifyByRoles(
+            row.company_id,
+            ["company_admin", "commercial_director"],
+            {
+              kind: "points.cycle_pending",
+              severity: "info",
+              title: "Ciclo de comisiones pendiente de revisión",
+              body: `${prevRange.cycle_month
+                .toString()
+                .padStart(2, "0")}/${prevRange.cycle_year} cerró su periodo. Revisa y cierra desde Comisiones.`,
+              action_url: `/comisiones/${(created as { id: string }).id}`,
+            },
+          ).catch(() => null);
+        }
+        continue;
+      }
+      const c = cycle as { id: string; status: string };
+      if (c.status !== "open") continue;
+      await admin
+        .from("points_cycles")
+        .update({ status: "pending_review" })
+        .eq("id", c.id);
+      cyclesPending += 1;
+      await notifyByRoles(
+        row.company_id,
+        ["company_admin", "commercial_director"],
+        {
+          kind: "points.cycle_pending",
+          severity: "info",
+          title: "Ciclo de comisiones pendiente de revisión",
+          body: `${prevRange.cycle_month
+            .toString()
+            .padStart(2, "0")}/${prevRange.cycle_year} cerró su periodo. Revisa y cierra desde Comisiones.`,
+          action_url: `/comisiones/${c.id}`,
+        },
+      ).catch(() => null);
+    }
+  } catch (e) {
+    console.error("[cron/daily] points cycles pending failed:", e);
+  }
+
+  // ============================================================================
   // SCRAPER PRECIOS AGUA — solo el día 1 del mes
   // ============================================================================
   let scraperStats: { ok: number; failed: number; total: number } | null = null;
@@ -626,6 +717,7 @@ export async function GET(req: NextRequest) {
       auto_loading: loadingStats,
       incident_sla_breaches: slaBreaches,
       gocardless_retry: gcRetry,
+      cycles_pending_review: cyclesPending,
     },
     ranAt: new Date().toISOString(),
   });
