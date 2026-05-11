@@ -27,9 +27,9 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
       try {
         await updateFiscalSettingsAction(v);
         notify.success("Datos fiscales guardados");
-        // Refrescar el page server component para confirmar que la BD
-        // realmente tiene los valores (rehidrata el form).
-        router.refresh();
+        // Una vez guardado, el admin no necesita seguir aquí — vuelve al
+        // hub de configuración para acceder al resto de secciones.
+        router.push("/configuracion" as never);
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
         // Aún así refrescamos para que el usuario vea qué se guardó
