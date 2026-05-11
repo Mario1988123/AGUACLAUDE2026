@@ -80,6 +80,9 @@ interface Props {
   canEditCollectedPayments?: boolean;
   /** Estado del contrato — usado para bloquear el wizard si no está firmado. */
   contractStatus?: string;
+  /** Plan del contrato (cash/rental/renting) — para decidir si ofrecer
+   *  contrato de mantenimiento separado al cerrar instalación. */
+  contractPlanType?: "cash" | "rental" | "renting" | null;
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -144,6 +147,7 @@ export function InstallationWizard(props: Props) {
     contractIncludesMaintenance,
     canEditCollectedPayments = false,
     contractStatus,
+    contractPlanType,
   } = props;
   void representativeName;
 
@@ -812,7 +816,7 @@ export function InstallationWizard(props: Props) {
                   {/* Items con S/N */}
                   <div className="space-y-2">
                     <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Equipos a instalar
+                      {status === "completed" ? "Equipos instalados" : "Equipos a instalar"}
                     </p>
                     {items.map((it) => (
                       <div
@@ -1060,10 +1064,27 @@ export function InstallationWizard(props: Props) {
                     />
                   </div>
                   {/* Mantenimiento: si el contrato principal NO incluye, se
-                      ofrece crear un contrato de mantenimiento independiente */}
-                  {!contractIncludesMaintenance &&
-                    customerId &&
-                    maintenancePlans.length > 0 && (
+                      ofrece crear un contrato de mantenimiento independiente.
+                      Regla 2026-05-11: NO ofrecer si el contrato es
+                      'rental' (alquiler) activo — el alquiler incluye
+                      mantenimiento implícito porque el equipo es de la
+                      empresa y ésta se responsabiliza de su funcionamiento.
+                      Solo se ofrece para:
+                        - cash (compra al contado, sin mantenimiento)
+                        - renting una vez completed (terminado)
+                        - sin contrato (equipo externo / otra empresa) */}
+                  {(() => {
+                    const isRentalActive =
+                      contractPlanType === "rental" &&
+                      contractStatus !== "completed" &&
+                      contractStatus !== "cancelled";
+                    const shouldOffer =
+                      !contractIncludesMaintenance &&
+                      !isRentalActive &&
+                      customerId &&
+                      maintenancePlans.length > 0;
+                    if (!shouldOffer) return null;
+                    return (
                       <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3">
                         <p className="text-sm font-bold text-amber-900">
                           ¿Quieres ofrecerle un contrato de mantenimiento al cliente?
@@ -1082,7 +1103,8 @@ export function InstallationWizard(props: Props) {
                           />
                         </div>
                       </div>
-                    )}
+                    );
+                  })()}
 
                   <Button
                     onClick={finish}

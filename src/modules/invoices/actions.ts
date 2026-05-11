@@ -23,10 +23,19 @@ export interface InvoiceListItem {
   customer_id: string;
   customer_name: string | null;
   contract_id: string | null;
+  series_id: string;
+  number: number;
+  fiscal_year: number;
   issue_date: string;
   due_date: string | null;
   total_cents: number;
   pending_cents: number;
+  /** ID de la factura rectificativa que rectifica a ESTA (si existe) */
+  corrected_by_id: string | null;
+  corrected_by_reference: string | null;
+  /** ID de la factura original a la que ESTA rectifica (si es credit_note) */
+  corrects_invoice_id: string | null;
+  corrects_reference: string | null;
 }
 
 export interface InvoiceLine {
@@ -159,7 +168,7 @@ export async function listInvoices(filters?: {
   let query = admin
     .from("invoices")
     .select(
-      "id, full_reference, kind, status, customer_id, contract_id, issue_date, due_date, total_cents",
+      "id, full_reference, kind, status, customer_id, contract_id, series_id, number, fiscal_year, issue_date, due_date, total_cents, corrects_invoice_id",
     )
     .eq("company_id", session.company_id)
     .order("issue_date", { ascending: false })
@@ -179,9 +188,13 @@ export async function listInvoices(filters?: {
     status: InvoiceStatus;
     customer_id: string;
     contract_id: string | null;
+    series_id: string;
+    number: number;
+    fiscal_year: number;
     issue_date: string;
     due_date: string | null;
     total_cents: number;
+    corrects_invoice_id: string | null;
   };
   const rows = (data ?? []) as R[];
   if (rows.length === 0) return [];
@@ -215,11 +228,59 @@ export async function listInvoices(filters?: {
     paidMap.set(p.invoice_id, (paidMap.get(p.invoice_id) ?? 0) + p.amount_cents);
   }
 
-  return rows.map((r) => ({
-    ...r,
-    customer_name: nameMap.get(r.customer_id) ?? null,
-    pending_cents: r.total_cents - (paidMap.get(r.id) ?? 0),
-  }));
+  // Rectificativas: detectar qué facturas TIENEN una credit_note que las anula.
+  // Buscamos credit_notes que apunten a estas facturas.
+  const { data: rects } = await admin
+    .from("invoices")
+    .select("id, full_reference, corrects_invoice_id")
+    .eq("kind", "credit_note")
+    .in("corrects_invoice_id", ids);
+  const rectMap = new Map<string, { id: string; ref: string }>();
+  for (const r of (rects ?? []) as Array<{
+    id: string;
+    full_reference: string;
+    corrects_invoice_id: string | null;
+  }>) {
+    if (r.corrects_invoice_id) {
+      rectMap.set(r.corrects_invoice_id, { id: r.id, ref: r.full_reference });
+    }
+  }
+  // Y para credit_notes, resolver referencia de la original.
+  const origIds = Array.from(
+    new Set(
+      rows
+        .filter((r) => r.corrects_invoice_id)
+        .map((r) => r.corrects_invoice_id as string),
+    ),
+  );
+  const origMap = new Map<string, string>();
+  if (origIds.length > 0) {
+    const { data: origs } = await admin
+      .from("invoices")
+      .select("id, full_reference")
+      .in("id", origIds);
+    for (const o of (origs ?? []) as Array<{ id: string; full_reference: string }>) {
+      origMap.set(o.id, o.full_reference);
+    }
+  }
+
+  return rows.map((r) => {
+    // Si status='paid', 'cancelled' o 'void' → pending=0 aunque no haya
+    // payments registrados (evita inconsistencia "Cobrada" con pendiente).
+    const isClosed = r.status === "paid" || r.status === "cancelled" || r.status === "void";
+    const pending = isClosed ? 0 : r.total_cents - (paidMap.get(r.id) ?? 0);
+    const rect = rectMap.get(r.id) ?? null;
+    return {
+      ...r,
+      customer_name: nameMap.get(r.customer_id) ?? null,
+      pending_cents: pending,
+      corrected_by_id: rect?.id ?? null,
+      corrected_by_reference: rect?.ref ?? null,
+      corrects_reference: r.corrects_invoice_id
+        ? origMap.get(r.corrects_invoice_id) ?? null
+        : null,
+    };
+  });
 }
 
 export async function getInvoice(id: string): Promise<InvoiceDetail> {
@@ -514,6 +575,100 @@ export async function cancelInvoiceAction(invoiceId: string, reason?: string): P
     .eq("company_id", session.company_id);
   revalidatePath(`/facturas/${invoiceId}`);
   revalidatePath("/facturas");
+}
+
+/**
+ * Borra o rectifica una factura según las reglas fiscales:
+ *
+ * - Si es un BORRADOR (status='draft') Y es la ÚLTIMA de la numeración en
+ *   su serie/año fiscal → permitir DELETE duro (la numeración mantiene su
+ *   continuidad porque liberamos el último número).
+ * - Si NO es draft o NO es la última → forzar RECTIFICATIVA (credit_note)
+ *   que la anule contablemente sin romper la numeración.
+ *
+ * Devuelve:
+ *   { deleted: true } si la borró
+ *   { deleted: false, credit_note_id } si creó rectificativa
+ */
+export async function deleteOrRectifyInvoiceAction(
+  invoiceId: string,
+): Promise<{ deleted: boolean; credit_note_id?: string }> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: inv } = await admin
+    .from("invoices")
+    .select("id, status, kind, series_id, number, fiscal_year")
+    .eq("id", invoiceId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!inv) throw new Error("Factura no encontrada");
+  const i = inv as {
+    id: string;
+    status: string;
+    kind: string;
+    series_id: string;
+    number: number;
+    fiscal_year: number;
+  };
+
+  // Comprobar si es la última de su numeración (no hay otra con número
+  // mayor en la misma serie + año).
+  const { data: laterRows } = await admin
+    .from("invoices")
+    .select("id")
+    .eq("company_id", session.company_id)
+    .eq("series_id", i.series_id)
+    .eq("fiscal_year", i.fiscal_year)
+    .gt("number", i.number)
+    .limit(1);
+  const isLast = ((laterRows ?? []) as Array<unknown>).length === 0;
+
+  // Comprobar si ya existe una rectificativa que la corrige.
+  const { data: existingCredit } = await admin
+    .from("invoices")
+    .select("id")
+    .eq("corrects_invoice_id", invoiceId)
+    .eq("kind", "credit_note")
+    .limit(1)
+    .maybeSingle();
+  if (existingCredit) {
+    throw new Error(
+      "Esta factura ya tiene una rectificativa. No se puede volver a anular.",
+    );
+  }
+
+  // Caso 1: borrado duro permitido.
+  if (i.status === "draft" && isLast) {
+    // Liberar el número para que la siguiente factura tome este número
+    // (decrementar next_number de la serie).
+    await admin
+      .from("invoice_series")
+      .update({ next_number: i.number })
+      .eq("id", i.series_id)
+      .gte("next_number", i.number + 1);
+    // Borrar líneas y pagos primero (FK)
+    await admin.from("invoice_lines").delete().eq("invoice_id", invoiceId);
+    await admin.from("invoice_payments").delete().eq("invoice_id", invoiceId);
+    await admin.from("invoices").delete().eq("id", invoiceId);
+    revalidatePath("/facturas");
+    return { deleted: true };
+  }
+
+  // Caso 2: rectificar. Si está en draft pero no es la última, también
+  // forzamos rectificativa para mantener la numeración continua.
+  const creditId = await createCreditNoteAction(invoiceId);
+  // Marcar la original como cancelled si no lo estaba ya y NO está pagada.
+  // Si estaba pagada, la rectificativa generará un cobro negativo.
+  if (i.status !== "paid" && i.status !== "cancelled") {
+    await admin
+      .from("invoices")
+      .update({ status: "cancelled" })
+      .eq("id", invoiceId);
+  }
+  revalidatePath("/facturas");
+  return { deleted: false, credit_note_id: creditId };
 }
 
 /**

@@ -85,6 +85,7 @@ export default async function InstallationDetailPage({
   let customerId: string | null = null;
   let contractIncludesMaintenance = false;
   let contractStatus: string | null = null;
+  let contractPlanType: "cash" | "rental" | "renting" | null = null;
   if (i.contract_id) {
     try {
       const { data: ps } = await sb
@@ -99,7 +100,7 @@ export default async function InstallationDetailPage({
     try {
       const { data: ct } = await sb
         .from("contracts")
-        .select("customer_id, customer_snapshot, maintenance_included, status")
+        .select("customer_id, customer_snapshot, maintenance_included, status, plan_type")
         .eq("id", i.contract_id)
         .single();
       if (ct) {
@@ -108,10 +109,12 @@ export default async function InstallationDetailPage({
           customer_snapshot: Record<string, unknown> | null;
           maintenance_included: boolean | null;
           status: string | null;
+          plan_type: "cash" | "rental" | "renting" | null;
         };
         customerId = ctRow.customer_id;
         contractIncludesMaintenance = Boolean(ctRow.maintenance_included);
         contractStatus = ctRow.status ?? null;
+        contractPlanType = ctRow.plan_type ?? null;
         const cust = ctRow.customer_snapshot;
         if (cust) {
           const c = cust as {
@@ -195,6 +198,7 @@ export default async function InstallationDetailPage({
                 session.roles.includes("commercial_director")
               }
               contractStatus={contractStatus ?? undefined}
+              contractPlanType={contractPlanType}
             />
           )}
           <a
@@ -213,7 +217,11 @@ export default async function InstallationDetailPage({
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Equipos a instalar ({items.length})</CardTitle>
+              <CardTitle>
+                {i.status === "completed"
+                  ? `Equipos instalados (${items.length})`
+                  : `Equipos a instalar (${items.length})`}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {items.length === 0 ? (
@@ -360,7 +368,7 @@ export default async function InstallationDetailPage({
               </p>
             </CardContent>
           </Card>
-          {canReassign && (
+          {canReassign && i.status !== "completed" && i.status !== "cancelled" && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Asignación</CardTitle>

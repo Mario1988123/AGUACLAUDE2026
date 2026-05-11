@@ -59,8 +59,13 @@ export async function uploadInstallationPhotoAction(
     name: (file as Blob & { name?: string }).name,
     type: file.type,
   });
+  // Random sufijo para garantizar unicidad incluso si el usuario sube
+  // múltiples fotos en el mismo milisegundo (bug reportado 2026-05-11:
+  // la 3a foto fallaba — la causa más probable era colisión de
+  // storage_path entre subidas rápidas).
   const ts = Date.now();
-  const path = `${session.company_id}/${installationId}/${category}-${ts}.${ext}`;
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `${session.company_id}/${installationId}/${category}-${ts}-${rand}.${ext}`;
   const buf = Buffer.from(await file.arrayBuffer());
 
   // Garantizamos bucket vía helper compartido (idempotente, listBuckets +

@@ -13,6 +13,7 @@ import {
   VerifactuQueueCard,
 } from "@/modules/invoices/verifactu-queue-card";
 import { Pagination } from "@/shared/components/pagination";
+import { InvoiceRowActions } from "@/modules/invoices/row-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -182,54 +183,85 @@ export default async function InvoicesPage({
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="py-2 text-left">Ref</th>
-                    <th className="py-2 text-left">Tipo</th>
-                    <th className="py-2 text-left">Cliente</th>
-                    <th className="py-2 text-left">Emitida</th>
-                    <th className="py-2 text-left">Vence</th>
-                    <th className="py-2 text-right">Total</th>
-                    <th className="py-2 text-right">Pendiente</th>
-                    <th className="py-2 text-left">Estado</th>
-                    <th className="py-2 text-right">Acciones</th>
+                    <th className="px-2 py-2 text-left">Ref</th>
+                    <th className="px-2 py-2 text-left">Tipo</th>
+                    <th className="px-2 py-2 text-left">Cliente</th>
+                    <th className="px-2 py-2 text-left">Emitida</th>
+                    <th className="px-2 py-2 text-left">Vence</th>
+                    <th className="px-2 py-2 text-right">Total</th>
+                    <th className="px-2 py-2 text-right">Pendiente</th>
+                    <th className="px-3 py-2 text-left">Estado</th>
+                    <th className="px-2 py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {visibleInvoices.map((i) => (
                     <tr key={i.id} className="hover:bg-muted/30">
-                      <td className="py-2 font-mono text-xs">
+                      <td className="px-2 py-2 font-mono text-xs">
                         <Link
                           href={`/facturas/${i.id}` as never}
                           className="text-primary hover:underline"
                         >
                           {i.full_reference}
                         </Link>
-                      </td>
-                      <td className="py-2 text-xs">{KIND_LABEL[i.kind] ?? i.kind}</td>
-                      <td className="py-2">{i.customer_name ?? "—"}</td>
-                      <td className="py-2 text-xs">
-                        {new Date(i.issue_date).toLocaleDateString("es-ES")}
-                      </td>
-                      <td className="py-2 text-xs">
-                        {i.due_date ? new Date(i.due_date).toLocaleDateString("es-ES") : "—"}
-                      </td>
-                      <td className="py-2 text-right tabular-nums font-semibold">
-                        {eur(i.total_cents)}
-                      </td>
-                      <td className="py-2 text-right tabular-nums">
-                        {i.pending_cents > 0 ? (
-                          <span className="text-red-600">{eur(i.pending_cents)}</span>
-                        ) : (
-                          <span className="text-emerald-600">0,00 €</span>
+                        {i.corrected_by_reference && (
+                          <div className="mt-0.5 text-[10px] text-amber-700">
+                            ↳ rectificada por{" "}
+                            <Link
+                              href={`/facturas/${i.corrected_by_id}` as never}
+                              className="font-bold hover:underline"
+                            >
+                              {i.corrected_by_reference}
+                            </Link>
+                          </div>
+                        )}
+                        {i.corrects_reference && (
+                          <div className="mt-0.5 text-[10px] text-blue-700">
+                            ↳ rectifica a{" "}
+                            <Link
+                              href={`/facturas/${i.corrects_invoice_id}` as never}
+                              className="font-bold hover:underline"
+                            >
+                              {i.corrects_reference}
+                            </Link>
+                          </div>
                         )}
                       </td>
-                      <td className="py-2">
+                      <td className="px-2 py-2 text-xs">{KIND_LABEL[i.kind] ?? i.kind}</td>
+                      <td className="px-2 py-2">{i.customer_name ?? "—"}</td>
+                      <td className="px-2 py-2 text-xs">
+                        {new Date(i.issue_date).toLocaleDateString("es-ES")}
+                      </td>
+                      <td className="px-2 py-2 text-xs">
+                        {i.due_date ? new Date(i.due_date).toLocaleDateString("es-ES") : "—"}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums font-semibold">
+                        {eur(i.total_cents)}
+                      </td>
+                      <td className="px-2 py-2 text-right tabular-nums">
+                        {i.pending_cents > 0 ? (
+                          <span className="text-red-600 font-semibold">
+                            {eur(i.pending_cents)}
+                          </span>
+                        ) : (
+                          <span className="text-emerald-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
                         <StatusPill
                           label={STATUS_LABEL[i.status] ?? i.status}
                           tone={STATUS_TONE[i.status] ?? "info"}
                         />
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="px-2 py-2 text-right">
                         <div className="inline-flex items-center gap-1">
+                          <InvoiceRowActions
+                            invoiceId={i.id}
+                            status={i.status}
+                            pendingCents={i.pending_cents}
+                            isCreditNote={i.kind === "credit_note"}
+                            hasCreditNote={!!i.corrected_by_id}
+                          />
                           <Link
                             href={`/facturas/${i.id}` as never}
                             title="Ver factura"
