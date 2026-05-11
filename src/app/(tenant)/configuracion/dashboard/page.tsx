@@ -1,6 +1,7 @@
 import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -63,12 +64,15 @@ export default async function ConfigDashboardPage() {
   }
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          KPIs disponibles por rol. La personalización por usuario está
-          próximamente.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Cada usuario ve un dashboard con los KPIs propios de su rol. El
+            sistema decide la composición de tarjetas a partir del rol activo.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
       {KPI_GROUPS.map((g) => (
         <Card key={g.role}>

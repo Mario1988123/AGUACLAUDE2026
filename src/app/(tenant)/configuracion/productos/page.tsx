@@ -7,6 +7,7 @@ import { AttributesConfig } from "@/modules/config/products/attributes-config";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { listUnits } from "@/modules/config/units/actions";
 import { UnitsManager } from "@/modules/config/units/units-manager";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -21,12 +22,15 @@ export default async function ConfiguracionProductosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Configuración · Productos</h1>
-        <p className="text-sm text-muted-foreground">
-          Categorías y atributos. Puedes precargar las del catálogo global del SaaS o crear las
-          tuyas propias.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Configuración · Productos</h1>
+          <p className="text-sm text-muted-foreground">
+            Categorías y atributos. Puedes precargar las del catálogo global del SaaS o crear las
+            tuyas propias.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

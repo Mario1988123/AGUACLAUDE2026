@@ -26,6 +26,11 @@ interface Props {
   directMode?: boolean;
   /** Si está presente, modo edición: se actualiza la propuesta en vez de crear. */
   editId?: string;
+  /**
+   * Días por defecto de validez configurados en /configuracion/propuestas.
+   * Si no llega, se usa 15 como fallback (comportamiento anterior).
+   */
+  defaultValidityDays?: number;
   /** Datos iniciales en modo edición. */
   initial?: {
     customer_id: string | null;
@@ -96,15 +101,16 @@ export function ProposalCreateForm({
   defaultLeadId,
   directMode = false,
   editId,
+  defaultValidityDays = 15,
   initial,
 }: Props) {
   const isEdit = !!editId;
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? defaultCustomerId ?? "");
   const [validityUntil, setValidityUntil] = useState(() => {
     if (initial?.validity_until) return initial.validity_until;
-    // Por defecto: hoy + 15 días (formato YYYY-MM-DD)
+    // Por defecto: hoy + N días según /configuracion/propuestas.
     const d = new Date();
-    d.setDate(d.getDate() + 15);
+    d.setDate(d.getDate() + defaultValidityDays);
     return d.toISOString().slice(0, 10);
   });
   const [notes, setNotes] = useState(initial?.notes ?? "");

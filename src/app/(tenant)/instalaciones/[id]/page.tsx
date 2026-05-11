@@ -267,6 +267,85 @@ export default async function InstallationDetailPage({
         </div>
       </div>
 
+      {/* Card destacada del cliente — visible siempre en la cabecera de la
+          ficha. Antes solo aparecía dentro del wizard cuando se abría el
+          modal y el usuario reportaba que "no veía el bloque con todos los
+          datos" en la página de detalle. */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="space-y-3 pt-6">
+          <div className="text-xs font-bold uppercase tracking-wider text-primary">
+            Cliente
+          </div>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <div className="text-2xl font-extrabold text-foreground">
+              {customerName}
+            </div>
+            {customerTaxId && (
+              <Badge variant="outline" className="text-sm">
+                {customerTaxId}
+              </Badge>
+            )}
+            {customerId && (
+              <Link
+                href={`/clientes/${customerId}`}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                Ver ficha del cliente →
+              </Link>
+            )}
+          </div>
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            {installationAddress && (
+              <div>
+                <span className="font-semibold text-muted-foreground">
+                  Dirección de instalación:
+                </span>{" "}
+                {installationAddress}
+              </div>
+            )}
+            {customerPhone && (
+              <div>
+                <span className="font-semibold text-muted-foreground">
+                  Teléfono:
+                </span>{" "}
+                <a
+                  href={`tel:${customerPhone}`}
+                  className="font-bold text-primary hover:underline"
+                >
+                  📞 {customerPhone}
+                </a>
+              </div>
+            )}
+            {customerEmail && (
+              <div>
+                <span className="font-semibold text-muted-foreground">
+                  Email:
+                </span>{" "}
+                <a
+                  href={`mailto:${customerEmail}`}
+                  className="text-primary hover:underline"
+                >
+                  {customerEmail}
+                </a>
+              </div>
+            )}
+            {i.contract_id && (
+              <div>
+                <span className="font-semibold text-muted-foreground">
+                  Contrato:
+                </span>{" "}
+                <Link
+                  href={`/contratos/${i.contract_id}`}
+                  className="font-bold text-primary hover:underline"
+                >
+                  Ver contrato →
+                </Link>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>

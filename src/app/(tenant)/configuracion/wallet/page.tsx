@@ -2,6 +2,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,14 @@ export default async function ConfigWalletPage() {
   }
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Wallet (cobros)</h1>
-        <p className="text-sm text-muted-foreground">
-          Métodos de cobro habilitados y reglas de validación.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Wallet (cobros)</h1>
+          <p className="text-sm text-muted-foreground">
+            Métodos de cobro habilitados y reglas de validación.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
       <Card>
         <CardHeader>

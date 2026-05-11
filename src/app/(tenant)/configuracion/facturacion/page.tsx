@@ -7,6 +7,7 @@ import { InvoiceSeriesPanel } from "@/modules/invoices/series-panel";
 import { VerifactuModePanel } from "@/modules/invoices/verifactu-mode-panel";
 import { CertUploader } from "@/modules/invoices/cert-uploader";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,15 @@ export default async function FacturacionConfigPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Facturación</h1>
-        <p className="text-sm text-muted-foreground">
-          Configura las series de facturación, el modo Verifactu y el
-          certificado FNMT para envío automático a la AEAT.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Facturación</h1>
+          <p className="text-sm text-muted-foreground">
+            Configura las series de facturación, el modo Verifactu y el
+            certificado FNMT para envío automático a la AEAT.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

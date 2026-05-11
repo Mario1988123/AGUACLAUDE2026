@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { requireSession } from "@/shared/lib/auth/session";
 import { listAllMaintenancePlansAction } from "@/modules/maintenance-plans/config-actions";
 import { MaintenancePlansEditor } from "@/modules/maintenance-plans/plans-editor";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,16 @@ export default async function ConfigMantenimientosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Planes de mantenimiento</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestiona los 3 planes (Lite / Medium / Premium) que el comercial
-          puede ofrecer al cliente. Los snapshots de los contratos firmados
-          NO se ven afectados al editar — son inmutables.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Planes de mantenimiento</h1>
+          <p className="text-sm text-muted-foreground">
+            Gestiona los 3 planes (Lite / Medium / Premium) que el comercial
+            puede ofrecer al cliente. Los snapshots de los contratos firmados
+            NO se ven afectados al editar — son inmutables.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

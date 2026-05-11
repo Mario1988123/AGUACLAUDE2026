@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { InstallationsConfigForm } from "@/modules/config/installations/form";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +22,14 @@ export default async function ConfigInstalacionesPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Instalaciones</h1>
-        <p className="text-sm text-muted-foreground">
-          Configuración del proceso de instalación y tolerancias.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Instalaciones</h1>
+          <p className="text-sm text-muted-foreground">
+            Configuración del proceso de instalación y tolerancias.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
       <Card>
         <CardHeader>

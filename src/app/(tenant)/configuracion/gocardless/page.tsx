@@ -2,6 +2,7 @@ import { getGoCardlessSettings } from "@/modules/gocardless/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { GoCardlessSettingsForm } from "@/modules/gocardless/settings-form";
 import { Badge } from "@/shared/ui/badge";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,14 @@ export default async function GoCardlessConfigPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">GoCardless · Domiciliación SEPA</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Configura GoCardless para cobrar a clientes por domiciliación bancaria. El cliente firma un mandato online y a partir de ahí puedes cobrar contra esa cuenta.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">GoCardless · Domiciliación SEPA</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configura GoCardless para cobrar a clientes por domiciliación bancaria. El cliente firma un mandato online y a partir de ahí puedes cobrar contra esa cuenta.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

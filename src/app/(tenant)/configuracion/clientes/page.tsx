@@ -1,6 +1,7 @@
 import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +12,14 @@ export default async function ConfigClientesPage() {
   }
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Clientes</h1>
-        <p className="text-sm text-muted-foreground">
-          Configuración del módulo de clientes.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Clientes</h1>
+          <p className="text-sm text-muted-foreground">
+            Configuración del módulo de clientes.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
       <Card>
         <CardHeader>
@@ -35,11 +39,21 @@ export default async function ConfigClientesPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Campos personalizados</CardTitle>
+          <CardTitle className="text-base">Tipo de cliente y datos clave</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Próximamente: añadir campos custom (texto, número, lista) a la ficha
-          de cliente.
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            La ficha de cliente distingue automáticamente entre{" "}
+            <strong>particular</strong> (nombre, apellidos, DNI) y{" "}
+            <strong>empresa</strong> (razón social, nombre comercial, CIF). El
+            módulo gestiona también direcciones múltiples (fiscal, instalación,
+            envío) y consentimientos RGPD.
+          </p>
+          <p>
+            Los campos no son configurables por empresa para garantizar
+            compatibilidad con facturación, contratos y Verifactu. Si necesitas
+            datos extra puntuales, usa el campo <code>notes</code> de la ficha.
+          </p>
         </CardContent>
       </Card>
     </div>

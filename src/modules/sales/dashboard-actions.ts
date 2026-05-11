@@ -213,6 +213,11 @@ async function _getDashboardObjectives(
 
     let actualAmount = 0;
     let actualUnits = filtered.length;
+    // monthly_objectives.metric_kind admite los enums `sales | contracts |
+    // installations | recoveries` (definidos en la migración 121800). Los
+    // antiguos `cash_total | renting_total | rental_total | financier_total |
+    // units | any_total` se mantienen para retro-compatibilidad si alguien
+    // editó la columna en BD directamente.
     switch (o.metric_kind) {
       case "cash_total":
         actualAmount = filtered.filter((s) => s.plan_type === "cash").reduce((a, b) => a + b.total_cents, 0);
@@ -234,6 +239,24 @@ async function _getDashboardObjectives(
         actualAmount = filtered.reduce((a, b) => a + (b.financier_payment_cents ?? 0), 0);
         break;
       case "units":
+        actualAmount = 0;
+        break;
+      // Enums oficiales de monthly_objectives:
+      case "sales":
+      case "contracts":
+        // Total facturado del periodo (todos los planes). El propio acto
+        // de firmar contrato es lo que genera sales_records.
+        actualAmount = filtered.reduce((a, b) => a + b.total_cents, 0);
+        break;
+      case "installations":
+        // Métrica por unidades: cada sales_record cuenta como 1 venta /
+        // instalación cerrada. No hay importe target esperable, solo
+        // unidades.
+        actualAmount = 0;
+        break;
+      case "recoveries":
+        // Recuperaciones de leads o pruebas perdidas. Aún no hay tabla
+        // dedicada → marcamos como 0 hasta que se implemente el módulo.
         actualAmount = 0;
         break;
       case "any_total":

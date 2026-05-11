@@ -7,6 +7,7 @@ import { UserRowActions } from "@/modules/tenant/users/row-actions";
 import { TeamsPanel } from "@/modules/tenant/users/teams-panel";
 import { ROLE_KEYS } from "@/modules/tenant/users/schemas";
 import { UserAvatar } from "@/shared/components/user-avatar";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -44,11 +45,14 @@ export default async function UsuariosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Usuarios</h1>
-        <p className="text-sm text-muted-foreground">
-          {users.length} usuarios en tu empresa
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Usuarios</h1>
+          <p className="text-sm text-muted-foreground">
+            {users.length} usuarios en tu empresa
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">

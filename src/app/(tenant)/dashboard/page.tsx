@@ -230,6 +230,7 @@ async function renderDashboard({
   ];
 
   const isLevel1 = objectives.level === 1;
+  const isLevel2 = objectives.level === 2;
   const isLevel3 = objectives.level === 3;
 
   return (
@@ -310,12 +311,22 @@ async function renderDashboard({
               ? "No tienes objetivos individuales este mes."
               : "Sin objetivos individuales para el filtro actual."
           }
+          emptyAction={
+            isLevel1
+              ? { href: "/configuracion/objetivos", label: "Configurar objetivos" }
+              : undefined
+          }
         />
         <DashboardObjectivesCard
           title="Objetivos del departamento"
           icon="team"
           data={objectives.department_objectives}
           emptyMsg="Sin objetivos de departamento definidos."
+          emptyAction={
+            isLevel1 || isLevel2
+              ? { href: "/configuracion/objetivos", label: "Configurar objetivos" }
+              : undefined
+          }
         />
       </div>
 

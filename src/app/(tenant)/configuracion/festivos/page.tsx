@@ -7,6 +7,7 @@ import {
 import { REGION_HOLIDAYS_2026, REGION_LABELS } from "@/modules/time-tracking/regions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { HolidaysManager } from "@/modules/time-tracking/holidays-manager";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +22,17 @@ export default async function FestivosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          Configuración · Calendario laboral
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Festivos nacionales (España) precargados. Selecciona tu provincia para sugerencias y
-          añade los festivos locales.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            Configuración · Calendario laboral
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Festivos nacionales (España) precargados. Selecciona tu provincia para sugerencias y
+            añade los festivos locales.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

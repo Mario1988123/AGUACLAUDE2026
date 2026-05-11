@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Target, Users } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -30,11 +31,14 @@ export function DashboardObjectivesCard({
   icon = "individual",
   data,
   emptyMsg,
+  emptyAction,
 }: {
   title: string;
   icon?: "individual" | "team";
   data: ObjectiveProgress[];
   emptyMsg: string;
+  /** Si se pasa, se renderiza como link debajo del emptyMsg. */
+  emptyAction?: { href: string; label: string };
 }) {
   const Icon = icon === "team" ? Users : Target;
   return (
@@ -47,7 +51,17 @@ export function DashboardObjectivesCard({
       </CardHeader>
       <CardContent>
         {data.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{emptyMsg}</p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{emptyMsg}</p>
+            {emptyAction && (
+              <Link
+                href={emptyAction.href as never}
+                className="inline-flex items-center text-sm font-semibold text-primary hover:underline"
+              >
+                {emptyAction.label} →
+              </Link>
+            )}
+          </div>
         ) : (
           <ul className="space-y-3">
             {data.map((o) => {

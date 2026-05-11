@@ -2,6 +2,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,15 @@ export default async function ConfigNotificacionesPage() {
   }
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Notificaciones</h1>
-        <p className="text-sm text-muted-foreground">
-          Eventos del sistema que generan notificación. Cada usuario podrá
-          decidir desde su perfil qué canales activar.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Notificaciones</h1>
+          <p className="text-sm text-muted-foreground">
+            Eventos del sistema que generan notificación. Cada usuario podrá
+            decidir desde su perfil qué canales activar.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
       <Card>
         <CardHeader>
@@ -68,16 +72,22 @@ export default async function ConfigNotificacionesPage() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            <strong>app</strong> → icono de campana en el header del CRM.
+            <strong>app</strong> → icono de campana en el header del CRM
+            (siempre activo).
           </p>
           <p>
-            <strong>email</strong> → notificación por correo (próximamente).
+            <strong>email</strong> → notificación por correo. Activo en eventos
+            críticos hacia cliente (contrato firmado, incidencia abierta,
+            mantenimiento). Requiere consentimiento RGPD del cliente.
           </p>
           <p>
-            <strong>whatsapp</strong> → mensaje WhatsApp Business (próximamente).
+            <strong>whatsapp</strong> → mensaje WhatsApp Business. Disponible
+            para mailing comercial dirigido si se configura el proveedor en{" "}
+            <strong>/configuracion/mailing</strong>.
           </p>
           <p>
-            <strong>push</strong> → notificación push del navegador (próximamente).
+            <strong>push</strong> → notificación push del navegador. Disponible
+            con la PWA activa (actualmente desactivada por configuración).
           </p>
         </CardContent>
       </Card>

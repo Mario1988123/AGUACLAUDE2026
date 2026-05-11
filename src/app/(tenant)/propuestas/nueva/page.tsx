@@ -2,6 +2,7 @@ import { listProductsForProposal } from "@/modules/products/actions";
 import { listCustomers } from "@/modules/customers/actions";
 import { listLeads, getLead } from "@/modules/leads/actions";
 import { ProposalCreateForm } from "@/modules/proposals/create-form";
+import { getDefaultProposalValidityDays } from "@/modules/config/proposals/actions";
 
 export default async function NuevaPropuestaPage({
   searchParams,
@@ -16,10 +17,11 @@ export default async function NuevaPropuestaPage({
   const sp = await searchParams;
   const leadId = sp.lead_id ?? sp.lead;
   const directMode = sp.direct === "1";
-  const [products, customers, leads] = await Promise.all([
+  const [products, customers, leads, defaultValidityDays] = await Promise.all([
     listProductsForProposal(),
     listCustomers(),
     listLeads().catch(() => []),
+    getDefaultProposalValidityDays().catch(() => 15),
   ]);
 
   let leadDisplay: string | null = null;
@@ -75,6 +77,7 @@ export default async function NuevaPropuestaPage({
         defaultCustomerId={sp.customer_id}
         defaultLeadId={leadId}
         directMode={directMode}
+        defaultValidityDays={defaultValidityDays}
       />
     </div>
   );

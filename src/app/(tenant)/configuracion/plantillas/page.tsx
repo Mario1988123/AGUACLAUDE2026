@@ -1,6 +1,7 @@
 import { listMessageTemplatesAdmin } from "@/modules/messaging/actions";
 import { MessageTemplatesManager } from "@/modules/messaging/templates-manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +10,15 @@ export default async function ConfiguracionPlantillasPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Plantillas de mensaje</h1>
-        <p className="text-sm text-muted-foreground">
-          Plantillas de WhatsApp y Email que aparecen en las fichas de leads y clientes para que
-          los comerciales envíen mensajes con un clic.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Plantillas de mensaje</h1>
+          <p className="text-sm text-muted-foreground">
+            Plantillas de WhatsApp y Email que aparecen en las fichas de leads y clientes para que
+            los comerciales envíen mensajes con un clic.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

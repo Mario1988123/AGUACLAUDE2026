@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { ExpenseSettingsForm } from "@/modules/expenses/settings-form";
 import { CategoriesManager } from "@/modules/expenses/categories-manager";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,14 @@ export default async function ExpenseSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Gastos comerciales</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Límites IRPF España, ratio kilometraje, alertas. OCR de tickets vía Mindee.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Gastos comerciales</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Límites IRPF España, ratio kilometraje, alertas. OCR de tickets vía Mindee.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

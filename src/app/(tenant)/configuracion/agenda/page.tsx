@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import { getCompanySettings } from "@/modules/config/company/actions";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -20,12 +21,15 @@ export default async function ConfiguracionAgendaPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Configuración · Agenda</h1>
-        <p className="text-sm text-muted-foreground">
-          Las horas comerciales, tolerancias y avisos que afectan a las visitas e instalaciones
-          se editan en la configuración general de la empresa.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Configuración · Agenda</h1>
+          <p className="text-sm text-muted-foreground">
+            Las horas comerciales, tolerancias y avisos que afectan a las visitas e instalaciones
+            se editan en la configuración general de la empresa.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

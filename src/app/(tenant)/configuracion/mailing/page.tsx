@@ -4,6 +4,7 @@ import { getMailingDomain } from "@/modules/mailing/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { DomainSetupPanel } from "@/modules/mailing/domain-setup-panel";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +18,15 @@ export default async function MailingConfigPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Configuración de mailing</h1>
-        <p className="text-sm text-muted-foreground">
-          Configura el dominio desde el que tu equipo enviará emails al cliente
-          (propuestas, facturas, recordatorios, campañas).
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Configuración de mailing</h1>
+          <p className="text-sm text-muted-foreground">
+            Configura el dominio desde el que tu equipo enviará emails al cliente
+            (propuestas, facturas, recordatorios, campañas).
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

@@ -7,6 +7,7 @@ import { ScheduleEditor } from "@/modules/time-tracking/schedule-editor";
 import { VacationsTable } from "@/modules/time-tracking/vacations-table";
 import { getCompanySettings } from "@/modules/config/company/actions";
 import { BusinessHoursForm } from "@/modules/config/company/business-hours-form";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -24,13 +25,16 @@ export default async function HorariosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">
-          Configuración · Horarios y vacaciones
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Horario comercial de la empresa, jornada laboral por usuario y vacaciones.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            Configuración · Horarios y vacaciones
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Horario comercial de la empresa, jornada laboral por usuario y vacaciones.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>

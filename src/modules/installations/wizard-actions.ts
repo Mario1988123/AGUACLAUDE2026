@@ -67,7 +67,15 @@ export async function startInstallationAction(input: {
         status: string;
       }
     | null;
-  if (!i) throw new Error("Instalación no encontrada");
+  if (!i) {
+    console.error(
+      "[startInstallation] installation not found for id:",
+      input.installation_id,
+    );
+    throw new Error(
+      `Instalación no encontrada (id: ${input.installation_id.slice(0, 8)}…). Recarga la página e inténtalo de nuevo. Si persiste, contacta con soporte.`,
+    );
+  }
 
   // Bloqueo de fecha (decisión usuario 2026-05-11): el técnico solo puede
   // iniciar el parte si scheduled_at cae HOY. Si está en el futuro o en

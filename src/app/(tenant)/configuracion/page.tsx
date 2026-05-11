@@ -31,6 +31,9 @@ const SECTIONS = [
   { href: "/configuracion/horarios", label: "Horarios y vacaciones", icon: "Clock", desc: "Jornada laboral y días por usuario" },
   { href: "/configuracion/festivos", label: "Calendario laboral", icon: "Calendar", desc: "Festivos nacionales y locales" },
   { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo, roles y permisos" },
+  { href: "/configuracion/agenda", label: "Agenda", icon: "Calendar", desc: "Horario, tolerancias y tipos de evento" },
+  { href: "/configuracion/almacenes", label: "Almacenes", icon: "Warehouse", desc: "Almacenes, furgonetas y stock" },
+  { href: "/configuracion/modulos", label: "Módulos activos", icon: "Layers", desc: "Activar/desactivar módulos por empresa" },
 ];
 
 export default async function ConfiguracionPage() {

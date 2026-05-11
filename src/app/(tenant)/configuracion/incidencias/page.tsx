@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { getSlaSettings } from "@/modules/incidents/sla-actions";
 import { SlaSettingsForm } from "@/modules/incidents/sla-form";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,14 @@ export default async function ConfigIncidenciasPage() {
   const sla = await getSlaSettings();
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Incidencias</h1>
-        <p className="text-sm text-muted-foreground">
-          SLA por prioridad y reglas de asignación.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Incidencias</h1>
+          <p className="text-sm text-muted-foreground">
+            SLA por prioridad y reglas de asignación.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
       <Card>
         <CardHeader>
@@ -54,12 +58,19 @@ export default async function ConfigIncidenciasPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Asignación automática</CardTitle>
+          <CardTitle className="text-base">Flujo de asignación</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Por defecto, la incidencia queda <strong>sin asignar</strong> hasta
-          que el director técnico la dispatcha. Próximamente: asignación
-          automática round-robin entre técnicos disponibles.
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            La incidencia queda <strong>sin asignar</strong> hasta que el
+            director técnico la asigna manualmente desde el detalle de la
+            incidencia. Esto permite priorizar según carga real del equipo y
+            urgencia del caso.
+          </p>
+          <p>
+            El director técnico ve todas las incidencias abiertas de su
+            empresa; los técnicos solo ven las suyas y las de su equipo.
+          </p>
         </CardContent>
       </Card>
     </div>

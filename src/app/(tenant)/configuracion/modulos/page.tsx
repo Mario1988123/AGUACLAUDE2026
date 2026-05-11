@@ -1,6 +1,7 @@
 import { listCompanyModules } from "@/modules/config/modules/actions";
 import { ModulesManager } from "@/modules/config/modules/manager";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,15 @@ export default async function ConfiguracionModulosPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Módulos</h1>
-        <p className="text-sm text-muted-foreground">
-          Activa o desactiva los módulos disponibles para tu empresa. Los módulos esenciales
-          (core) no pueden desactivarse. Los aparcados están reservados pero no operativos.
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Módulos</h1>
+          <p className="text-sm text-muted-foreground">
+            Activa o desactiva los módulos disponibles para tu empresa. Los módulos esenciales
+            (core) no pueden desactivarse. Los aparcados están reservados pero no operativos.
+          </p>
+        </div>
+        <BackButton href="/configuracion" />
       </div>
 
       <Card>
