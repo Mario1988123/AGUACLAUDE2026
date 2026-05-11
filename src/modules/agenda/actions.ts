@@ -687,6 +687,20 @@ export async function rescheduleAgendaEventAction(
   eventId: string,
   newStartsAtIso: string,
 ): Promise<void> {
+  // Items VIRTUALES (instalaciones / mantenimientos directos) tienen
+  // id "virtual-inst-{uuid}" o "virtual-maint-{uuid}". No están en
+  // agenda_events; reagendamos directamente la tabla origen.
+  if (eventId.startsWith("virtual-inst-")) {
+    const realId = eventId.slice("virtual-inst-".length);
+    await rescheduleInstallationFromAgenda(realId, newStartsAtIso);
+    return;
+  }
+  if (eventId.startsWith("virtual-maint-")) {
+    const realId = eventId.slice("virtual-maint-".length);
+    await rescheduleMaintenanceFromAgenda(realId, newStartsAtIso);
+    return;
+  }
+
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -772,6 +786,48 @@ export async function reassignAgendaEventAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+
+  // Items virtuales: reasignar la tabla origen (installations.installer_user_id
+  // o maintenance_jobs.technician_user_id) en vez de agenda_events.
+  const isUpperEarly =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+  if (!isUpperEarly && eventId.startsWith("virtual-")) {
+    throw new Error("Solo nivel 1 o 2 puede reasignar tareas");
+  }
+  if (eventId.startsWith("virtual-inst-")) {
+    const realId = eventId.slice("virtual-inst-".length);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin2 = createAdminClient() as any;
+    await admin2
+      .from("installations")
+      .update({
+        installer_user_id: newUserId || null,
+        assigned_at: newUserId ? new Date().toISOString() : null,
+        assigned_by: newUserId ? session.user_id : null,
+      })
+      .eq("id", realId)
+      .eq("company_id", session.company_id);
+    revalidatePath("/agenda");
+    revalidatePath(`/instalaciones/${realId}`);
+    return;
+  }
+  if (eventId.startsWith("virtual-maint-")) {
+    const realId = eventId.slice("virtual-maint-".length);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin2 = createAdminClient() as any;
+    await admin2
+      .from("maintenance_jobs")
+      .update({ technician_user_id: newUserId || null })
+      .eq("id", realId)
+      .eq("company_id", session.company_id);
+    revalidatePath("/agenda");
+    revalidatePath(`/mantenimientos/${realId}`);
+    return;
+  }
   const isUpper =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
@@ -831,4 +887,79 @@ export async function reassignAgendaEventAction(
   }
 
   revalidatePath("/agenda");
+}
+
+// ============================================================================
+// Reschedule de items virtuales (instalaciones / mantenimientos) desde la
+// agenda. La agenda los muestra como AgendaItem con id "virtual-inst-..."
+// o "virtual-maint-..."; al arrastrar, llamamos aquí para actualizar la
+// tabla origen.
+// ============================================================================
+
+async function rescheduleInstallationFromAgenda(
+  installationId: string,
+  newStartsAtIso: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: prev } = await admin
+    .from("installations")
+    .select("status, company_id")
+    .eq("id", installationId)
+    .maybeSingle();
+  if (!prev) throw new Error("Instalación no encontrada");
+  if ((prev as { company_id: string }).company_id !== session.company_id) {
+    throw new Error("Instalación de otra empresa");
+  }
+  if (
+    !["scheduled", "in_progress", "paused", "unscheduled"].includes(
+      (prev as { status: string }).status,
+    )
+  ) {
+    throw new Error("La instalación ya no se puede reprogramar");
+  }
+  await admin
+    .from("installations")
+    .update({
+      scheduled_at: new Date(newStartsAtIso).toISOString(),
+      status: "scheduled",
+    })
+    .eq("id", installationId);
+  revalidatePath("/agenda");
+  revalidatePath("/instalaciones");
+  revalidatePath(`/instalaciones/${installationId}`);
+}
+
+async function rescheduleMaintenanceFromAgenda(
+  maintenanceId: string,
+  newStartsAtIso: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: prev } = await admin
+    .from("maintenance_jobs")
+    .select("status, company_id")
+    .eq("id", maintenanceId)
+    .maybeSingle();
+  if (!prev) throw new Error("Mantenimiento no encontrado");
+  if ((prev as { company_id: string }).company_id !== session.company_id) {
+    throw new Error("Mantenimiento de otra empresa");
+  }
+  if (!["scheduled", "in_progress"].includes((prev as { status: string }).status)) {
+    throw new Error("El mantenimiento ya no se puede reprogramar");
+  }
+  await admin
+    .from("maintenance_jobs")
+    .update({
+      scheduled_at: new Date(newStartsAtIso).toISOString(),
+      status: "scheduled",
+    })
+    .eq("id", maintenanceId);
+  revalidatePath("/agenda");
+  revalidatePath("/mantenimientos");
+  revalidatePath(`/mantenimientos/${maintenanceId}`);
 }

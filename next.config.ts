@@ -15,6 +15,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  // El default de Next es 1 MB para Server Actions. Subimos a 10 MB porque
+  // recibimos firmas (PNG base64), DNIs y fotos del wizard de instalación/
+  // pruebas gratuitas y se reventaba con "Body exceeded 1 MB limit".
+  // Las fotos grandes ya usan FormData + Storage directo (no llegan aquí),
+  // pero firmas pad + DNI base64 suman.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   images: {
     remotePatterns: [
       {

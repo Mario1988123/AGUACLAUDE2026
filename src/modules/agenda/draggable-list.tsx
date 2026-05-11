@@ -148,35 +148,21 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                 {byDay[day]!
                   .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
                   .map((ev) => {
-                    // Items virtuales (instalaciones/mantenimientos) NO son
-                    // draggable ni abren el move-dialog — su scheduled_at
-                    // vive en installations / maintenance_jobs, no en
-                    // agenda_events. Para moverlos hay que abrir su ficha.
-                    const isVirtual = ev.id.startsWith("virtual-");
-                    const virtualHref =
-                      isVirtual && ev.subject_type === "installation"
-                        ? `/instalaciones/${ev.subject_id}`
-                        : isVirtual && ev.subject_type === "maintenance"
-                          ? `/mantenimientos/${ev.subject_id}`
-                          : null;
-                    const handleClick = () => {
-                      if (virtualHref) {
-                        window.location.href = virtualHref;
-                      } else {
-                        setMoveTarget(ev);
-                      }
-                    };
+                    // Items virtuales (instalaciones/mantenimientos) SÍ son
+                    // draggable. rescheduleAgendaEventAction detecta prefijo
+                    // "virtual-inst-"/"virtual-maint-" y actualiza la tabla
+                    // origen (installations / maintenance_jobs).
                     return (
                     <li
                       key={ev.id}
-                      draggable={!isVirtual}
-                      onDragStart={(e) => !isVirtual && onDragStart(e, ev.id)}
+                      draggable
+                      onDragStart={(e) => onDragStart(e, ev.id)}
                       onDragEnd={onDragEnd}
-                      onClick={handleClick}
+                      onClick={() => setMoveTarget(ev)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          handleClick();
+                          setMoveTarget(ev);
                         }
                       }}
                       role="button"
