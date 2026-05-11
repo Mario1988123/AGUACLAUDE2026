@@ -14,7 +14,6 @@ import {
   getBankAccount,
   getMandate,
   getRedirectFlow,
-  listMandatesByCustomer,
 } from "./client";
 
 interface SettingsRow {
@@ -751,5 +750,3 @@ export async function importMandateByIdAction(input: {
   }
 }
 
-// Suprimir warning de unused (la fn está importada por si la usamos en futuro)
-void listMandatesByCustomer;

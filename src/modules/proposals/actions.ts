@@ -9,7 +9,6 @@ import { proposalCreateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
-import { awardPoints, getPointsSettings } from "@/modules/points/award";
 
 export async function listProposals(filters?: { status?: string }): Promise<ProposalListItem[]> {
   const session = await requireSession();
@@ -935,131 +934,8 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
   // completar la instalación (cuando se cierra el ciclo entero). Aceptar
   // propuesta es un hito INFORMATIVO: queda en eventos pero NO suma
   // puntos. Si el ciclo se interrumpe (cancelación), el comercial nunca
-  // cobra los puntos por esta propuesta.
-  // El bloque siguiente queda desactivado a propósito; lo dejo
-  // documentado por si se quisiera revertir la decisión en el futuro.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _DISABLED_PROPOSAL_POINTS = false;
-  if (_DISABLED_PROPOSAL_POINTS && session.company_id) {
-    try {
-      const cfg = await getPointsSettings(session.company_id);
-      // Detalles del lead (si lo había) para origen tmk + assigned_user
-      let assignedUserId: string | null = null;
-      let originTmkUserId: string | null = null;
-      if (p.lead_id) {
-        const { data: l } = await supabase
-          .from("leads")
-          .select("assigned_user_id, origin_tmk_user_id")
-          .eq("id", p.lead_id)
-          .maybeSingle();
-        const lObj = l as {
-          assigned_user_id: string | null;
-          origin_tmk_user_id: string | null;
-        } | null;
-        assignedUserId = lObj?.assigned_user_id ?? null;
-        originTmkUserId = lObj?.origin_tmk_user_id ?? null;
-      } else if (customerId) {
-        const { data: c } = await supabase
-          .from("customers")
-          .select("assigned_user_id, source_lead_id")
-          .eq("id", customerId)
-          .maybeSingle();
-        const cObj = c as {
-          assigned_user_id: string | null;
-          source_lead_id: string | null;
-        } | null;
-        assignedUserId = cObj?.assigned_user_id ?? null;
-        if (cObj?.source_lead_id) {
-          const { data: l } = await supabase
-            .from("leads")
-            .select("origin_tmk_user_id")
-            .eq("id", cObj.source_lead_id)
-            .maybeSingle();
-          originTmkUserId =
-            (l as { origin_tmk_user_id: string | null } | null)?.origin_tmk_user_id ?? null;
-        }
-      }
-      // Quién es el comercial: assigned_user_id si existe, fallback al actor
-      const commercialUserId = assignedUserId ?? session.user_id;
-
-      // Cantidad de items + check de descuento
-      const { data: items } = await supabase
-        .from("proposal_items")
-        .select("quantity, unit_price_cash_cents, product_id")
-        .eq("proposal_id", id);
-      type Item = {
-        quantity: number;
-        unit_price_cash_cents: number | null;
-        product_id: string;
-      };
-      const itemList = (items ?? []) as Item[];
-      const totalEquipments = itemList.reduce((s, it) => s + it.quantity, 0);
-
-      // Detectar si alguno se vendió por debajo del mínimo comercial autorizado
-      const productIds = itemList.map((i) => i.product_id);
-      let hasDiscount = false;
-      if (productIds.length > 0) {
-        const { data: plans } = await supabase
-          .from("product_pricing_plans")
-          .select("product_id, min_authorized_cents")
-          .in("product_id", productIds)
-          .eq("plan_type", "cash");
-        const minMap = new Map<string, number | null>();
-        for (const pl of (plans ?? []) as Array<{
-          product_id: string;
-          min_authorized_cents: number | null;
-        }>) {
-          minMap.set(pl.product_id, pl.min_authorized_cents);
-        }
-        for (const it of itemList) {
-          const min = minMap.get(it.product_id);
-          if (
-            min != null &&
-            it.unit_price_cash_cents != null &&
-            it.unit_price_cash_cents < min
-          ) {
-            hasDiscount = true;
-            break;
-          }
-        }
-      }
-
-      const basePoints = totalEquipments * cfg.points_per_equipment_sold;
-      const adjustedPoints = hasDiscount
-        ? Math.round((basePoints * (100 - cfg.discount_penalty_percent)) / 100)
-        : basePoints;
-
-      // Reparto si origen TMK
-      const tmkPct = originTmkUserId ? cfg.tmk_split_percent : 0;
-      const tmkPoints = Math.round((adjustedPoints * tmkPct) / 100);
-      const commercialPoints = adjustedPoints - tmkPoints;
-
-      if (commercialPoints > 0 && commercialUserId) {
-        await awardPoints({
-          company_id: session.company_id,
-          user_id: commercialUserId,
-          points: commercialPoints,
-          reason: hasDiscount ? "sale_with_discount" : "sale",
-          subject_type: "proposal",
-          subject_id: id,
-          metadata: { equipments: totalEquipments, has_discount: hasDiscount },
-        });
-      }
-      if (tmkPoints > 0 && originTmkUserId) {
-        await awardPoints({
-          company_id: session.company_id,
-          user_id: originTmkUserId,
-          points: tmkPoints,
-          reason: "sale_tmk_split",
-          subject_type: "proposal",
-          subject_id: id,
-          metadata: { split_pct: tmkPct, has_discount: hasDiscount },
-        });
-      }
-    } catch {
-      /* no-op */
-    }
-  }
+  // cobra los puntos por esta propuesta. La lógica de award se ejecuta en
+  // installations.completeInstallation → awardSalesBundleOnInstall.
 
   revalidatePath(`/propuestas/${id}`);
   revalidatePath("/propuestas");

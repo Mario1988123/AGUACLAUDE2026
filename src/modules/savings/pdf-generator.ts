@@ -12,16 +12,13 @@ import {
   drawTiles,
   drawCalloutBlock,
   drawSectionTitle,
-  drawDashFooter,
   drawParagraph,
   fmtEur,
   fmtDateLong,
-  fmtDateShort,
 } from "@/shared/lib/pdf/dashstack";
 
 const PAGE_W = 595;
 const MARGIN = 48;
-const PRIMARY = rgb(0.10, 0.55, 0.55); // teal
 const RED = rgb(0.86, 0.30, 0.30);
 const GREEN = rgb(0.20, 0.65, 0.40);
 const MUTED = rgb(0.45, 0.50, 0.55);
@@ -519,11 +516,6 @@ export async function generateSavingsPdf(savingsId: string): Promise<Uint8Array>
       color: MUTED,
     });
   }
-
-  // Suprimir unused imports warning
-  void drawDashFooter;
-  void fmtDateShort;
-  void PRIMARY;
 
   return await d.pdf.save();
 }
