@@ -659,63 +659,11 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
   });
 }
 
-/**
- * Crea una factura a partir de una entrada de wallet validada (cobro real).
- */
-export async function createInvoiceFromWalletEntryAction(
-  walletEntryId: string,
-): Promise<string> {
-  const session = await ensureAdmin();
-  if (!session.company_id) throw new Error("Sin empresa");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data: w } = await admin
-    .from("wallet_entries")
-    .select("id, customer_id, contract_id, concept, amount_cents")
-    .eq("id", walletEntryId)
-    .maybeSingle();
-  if (!w) throw new Error("Movimiento no encontrado");
-  const we = w as {
-    id: string;
-    customer_id: string | null;
-    contract_id: string | null;
-    concept: string;
-    amount_cents: number;
-  };
-  if (!we.customer_id) throw new Error("El movimiento no tiene cliente asociado");
-  const fiscal = await getFiscalSettings();
-  // Importe en wallet ya es total con IVA. Calculamos base = total / (1 + iva)
-  const ivaPercent = fiscal.invoice_default_iva;
-  const baseCents = Math.round(we.amount_cents / (1 + ivaPercent / 100));
-  const invoiceId = await createInvoiceAction({
-    customer_id: we.customer_id,
-    contract_id: we.contract_id,
-    notes: we.concept,
-    lines: [
-      {
-        description: we.concept,
-        quantity: 1,
-        unit_price_cents: baseCents,
-        discount_percent: 0,
-        tax_rate_percent: ivaPercent,
-      },
-    ],
-  });
-  // Vincular como cobro inmediato
-  await admin.from("invoice_payments").insert({
-    company_id: session.company_id,
-    invoice_id: invoiceId,
-    wallet_entry_id: walletEntryId,
-    amount_cents: we.amount_cents,
-    created_by: session.user_id,
-  });
-  await admin
-    .from("invoices")
-    .update({ status: "paid", paid_at: new Date().toISOString() })
-    .eq("id", invoiceId);
-  revalidatePath("/facturas");
-  return invoiceId;
-}
+// createInvoiceFromWalletEntryAction → ELIMINADA (2026-05-11). La función
+// canónica es wallet/actions.ts:createInvoiceFromWalletAction. Tiene los
+// guards completos (tax_id, dirección, status válido), devuelve result
+// pattern { ok, invoice_id, error } que la UI usa, marca status='paid' y
+// crea invoice_payments. La versión anterior aquí estaba huérfana.
 
 /**
  * Genera facturas mensuales para todos los contratos activos con cuota

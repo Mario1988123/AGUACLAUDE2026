@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
   validateCIF,
+  validateDNIorNIE,
   validateIBAN,
   validateSpanishPhone,
   validateSpanishPostalCode,
@@ -89,8 +90,15 @@ function validateFiscalFormat(input: Partial<FiscalSettings>): void {
   const errs: string[] = [];
 
   if (input.fiscal_tax_id != null && input.fiscal_tax_id !== "") {
-    if (!validateCIF(input.fiscal_tax_id)) {
-      errs.push("CIF/NIF de empresa con formato inválido");
+    // Aceptamos CIF (empresas), DNI o NIE (autónomos / empresarios
+    // individuales). Antes solo se aceptaba CIF y rechazaba a autónomos.
+    const taxId = input.fiscal_tax_id.trim().toUpperCase();
+    const isCif = validateCIF(taxId);
+    const isPersonal = validateDNIorNIE(taxId).valid;
+    if (!isCif && !isPersonal) {
+      errs.push(
+        "CIF/NIF de empresa con formato inválido (debe ser CIF tipo A1234567B, DNI 12345678X o NIE X1234567L)",
+      );
     }
   }
 

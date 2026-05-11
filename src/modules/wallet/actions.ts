@@ -785,29 +785,55 @@ export async function createInvoiceFromWalletAction(
       };
     }
 
+    // IVA configurable desde fiscal settings (antes hardcoded 21%).
+    const { getFiscalSettings } = await import("@/modules/config/fiscal/actions");
+    const fiscal = await getFiscalSettings();
+    const ivaPercent = fiscal.invoice_default_iva ?? 21;
     const totalCents = w.amount_cents;
-    const baseCents = Math.round(totalCents / 1.21);
+    const baseCents = Math.round(totalCents / (1 + ivaPercent / 100));
 
     const { createInvoiceAction } = await import("@/modules/invoices/actions");
     const invoiceId = await createInvoiceAction({
       customer_id: w.customer_id,
       contract_id: w.contract_id ?? null,
       kind: "invoice",
+      notes: w.concept,
       lines: [
         {
           description: w.concept,
           quantity: 1,
           unit_price_cents: baseCents,
           discount_percent: 0,
-          tax_rate_percent: 21,
+          tax_rate_percent: ivaPercent,
         },
       ],
     });
 
+    // Vincular wallet → factura
     await admin
       .from("wallet_entries")
       .update({ invoice_id: invoiceId })
       .eq("id", w.id);
+
+    // Registrar el cobro como invoice_payment + marcar factura pagada
+    // (el wallet_entry ya estaba en collected/validated → la factura nace
+    // pagada porque corresponde a un cobro real).
+    try {
+      await admin.from("invoice_payments").insert({
+        company_id: session.company_id,
+        invoice_id: invoiceId,
+        wallet_entry_id: w.id,
+        amount_cents: w.amount_cents,
+        created_by: session.user_id,
+      });
+      await admin
+        .from("invoices")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", invoiceId);
+    } catch (e) {
+      console.error("[createInvoiceFromWallet] paid mark failed:", e);
+      // No bloqueante: factura existe, solo falta marcar paid.
+    }
 
     revalidatePath("/wallet");
     revalidatePath("/facturas");
