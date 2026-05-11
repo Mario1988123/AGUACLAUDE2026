@@ -296,15 +296,20 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
 
   const kind: InvoiceKind = input.kind ?? "invoice";
   const series = await getOrSeedSeries(session.company_id, kind);
-  const { data: numRow, error: e1 } = await admin.rpc("next_invoice_number", {
-    p_series_id: series.id,
-  });
+  // Función canónica en schema public (Verifactu 2026-05-07). Devuelve
+  // bigint con el número. La anterior app.next_invoice_number quedó
+  // obsoleta (no visible en PostgREST por estar en schema app).
+  const { data: nextNum, error: e1 } = await admin.rpc(
+    "allocate_next_invoice_number",
+    { p_series_id: series.id },
+  );
   if (e1) throw new Error(e1.message);
-  const numInfo = (Array.isArray(numRow) ? numRow[0] : numRow) as {
-    number: number;
-    fiscal_year: number;
-  };
-  const fullRef = `${series.series_code}-${numInfo.fiscal_year}-${String(numInfo.number).padStart(5, "0")}`;
+  const num = Number(nextNum);
+  if (!Number.isFinite(num) || num <= 0) {
+    throw new Error("No se pudo asignar número de factura");
+  }
+  const fiscalYear = new Date().getFullYear();
+  const fullRef = `${series.series_code}-${fiscalYear}-${String(num).padStart(5, "0")}`;
 
   // Snapshots
   const fiscal = await getFiscalSettings();
@@ -340,8 +345,8 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
       contract_id: input.contract_id ?? null,
       kind,
       series_id: series.id,
-      number: numInfo.number,
-      fiscal_year: numInfo.fiscal_year,
+      number: num,
+      fiscal_year: fiscalYear,
       full_reference: fullRef,
       status: "draft",
       customer_fiscal_snapshot: { ...(cust ?? {}), address: addr ?? null },
