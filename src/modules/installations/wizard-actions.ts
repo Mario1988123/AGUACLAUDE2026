@@ -69,19 +69,33 @@ export async function startInstallationAction(input: {
     | null;
   if (!i) throw new Error("Instalación no encontrada");
 
-  // Si la instalación está programada para un día FUTURO pero el técnico
-  // está iniciando el parte ahora, auto-reagendamos a NOW (la realidad
-  // manda) en lugar de bloquear. Antes lanzábamos un Error que en
-  // producción se mostraba como digest "Server Components render" opaco.
-  let autoRescheduledFromFuture = false;
-  if (i.scheduled_at) {
+  // Bloqueo de fecha (decisión usuario 2026-05-11): el técnico solo puede
+  // iniciar el parte si scheduled_at cae HOY. Si está en el futuro o en
+  // el pasado, bloquear. Para adelantarlo / atrasarlo, nivel 2 (admin /
+  // directores) tiene que modificar la fecha en la ficha de la instalación.
+  // Nivel 1 y nivel 2 PUEDEN saltar el bloqueo (cuando algo va mal en
+  // campo, el director puede iniciar el parte fuera de día).
+  const isUpperLevel =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
+  const autoRescheduledFromFuture = false;
+  if (i.scheduled_at && !isUpperLevel) {
     const sched = new Date(i.scheduled_at);
     const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    if (sched > today) {
-      autoRescheduledFromFuture = true;
-      // El UPDATE de scheduled_at se hace en el bucle de columnas más
-      // abajo añadiendo la entrada correspondiente.
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+    const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+    if (sched < todayStart) {
+      throw new Error(
+        `La instalación estaba programada para el ${sched.toLocaleDateString("es-ES")}. Habla con un director para reprogramarla antes de iniciarla.`,
+      );
+    }
+    if (sched > todayEnd) {
+      throw new Error(
+        `Esta instalación está programada para el ${sched.toLocaleDateString("es-ES")}. No se puede iniciar antes de esa fecha. Si quieres adelantarla, avisa a un director (nivel 2) para que modifique la fecha.`,
+      );
     }
   }
 

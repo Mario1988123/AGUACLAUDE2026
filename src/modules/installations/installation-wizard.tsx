@@ -83,6 +83,12 @@ interface Props {
   /** Plan del contrato (cash/rental/renting) — para decidir si ofrecer
    *  contrato de mantenimiento separado al cerrar instalación. */
   contractPlanType?: "cash" | "rental" | "renting" | null;
+  /** Datos extra del cliente para mostrar quién es y dónde se instala (decisión usuario 2026-05-11). */
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  installationAddress?: string | null;
+  /** Fecha y hora programada — para bloquear el inicio si no es el día actual. */
+  scheduledAt?: string | null;
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -148,6 +154,10 @@ export function InstallationWizard(props: Props) {
     canEditCollectedPayments = false,
     contractStatus,
     contractPlanType,
+    customerPhone,
+    customerEmail,
+    installationAddress,
+    scheduledAt,
   } = props;
   void representativeName;
 
@@ -664,7 +674,105 @@ export function InstallationWizard(props: Props) {
             <div className="flex-1 overflow-y-auto p-4">
               {/* PASO 1 — Iniciar parte */}
               {step === 1 && (
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {/* Card destacada con datos del cliente (decisión usuario 2026-05-11):
+                      al abrir el parte el técnico ve quién es el cliente sin tener
+                      que volver a la ficha. */}
+                  <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 space-y-2">
+                    <div className="text-xs font-bold uppercase tracking-wider text-primary">
+                      Cliente
+                    </div>
+                    <div className="text-lg font-extrabold text-foreground">
+                      {customerName}
+                      {customerTaxId && (
+                        <span className="ml-2 text-sm font-normal text-muted-foreground">
+                          · {customerTaxId}
+                        </span>
+                      )}
+                    </div>
+                    {installationAddress && (
+                      <div className="flex items-start gap-2 text-sm">
+                        <span className="font-bold text-muted-foreground">Dirección:</span>
+                        <span>{installationAddress}</span>
+                      </div>
+                    )}
+                    {(customerPhone || customerEmail) && (
+                      <div className="flex flex-wrap items-center gap-3 pt-1 text-sm">
+                        {customerPhone && (
+                          <a
+                            href={`tel:${customerPhone}`}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
+                          >
+                            📞 Llamar {customerPhone}
+                          </a>
+                        )}
+                        {customerEmail && (
+                          <span className="text-xs text-muted-foreground">
+                            {customerEmail}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {scheduledAt && (
+                      <div className="pt-2 text-xs text-muted-foreground">
+                        Programada para:{" "}
+                        <strong>
+                          {new Date(scheduledAt).toLocaleString("es-ES", {
+                            weekday: "long",
+                            day: "numeric",
+                            month: "long",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Validación de fecha (decisión usuario 2026-05-11):
+                      NO se puede iniciar antes del día programado. Para
+                      adelantarlo hay que avisar a nivel 2 (admin / director)
+                      que modifique la fecha. */}
+                  {(() => {
+                    if (!scheduledAt || status === "in_progress" || status === "paused") return null;
+                    const today = new Date();
+                    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+                    const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                    const sched = new Date(scheduledAt);
+                    if (sched < todayStart) {
+                      return (
+                        <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+                          <p className="font-bold">⚠ Fecha pasada</p>
+                          <p className="mt-1 text-xs">
+                            La instalación estaba programada para{" "}
+                            <strong>
+                              {sched.toLocaleDateString("es-ES")}
+                            </strong>
+                            . Habla con un director para reprogramarla antes de
+                            iniciarla.
+                          </p>
+                        </div>
+                      );
+                    }
+                    if (sched > todayEnd) {
+                      return (
+                        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                          <p className="font-bold">⚠ Aún no es el día programado</p>
+                          <p className="mt-1 text-xs">
+                            Esta instalación está programada para{" "}
+                            <strong>
+                              {sched.toLocaleDateString("es-ES")}
+                            </strong>
+                            . No se puede iniciar antes de esa fecha. Si quieres
+                            hacerla antes, avisa a un director (nivel 2) para que
+                            adelante la fecha en la ficha de la instalación.
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   <p className="text-sm">
                     Pulsa <strong>Iniciar parte</strong> y se capturará tu posición GPS
                     automáticamente.
@@ -677,17 +785,31 @@ export function InstallationWizard(props: Props) {
                     <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
                       ✓ Parte ya iniciado. Continúa al paso 2.
                     </div>
-                  ) : (
-                    <Button
-                      onClick={startParte}
-                      disabled={pending}
-                      className="w-full"
-                      variant="success"
-                      size="lg"
-                    >
-                      <Crosshair className="h-4 w-4" /> Iniciar parte (capturar GPS)
-                    </Button>
-                  )}
+                  ) : (() => {
+                    // Calcula si la fecha bloquea el inicio
+                    let blocked = false;
+                    if (scheduledAt) {
+                      const today = new Date();
+                      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
+                      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                      const sched = new Date(scheduledAt);
+                      blocked = sched < todayStart || sched > todayEnd;
+                    }
+                    return (
+                      <Button
+                        onClick={startParte}
+                        disabled={pending || blocked}
+                        className="w-full"
+                        variant="success"
+                        size="lg"
+                      >
+                        <Crosshair className="h-4 w-4" />
+                        {blocked
+                          ? "Bloqueado — no es el día programado"
+                          : "Iniciar parte (capturar GPS)"}
+                      </Button>
+                    );
+                  })()}
                 </div>
               )}
 

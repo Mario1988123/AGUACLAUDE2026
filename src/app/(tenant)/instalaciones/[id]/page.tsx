@@ -52,6 +52,7 @@ export default async function InstallationDetailPage({
     notes: string | null;
     contract_id: string | null;
     installer_user_id: string | null;
+    address_id: string | null;
   };
 
   const [items, photos, signatures, session, team, installers, photosFull, signaturesFull] =
@@ -146,6 +147,55 @@ export default async function InstallationDetailPage({
     console.error("[install/page] listMaintenancePlans failed:", e);
   }
 
+  // Datos extra del cliente para mostrar en el wizard: teléfono, email
+  // y dirección de instalación. El customer_snapshot del contrato puede
+  // no tenerlos completos; preferimos query directa a customers + addresses.
+  let customerPhone: string | null = null;
+  let customerEmail: string | null = null;
+  let installationAddress: string | null = null;
+  if (customerId) {
+    try {
+      const { data: c } = await sb
+        .from("customers")
+        .select("email, phone_primary")
+        .eq("id", customerId)
+        .maybeSingle();
+      if (c) {
+        customerPhone = (c as { phone_primary: string | null }).phone_primary ?? null;
+        customerEmail = (c as { email: string | null }).email ?? null;
+      }
+    } catch (e) {
+      console.error("[install/page] customer phone/email load:", e);
+    }
+  }
+  if (i.address_id) {
+    try {
+      const { data: a } = await sb
+        .from("addresses")
+        .select(
+          "street_type, street, street_number, portal, floor, door, postal_code, city, province",
+        )
+        .eq("id", i.address_id)
+        .maybeSingle();
+      if (a) {
+        installationAddress =
+          [
+            `${a.street_type ?? ""} ${a.street ?? ""} ${a.street_number ?? ""}`.trim(),
+            a.portal ? `Portal ${a.portal}` : null,
+            a.floor ?? null,
+            a.door ?? null,
+            a.postal_code,
+            a.city,
+            a.province,
+          ]
+            .filter(Boolean)
+            .join(", ") || null;
+      }
+    } catch (e) {
+      console.error("[install/page] address load:", e);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -199,6 +249,10 @@ export default async function InstallationDetailPage({
               }
               contractStatus={contractStatus ?? undefined}
               contractPlanType={contractPlanType}
+              customerPhone={customerPhone}
+              customerEmail={customerEmail}
+              installationAddress={installationAddress}
+              scheduledAt={i.scheduled_at}
             />
           )}
           <a
