@@ -113,6 +113,12 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
   const supabase = (await createClient()) as any;
   const start = new Date(year, month, 1).toISOString();
   const end = new Date(year, month + 2, 0).toISOString(); // mes anterior + actual + sig
+  const isLevel1or2 =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("telemarketing_director");
   let query = supabase
     .from("agenda_events")
     .select(
@@ -122,21 +128,37 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
     .gte("starts_at", start)
     .lte("starts_at", end)
     .order("starts_at");
-  if (
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("technical_director") &&
-    !session.roles.includes("commercial_director") &&
-    !session.roles.includes("telemarketing_director")
-  ) {
+  if (!isLevel1or2) {
     query = query.eq("assigned_user_id", session.user_id);
   }
   const { data, error } = await query;
   if (error) throw error;
-  return await recomputeOutsideHoursForList(
-    (data ?? []) as AgendaItem[],
-    session.company_id,
+  const events = (data ?? []) as AgendaItem[];
+
+  // Añadir instalaciones y mantenimientos programados (bug 2026-05-11:
+  // si markContractSigned NO consigue crear el row de agenda_events por
+  // fail-soft, la instalación tenía scheduled_at pero NO aparecía en
+  // agenda. Ahora las leemos directas de installations + maintenance_jobs).
+  const virtuals = await loadVirtualAgendaItems({
+    from: start,
+    to: end,
+    restrictToUserId: isLevel1or2 ? null : session.user_id,
+    companyId: session.company_id ?? null,
+  });
+
+  // Quitar duplicados: si ya existe un agenda_events para la misma
+  // installation/maintenance (subject_type+subject_id), descartar el virtual.
+  const existingKey = new Set(
+    events
+      .filter((e) => e.subject_type && e.subject_id)
+      .map((e) => `${e.subject_type}:${e.subject_id}`),
   );
+  const merged = [
+    ...events,
+    ...virtuals.filter((v) => !existingKey.has(`${v.subject_type}:${v.subject_id}`)),
+  ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+  return await recomputeOutsideHoursForList(merged, session.company_id);
 }
 
 export async function listAgenda(
@@ -146,23 +168,13 @@ export async function listAgenda(
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  // El cron daily crea instalaciones de hoy desde primera hora; si arrancamos
+  // la query con now.toISOString() (medio día) se pierden las de las 8-9-10
+  // de la mañana. Usamos start-of-today.
   const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const until = new Date(now.getTime() + daysAhead * 86400000);
 
-  let query = supabase
-    .from("agenda_events")
-    .select(
-      "id, kind, status, title, description, starts_at, ends_at, assigned_user_id, is_outside_hours, subject_type, subject_id",
-    )
-    .is("deleted_at", null)
-    .gte("starts_at", now.toISOString())
-    .lte("starts_at", until.toISOString())
-    .order("starts_at");
-
-  // Aplicación de scope. Si el caller es nivel 3 (sales_rep,
-  // telemarketer, installer) NO puede ver agenda de otros usuarios:
-  // forzamos siempre filter.user_id = self, ignorando lo que llegue.
-  // Antes con filters.user_id pasaba el bypass y veían al admin.
   const isLevel1or2 =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
@@ -170,6 +182,18 @@ export async function listAgenda(
     session.roles.includes("commercial_director") ||
     session.roles.includes("telemarketing_director");
 
+  let query = supabase
+    .from("agenda_events")
+    .select(
+      "id, kind, status, title, description, starts_at, ends_at, assigned_user_id, is_outside_hours, subject_type, subject_id",
+    )
+    .is("deleted_at", null)
+    .gte("starts_at", startOfToday.toISOString())
+    .lte("starts_at", until.toISOString())
+    .order("starts_at");
+
+  // Scope. Si el caller es nivel 3 (sales_rep, telemarketer, installer) NO
+  // puede ver agenda de otros: forzamos filter.user_id = self.
   if (!isLevel1or2) {
     query = query.eq("assigned_user_id", session.user_id);
   } else if (filters?.user_id) {
@@ -182,10 +206,165 @@ export async function listAgenda(
 
   const { data, error } = await query;
   if (error) throw error;
-  return await recomputeOutsideHoursForList(
-    (data ?? []) as AgendaItem[],
-    session.company_id,
+  const events = (data ?? []) as AgendaItem[];
+
+  // Si el filtro pide kind específico, no añadimos virtuales (esos kinds
+  // virtuales son 'installation' / 'maintenance', distintos de los kinds
+  // tradicionales de agenda_events: visit/call/manual/meeting/reminder).
+  let merged: AgendaItem[] = events;
+  if (!filters?.kind) {
+    const restrictUid = !isLevel1or2
+      ? session.user_id
+      : filters?.user_id ?? null;
+    const virtuals = await loadVirtualAgendaItems({
+      from: startOfToday.toISOString(),
+      to: until.toISOString(),
+      restrictToUserId: restrictUid,
+      companyId: session.company_id ?? null,
+    });
+    const existingKey = new Set(
+      events
+        .filter((e) => e.subject_type && e.subject_id)
+        .map((e) => `${e.subject_type}:${e.subject_id}`),
+    );
+    merged = [
+      ...events,
+      ...virtuals.filter((v) => !existingKey.has(`${v.subject_type}:${v.subject_id}`)),
+    ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  }
+
+  return await recomputeOutsideHoursForList(merged, session.company_id);
+}
+
+/**
+ * Lee instalaciones + mantenimientos programados en el rango y los devuelve
+ * como AgendaItem virtuales (sin row en agenda_events). Esto evita que
+ * trabajos del campo se pierdan si la inserción defensiva en agenda_events
+ * falló en su momento (bug 2026-05-11).
+ */
+async function loadVirtualAgendaItems(args: {
+  from: string;
+  to: string;
+  restrictToUserId: string | null;
+  companyId: string | null;
+}): Promise<AgendaItem[]> {
+  if (!args.companyId) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  let instQ = supabase
+    .from("installations")
+    .select(
+      "id, reference_code, customer_id, status, scheduled_at, installer_user_id",
+    )
+    .eq("company_id", args.companyId)
+    .in("status", ["scheduled", "in_progress", "paused"])
+    .not("scheduled_at", "is", null)
+    .gte("scheduled_at", args.from)
+    .lte("scheduled_at", args.to)
+    .is("deleted_at", null);
+  if (args.restrictToUserId) {
+    instQ = instQ.eq("installer_user_id", args.restrictToUserId);
+  }
+
+  let maintQ = supabase
+    .from("maintenance_jobs")
+    .select("id, customer_id, status, scheduled_at, technician_user_id")
+    .eq("company_id", args.companyId)
+    .in("status", ["scheduled", "in_progress"])
+    .not("scheduled_at", "is", null)
+    .gte("scheduled_at", args.from)
+    .lte("scheduled_at", args.to);
+  if (args.restrictToUserId) {
+    maintQ = maintQ.eq("technician_user_id", args.restrictToUserId);
+  }
+
+  const [{ data: insts }, { data: maints }] = await Promise.all([instQ, maintQ]);
+  type InstRow = {
+    id: string;
+    reference_code: string | null;
+    customer_id: string | null;
+    status: string;
+    scheduled_at: string;
+    installer_user_id: string | null;
+  };
+  type MaintRow = {
+    id: string;
+    customer_id: string | null;
+    status: string;
+    scheduled_at: string;
+    technician_user_id: string | null;
+  };
+  const instList = (insts ?? []) as InstRow[];
+  const maintList = (maints ?? []) as MaintRow[];
+
+  // Resolver nombres de cliente para títulos
+  const cIds = Array.from(
+    new Set(
+      [...instList.map((i) => i.customer_id), ...maintList.map((m) => m.customer_id)].filter(
+        (v): v is string => !!v,
+      ),
+    ),
   );
+  const nameMap = new Map<string, string>();
+  if (cIds.length > 0) {
+    const { data: cs } = await supabase
+      .from("customers")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .in("id", cIds);
+    for (const c of (cs ?? []) as Array<{
+      id: string;
+      party_kind: "individual" | "company";
+      legal_name: string | null;
+      trade_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>) {
+      nameMap.set(
+        c.id,
+        c.party_kind === "company"
+          ? c.trade_name || c.legal_name || "Cliente"
+          : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente",
+      );
+    }
+  }
+
+  const out: AgendaItem[] = [];
+  for (const i of instList) {
+    out.push({
+      id: `virtual-inst-${i.id}`,
+      kind: "installation",
+      status: i.status,
+      title: i.customer_id
+        ? `Instalación · ${nameMap.get(i.customer_id) ?? "Cliente"}`
+        : `Instalación ${i.reference_code ?? ""}`.trim(),
+      description: i.reference_code ?? null,
+      starts_at: i.scheduled_at,
+      ends_at: null,
+      assigned_user_id: i.installer_user_id,
+      is_outside_hours: false,
+      subject_type: "installation",
+      subject_id: i.id,
+    });
+  }
+  for (const m of maintList) {
+    out.push({
+      id: `virtual-maint-${m.id}`,
+      kind: "maintenance",
+      status: m.status,
+      title: m.customer_id
+        ? `Mantenimiento · ${nameMap.get(m.customer_id) ?? "Cliente"}`
+        : "Mantenimiento",
+      description: null,
+      starts_at: m.scheduled_at,
+      ends_at: null,
+      assigned_user_id: m.technician_user_id,
+      is_outside_hours: false,
+      subject_type: "maintenance",
+      subject_id: m.id,
+    });
+  }
+  return out;
 }
 
 /**

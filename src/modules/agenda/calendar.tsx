@@ -153,16 +153,34 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                       {dayNum}
                     </div>
                     <div className="space-y-1">
-                      {dayEvents.slice(0, 3).map((ev) => (
+                      {dayEvents.slice(0, 3).map((ev) => {
+                        // Virtual (installation / maintenance directos) →
+                        // navega a la ficha, no abrir move-dialog.
+                        const isVirtual = ev.id.startsWith("virtual-");
+                        const virtualHref =
+                          isVirtual && ev.subject_type === "installation"
+                            ? `/instalaciones/${ev.subject_id}`
+                            : isVirtual && ev.subject_type === "maintenance"
+                              ? `/mantenimientos/${ev.subject_id}`
+                              : null;
+                        return (
                         <button
                           type="button"
                           key={ev.id}
-                          onClick={() => setMoveTarget(ev)}
+                          onClick={() => {
+                            if (virtualHref) {
+                              window.location.href = virtualHref;
+                            } else {
+                              setMoveTarget(ev);
+                            }
+                          }}
                           className={cn(
                             "block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-pointer",
                             KIND_COLOR[ev.kind] ?? KIND_COLOR.manual,
                           )}
-                          title={`${KIND_LABEL[ev.kind]}: ${ev.title} — pulsa para mover`}
+                          title={`${KIND_LABEL[ev.kind]}: ${ev.title}${
+                            isVirtual ? " — abrir ficha" : " — pulsa para mover"
+                          }`}
                         >
                           {new Date(ev.starts_at).toLocaleTimeString("es-ES", {
                             hour: "2-digit",
@@ -170,7 +188,8 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                           })}{" "}
                           {ev.title}
                         </button>
-                      ))}
+                        );
+                      })}
                       {dayEvents.length > 3 && (
                         <Badge variant="outline" className="text-[10px]">
                           +{dayEvents.length - 3}
