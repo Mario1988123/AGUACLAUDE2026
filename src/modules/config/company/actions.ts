@@ -83,3 +83,33 @@ export async function updateCompanySettingsAction(input: unknown) {
   }
   revalidatePath("/configuracion");
 }
+
+/**
+ * Action específica para actualizar SOLO el horario comercial. Se usa
+ * desde /configuracion/horarios donde se ha integrado la edición del
+ * horario general (antes vivía en /configuracion → CompanySettingsForm).
+ */
+export async function updateBusinessHoursAction(
+  hours: Record<string, { open: string; close: string } | null>,
+): Promise<void> {
+  const session = await ensureAdmin();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: existing } = await supabase
+    .from("company_settings")
+    .select("company_id")
+    .eq("company_id", session.company_id!)
+    .maybeSingle();
+  if (existing) {
+    await supabase
+      .from("company_settings")
+      .update({ business_hours: hours })
+      .eq("company_id", session.company_id!);
+  } else {
+    await supabase.from("company_settings").insert({
+      company_id: session.company_id!,
+      business_hours: hours,
+    });
+  }
+  revalidatePath("/configuracion/horarios");
+}

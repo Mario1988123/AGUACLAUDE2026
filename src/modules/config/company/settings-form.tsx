@@ -8,42 +8,17 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { updateCompanySettingsAction, type CompanySettings } from "./actions";
 
-const DAYS: { key: string; label: string }[] = [
-  { key: "mon", label: "Lunes" },
-  { key: "tue", label: "Martes" },
-  { key: "wed", label: "Miércoles" },
-  { key: "thu", label: "Jueves" },
-  { key: "fri", label: "Viernes" },
-  { key: "sat", label: "Sábado" },
-  { key: "sun", label: "Domingo" },
-];
-
 export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
-  const [hours, setHours] = useState(initial.business_hours);
   const [geoTol, setGeoTol] = useState(initial.installation_geo_tolerance_m);
   const [timeTol, setTimeTol] = useState(initial.installation_time_tolerance_min);
   const [pdfColor, setPdfColor] = useState(initial.pdf_brand_color);
   const [pending, startTransition] = useTransition();
-
-  function toggleDay(key: string) {
-    setHours((h) => ({
-      ...h,
-      [key]: h[key] ? null : { open: "09:00", close: "18:00" },
-    }));
-  }
-  function setHour(key: string, kind: "open" | "close", value: string) {
-    setHours((h) => ({
-      ...h,
-      [key]: h[key] ? { ...h[key]!, [kind]: value } : { open: "09:00", close: "18:00", [kind]: value },
-    }));
-  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
       try {
         await updateCompanySettingsAction({
-          business_hours: hours,
           installation_geo_tolerance_m: geoTol,
           installation_time_tolerance_min: timeTol,
           pdf_brand_color: pdfColor,
@@ -58,66 +33,30 @@ export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/*
-        Datos fiscales (razón social, CIF, dirección, teléfono, email, IBAN)
-        viven en /configuracion/fiscal — fuente única para evitar duplicación.
-        Antes este form pedía los mismos campos y se pisaban entre sí.
+        Datos fiscales viven en /configuracion/fiscal — fuente única para
+        evitar duplicación. Antes este form pedía esos campos y se pisaban.
+        Horario comercial vive en /configuracion/horarios desde 2026-05-11.
       */}
-      <div className="rounded-2xl border border-border bg-muted/20 p-4 text-sm">
-        Los datos fiscales (razón social, CIF, dirección, teléfono, email, IBAN)
-        se gestionan en{" "}
-        <Link
-          href="/configuracion/fiscal"
-          className="font-bold text-primary hover:underline"
-        >
-          Datos fiscales
-        </Link>
-        .
-      </div>
-
-      <div className="space-y-3">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-          Horario comercial
-        </h3>
-        <div className="space-y-2">
-          {DAYS.map((d) => {
-            const active = hours[d.key] != null;
-            return (
-              <div
-                key={d.key}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-              >
-                <label className="flex w-32 items-center gap-2 font-semibold">
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={() => toggleDay(d.key)}
-                    className="h-5 w-5"
-                  />
-                  {d.label}
-                </label>
-                {active ? (
-                  <div className="flex flex-1 items-center gap-2">
-                    <Input
-                      type="time"
-                      value={hours[d.key]!.open}
-                      onChange={(e) => setHour(d.key, "open", e.target.value)}
-                      className="max-w-[120px]"
-                    />
-                    <span>—</span>
-                    <Input
-                      type="time"
-                      value={hours[d.key]!.close}
-                      onChange={(e) => setHour(d.key, "close", e.target.value)}
-                      className="max-w-[120px]"
-                    />
-                  </div>
-                ) : (
-                  <span className="text-sm text-muted-foreground">Cerrado</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      <div className="rounded-2xl border border-border bg-muted/20 p-4 text-sm space-y-1">
+        <p>
+          <strong>Datos fiscales</strong> (razón social, CIF, dirección, teléfono,
+          email, IBAN) →{" "}
+          <Link
+            href="/configuracion/fiscal"
+            className="font-bold text-primary hover:underline"
+          >
+            Datos fiscales
+          </Link>
+        </p>
+        <p>
+          <strong>Horario comercial</strong> →{" "}
+          <Link
+            href="/configuracion/horarios"
+            className="font-bold text-primary hover:underline"
+          >
+            Horarios y vacaciones
+          </Link>
+        </p>
       </div>
 
       <div className="space-y-3">

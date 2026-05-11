@@ -5,6 +5,8 @@ import { listTeamMembers } from "@/modules/agenda/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { ScheduleEditor } from "@/modules/time-tracking/schedule-editor";
 import { VacationsTable } from "@/modules/time-tracking/vacations-table";
+import { getCompanySettings } from "@/modules/config/company/actions";
+import { BusinessHoursForm } from "@/modules/config/company/business-hours-form";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,10 @@ export default async function HorariosPage() {
   }
   const team = await listTeamMembers();
   const year = new Date().getFullYear();
-  const balances = await listVacationBalances(year);
+  const [balances, companySettings] = await Promise.all([
+    listVacationBalances(year),
+    getCompanySettings(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -24,9 +29,18 @@ export default async function HorariosPage() {
           Configuración · Horarios y vacaciones
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Define la jornada laboral semanal y los días de vacaciones de cada usuario.
+          Horario comercial de la empresa, jornada laboral por usuario y vacaciones.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Horario comercial de la empresa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BusinessHoursForm initial={companySettings.business_hours} />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
