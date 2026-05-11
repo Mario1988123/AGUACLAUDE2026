@@ -109,6 +109,7 @@ export const MODULES: ModuleEntry[] = [
 
   // ===== 8. SISTEMA =====
   { key: "events", label: "Eventos", icon: "Activity", href: "/eventos", group: "system", rolesAllowed: LEVEL_1_2 },
+  { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system" },
   { key: "audit", label: "Auditoría", icon: "ScrollText", href: "/auditoria", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];

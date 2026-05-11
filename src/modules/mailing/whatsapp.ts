@@ -56,6 +56,13 @@ export interface SendWhatsAppInput {
   template_sid?: string;
   /** Variables de la plantilla {{1}}, {{2}}... */
   template_variables?: Record<string, string>;
+  /** Metadata para registrar en whatsapp_sends y timeline (opcional). */
+  company_id?: string;
+  user_id?: string | null;
+  customer_id?: string | null;
+  lead_id?: string | null;
+  related_subject_type?: string | null;
+  related_subject_id?: string | null;
 }
 
 export interface SendWhatsAppResult {
@@ -110,20 +117,88 @@ export async function sendWhatsApp(
     }
 
     const msg = await client.messages.create(params);
-    return {
+    const result: SendWhatsAppResult = {
       ok: true,
       message_sid: msg.sid,
       error_code: null,
       error_message: null,
     };
+    await persistWhatsAppSend(input, result);
+    return result;
   } catch (e) {
     const err = e as { code?: string | number; message?: string };
-    return {
+    const result: SendWhatsAppResult = {
       ok: false,
       message_sid: null,
       error_code: String(err.code ?? "TWILIO_ERROR"),
       error_message: err.message ?? "Error Twilio",
     };
+    await persistWhatsAppSend(input, result);
+    return result;
+  }
+}
+
+/**
+ * Persiste el envío en whatsapp_sends + evento timeline. Fail-soft: si la
+ * tabla no existe o falta company_id, no rompe el envío.
+ */
+async function persistWhatsAppSend(
+  input: SendWhatsAppInput,
+  result: SendWhatsAppResult,
+): Promise<void> {
+  if (!input.company_id) return; // Sin contexto multi-tenant, no se puede persistir
+  try {
+    const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: row } = await admin
+      .from("whatsapp_sends")
+      .insert({
+        company_id: input.company_id,
+        user_id: input.user_id ?? null,
+        to_phone: input.to_phone,
+        body: input.body,
+        template_sid: input.template_sid ?? null,
+        template_variables: input.template_variables ?? null,
+        status: result.ok ? "sent" : "failed",
+        message_sid: result.message_sid,
+        error_code: result.error_code,
+        error_message: result.error_message,
+        sent_at: result.ok ? new Date().toISOString() : null,
+        customer_id: input.customer_id ?? null,
+        lead_id: input.lead_id ?? null,
+        related_subject_type: input.related_subject_type ?? null,
+        related_subject_id: input.related_subject_id ?? null,
+      })
+      .select("id")
+      .single();
+    const sendId = (row as { id: string } | null)?.id;
+    if (sendId && result.ok) {
+      try {
+        await admin.from("events").insert({
+          company_id: input.company_id,
+          subject_type:
+            input.related_subject_type ??
+            (input.customer_id ? "customer" : input.lead_id ? "lead" : "company"),
+          subject_id:
+            input.related_subject_id ??
+            input.customer_id ??
+            input.lead_id ??
+            input.company_id,
+          kind: "whatsapp.sent",
+          payload: {
+            whatsapp_send_id: sendId,
+            to_phone: input.to_phone,
+            template_sid: input.template_sid ?? null,
+          },
+          actor_user_id: input.user_id ?? null,
+        });
+      } catch {
+        /* fail-soft */
+      }
+    }
+  } catch (e) {
+    console.error("[persistWhatsAppSend] failed:", e);
   }
 }
 

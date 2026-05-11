@@ -1,4 +1,10 @@
 export const EVENT_LABEL: Record<string, string> = {
+  "email.sent": "Email enviado",
+  "email.opened": "Email abierto por el cliente",
+  "email.clicked": "Email — cliente pulsó enlace",
+  "email.bounced": "Email rebotado",
+  "email.complained": "Email marcado como spam",
+  "whatsapp.sent": "WhatsApp enviado",
   "lead.created": "Lead creado",
   "lead.contacted": "Contactado",
   "lead.status_changed": "Cambio de estado",

@@ -434,6 +434,7 @@ export async function sendTransactionalEmail(
       company_id: session.company_id,
       user_id: session.user_id,
       template_id: tpl.id,
+      template_key: input.template_key,
       to_email: input.to_email,
       to_name: input.to_name,
       customer_id: input.customer_id ?? null,
@@ -458,9 +459,38 @@ export async function sendTransactionalEmail(
     .select("id")
     .single();
 
+  const sendId = (sendRow as { id: string } | null)?.id;
+
+  // Insertar evento timeline en events para que aparezca en la ficha
+  // del cliente/contrato/propuesta. Fail-soft.
+  if (sendId && result.ok) {
+    try {
+      await admin.from("events").insert({
+        company_id: session.company_id,
+        subject_type: input.related_subject_type ?? (input.customer_id ? "customer" : "lead"),
+        subject_id:
+          input.related_subject_id ??
+          input.customer_id ??
+          input.lead_id ??
+          session.company_id,
+        kind: "email.sent",
+        payload: {
+          email_send_id: sendId,
+          template_key: input.template_key,
+          template_kind: tpl.kind,
+          to_email: input.to_email,
+          subject,
+        },
+        actor_user_id: session.user_id,
+      });
+    } catch (e) {
+      console.error("[sendTransactionalEmail] event insert failed:", e);
+    }
+  }
+
   return {
     ok: result.ok,
-    send_id: (sendRow as { id: string } | null)?.id,
+    send_id: sendId,
     error: result.error_message ?? undefined,
   };
 }

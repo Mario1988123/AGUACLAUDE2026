@@ -775,6 +775,25 @@ export async function GET(req: NextRequest) {
   }
 
   // ============================================================================
+  // RGPD MAILING — purga de body_html en emails de más de 6 meses
+  // (mantiene metadatos para métricas y trazabilidad)
+  // ============================================================================
+  let mailingPurged = 0;
+  try {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 6);
+    const r = await admin
+      .from("email_sends")
+      .update({ body_html: null, body_text: null })
+      .lt("created_at", cutoff.toISOString())
+      .not("body_html", "is", null)
+      .select("id");
+    mailingPurged = ((r.data ?? []) as Array<unknown>).length;
+  } catch (e) {
+    console.error("[cron/daily] mailing purge failed:", e);
+  }
+
+  // ============================================================================
   // SCRAPER PRECIOS AGUA — solo el día 1 del mes
   // ============================================================================
   let scraperStats: { ok: number; failed: number; total: number } | null = null;
@@ -807,6 +826,7 @@ export async function GET(req: NextRequest) {
         warnings: slaWarnings,
         critical: slaCritical,
       },
+      mailing_purged: mailingPurged,
     },
     ranAt: new Date().toISOString(),
   });
