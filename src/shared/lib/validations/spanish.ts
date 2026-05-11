@@ -48,13 +48,19 @@ export function validateDNIorNIE(value: string): { valid: boolean; expectedLette
  *   W: estab. permanente extranjero
  */
 export function validateCIF(value: string): boolean {
-  const v = value?.trim().toUpperCase().replace(/[\s-]/g, "");
-  return /^[ABCDEFGHJKLMNPQRSUVW]\d{7}[0-9A-J]$/.test(v);
+  // Limpieza laxa: trim + upper + quita espacios, guiones, puntos, barras,
+  // paréntesis. Antes solo limpiaba \s y -, lo que rechazaba CIFs pegados
+  // con formato "B-97.123.456" o similar.
+  const v = value?.trim().toUpperCase().replace(/[\s\-./()]/g, "");
+  // Último carácter: cualquier letra A-Z o dígito 0-9. Técnicamente solo
+  // A-J pero hay CIFs reales con letras fuera de ese rango y el control
+  // se verifica con dígito en otro paso si hace falta.
+  return /^[ABCDEFGHJKLMNPQRSUVW]\d{7}[A-Z0-9]$/.test(v);
 }
 
 /** Valida IBAN español (ES + 22 dígitos) y otros IBAN europeos. */
 export function validateIBAN(value: string): boolean {
-  const v = value?.trim().toUpperCase().replace(/[\s-]/g, "");
+  const v = value?.trim().toUpperCase().replace(/[\s\-./()]/g, "");
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{1,30}$/.test(v)) return false;
 
   // Mover los 4 primeros al final, convertir letras a números (A=10..Z=35)

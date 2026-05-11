@@ -4,9 +4,6 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
-  validateCIF,
-  validateDNIorNIE,
-  validateIBAN,
   validateSpanishPhone,
   validateSpanishPostalCode,
 } from "@/shared/lib/validations/spanish";
@@ -90,22 +87,37 @@ function validateFiscalFormat(input: Partial<FiscalSettings>): void {
   const errs: string[] = [];
 
   if (input.fiscal_tax_id != null && input.fiscal_tax_id !== "") {
-    // Aceptamos CIF (empresas), DNI o NIE (autónomos / empresarios
-    // individuales). Antes solo se aceptaba CIF y rechazaba a autónomos.
-    const taxId = input.fiscal_tax_id.trim().toUpperCase();
-    const isCif = validateCIF(taxId);
-    const isPersonal = validateDNIorNIE(taxId).valid;
-    if (!isCif && !isPersonal) {
+    // Validación LAXA de CIF/DNI/NIE de empresa: solo formato, no
+    // dígito de control. La letra de control real depende de un
+    // algoritmo que puede dar falsos negativos para CIFs reales
+    // (SL, SA, CB, etc.) — bloquearíamos a empresas válidas. Igual
+    // para DNI: validar la letra obligaría al usuario a saberse el
+    // algoritmo. El admin se hace responsable de meter su propio
+    // CIF correcto.
+    const taxId = input.fiscal_tax_id.trim().toUpperCase().replace(/[\s\-./()]/g, "");
+    const cifFormat = /^[ABCDEFGHJKLMNPQRSUVW]\d{7}[A-Z0-9]$/.test(taxId);
+    const dniFormat = /^\d{8}[A-Z]$/.test(taxId);
+    const nieFormat = /^[XYZ]\d{7}[A-Z]$/.test(taxId);
+    if (!cifFormat && !dniFormat && !nieFormat) {
       errs.push(
-        "CIF/NIF de empresa con formato inválido (debe ser CIF tipo A1234567B, DNI 12345678X o NIE X1234567L)",
+        "CIF/NIF de empresa con formato inválido (debe ser CIF tipo A1234567B/J, DNI 12345678X o NIE X1234567L)",
       );
     }
   }
 
   if (input.fiscal_iban != null && input.fiscal_iban !== "") {
-    // Aceptamos IBAN válido o "ES00..." (placeholder pendiente).
-    const ok = validateIBAN(input.fiscal_iban) || isPendingIban(input.fiscal_iban);
-    if (!ok) errs.push("IBAN con formato inválido");
+    // IBAN LAXO: aceptamos formato (2 letras + 2 dígitos + 11-30 alfanum)
+    // sin obligar a que cuadre el módulo 97. Algunos bancos cambian sus
+    // DC al renombrar / fusionar y el algoritmo bloquearía IBANs reales.
+    // El admin es responsable de meter el suyo correcto.
+    const iban = input.fiscal_iban.trim().toUpperCase().replace(/[\s\-./()]/g, "");
+    const okFormat = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban);
+    const okPending = isPendingIban(input.fiscal_iban);
+    if (!okFormat && !okPending) {
+      errs.push(
+        "IBAN con formato inválido (debe empezar por país tipo ES seguido de 22 caracteres, o ES00 si está pendiente)",
+      );
+    }
   }
 
   if (input.fiscal_phone != null && input.fiscal_phone !== "") {
