@@ -724,13 +724,35 @@ export async function generateFreeTrialDeliveryNotePdf(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { data: trialRow } = await admin
+  // SELECT defensivo: si PostgREST tiene cache obsoleto y no ve alguna
+  // columna de firma, cargamos solo lo core y dejamos los paths/nombres
+  // en null. El PDF saldrá sin firmas pero al menos no peta.
+  const FULL_COLS =
+    "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id, customer_signature_path, customer_signer_name, customer_signer_tax_id, customer_signed_at, representative_signature_path, representative_user_id, representative_signed_at";
+  const CORE_COLS =
+    "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id";
+  let trialRes = await admin
     .from("free_trials")
-    .select(
-      "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id, customer_signature_path, customer_signer_name, customer_signer_tax_id, customer_signed_at, representative_signature_path, representative_user_id, representative_signed_at",
-    )
+    .select(FULL_COLS)
     .eq("id", trialId)
     .maybeSingle();
+  if (
+    trialRes.error &&
+    /(does not exist|schema cache|Could not find)/i.test(
+      trialRes.error.message ?? "",
+    )
+  ) {
+    console.warn(
+      "[generateFreeTrialPdf] cache obsoleto, cargando sin columnas de firma:",
+      trialRes.error.message,
+    );
+    trialRes = await admin
+      .from("free_trials")
+      .select(CORE_COLS)
+      .eq("id", trialId)
+      .maybeSingle();
+  }
+  const trialRow = trialRes.data;
   if (!trialRow) throw new Error("Prueba no encontrada");
   const trial = trialRow as {
     id: string;
@@ -745,13 +767,14 @@ export async function generateFreeTrialDeliveryNotePdf(
     installation_address_id: string | null;
     customer_id: string | null;
     lead_id: string | null;
-    customer_signature_path: string | null;
-    customer_signer_name: string | null;
-    customer_signer_tax_id: string | null;
-    customer_signed_at: string | null;
-    representative_signature_path: string | null;
-    representative_user_id: string | null;
-    representative_signed_at: string | null;
+    // Estas son opcionales (no se cargan si cache obsoleto)
+    customer_signature_path?: string | null;
+    customer_signer_name?: string | null;
+    customer_signer_tax_id?: string | null;
+    customer_signed_at?: string | null;
+    representative_signature_path?: string | null;
+    representative_user_id?: string | null;
+    representative_signed_at?: string | null;
   };
 
   const { data: itemsRows } = await admin
@@ -905,8 +928,8 @@ export async function generateFreeTrialDeliveryNotePdf(
 
   const doc = await newDoc();
   const today = new Date();
-  const repSigImage = await fetchSignature(doc.pdf, trial.representative_signature_path);
-  const custSigImage = await fetchSignature(doc.pdf, trial.customer_signature_path);
+  const repSigImage = await fetchSignature(doc.pdf, trial.representative_signature_path ?? null);
+  const custSigImage = await fetchSignature(doc.pdf, trial.customer_signature_path ?? null);
   const isSigned = !!trial.customer_signature_path && !!trial.representative_signature_path;
 
   drawHeader(doc, {

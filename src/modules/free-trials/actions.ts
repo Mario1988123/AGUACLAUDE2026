@@ -380,6 +380,27 @@ export async function signAndInstallFreeTrialAction(input: {
   customer_signature_data_url: string;
   representative_signature_data_url: string;
 }): Promise<{ ok: true; status: "scheduled" | "installed" }> {
+  try {
+    return await _signAndInstallFreeTrialAction(input);
+  } catch (err) {
+    console.error(
+      "[signAndInstallFreeTrial] FAILED:",
+      err instanceof Error ? err.message : err,
+      err instanceof Error ? err.stack : undefined,
+    );
+    throw err;
+  }
+}
+
+async function _signAndInstallFreeTrialAction(input: {
+  trial_id: string;
+  is_provisional: boolean;
+  scheduled_for: string | null;
+  customer_signer_name: string;
+  customer_signer_tax_id?: string | null;
+  customer_signature_data_url: string;
+  representative_signature_data_url: string;
+}): Promise<{ ok: true; status: "scheduled" | "installed" }> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
 
@@ -434,13 +455,51 @@ export async function signAndInstallFreeTrialAction(input: {
     metaPayload.scheduled_at = input.scheduled_for;
     metaPayload.status = "scheduled";
   }
-  let upd = await admin.from("free_trials").update(metaPayload).eq("id", input.trial_id);
-  // Defensa por si is_provisional_install no existe aún (migración pendiente)
-  if (upd.error && /is_provisional_install/i.test(upd.error.message ?? "")) {
-    delete metaPayload.is_provisional_install;
-    upd = await admin.from("free_trials").update(metaPayload).eq("id", input.trial_id);
+  // UPDATE defensivo. PostgREST puede tener cache obsoleto y rechazar
+  // alguna columna añadida en migración tardía con "Could not find the
+  // 'X' column in the schema cache". En ese caso quitamos esa columna
+  // y reintentamos hasta que pase o queden solo las columnas core. Así
+  // al menos las firmas quedan en storage y el flag de status avanza.
+  const OPTIONAL_COLS = [
+    "is_provisional_install",
+    "customer_signature_path",
+    "customer_signer_name",
+    "customer_signer_tax_id",
+    "customer_signed_at",
+    "representative_signature_path",
+    "representative_user_id",
+    "representative_signed_at",
+    "conditions_signed",
+  ];
+  let upd = await admin
+    .from("free_trials")
+    .update(metaPayload)
+    .eq("id", input.trial_id);
+  while (upd.error) {
+    const msg = upd.error.message ?? "";
+    // Coincide tanto "column X of free_trials" como "Could not find the 'X' column"
+    const m = msg.match(/(?:'|"|column\s+)([a-z_]+)(?:'|"|\s)/i);
+    const offending = m?.[1];
+    if (offending && OPTIONAL_COLS.includes(offending) && offending in metaPayload) {
+      console.warn(
+        "[signAndInstallFreeTrial] columna no en schema cache, reintento sin",
+        offending,
+      );
+      delete metaPayload[offending];
+      upd = await admin
+        .from("free_trials")
+        .update(metaPayload)
+        .eq("id", input.trial_id);
+      continue;
+    }
+    console.error(
+      "[signAndInstallFreeTrial] UPDATE free_trials failed:",
+      msg,
+      "payload keys:",
+      Object.keys(metaPayload).join(","),
+    );
+    throw new Error(msg);
   }
-  if (upd.error) throw new Error(upd.error.message);
 
   // Si es para instalar ahora → ejecutamos installFreeTrialAction
   if (!input.scheduled_for) {
