@@ -1,13 +1,10 @@
 import Link from "next/link";
 import * as Icons from "lucide-react";
-import { getCompanySettings } from "@/modules/config/company/actions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { CompanySettingsForm } from "@/modules/config/company/settings-form";
 
 export const dynamic = "force-dynamic";
 
 const SECTIONS = [
-  { href: "/configuracion/fiscal", label: "Datos fiscales", icon: "Building2", desc: "Razón social, CIF, dirección, IBAN" },
+  { href: "/configuracion/fiscal", label: "Datos fiscales", icon: "Building2", desc: "Razón social, CIF, IBAN, logo y color PDF" },
   { href: "/configuracion/facturacion", label: "Facturación", icon: "Receipt", desc: "Series, modo Verifactu, certificado FNMT" },
   { href: "/configuracion/mailing", label: "Mailing", icon: "Mail", desc: "Dominio envío + DNS DKIM/SPF + plantillas" },
   { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Caducidad y orígenes" },
@@ -37,13 +34,14 @@ const SECTIONS = [
 ];
 
 export default async function ConfiguracionPage() {
-  const settings = await getCompanySettings();
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight">Configuración</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Solo el administrador de la empresa puede modificar la configuración.
+          Los datos fiscales, el logo y el color corporativo se gestionan ahora
+          dentro de cada módulo correspondiente.
         </p>
       </div>
 
@@ -71,15 +69,6 @@ export default async function ConfiguracionPage() {
           );
         })}
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>General de la empresa</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CompanySettingsForm initial={settings} />
-        </CardContent>
-      </Card>
     </div>
   );
 }

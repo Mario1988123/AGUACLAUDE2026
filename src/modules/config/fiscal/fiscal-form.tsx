@@ -12,6 +12,7 @@ import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { IbanInput } from "@/shared/components/iban-input";
 import { PhoneInput } from "@/shared/components/phone-input";
 import { updateFiscalSettingsAction, type FiscalSettings } from "./actions";
+import { LogoUploader } from "./logo-uploader";
 
 export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
   const [v, setV] = useState(initial);
@@ -145,13 +146,52 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
               onChange={(val) => set("fiscal_iban", val || null)}
             />
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>URL del logo (opcional)</Label>
-            <Input
-              value={v.fiscal_logo_url ?? ""}
-              onChange={(e) => set("fiscal_logo_url", e.target.value || null)}
-              placeholder="https://..."
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Marca corporativa (PDFs)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <Label>Logo de la empresa</Label>
+            <p className="text-xs text-muted-foreground">
+              Se aplica como cabecera en todos los PDFs generados: facturas,
+              propuestas, contratos, albaranes y partes de instalación.
+            </p>
+            <LogoUploader
+              currentUrl={v.fiscal_logo_url}
+              onUploaded={(url) => set("fiscal_logo_url", url)}
+              onCleared={() => set("fiscal_logo_url", null)}
             />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[200px_1fr] items-center">
+            <div className="space-y-1.5">
+              <Label htmlFor="pdf_color">Color principal PDF</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  id="pdf_color"
+                  type="color"
+                  value={v.pdf_brand_color || "#4880FF"}
+                  onChange={(e) => set("pdf_brand_color", e.target.value)}
+                  className="h-12 w-16 cursor-pointer rounded-xl border border-border bg-card p-1"
+                />
+                <Input
+                  value={v.pdf_brand_color || ""}
+                  onChange={(e) =>
+                    set("pdf_brand_color", e.target.value || "#4880FF")
+                  }
+                  placeholder="#4880FF"
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Color aplicado a las cabeceras y bandas de los PDFs (contratos,
+              propuestas, facturas, albaranes…). Indica el hex completo
+              empezando por <code>#</code>.
+            </p>
           </div>
         </CardContent>
       </Card>

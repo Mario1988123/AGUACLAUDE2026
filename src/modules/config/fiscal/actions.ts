@@ -17,6 +17,8 @@ export interface FiscalSettings {
   fiscal_iban: string | null;
   fiscal_mercantile_reg: string | null;
   fiscal_logo_url: string | null;
+  /** Color hex aplicado a cabeceras y bandas de los PDFs emitidos. */
+  pdf_brand_color: string;
   invoice_default_iva: number;
   invoice_default_due_days: number;
   invoice_footer_text: string | null;
@@ -35,6 +37,7 @@ const DEFAULTS: FiscalSettings = {
   fiscal_iban: null,
   fiscal_mercantile_reg: null,
   fiscal_logo_url: null,
+  pdf_brand_color: "#4880FF",
   invoice_default_iva: 21,
   invoice_default_due_days: 30,
   invoice_footer_text: null,
@@ -56,7 +59,7 @@ export async function getFiscalSettings(): Promise<FiscalSettings> {
     const { data } = await admin
       .from("company_settings")
       .select(
-        "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban, fiscal_mercantile_reg, fiscal_logo_url, invoice_default_iva, invoice_default_due_days, invoice_footer_text",
+        "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban, fiscal_mercantile_reg, fiscal_logo_url, pdf_brand_color, invoice_default_iva, invoice_default_due_days, invoice_footer_text",
       )
       .eq("company_id", session.company_id)
       .maybeSingle();
@@ -183,4 +186,85 @@ export async function updateFiscalSettingsAction(
 
   revalidatePath("/configuracion/fiscal");
   return { saved: payload as Partial<FiscalSettings>, skipped };
+}
+
+/**
+ * Sube el logo de la empresa al bucket `company-logos` y devuelve la URL
+ * pública. Restricciones (validadas en cliente Y en servidor):
+ *  - Tipos aceptados: PNG, JPG, WEBP, SVG.
+ *  - Tamaño máximo: 1 MB (suficiente para un logo bien optimizado).
+ *  - Dimensión recomendada: ancho 600-1200 px (≈4-6 cm a 300 dpi). El
+ *    PDF lo escala manteniendo aspect-ratio; un logo más grande malgasta
+ *    espacio sin mejorar la calidad de impresión.
+ *
+ * Devuelve `{ url }` con la URL pública lista para guardar en
+ * `fiscal_logo_url`. El form llama después a `updateFiscalSettingsAction`
+ * para persistir esa URL.
+ */
+const MAX_LOGO_BYTES = 1 * 1024 * 1024; // 1 MB
+const ALLOWED_LOGO_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/svg+xml",
+]);
+
+export async function uploadCompanyLogoAction(input: {
+  /** Data URL "data:image/png;base64,..." */
+  data_url: string;
+  /** Nombre original (para extraer extensión si no viene en el data url). */
+  original_filename?: string | null;
+}): Promise<{ url: string }> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!input.data_url?.startsWith("data:image/")) {
+    throw new Error("El archivo no es una imagen válida.");
+  }
+  const match = input.data_url.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) throw new Error("Formato del archivo inesperado.");
+  const mime = match[1]!.toLowerCase();
+  if (!ALLOWED_LOGO_MIME.has(mime)) {
+    throw new Error(
+      `Tipo no soportado (${mime}). Usa PNG, JPG, WEBP o SVG.`,
+    );
+  }
+  const buffer = Buffer.from(match[2]!, "base64");
+  if (buffer.length > MAX_LOGO_BYTES) {
+    throw new Error(
+      `El logo supera 1 MB (${(buffer.length / 1024 / 1024).toFixed(2)} MB). Comprímelo antes de subirlo.`,
+    );
+  }
+
+  const { ensureBucket } = await import("@/shared/lib/supabase/storage-buckets");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const BUCKET = "company-logos";
+  const ok = await ensureBucket(admin, BUCKET);
+  if (!ok) throw new Error("No se pudo preparar el bucket de logos.");
+
+  const ext =
+    mime === "image/svg+xml"
+      ? "svg"
+      : mime === "image/png"
+        ? "png"
+        : mime === "image/webp"
+          ? "webp"
+          : "jpg";
+  // Path estable + cache-buster: la URL pública nueva invalida la antigua
+  // sin tener que borrar el fichero anterior.
+  const path = `${session.company_id}/logo-${Date.now()}.${ext}`;
+  const up = await admin.storage.from(BUCKET).upload(path, buffer, {
+    contentType: mime,
+    upsert: true,
+    cacheControl: "3600",
+  });
+  if (up.error) throw new Error(`No se pudo subir el logo: ${up.error.message}`);
+
+  const { data } = admin.storage.from(BUCKET).getPublicUrl(path);
+  const publicUrl = (data as { publicUrl: string }).publicUrl;
+  if (!publicUrl) throw new Error("No se pudo generar la URL pública del logo.");
+
+  revalidatePath("/configuracion/fiscal");
+  return { url: publicUrl };
 }
