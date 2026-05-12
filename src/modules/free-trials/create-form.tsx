@@ -248,8 +248,16 @@ export function FreeTrialCreateForm({
             <Input
               type="datetime-local"
               value={scheduledAt}
+              min={(() => {
+                const d = new Date();
+                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                return d.toISOString().slice(0, 16);
+              })()}
               onChange={(e) => setScheduledAt(e.target.value)}
             />
+            <p className="text-[11px] text-muted-foreground">
+              No se puede programar para una fecha pasada.
+            </p>
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Eye, FileCheck, Undo2 } from "lucide-react";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -16,7 +17,10 @@ const STATUS_LABEL: Record<string, string> = {
   removed: "Retirada",
   expired: "Caducada",
 };
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warning" | "destructive" | "outline"> = {
+const STATUS_VARIANT: Record<
+  string,
+  "default" | "secondary" | "success" | "warning" | "destructive" | "outline"
+> = {
   draft: "secondary",
   scheduled: "default",
   installed: "warning",
@@ -37,16 +41,89 @@ interface Row {
   expires_at: string | null;
 }
 
+interface Party {
+  id: string;
+  party_kind: "individual" | "company";
+  legal_name: string | null;
+  trade_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+}
+
+function partyName(p: Party): string {
+  return p.party_kind === "company"
+    ? p.trade_name || p.legal_name || "Empresa"
+    : `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "Cliente";
+}
+
+function fmt(d: string | null | undefined) {
+  return d ? new Date(d).toLocaleDateString("es-ES") : "—";
+}
+
 export default async function PruebasGratuitasPage() {
   await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("free_trials")
-    .select("id, reference_code, status, customer_id, lead_id, scheduled_at, installed_at, expires_at")
+    .select(
+      "id, reference_code, status, customer_id, lead_id, scheduled_at, installed_at, expires_at",
+    )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
   const rows = (data ?? []) as Row[];
+
+  // Cargar nombres de clientes/leads + items en paralelo
+  const customerIds = rows
+    .map((r) => r.customer_id)
+    .filter((v): v is string => !!v);
+  const leadIds = rows.map((r) => r.lead_id).filter((v): v is string => !!v);
+  const trialIds = rows.map((r) => r.id);
+
+  const [custRes, leadRes, itemsRes] = await Promise.all([
+    customerIds.length
+      ? supabase
+          .from("customers")
+          .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+          .in("id", customerIds)
+      : Promise.resolve({ data: [] }),
+    leadIds.length
+      ? supabase
+          .from("leads")
+          .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+          .in("id", leadIds)
+      : Promise.resolve({ data: [] }),
+    trialIds.length
+      ? supabase
+          .from("free_trial_items")
+          .select("free_trial_id, product_name_snapshot, quantity")
+          .in("free_trial_id", trialIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const cMap = new Map<string, string>(
+    ((custRes.data ?? []) as Party[]).map((p) => [p.id, partyName(p)]),
+  );
+  const lMap = new Map<string, string>(
+    ((leadRes.data ?? []) as Party[]).map((p) => [p.id, partyName(p)]),
+  );
+  const itemsMap = new Map<
+    string,
+    Array<{ product_name_snapshot: string; quantity: number }>
+  >();
+  for (const it of (itemsRes.data ?? []) as Array<{
+    free_trial_id: string;
+    product_name_snapshot: string;
+    quantity: number;
+  }>) {
+    const arr = itemsMap.get(it.free_trial_id) ?? [];
+    arr.push({
+      product_name_snapshot: it.product_name_snapshot,
+      quantity: it.quantity,
+    });
+    itemsMap.set(it.free_trial_id, arr);
+  }
 
   return (
     <div className="space-y-6">
@@ -68,45 +145,126 @@ export default async function PruebasGratuitasPage() {
               Sin pruebas. Se generan desde la ficha de un cliente o lead.
             </p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Ref.</th>
-                  <th className="py-2 text-left">Estado</th>
-                  <th className="py-2 text-left">Instalada</th>
-                  <th className="py-2 text-left">Caduca</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {rows.map((r) => (
-                  <tr key={r.id} className="hover:bg-muted/50">
-                    <td className="py-2 font-mono text-xs">
-                      <Link
-                        href={`/pruebas-gratuitas/${r.id}` as never}
-                        className="text-primary hover:underline"
-                      >
-                        {r.reference_code ?? `#${r.id.slice(0, 8)}`}
-                      </Link>
-                    </td>
-                    <td className="py-2">
-                      <Badge variant={STATUS_VARIANT[r.status]}>
-                        {STATUS_LABEL[r.status] ?? r.status}
-                      </Badge>
-                    </td>
-                    <td className="py-2 text-xs text-muted-foreground">
-                      {r.installed_at
-                        ? new Date(r.installed_at).toLocaleDateString("es-ES")
-                        : "—"}
-                    </td>
-                    <td className="py-2 text-xs text-muted-foreground">
-                      {r.expires_at
-                        ? new Date(r.expires_at).toLocaleDateString("es-ES")
-                        : "—"}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="py-2 text-left">Ref.</th>
+                    <th className="py-2 text-left">Cliente / Lead</th>
+                    <th className="py-2 text-left">Equipos</th>
+                    <th className="py-2 text-left">Estado</th>
+                    <th className="py-2 text-left">Instalada</th>
+                    <th className="py-2 text-left">Caduca</th>
+                    <th className="py-2 text-right pr-2">Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {rows.map((r) => {
+                    const partyLabel = r.customer_id
+                      ? cMap.get(r.customer_id) ?? "Cliente"
+                      : r.lead_id
+                        ? lMap.get(r.lead_id) ?? "Lead"
+                        : "Sin asignar";
+                    const partyHref = r.customer_id
+                      ? `/clientes/${r.customer_id}`
+                      : r.lead_id
+                        ? `/leads/${r.lead_id}`
+                        : null;
+                    const items = itemsMap.get(r.id) ?? [];
+                    const equiposLabel =
+                      items.length === 0
+                        ? "—"
+                        : items
+                            .map(
+                              (it) =>
+                                `${it.product_name_snapshot}${it.quantity > 1 ? ` ×${it.quantity}` : ""}`,
+                            )
+                            .join(", ");
+                    return (
+                      <tr key={r.id} className="hover:bg-muted/50">
+                        <td className="py-2 font-mono text-xs">
+                          <Link
+                            href={`/pruebas-gratuitas/${r.id}` as never}
+                            className="text-primary hover:underline font-semibold"
+                          >
+                            {r.reference_code ?? `#${r.id.slice(0, 8)}`}
+                          </Link>
+                        </td>
+                        <td className="py-2">
+                          <div className="flex flex-col gap-0.5">
+                            {partyHref ? (
+                              <Link
+                                href={partyHref as never}
+                                className="font-medium text-primary hover:underline"
+                              >
+                                {partyLabel}
+                              </Link>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                {partyLabel}
+                              </span>
+                            )}
+                            <Badge
+                              variant={r.customer_id ? "secondary" : "outline"}
+                              className="w-fit text-[10px]"
+                            >
+                              {r.customer_id ? "Cliente" : "Lead"}
+                            </Badge>
+                          </div>
+                        </td>
+                        <td
+                          className="py-2 max-w-[220px] truncate text-xs"
+                          title={equiposLabel}
+                        >
+                          {equiposLabel}
+                        </td>
+                        <td className="py-2">
+                          <Badge variant={STATUS_VARIANT[r.status]}>
+                            {STATUS_LABEL[r.status] ?? r.status}
+                          </Badge>
+                        </td>
+                        <td className="py-2 text-xs text-muted-foreground">
+                          {fmt(r.installed_at)}
+                        </td>
+                        <td className="py-2 text-xs text-muted-foreground">
+                          {fmt(r.expires_at)}
+                        </td>
+                        <td className="py-2">
+                          <div className="flex items-center justify-end gap-1.5 pr-2">
+                            <Link
+                              href={`/pruebas-gratuitas/${r.id}` as never}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-primary"
+                              title="Ver ficha"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Link>
+                            {r.status === "installed" && (
+                              <Link
+                                href={`/pruebas-gratuitas/${r.id}` as never}
+                                className="inline-flex h-8 items-center gap-1 rounded-lg border border-success/40 bg-success/10 px-2 text-xs font-semibold text-success hover:bg-success/20"
+                                title="Aceptar y generar contrato"
+                              >
+                                <FileCheck className="h-3.5 w-3.5" /> Aceptar
+                              </Link>
+                            )}
+                            {(r.status === "rejected" ||
+                              r.status === "expired") && (
+                              <Link
+                                href={`/pruebas-gratuitas/${r.id}` as never}
+                                className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-2 text-xs font-semibold text-muted-foreground hover:bg-muted"
+                                title="Marcar devuelta"
+                              >
+                                <Undo2 className="h-3.5 w-3.5" /> Devuelta
+                              </Link>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

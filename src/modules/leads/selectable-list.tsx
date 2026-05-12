@@ -277,6 +277,14 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                             ↻ Reabierto
                           </span>
                         )}
+                        {l.has_active_trial && (
+                          <span
+                            title="Prueba gratuita activa"
+                            className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700"
+                          >
+                            🎁 Prueba activa
+                          </span>
+                        )}
                       </div>
                       {isCompany && l.contact_name && (
                         <div className="text-xs text-muted-foreground">

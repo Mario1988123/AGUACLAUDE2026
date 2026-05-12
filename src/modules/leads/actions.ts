@@ -145,16 +145,32 @@ export async function listLeads(filters?: {
   // Marcar qué leads tienen propuestas (para mostrar "perdido" en lugar de
   // "eliminar" en la lista de acciones).
   const leadsWithProposals = new Set<string>();
+  const leadsWithActiveTrial = new Set<string>();
   if (rows.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
-    const { data: props } = await sb
-      .from("proposals")
-      .select("lead_id")
-      .in("lead_id", rows.map((r) => r.id))
-      .is("deleted_at", null);
-    for (const p of (props ?? []) as { lead_id: string | null }[]) {
+    const ids = rows.map((r) => r.id);
+    const [propsRes, trialsRes] = await Promise.all([
+      sb
+        .from("proposals")
+        .select("lead_id")
+        .in("lead_id", ids)
+        .is("deleted_at", null),
+      // Pruebas en curso: draft / scheduled / installed. Las accepted ya
+      // se convirtieron en cliente y no llevan lead_id activo; rejected/
+      // expired/removed están cerradas.
+      sb
+        .from("free_trials")
+        .select("lead_id, status")
+        .in("lead_id", ids)
+        .is("deleted_at", null)
+        .in("status", ["draft", "scheduled", "installed"]),
+    ]);
+    for (const p of (propsRes.data ?? []) as { lead_id: string | null }[]) {
       if (p.lead_id) leadsWithProposals.add(p.lead_id);
+    }
+    for (const t of (trialsRes.data ?? []) as { lead_id: string | null }[]) {
+      if (t.lead_id) leadsWithActiveTrial.add(t.lead_id);
     }
   }
 
@@ -189,6 +205,7 @@ export async function listLeads(filters?: {
       address_lat: addr.lat,
       address_lng: addr.lng,
       has_proposals: leadsWithProposals.has(r.id),
+      has_active_trial: leadsWithActiveTrial.has(r.id),
     };
   });
 }

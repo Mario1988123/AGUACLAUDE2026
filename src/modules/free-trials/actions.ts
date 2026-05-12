@@ -114,6 +114,17 @@ export async function createFreeTrialAction(input: unknown) {
   if (parsed.customer_id && parsed.lead_id) {
     throw new Error("Solo cliente o lead, no ambos");
   }
+  // Validación servidor: no se puede programar para fecha pasada.
+  if (parsed.scheduled_at) {
+    const sched = new Date(parsed.scheduled_at);
+    const minToday = new Date();
+    minToday.setHours(0, 0, 0, 0);
+    if (sched < minToday) {
+      throw new Error(
+        "La fecha de entrega no puede ser anterior a hoy. Si necesitas registrar una prueba ya entregada, créala sin fecha y márcala como instalada.",
+      );
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
