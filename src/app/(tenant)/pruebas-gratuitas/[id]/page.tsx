@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Timeline } from "@/modules/events/timeline";
 import { BackButton } from "@/shared/components/back-button";
+import { listInstallers } from "@/modules/agenda/actions";
+import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,45 @@ export default async function FreeTrialDetailPage({
     : trial.lead_id
       ? { href: `/leads/${trial.lead_id}`, label: "lead" }
       : null;
+
+  // Almacenes + técnicos para el modal de desinstalación, y orden de
+  // uninstall pendiente (si ya existe) para no permitir duplicarla.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sbAdmin = (await createClient()) as any;
+  const [whRes, installers, uninstallRes] = await Promise.all([
+    sbAdmin
+      .from("warehouses")
+      .select("id, name, is_used_equipment_default")
+      .is("deleted_at", null)
+      .order("is_used_equipment_default", { ascending: false }),
+    listInstallers().catch(() => []),
+    sbAdmin
+      .from("installations")
+      .select("id, status, reference_code, scheduled_at")
+      .eq("free_trial_id", id)
+      .eq("kind", "uninstall")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const warehouses = ((whRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    is_used_equipment_default: boolean | null;
+  }>).map((w) => ({
+    id: w.id,
+    name: w.name,
+    is_used_default: !!w.is_used_equipment_default,
+  }));
+  const pendingUninstall = uninstallRes.data as
+    | {
+        id: string;
+        status: string;
+        reference_code: string | null;
+        scheduled_at: string | null;
+      }
+    | null;
 
   // Cargar nombre + DNI del owner para el modal sign+install
   let ownerName = "Cliente";
@@ -189,6 +230,9 @@ export default async function FreeTrialDetailPage({
               }
               customerName={ownerName}
               customerTaxId={ownerTaxId}
+              warehouses={warehouses}
+              installers={installers}
+              pendingUninstall={pendingUninstall}
             />
           </CardContent>
         </Card>

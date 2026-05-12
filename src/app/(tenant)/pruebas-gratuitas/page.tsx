@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Eye, FileCheck, Undo2 } from "lucide-react";
+import { Eye, FileCheck, PackageMinus } from "lucide-react";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -247,14 +247,15 @@ export default async function PruebasGratuitasPage() {
                                 <FileCheck className="h-3.5 w-3.5" /> Aceptar
                               </Link>
                             )}
-                            {(r.status === "rejected" ||
+                            {(r.status === "installed" ||
+                              r.status === "rejected" ||
                               r.status === "expired") && (
                               <Link
                                 href={`/pruebas-gratuitas/${r.id}` as never}
-                                className="inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-2 text-xs font-semibold text-muted-foreground hover:bg-muted"
-                                title="Marcar devuelta"
+                                className="inline-flex h-8 items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-2 text-xs font-semibold text-warning hover:bg-warning/20"
+                                title="Agendar desinstalación"
                               >
-                                <Undo2 className="h-3.5 w-3.5" /> Devuelta
+                                <PackageMinus className="h-3.5 w-3.5" /> Desinstalar
                               </Link>
                             )}
                           </div>

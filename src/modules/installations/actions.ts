@@ -801,7 +801,7 @@ export async function completeInstallation(input: unknown) {
   // Calcular duración si tenemos started_at
   const { data: inst } = await admin
     .from("installations")
-    .select("started_at, contract_id, customer_id, address_id, kind, notes")
+    .select("started_at, contract_id, customer_id, address_id, kind, notes, free_trial_id")
     .eq("id", parsed.id)
     .single();
   const startTs = (inst as { started_at: string | null })?.started_at;
@@ -828,6 +828,7 @@ export async function completeInstallation(input: unknown) {
     address_id: string | null;
     kind: "normal" | "free_trial" | "relocation" | "uninstall";
     notes: string | null;
+    free_trial_id: string | null;
   };
 
   // ===== Fork por tipo =====
@@ -838,6 +839,19 @@ export async function completeInstallation(input: unknown) {
       await mod.processUninstallCompletion(parsed.id);
     } catch (e) {
       console.error("[completeInstallation] uninstall flow:", e);
+    }
+    // Si esta desinstalación viene de una PRUEBA GRATUITA → marcar la
+    // prueba como `removed` y registrar el evento. Sin esto la prueba
+    // quedaría "installed" para siempre aunque el equipo ya se devolvió.
+    if (i.free_trial_id) {
+      try {
+        const ftMod = await import("@/modules/free-trials/uninstall-actions");
+        await ftMod.processFreeTrialUninstallCompletion(parsed.id);
+        revalidatePath(`/pruebas-gratuitas/${i.free_trial_id}`);
+        revalidatePath("/pruebas-gratuitas");
+      } catch (e) {
+        console.error("[completeInstallation] free-trial uninstall hook:", e);
+      }
     }
     // No tocamos contratos ni mantenimientos en una desinstalación.
     revalidatePath(`/instalaciones/${parsed.id}`);

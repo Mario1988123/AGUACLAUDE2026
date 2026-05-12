@@ -919,6 +919,38 @@ export async function markReturnedAction(id: string) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // Decisión usuario 2026-05-12: NO se puede marcar una prueba como
+  // devuelta sin haber pasado por una orden de DESINSTALACIÓN. Si la
+  // prueba está en estado `installed`/`scheduled`/`expired`/`rejected`
+  // y no hay installation kind='uninstall' status='completed' enlazada,
+  // bloqueamos. Excepto cuando el propio completeInstallation nos llama
+  // (entonces ya existe la installation completada).
+  const { data: trialStateData } = await admin
+    .from("free_trials")
+    .select("status")
+    .eq("id", id)
+    .maybeSingle();
+  const trialState = (trialStateData as { status: string } | null)?.status;
+  if (
+    trialState &&
+    ["installed", "scheduled", "expired", "rejected"].includes(trialState)
+  ) {
+    const { data: closedUninstall } = await admin
+      .from("installations")
+      .select("id, status")
+      .eq("free_trial_id", id)
+      .eq("kind", "uninstall")
+      .is("deleted_at", null)
+      .eq("status", "completed")
+      .limit(1)
+      .maybeSingle();
+    if (!closedUninstall) {
+      throw new Error(
+        "Para retirar la prueba primero debes agendar una desinstalación. Pulsa «Agendar desinstalación» y, cuando el técnico la complete, la prueba pasará a «retirada» automáticamente.",
+      );
+    }
+  }
+
   const r = await admin
     .from("free_trials")
     .update({ status: "removed", removed_at: new Date().toISOString() })
