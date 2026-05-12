@@ -211,7 +211,7 @@ export default async function InstallationDetailPage({
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {i.scheduled_at
-              ? `Programada ${new Date(i.scheduled_at).toLocaleString("es-ES")}`
+              ? `Programada ${new Date(i.scheduled_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}`
               : "Sin agendar"}
           </p>
         </div>
@@ -429,7 +429,7 @@ export default async function InstallationDetailPage({
                           {s.signer_name}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(s.signed_at).toLocaleString("es-ES")}
+                          {new Date(s.signed_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
                           {s.context ? ` · ${s.context}` : ""}
                         </div>
                       </div>
@@ -448,11 +448,11 @@ export default async function InstallationDetailPage({
               <CardContent className="space-y-2 text-sm">
                 <div>
                   <strong>Iniciado:</strong>{" "}
-                  {i.started_at && new Date(i.started_at).toLocaleString("es-ES")}
+                  {i.started_at && new Date(i.started_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
                 </div>
                 <div>
                   <strong>Completado:</strong>{" "}
-                  {new Date(i.completed_at).toLocaleString("es-ES")}
+                  {new Date(i.completed_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
                 </div>
                 {i.duration_seconds && (
                   <div>
@@ -478,7 +478,7 @@ export default async function InstallationDetailPage({
               {i.scheduled_at && (
                 <div>
                   <strong>Programada:</strong>{" "}
-                  {new Date(i.scheduled_at).toLocaleString("es-ES")}
+                  {new Date(i.scheduled_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
                 </div>
               )}
               <div>

@@ -102,7 +102,7 @@ export async function listInstallations(filters?: {
   let query = supabase
     .from("installations")
     .select(
-      "id, reference_code, status, kind, installer_user_id, customer_id, scheduled_at, started_at, completed_at, created_at, contract_id, address_id",
+      "id, reference_code, status, kind, installer_user_id, customer_id, free_trial_id, scheduled_at, started_at, completed_at, created_at, contract_id, address_id",
     )
     .is("deleted_at", null)
     .order("scheduled_at", { ascending: true, nullsFirst: false })
@@ -133,9 +133,26 @@ export async function listInstallations(filters?: {
   const { data, error } = await query;
   if (error) throw error;
 
-  const rows = (data ?? []) as Array<Omit<InstallationRow, "customer_name">>;
+  return resolvePartyNames(supabase, (data ?? []) as Array<
+    Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
+  >);
+}
+
+/**
+ * Resuelve `customer_name` para una lista de installations.
+ * - Si tiene `customer_id` → carga el cliente.
+ * - Si no, y tiene `free_trial_id` → carga el lead asociado a la prueba.
+ *   Así las desinstalaciones de pruebas a leads ya no aparecen como "—".
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function resolvePartyNames(supabase: any, rows: Array<
+  Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
+>): Promise<InstallationRow[]> {
   const customerIds = Array.from(
     new Set(rows.map((r) => r.customer_id).filter(Boolean) as string[]),
+  );
+  const trialIds = Array.from(
+    new Set(rows.map((r) => r.free_trial_id).filter((v): v is string => !!v)),
   );
   let nameMap = new Map<string, string>();
   if (customerIds.length > 0) {
@@ -160,10 +177,58 @@ export async function listInstallations(filters?: {
       ]),
     );
   }
-  return rows.map((r) => ({
-    ...r,
-    customer_name: r.customer_id ? nameMap.get(r.customer_id) ?? null : null,
-  }));
+  const trialLeadName = new Map<string, string>();
+  if (trialIds.length > 0) {
+    const { data: trials } = await supabase
+      .from("free_trials")
+      .select("id, lead_id")
+      .in("id", trialIds);
+    const leadIds = Array.from(
+      new Set(
+        ((trials ?? []) as Array<{ id: string; lead_id: string | null }>)
+          .map((t) => t.lead_id)
+          .filter((v): v is string => !!v),
+      ),
+    );
+    let leadName = new Map<string, string>();
+    if (leadIds.length > 0) {
+      const { data: leads } = await supabase
+        .from("leads")
+        .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+        .in("id", leadIds);
+      type LL = {
+        id: string;
+        party_kind: "individual" | "company";
+        legal_name: string | null;
+        trade_name: string | null;
+        first_name: string | null;
+        last_name: string | null;
+      };
+      leadName = new Map(
+        ((leads ?? []) as LL[]).map((l) => [
+          l.id,
+          l.party_kind === "company"
+            ? l.trade_name || l.legal_name || "Lead"
+            : `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "Lead",
+        ]),
+      );
+    }
+    for (const t of (trials ?? []) as Array<{
+      id: string;
+      lead_id: string | null;
+    }>) {
+      const n = t.lead_id ? leadName.get(t.lead_id) : null;
+      if (n) trialLeadName.set(t.id, n);
+    }
+  }
+  return rows.map((r) => {
+    let name: string | null = null;
+    if (r.customer_id) name = nameMap.get(r.customer_id) ?? null;
+    if (!name && r.free_trial_id) {
+      name = trialLeadName.get(r.free_trial_id) ?? null;
+    }
+    return { ...r, customer_name: name } as InstallationRow;
+  });
 }
 
 /**
@@ -184,7 +249,7 @@ export async function listUnscheduledInstallations(): Promise<InstallationRow[]>
   const { data, error } = await supabase
     .from("installations")
     .select(
-      "id, reference_code, status, kind, installer_user_id, customer_id, scheduled_at, started_at, completed_at, created_at, contract_id, address_id",
+      "id, reference_code, status, kind, installer_user_id, customer_id, free_trial_id, scheduled_at, started_at, completed_at, created_at, contract_id, address_id",
     )
     .is("deleted_at", null)
     .is("scheduled_at", null)
@@ -193,37 +258,9 @@ export async function listUnscheduledInstallations(): Promise<InstallationRow[]>
     .limit(200);
   if (error) throw error;
 
-  const rows = (data ?? []) as Array<Omit<InstallationRow, "customer_name">>;
-  const customerIds = Array.from(
-    new Set(rows.map((r) => r.customer_id).filter(Boolean) as string[]),
-  );
-  let nameMap = new Map<string, string>();
-  if (customerIds.length > 0) {
-    const { data: cs } = await supabase
-      .from("customers")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
-      .in("id", customerIds);
-    type CC = {
-      id: string;
-      party_kind: "individual" | "company";
-      legal_name: string | null;
-      trade_name: string | null;
-      first_name: string | null;
-      last_name: string | null;
-    };
-    nameMap = new Map(
-      ((cs ?? []) as CC[]).map((c) => [
-        c.id,
-        c.party_kind === "company"
-          ? c.trade_name || c.legal_name || "Sin nombre"
-          : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre",
-      ]),
-    );
-  }
-  return rows.map((r) => ({
-    ...r,
-    customer_name: r.customer_id ? nameMap.get(r.customer_id) ?? null : null,
-  }));
+  return resolvePartyNames(supabase, (data ?? []) as Array<
+    Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
+  >);
 }
 
 export async function getInstallation(id: string) {

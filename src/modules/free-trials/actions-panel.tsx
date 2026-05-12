@@ -121,7 +121,7 @@ export function FreeTrialActionsPanel({
             <>
               {" "}
               · prevista{" "}
-              {new Date(pendingUninstall.scheduled_at).toLocaleString("es-ES")}
+              {new Date(pendingUninstall.scheduled_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
             </>
           )}
         </div>

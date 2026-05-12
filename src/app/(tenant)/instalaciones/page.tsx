@@ -32,19 +32,74 @@ const STATUS_OPTIONS = [
 
 const DAY_LABEL = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+// Vercel corre en UTC. Para que el agrupado por día y la hora visible
+// salgan en hora local española usamos siempre Europe/Madrid. Antes
+// "10:00 local" se renderizaba como "08:00" porque toLocaleTimeString
+// sin timeZone usa la del host (UTC).
+const TZ = "Europe/Madrid";
+
+function dateKey(iso: string): string {
+  // YYYY-MM-DD en zona Madrid, robusto frente al UTC del server.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const y = parts.find((p) => p.type === "year")?.value ?? "0000";
+  const m = parts.find((p) => p.type === "month")?.value ?? "01";
+  const d = parts.find((p) => p.type === "day")?.value ?? "01";
+  return `${y}-${m}-${d}`;
+}
+
+function todayKey(): string {
+  return dateKey(new Date().toISOString());
+}
+function tomorrowKey(): string {
+  const t = new Date();
+  t.setDate(t.getDate() + 1);
+  return dateKey(t.toISOString());
 }
 
 function fmtDayHeader(iso: string): string {
-  const d = new Date(`${iso}T00:00:00`);
-  const today = new Date();
-  const t = dateKey(today);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  if (iso === t) return `Hoy · ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
-  if (iso === dateKey(tomorrow)) return `Mañana · ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
-  return `${DAY_LABEL[d.getDay()]} ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long" })}`;
+  // `iso` aquí es YYYY-MM-DD (clave de día en zona Madrid). Para mostrar
+  // el día de la semana correcto interpretamos la fecha al mediodía de
+  // Madrid (evita off-by-one al cruzar medianoche UTC).
+  const d = new Date(`${iso}T12:00:00+02:00`);
+  const t = todayKey();
+  if (iso === t)
+    return `Hoy · ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long", timeZone: TZ })}`;
+  if (iso === tomorrowKey())
+    return `Mañana · ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long", timeZone: TZ })}`;
+  const dayName = DAY_LABEL[
+    Number(
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: TZ,
+        weekday: "long",
+      })
+        .formatToParts(d)
+        .find((p) => p.type === "weekday")?.value
+        ? // Mapeo manual de "Monday" → 1 etc.
+          ({
+            Sunday: 0,
+            Monday: 1,
+            Tuesday: 2,
+            Wednesday: 3,
+            Thursday: 4,
+            Friday: 5,
+            Saturday: 6,
+          } as Record<string, number>)[
+            new Intl.DateTimeFormat("en-US", {
+              timeZone: TZ,
+              weekday: "long",
+            })
+              .formatToParts(d)
+              .find((p) => p.type === "weekday")!.value
+          ] ?? 0
+        : 0,
+    )
+  ];
+  return `${dayName} ${d.toLocaleDateString("es-ES", { day: "numeric", month: "long", timeZone: TZ })}`;
 }
 
 export default async function InstalacionesPage({
@@ -78,10 +133,10 @@ export default async function InstalacionesPage({
     else unscheduled.push(i);
   }
 
-  // Agrupar agendadas por día
+  // Agrupar agendadas por día (clave en zona Madrid).
   const byDay = new Map<string, I[]>();
   for (const i of scheduled) {
-    const k = dateKey(new Date(i.scheduled_at!));
+    const k = dateKey(i.scheduled_at!);
     const arr = byDay.get(k) ?? [];
     arr.push(i);
     byDay.set(k, arr);
@@ -180,6 +235,7 @@ export default async function InstalacionesPage({
                         const time = new Date(i.scheduled_at!).toLocaleTimeString("es-ES", {
                           hour: "2-digit",
                           minute: "2-digit",
+                          timeZone: TZ,
                         });
                         return (
                           <li
