@@ -30,15 +30,33 @@ export async function backfillSalesRecordsAction(): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // 1) Cargar contratos firmados o activos (no cancelados, no borrados)
-  const { data: contractsData, error: cErr } = await admin
-    .from("contracts")
-    .select(
-      "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, assigned_user_id, signed_at, created_at, status",
-    )
-    .eq("company_id", session.company_id)
-    .is("deleted_at", null)
-    .in("status", ["signed", "active"]);
+  // 1) Cargar contratos firmados o activos (no cancelados, no borrados).
+  //    Query defensiva: primero intentamos con todas las columnas opcionales
+  //    (`assigned_user_id`, `signed_at`); si PostgREST devuelve "column does
+  //    not exist" (cache obsoleto o migración pendiente) reintentamos con
+  //    el subconjunto mínimo. La regla feedback_migrations_defensive lo
+  //    exige para cualquier columna añadida en migraciones tardías.
+  const BASE_COLS = "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, created_at, status";
+  const FULL_COLS = `${BASE_COLS}, assigned_user_id, signed_at`;
+
+  async function loadContracts(cols: string) {
+    return admin
+      .from("contracts")
+      .select(cols)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .in("status", ["signed", "active"]);
+  }
+  let { data: contractsData, error: cErr } = await loadContracts(FULL_COLS);
+  if (cErr && /column .* does not exist/i.test(cErr.message ?? "")) {
+    console.warn(
+      "[backfillSalesRecords] reintentando sin columnas opcionales:",
+      cErr.message,
+    );
+    const retry = await loadContracts(BASE_COLS);
+    contractsData = retry.data;
+    cErr = retry.error;
+  }
   if (cErr) throw new Error(`Error cargando contratos: ${cErr.message}`);
 
   const contracts = (contractsData ?? []) as Array<{
@@ -48,8 +66,8 @@ export async function backfillSalesRecordsAction(): Promise<{
     total_cash_cents: number | null;
     monthly_cents: number | null;
     duration_months: number | null;
-    assigned_user_id: string | null;
-    signed_at: string | null;
+    assigned_user_id?: string | null;
+    signed_at?: string | null;
     created_at: string;
     status: string;
   }>;
@@ -109,7 +127,7 @@ export async function backfillSalesRecordsAction(): Promise<{
         company_id: session.company_id!,
         contract_id: cf.id,
         contract_item_id: it?.id ?? null,
-        sales_user_id: cf.assigned_user_id,
+        sales_user_id: cf.assigned_user_id ?? null,
         tmk_user_id: tmkUserId,
         installer_user_id: null,
         plan_type: cf.plan_type,

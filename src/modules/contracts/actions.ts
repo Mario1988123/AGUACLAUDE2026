@@ -908,13 +908,27 @@ export async function markContractSigned(id: string) {
   //     al TMK (origen del lead) según points_settings de la empresa.
   // Fail-soft: si algo falla NO se rompe la firma.
   try {
-    const { data: contractFull } = await admin
+    // Query defensiva: `assigned_user_id` lo añadió la migración
+    // 20260503150000. Si por cualquier motivo (schema cache o migración
+    // pendiente) no está, recuperamos solo lo esencial y dejamos el
+    // sales_user_id en null.
+    const BASE_COLS =
+      "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months";
+    let { data: contractFull, error: cfErr } = await admin
       .from("contracts")
-      .select(
-        "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, assigned_user_id",
-      )
+      .select(`${BASE_COLS}, assigned_user_id`)
       .eq("id", id)
       .single();
+    if (cfErr && /column .* does not exist/i.test(cfErr.message ?? "")) {
+      const retry = await admin
+        .from("contracts")
+        .select(BASE_COLS)
+        .eq("id", id)
+        .single();
+      contractFull = retry.data;
+      cfErr = retry.error;
+    }
+    if (cfErr) throw new Error(cfErr.message);
     const cf = contractFull as {
       id: string;
       customer_id: string | null;
@@ -922,7 +936,7 @@ export async function markContractSigned(id: string) {
       total_cash_cents: number | null;
       monthly_cents: number | null;
       duration_months: number | null;
-      assigned_user_id: string | null;
+      assigned_user_id?: string | null;
     };
 
     // TMK origen: si el cliente vino de un lead con origin_tmk_user_id
@@ -975,7 +989,7 @@ export async function markContractSigned(id: string) {
       company_id: session.company_id!,
       contract_id: id,
       contract_item_id: it?.id ?? null,
-      sales_user_id: cf.assigned_user_id,
+      sales_user_id: cf.assigned_user_id ?? null,
       tmk_user_id: tmkUserId,
       installer_user_id: null,
       plan_type: cf.plan_type,
