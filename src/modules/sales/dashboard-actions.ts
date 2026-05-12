@@ -273,9 +273,14 @@ async function _getDashboardObjectives(
         ? Math.round((actualUnits * 100) / o.target_units)
         : null;
 
+    const DEPT_LABEL: Record<string, string> = {
+      sales: "Comerciales",
+      tech: "Técnicos",
+      tmk: "Telemarketing",
+    };
     const scopeLabel =
       o.scope_type === "department"
-        ? `Departamento`
+        ? DEPT_LABEL[o.scope_department ?? ""] ?? "Departamento"
         : nameMap.get(o.scope_user_id ?? "") ?? "Usuario";
 
     return {

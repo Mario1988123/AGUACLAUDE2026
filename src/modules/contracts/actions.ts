@@ -988,7 +988,21 @@ export async function markContractSigned(id: string) {
       period_year: periodYear,
       period_month: periodMonth,
     }));
-    await admin.from("sales_records").insert(recordRows);
+    // Antes el INSERT no comprobaba `error` y, si fallaba (enum, FK,
+    // tipos…), el dashboard de objetivos quedaba en 0 sin avisar. Ahora
+    // logueamos el error para que aparezca en Vercel logs y podamos
+    // diagnosticarlo.
+    const { error: srErr } = await admin
+      .from("sales_records")
+      .insert(recordRows);
+    if (srErr) {
+      console.error(
+        "[markContractSigned] sales_records INSERT failed:",
+        srErr.message,
+        "rows:",
+        JSON.stringify(recordRows),
+      );
+    }
 
     // PUNTOS: decisión usuario 2026-05-10 — los puntos por la venta NO
     // se otorgan al firmar el contrato. Quedan "pendientes" y se

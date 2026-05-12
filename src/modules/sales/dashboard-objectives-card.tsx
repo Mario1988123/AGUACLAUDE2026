@@ -5,12 +5,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import type { ObjectiveProgress } from "./dashboard-actions";
 
 const METRIC_LABEL: Record<string, string> = {
-  cash_total: "Contado",
-  renting_total: "Renting",
-  rental_total: "Alquiler",
-  financier_total: "Financiera",
+  // Enums oficiales de monthly_objectives.metric_kind
+  sales: "Ventas",
+  contracts: "Contratos firmados",
+  installations: "Instalaciones cerradas",
+  recoveries: "Recuperaciones",
+  // Enums legados (si quedan filas viejas)
+  cash_total: "Ventas al contado",
+  renting_total: "Ventas en renting",
+  rental_total: "Ventas en alquiler",
+  financier_total: "Importe financiado",
   units: "Unidades",
-  any_total: "Total",
+  any_total: "Total ventas",
 };
 
 function fmtEur(c: number | null | undefined) {

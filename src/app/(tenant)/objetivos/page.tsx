@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/shared/lib/auth/session";
-import {
-  getObjectivesCascade,
-  getMyDepartments,
-} from "@/modules/sales/cascade-actions";
-import { ObjectivesCascadeView } from "@/modules/sales/cascade-view";
+import { getObjectivesCascade } from "@/modules/sales/cascade-actions";
+import { ObjectivesCascadeReadonly } from "@/modules/sales/cascade-view-readonly";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Página global /objetivos: SOLO LECTURA.
+ *
+ * Muestra el resumen del mes (cascada nivel 1 → nivel 2 con % completado).
+ * Cualquier edición redirige a /configuracion/objetivos para evitar tener
+ * dos sitios donde modificar la misma tabla `monthly_objectives`.
+ */
 export default async function ObjectivesPage({
   searchParams,
 }: {
@@ -30,10 +34,7 @@ export default async function ObjectivesPage({
   const year = sp.y ? Number(sp.y) : now.getFullYear();
   const month = sp.m ? Number(sp.m) : now.getMonth() + 1;
 
-  const [cascade, myDepts] = await Promise.all([
-    getObjectivesCascade(year, month).catch(() => []),
-    getMyDepartments().catch(() => []),
-  ]);
+  const cascade = await getObjectivesCascade(year, month).catch(() => []);
 
   function monthHref(yearN: number, monthN: number) {
     return `/objetivos?y=${yearN}&m=${monthN}` as const;
@@ -56,7 +57,15 @@ export default async function ObjectivesPage({
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Objetivos del mes</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Cascada nivel 1 → nivel 2. {isLevel1 ? "Eres nivel 1: defines targets por departamento." : `Eres director: distribuyes el target del departamento entre tu equipo.`}
+            Resumen del cumplimiento (departamentos y miembros). Para crear o
+            modificar targets ve a{" "}
+            <Link
+              href="/configuracion/objetivos"
+              className="font-bold text-primary hover:underline"
+            >
+              /configuracion/objetivos
+            </Link>
+            .
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -78,13 +87,7 @@ export default async function ObjectivesPage({
         </div>
       </div>
 
-      <ObjectivesCascadeView
-        year={year}
-        month={month}
-        data={cascade}
-        isLevel1={isLevel1}
-        myDepartments={myDepts}
-      />
+      <ObjectivesCascadeReadonly data={cascade} />
     </div>
   );
 }
