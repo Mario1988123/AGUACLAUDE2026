@@ -36,6 +36,12 @@ export interface LeadListItem {
    * en la tabla.
    */
   has_active_trial?: boolean;
+  /**
+   * true si el lead tiene alguna incidencia ABIERTA (sin resolver) en una
+   * de sus pruebas gratuitas. Pinta un badge rojo "🚨 Incidencia" para
+   * que el responsable lo vea sin tener que abrir la ficha.
+   */
+  has_open_incident?: boolean;
 }
 
 export interface LeadDetail extends Omit<LeadListItem, "display_name" | "days_since_created"> {

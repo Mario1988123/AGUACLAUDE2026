@@ -267,11 +267,9 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                         >
                           {l.display_name}
                         </Link>
-                        {l.status === "new" && !l.assigned_user_id && (
-                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-700">
-                            Nuevo
-                          </span>
-                        )}
+                        {/* "Nuevo" ya sale en la columna ESTADO. Aquí
+                            reservamos espacio para indicadores propios del
+                            lead que NO se reflejan en el status oficial. */}
                         {l.tags?.includes("reabierto") && (
                           <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800">
                             ↻ Reabierto
@@ -283,6 +281,14 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                             className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700"
                           >
                             🎁 Prueba activa
+                          </span>
+                        )}
+                        {l.has_open_incident && (
+                          <span
+                            title="Incidencia abierta en la prueba"
+                            className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700"
+                          >
+                            🚨 Incidencia
                           </span>
                         )}
                       </div>

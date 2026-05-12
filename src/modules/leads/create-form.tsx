@@ -9,7 +9,11 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createLeadAction } from "./actions";
 import { LEAD_ORIGIN, LEAD_POTENTIAL, ORIGIN_LABEL } from "./schemas";
-import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
+import {
+  provinceFromPostalCode,
+  validateSpanishPostalCode,
+} from "@/shared/lib/validations/spanish";
+import { MapPicker } from "@/shared/components/map-picker";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { PhoneInput } from "@/shared/components/phone-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
@@ -159,10 +163,29 @@ export function LeadCreateForm() {
 
   function onPostalChange(v: string) {
     setPostal(v);
-    if (v.length === 5 && !province) {
+    if (v.length === 5) {
       const p = provinceFromPostalCode(v);
-      if (p) setProvince(p);
+      // Si CP es válido y la provincia actual no coincide → pisar.
+      // Evita el caso aberrante "CP 46xxx + Provincia Galicia".
+      if (p && (!province || province.toLowerCase().trim() !== p.toLowerCase().trim())) {
+        setProvince(p);
+      }
     }
+  }
+
+  /** Devuelve mensaje de error si CP, provincia o ciudad no encajan. */
+  function geoIncoherence(): string | null {
+    const cp = postal.trim();
+    if (!cp) return null; // step 3 ya valida que no esté vacío
+    if (!validateSpanishPostalCode(cp)) {
+      return `El código postal "${cp}" no es válido (5 dígitos, 01-52).`;
+    }
+    const expected = provinceFromPostalCode(cp);
+    const current = province.trim();
+    if (expected && current && current.toLowerCase() !== expected.toLowerCase()) {
+      return `El CP ${cp} pertenece a ${expected}, no a "${current}".`;
+    }
+    return null;
   }
 
   function validateStep1(): boolean {
@@ -195,6 +218,11 @@ export function LeadCreateForm() {
     }
     if (!city.trim()) {
       notify.warning("Población obligatoria");
+      return false;
+    }
+    const geoErr = geoIncoherence();
+    if (geoErr) {
+      notify.error("Dirección incoherente", geoErr);
       return false;
     }
     return true;
@@ -464,6 +492,23 @@ export function LeadCreateForm() {
             )}
           </div>
 
+          {/* Mapa con chincheta arrastrable. Si aún no hay coordenadas se
+              muestra placeholder. Cuando el usuario mueve la chincheta se
+              hace reverse-geocode y se rellenan los campos. */}
+          <MapPicker
+            latitude={latitude}
+            longitude={longitude}
+            onChange={(lat, lng) => {
+              void fillFromCoords(lat, lng, true);
+            }}
+          />
+          {latitude != null && longitude != null && (
+            <p className="text-[11px] text-muted-foreground">
+              Arrastra la chincheta o pincha en el mapa para ajustar la posición
+              exacta. Al moverla se rellenará calle/CP/población según el mapa.
+            </p>
+          )}
+
           {/* Vía + número */}
           <div className="grid gap-4 sm:grid-cols-[180px_1fr_140px]">
             <div className="space-y-2">
@@ -530,6 +575,14 @@ export function LeadCreateForm() {
               <Input value={province} onChange={(e) => setProvince(e.target.value)} />
             </div>
           </div>
+          {postal.length >= 5 && (() => {
+            const err = geoIncoherence();
+            return err ? (
+              <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+                ⚠️ {err}
+              </div>
+            ) : null;
+          })()}
         </div>
       )}
 

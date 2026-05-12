@@ -16,7 +16,10 @@ import {
   type StreetType,
 } from "./schemas";
 import { upsertAddressAction } from "./actions";
-import { provinceFromPostalCode } from "@/shared/lib/validations/spanish";
+import {
+  provinceFromPostalCode,
+  validateSpanishPostalCode,
+} from "@/shared/lib/validations/spanish";
 import { reverseGeocodeAction as reverseGeocode, forwardGeocodeAction as forwardGeocode } from "@/shared/lib/geocoding/actions";
 import type { AddressRow } from "./actions";
 
@@ -153,14 +156,52 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       const next = { ...f, [key]: value };
       if (key === "postal_code" && typeof value === "string" && value.length === 5) {
         const p = provinceFromPostalCode(value);
-        if (p && !next.province) next.province = p;
+        // Si el CP es válido y la provincia actual no coincide, la
+        // pisamos. Evita el caso aberrante "CP 46xxx + Provincia Galicia".
+        if (p) {
+          if (!next.province || next.province.toLowerCase().trim() !== p.toLowerCase().trim()) {
+            next.province = p;
+          }
+        }
       }
       return next;
     });
   }
 
+  /** Comprueba que CP, provincia y población forman una combinación posible. */
+  function validateGeo(): string | null {
+    const cp = form.postal_code?.trim() ?? "";
+    if (!cp) {
+      return "Falta el código postal.";
+    }
+    if (!validateSpanishPostalCode(cp)) {
+      return `El código postal "${cp}" no es válido (5 dígitos, 01-52).`;
+    }
+    const expectedProvince = provinceFromPostalCode(cp);
+    const current = form.province?.trim() ?? "";
+    if (
+      expectedProvince &&
+      current &&
+      current.toLowerCase() !== expectedProvince.toLowerCase()
+    ) {
+      return `El CP ${cp} pertenece a ${expectedProvince}, no a "${current}". Corrige la provincia o el CP.`;
+    }
+    if (expectedProvince && !current) {
+      return `Indica la provincia. El CP ${cp} corresponde a ${expectedProvince}.`;
+    }
+    if (!form.city?.trim()) {
+      return "Falta la población.";
+    }
+    return null;
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const geoErr = validateGeo();
+    if (geoErr) {
+      notify.error("Dirección incoherente", geoErr);
+      return;
+    }
     startTransition(async () => {
       try {
         await upsertAddressAction({
@@ -176,6 +217,8 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       }
     });
   }
+
+  const geoWarning = validateGeo();
 
   const hasGeo = form.latitude != null && form.longitude != null;
   const mapsUrl = hasGeo
@@ -271,7 +314,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Población</Label>
+          <Label>Población *</Label>
           <Input value={form.city} onChange={(e) => update("city", e.target.value)} />
         </div>
         <div className="space-y-1.5">
@@ -279,6 +322,11 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
           <Input value={form.province} onChange={(e) => update("province", e.target.value)} />
         </div>
       </div>
+      {geoWarning && form.postal_code.length >= 5 && (
+        <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+          ⚠️ {geoWarning}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">

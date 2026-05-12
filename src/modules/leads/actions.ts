@@ -143,9 +143,10 @@ export async function listLeads(filters?: {
   }
 
   // Marcar qué leads tienen propuestas (para mostrar "perdido" en lugar de
-  // "eliminar" en la lista de acciones).
+  // "eliminar" en la lista de acciones), prueba activa e incidencia abierta.
   const leadsWithProposals = new Set<string>();
   const leadsWithActiveTrial = new Set<string>();
+  const leadsWithOpenIncident = new Set<string>();
   if (rows.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
@@ -158,10 +159,11 @@ export async function listLeads(filters?: {
         .is("deleted_at", null),
       // Pruebas en curso: draft / scheduled / installed. Las accepted ya
       // se convirtieron en cliente y no llevan lead_id activo; rejected/
-      // expired/removed están cerradas.
+      // expired/removed están cerradas. Cargamos `id` también porque lo
+      // necesitamos para el lookup de incidencias abiertas.
       sb
         .from("free_trials")
-        .select("lead_id, status")
+        .select("id, lead_id, status")
         .in("lead_id", ids)
         .is("deleted_at", null)
         .in("status", ["draft", "scheduled", "installed"]),
@@ -169,8 +171,57 @@ export async function listLeads(filters?: {
     for (const p of (propsRes.data ?? []) as { lead_id: string | null }[]) {
       if (p.lead_id) leadsWithProposals.add(p.lead_id);
     }
-    for (const t of (trialsRes.data ?? []) as { lead_id: string | null }[]) {
-      if (t.lead_id) leadsWithActiveTrial.add(t.lead_id);
+    const trialRows = (trialsRes.data ?? []) as Array<{
+      id: string;
+      lead_id: string | null;
+      status: string;
+    }>;
+    const trialIdToLead = new Map<string, string>();
+    for (const t of trialRows) {
+      if (t.lead_id) {
+        leadsWithActiveTrial.add(t.lead_id);
+        trialIdToLead.set(t.id, t.lead_id);
+      }
+    }
+    // Incidencias abiertas: incidents.installation_id → installations.free_trial_id → trial → lead.
+    // Estados "abierta": open/assigned/in_progress/waiting_parts/waiting_customer.
+    if (trialIdToLead.size > 0) {
+      const trialIds = Array.from(trialIdToLead.keys());
+      const { data: ftInstalls } = await sb
+        .from("installations")
+        .select("id, free_trial_id")
+        .in("free_trial_id", trialIds)
+        .is("deleted_at", null);
+      const instToTrial = new Map<string, string>();
+      for (const i of (ftInstalls ?? []) as Array<{
+        id: string;
+        free_trial_id: string | null;
+      }>) {
+        if (i.free_trial_id) instToTrial.set(i.id, i.free_trial_id);
+      }
+      if (instToTrial.size > 0) {
+        const { data: incs } = await sb
+          .from("incidents")
+          .select("installation_id, status")
+          .in("installation_id", Array.from(instToTrial.keys()))
+          .in("status", [
+            "open",
+            "assigned",
+            "in_progress",
+            "waiting_parts",
+            "waiting_customer",
+          ]);
+        for (const inc of (incs ?? []) as Array<{
+          installation_id: string | null;
+          status: string;
+        }>) {
+          if (!inc.installation_id) continue;
+          const tId = instToTrial.get(inc.installation_id);
+          if (!tId) continue;
+          const lId = trialIdToLead.get(tId);
+          if (lId) leadsWithOpenIncident.add(lId);
+        }
+      }
     }
   }
 
@@ -206,6 +257,7 @@ export async function listLeads(filters?: {
       address_lng: addr.lng,
       has_proposals: leadsWithProposals.has(r.id),
       has_active_trial: leadsWithActiveTrial.has(r.id),
+      has_open_incident: leadsWithOpenIncident.has(r.id),
     };
   });
 }
