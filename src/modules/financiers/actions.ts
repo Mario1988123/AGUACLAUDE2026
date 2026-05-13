@@ -31,6 +31,17 @@ export interface Financier {
   accepts_company: boolean;
   is_active: boolean;
   sort_order: number;
+  // Datos fiscales (Fase 6 — destinatario en factura renting)
+  fiscal_legal_name: string | null;
+  fiscal_tax_id: string | null;
+  fiscal_street: string | null;
+  fiscal_postal_code: string | null;
+  fiscal_city: string | null;
+  fiscal_province: string | null;
+  fiscal_country: string;
+  fiscal_email: string | null;
+  fiscal_phone: string | null;
+  fiscal_iban: string | null;
   coefficients: FinancierCoefficient[];
 }
 
@@ -48,6 +59,16 @@ const financierSchema = z.object({
   accepts_company: z.coerce.boolean().default(true),
   is_active: z.coerce.boolean().default(true),
   sort_order: z.coerce.number().int().default(0),
+  fiscal_legal_name: z.string().optional().nullable(),
+  fiscal_tax_id: z.string().optional().nullable(),
+  fiscal_street: z.string().optional().nullable(),
+  fiscal_postal_code: z.string().optional().nullable(),
+  fiscal_city: z.string().optional().nullable(),
+  fiscal_province: z.string().optional().nullable(),
+  fiscal_country: z.string().optional().default("España"),
+  fiscal_email: z.string().optional().nullable(),
+  fiscal_phone: z.string().optional().nullable(),
+  fiscal_iban: z.string().optional().nullable(),
 });
 
 const coefSchema = z.object({
@@ -77,11 +98,11 @@ export async function listFinanciers(opts?: {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  const FULL =
+    "id, name, short_name, logo_url, notes, kind, residual_pct, reserve_pct, accepts_individual, accepts_autonomo, accepts_company, is_active, sort_order, fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban";
   let q = supabase
     .from("financiers")
-    .select(
-      "id, name, short_name, logo_url, notes, kind, residual_pct, reserve_pct, accepts_individual, accepts_autonomo, accepts_company, is_active, sort_order",
-    )
+    .select(FULL)
     .is("deleted_at", null)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
@@ -148,6 +169,16 @@ export async function upsertFinancierAction(input: unknown): Promise<{ id: strin
     accepts_company: parsed.accepts_company,
     is_active: parsed.is_active,
     sort_order: parsed.sort_order,
+    fiscal_legal_name: parsed.fiscal_legal_name ?? null,
+    fiscal_tax_id: parsed.fiscal_tax_id ?? null,
+    fiscal_street: parsed.fiscal_street ?? null,
+    fiscal_postal_code: parsed.fiscal_postal_code ?? null,
+    fiscal_city: parsed.fiscal_city ?? null,
+    fiscal_province: parsed.fiscal_province ?? null,
+    fiscal_country: parsed.fiscal_country || "España",
+    fiscal_email: parsed.fiscal_email ?? null,
+    fiscal_phone: parsed.fiscal_phone ?? null,
+    fiscal_iban: parsed.fiscal_iban ?? null,
   };
   if (parsed.id) {
     const r = await admin
