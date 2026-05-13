@@ -30,9 +30,15 @@ export async function listCustomers(
   // "mine" fuerza al propio user (override del usuario aunque sea admin).
   const forceMine = scope === "mine" && !isLevel1(session);
 
+  // Intentamos cargar `is_autonomo` con un SELECT con coalesce — si la
+  // columna no existe en el cache de PostgREST, caemos al SELECT legacy.
+  const SELECT_FULL =
+    "id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at, assigned_user_id";
+  const SELECT_LEGACY =
+    "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at, assigned_user_id";
   let query = supabase
     .from("customers")
-    .select("id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at, assigned_user_id")
+    .select(SELECT_FULL)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -49,11 +55,39 @@ export async function listCustomers(
       `legal_name.ilike.%${c}%,trade_name.ilike.%${c}%,first_name.ilike.%${c}%,last_name.ilike.%${c}%,email.ilike.%${c}%,phone_primary.ilike.%${c}%`,
     );
   }
-  const { data, error } = await query;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let res: any = await query;
+  if (
+    res.error &&
+    /is_autonomo|schema cache|Could not find/i.test(res.error.message ?? "")
+  ) {
+    // Reintento con columnas legacy si is_autonomo no está visible.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q2: any = supabase
+      .from("customers")
+      .select(SELECT_LEGACY)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (visibleUserIds && !forceMine) {
+      q2 = q2.in("assigned_user_id", visibleUserIds);
+    } else if (forceMine || (scope === "mine" && !visibleUserIds)) {
+      q2 = q2.eq("assigned_user_id", session.user_id);
+    }
+    if (q) {
+      const c = q.replace(/[%_]/g, "");
+      q2 = q2.or(
+        `legal_name.ilike.%${c}%,trade_name.ilike.%${c}%,first_name.ilike.%${c}%,last_name.ilike.%${c}%,email.ilike.%${c}%,phone_primary.ilike.%${c}%`,
+      );
+    }
+    res = await q2;
+  }
+  const { data, error } = res;
   if (error) throw error;
   const baseRows = (data as Array<{
     id: string;
     party_kind: "individual" | "company";
+    is_autonomo?: boolean | null;
     legal_name: string | null;
     trade_name: string | null;
     first_name: string | null;
@@ -137,6 +171,7 @@ export async function listCustomers(
     return {
       id: c.id,
       party_kind: c.party_kind,
+      is_autonomo: c.is_autonomo ?? false,
       display_name:
         c.party_kind === "company"
           ? c.trade_name || c.legal_name || "Sin nombre"
@@ -204,9 +239,11 @@ export async function createCustomerAction(formData: FormData) {
 
   const supabase = await createClient();
   const isLevel3 = session.roles.includes("sales_rep");
-  const insertPayload = {
+  const insertPayload: Record<string, unknown> = {
     company_id: session.company_id,
     party_kind: parsed.party_kind,
+    // Solo guardamos is_autonomo si es company (en individual no aplica).
+    is_autonomo: parsed.party_kind === "company" ? !!parsed.is_autonomo : false,
     legal_name: parsed.legal_name || null,
     trade_name: parsed.trade_name || null,
     first_name: parsed.first_name || null,
@@ -221,11 +258,25 @@ export async function createCustomerAction(formData: FormData) {
     assigned_at: isLevel3 ? new Date().toISOString() : null,
     created_by: session.user_id,
   };
-  const { data, error } = await supabase
+  let res = await supabase
     .from("customers")
     .insert(insertPayload as never)
     .select("id")
     .single();
+  // Defensa schema cache: si is_autonomo no existe (migración no aplicada),
+  // reintentamos sin él para no bloquear el alta.
+  if (
+    res.error &&
+    /is_autonomo/i.test(res.error.message ?? "")
+  ) {
+    delete insertPayload.is_autonomo;
+    res = await supabase
+      .from("customers")
+      .insert(insertPayload as never)
+      .select("id")
+      .single();
+  }
+  const { data, error } = res;
   if (error) throw error;
   const newId = (data as { id: string }).id;
 
@@ -313,6 +364,7 @@ export async function updateCustomerAction(
     phone_secondary?: string | null;
     tax_id?: string | null;
     notes?: string | null;
+    is_autonomo?: boolean;
   },
 ): Promise<void> {
   const session = await requireSession();
@@ -369,7 +421,12 @@ export async function updateCustomerAction(
   for (const [k, v] of Object.entries(patch)) {
     cleaned[k] = v === "" ? null : v;
   }
-  const r = await admin.from("customers").update(cleaned).eq("id", customerId);
+  let r = await admin.from("customers").update(cleaned).eq("id", customerId);
+  // Defensa schema cache para is_autonomo
+  if (r.error && /is_autonomo/i.test(r.error.message ?? "")) {
+    delete cleaned.is_autonomo;
+    r = await admin.from("customers").update(cleaned).eq("id", customerId);
+  }
   if (r.error) throw new Error(r.error.message);
 
   await admin.from("events").insert({

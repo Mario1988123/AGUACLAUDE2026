@@ -34,10 +34,11 @@ export async function listLeads(filters?: {
   // "mine" override del usuario (aunque sea admin) para ver solo los suyos
   const forceMine = filters?.scope === "mine" && !isLevel1(session);
 
+  // SELECT con is_autonomo (con fallback al subset legacy en el catch).
   let query = supabase
     .from("leads")
     .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, status, origin, potential, assigned_user_id, created_at, tags",
+      "id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, email, phone_primary, status, origin, potential, assigned_user_id, created_at, tags",
     )
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -81,12 +82,53 @@ export async function listLeads(filters?: {
     query = query.eq("assigned_user_id", filters.assigned_user_id);
   }
 
-  const { data, error } = await query;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let initialRes: any = await query;
+  // Defensa: si is_autonomo no está en el cache, reintentar sin él.
+  if (
+    initialRes.error &&
+    /is_autonomo|schema cache|Could not find/i.test(initialRes.error.message ?? "")
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q2: any = supabase
+      .from("leads")
+      .select(
+        "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, status, origin, potential, assigned_user_id, created_at, tags",
+      )
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (forceMine) {
+      q2 = q2.eq("assigned_user_id", session.user_id);
+    } else if (visibleUserIds) {
+      q2 = q2.in("assigned_user_id", visibleUserIds);
+    }
+    if (filters?.status) {
+      q2 = q2.eq("status", filters.status);
+    } else {
+      q2 = q2.in("status", VALID_STATUSES);
+    }
+    if (filters?.q) {
+      const q = filters.q.replace(/[%_]/g, "");
+      q2 = q2.or(
+        `legal_name.ilike.%${q}%,trade_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%,phone_primary.ilike.%${q}%`,
+      );
+    }
+    if (filters?.assigned_user_id === "unassigned") {
+      q2 = q2.is("assigned_user_id", null);
+    } else if (filters?.assigned_user_id) {
+      q2 = q2.eq("assigned_user_id", filters.assigned_user_id);
+    }
+    initialRes = await q2;
+  }
+  const data = initialRes.data;
+  const error = initialRes.error;
   if (error) throw error;
 
   const rows = (data ?? []) as Array<{
     id: string;
     party_kind: "individual" | "company";
+    is_autonomo?: boolean | null;
     legal_name: string | null;
     trade_name: string | null;
     first_name: string | null;
@@ -234,6 +276,7 @@ export async function listLeads(filters?: {
     return {
       id: r.id,
       party_kind: r.party_kind,
+      is_autonomo: r.is_autonomo ?? false,
       display_name: isCompany
         ? r.trade_name || r.legal_name || "Sin nombre"
         : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Sin nombre",
@@ -316,9 +359,11 @@ export async function createLeadAction(formData: FormData) {
 
   const supabase = await createClient();
   const isLevel3 = session.roles.includes("sales_rep") || session.roles.includes("telemarketer");
-  const insertPayload = {
+  const insertPayload: Record<string, unknown> = {
     company_id: session.company_id,
     party_kind: parsed.party_kind,
+    is_autonomo:
+      parsed.party_kind === "company" ? !!parsed.is_autonomo : false,
     legal_name: parsed.legal_name || null,
     trade_name: parsed.trade_name || null,
     first_name: parsed.first_name || null,
@@ -339,12 +384,21 @@ export async function createLeadAction(formData: FormData) {
         : null,
     created_by: session.user_id,
   };
-  const { data, error } = await supabase
+  let res = await supabase
     .from("leads")
     .insert(insertPayload as never)
     .select("id")
     .single();
-
+  // Defensa schema cache: si is_autonomo no existe aún, reintentamos sin él.
+  if (res.error && /is_autonomo/i.test(res.error.message ?? "")) {
+    delete insertPayload.is_autonomo;
+    res = await supabase
+      .from("leads")
+      .insert(insertPayload as never)
+      .select("id")
+      .single();
+  }
+  const { data, error } = res;
   if (error) throw error;
   const newId = (data as { id: string }).id;
 

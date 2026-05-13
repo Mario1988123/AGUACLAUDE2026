@@ -8,6 +8,8 @@ export type PartyKind = "individual" | "company";
 export interface LeadListItem {
   id: string;
   party_kind: PartyKind;
+  /** Solo aplica si party_kind=company. Usado para elegir precio empresa/IVA. */
+  is_autonomo?: boolean;
   display_name: string;
   /** Razón social literal (puede no coincidir con display_name si tiene trade_name) */
   legal_name: string | null;

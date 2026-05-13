@@ -92,8 +92,15 @@ export interface ProductForProposal {
     plan_type: "cash" | "rental" | "renting";
     duration_months: number | null;
     permanence_months: number | null;
+    /** Legacy: igual que monthly_price_individual_cents si existe. */
     monthly_price_cents: number | null;
     total_price_cents: number;
+    /** Precio particular — IVA incluido. */
+    monthly_price_individual_cents: number | null;
+    total_price_individual_cents: number | null;
+    /** Precio empresa/autónomo — BASE imponible. */
+    monthly_price_business_cents: number | null;
+    total_price_business_cents: number | null;
     min_authorized_cents: number | null;
     absolute_min_cents: number | null;
   }>;
@@ -117,16 +124,60 @@ export async function listProductsForProposal(): Promise<ProductForProposal[]> {
   const list = (products ?? []) as P[];
   if (list.length === 0) return [];
   const ids = list.map((p) => p.id);
-  const { data: plans } = await supabase
+  // SELECT defensivo: si las columnas duales no están en el cache,
+  // caemos al subset legacy y derivamos los individuales del precio antiguo.
+  const FULL_COLS =
+    "product_id, plan_type, duration_months, permanence_months, monthly_price_cents, total_price_cents, monthly_price_individual_cents, monthly_price_business_cents, total_price_individual_cents, total_price_business_cents, min_authorized_cents, absolute_min_cents";
+  const LEGACY_COLS =
+    "product_id, plan_type, duration_months, permanence_months, monthly_price_cents, total_price_cents, min_authorized_cents, absolute_min_cents";
+  let plansRes = await supabase
     .from("product_pricing_plans")
-    .select(
-      "product_id, plan_type, duration_months, permanence_months, monthly_price_cents, total_price_cents, min_authorized_cents, absolute_min_cents",
-    )
+    .select(FULL_COLS)
     .in("product_id", ids)
     .eq("is_active", true);
+  if (
+    plansRes.error &&
+    /(does not exist|schema cache|Could not find)/i.test(plansRes.error.message ?? "")
+  ) {
+    plansRes = await supabase
+      .from("product_pricing_plans")
+      .select(LEGACY_COLS)
+      .in("product_id", ids)
+      .eq("is_active", true);
+  }
+  type PlRaw = {
+    product_id: string;
+    plan_type: "cash" | "rental" | "renting";
+    duration_months: number | null;
+    permanence_months: number | null;
+    monthly_price_cents: number | null;
+    total_price_cents: number;
+    monthly_price_individual_cents?: number | null;
+    monthly_price_business_cents?: number | null;
+    total_price_individual_cents?: number | null;
+    total_price_business_cents?: number | null;
+    min_authorized_cents: number | null;
+    absolute_min_cents: number | null;
+  };
   type Pl = ProductForProposal["plans"][number] & { product_id: string };
   const plansByProduct = new Map<string, Pl[]>();
-  for (const pl of (plans ?? []) as Pl[]) {
+  for (const raw of (plansRes.data ?? []) as PlRaw[]) {
+    const pl: Pl = {
+      product_id: raw.product_id,
+      plan_type: raw.plan_type,
+      duration_months: raw.duration_months,
+      permanence_months: raw.permanence_months,
+      monthly_price_cents: raw.monthly_price_cents,
+      total_price_cents: raw.total_price_cents,
+      monthly_price_individual_cents:
+        raw.monthly_price_individual_cents ?? raw.monthly_price_cents ?? null,
+      monthly_price_business_cents: raw.monthly_price_business_cents ?? null,
+      total_price_individual_cents:
+        raw.total_price_individual_cents ?? raw.total_price_cents ?? null,
+      total_price_business_cents: raw.total_price_business_cents ?? null,
+      min_authorized_cents: raw.min_authorized_cents,
+      absolute_min_cents: raw.absolute_min_cents,
+    };
     const arr = plansByProduct.get(pl.product_id) ?? [];
     arr.push(pl);
     plansByProduct.set(pl.product_id, arr);

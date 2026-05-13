@@ -1,6 +1,8 @@
 export interface CustomerListItem {
   id: string;
   party_kind: "individual" | "company";
+  /** Solo aplica si party_kind=company. Usado para elegir precio empresa/IVA. */
+  is_autonomo?: boolean;
   display_name: string;
   /** Para empresas: persona de contacto (first + last). */
   contact_name: string | null;

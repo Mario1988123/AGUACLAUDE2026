@@ -35,6 +35,8 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
   const [phone, setPhone] = useState("");
   const [phoneSecondary, setPhoneSecondary] = useState("");
   const [notes, setNotes] = useState("");
+  /** Toggle "Autónomo" — solo significativo si partyKind=company. */
+  const [isAutonomo, setIsAutonomo] = useState(false);
 
   const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });
 
@@ -73,6 +75,10 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
     }
     const fd = new FormData();
     fd.set("party_kind", partyKind);
+    fd.set(
+      "is_autonomo",
+      partyKind === "company" && isAutonomo ? "true" : "false",
+    );
     fd.set("legal_name", legalName);
     fd.set("trade_name", tradeName);
     fd.set("first_name", firstName);
@@ -163,18 +169,36 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
           </div>
 
           {partyKind === "company" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Razón social *</Label>
-                <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Nombre comercial</Label>
-                <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>CIF *</Label>
-                <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} required placeholder="B12345678" />
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-amber-200 bg-amber-50/40 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isAutonomo}
+                  onChange={(e) => setIsAutonomo(e.target.checked)}
+                  className="h-5 w-5 rounded"
+                />
+                <div className="flex-1">
+                  <div className="font-bold">Autónomo</div>
+                  <div className="text-xs text-muted-foreground">
+                    Persona física con actividad económica. A efectos de
+                    precio se trata como empresa (base + IVA) y limita qué
+                    financieras pueden ofrecerse en renting.
+                  </div>
+                </div>
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Razón social *</Label>
+                  <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nombre comercial</Label>
+                  <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{isAutonomo ? "CIF / NIF *" : "CIF *"}</Label>
+                  <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} required placeholder={isAutonomo ? "B/12345678 o 12345678A" : "B12345678"} />
+                </div>
               </div>
             </div>
           ) : (

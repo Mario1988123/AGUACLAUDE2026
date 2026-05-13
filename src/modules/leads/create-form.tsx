@@ -30,6 +30,8 @@ import { reverseGeocodeAction, forwardGeocodeAction } from "@/shared/lib/geocodi
 export function LeadCreateForm() {
   const [step, setStep] = useState(1);
   const [partyKind, setPartyKind] = useState<"individual" | "company">("individual");
+  /** Toggle "Autónomo" — solo aplica si partyKind=company. */
+  const [isAutonomo, setIsAutonomo] = useState(false);
   const [pending, startTransition] = useTransition();
 
   // Paso 1
@@ -247,6 +249,10 @@ export function LeadCreateForm() {
     }
     const fd = new FormData();
     fd.set("party_kind", partyKind);
+    fd.set(
+      "is_autonomo",
+      partyKind === "company" && isAutonomo ? "true" : "false",
+    );
     fd.set("legal_name", legalName);
     fd.set("trade_name", tradeName);
     fd.set("first_name", firstName);
@@ -351,19 +357,36 @@ export function LeadCreateForm() {
           </div>
 
           {partyKind === "company" ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Razón social *</Label>
-                <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label>Nombre comercial</Label>
-                <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>CIF</Label>
-                <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} placeholder="B12345678" />
-              </div>
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-amber-200 bg-amber-50/40 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isAutonomo}
+                  onChange={(e) => setIsAutonomo(e.target.checked)}
+                  className="h-5 w-5 rounded"
+                />
+                <div className="flex-1">
+                  <div className="font-bold">Autónomo</div>
+                  <div className="text-xs text-muted-foreground">
+                    Persona física con actividad económica. Al convertir a
+                    cliente la facturación irá como empresa (base + IVA) y
+                    se filtrarán las financieras que admitan autónomos.
+                  </div>
+                </div>
+              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Razón social *</Label>
+                  <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nombre comercial</Label>
+                  <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CIF</Label>
+                  <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} placeholder="B12345678" />
+                </div>
               <div className="space-y-2">
                 <Label>Tel. empresa</Label>
                 <PhoneInput value={phoneCompany} onChange={setPhoneCompany} />
@@ -380,6 +403,7 @@ export function LeadCreateForm() {
               <div className="space-y-2">
                 <Label>Apellidos</Label>
                 <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
               </div>
             </div>
           ) : (

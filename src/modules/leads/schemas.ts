@@ -68,6 +68,7 @@ export const STATUS_VARIANT: Record<
 export const leadCreateSchema = z
   .object({
     party_kind: z.enum(PARTY_KIND),
+    is_autonomo: z.coerce.boolean().optional().default(false),
     legal_name: z.string().optional().default(""),
     trade_name: z.string().optional().default(""),
     first_name: z.string().optional().default(""),

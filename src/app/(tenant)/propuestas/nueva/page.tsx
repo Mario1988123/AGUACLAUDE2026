@@ -71,8 +71,18 @@ export default async function NuevaPropuestaPage({
         </div>
       )}
       <ProposalCreateForm
-        customers={customers.map((c) => ({ id: c.id, name: c.display_name }))}
-        leads={leads.map((l) => ({ id: l.id, name: l.display_name }))}
+        customers={customers.map((c) => ({
+          id: c.id,
+          name: c.display_name,
+          party_kind: c.party_kind,
+          is_autonomo: c.is_autonomo ?? false,
+        }))}
+        leads={leads.map((l) => ({
+          id: l.id,
+          name: l.display_name,
+          party_kind: l.party_kind,
+          is_autonomo: l.is_autonomo ?? false,
+        }))}
         products={products}
         defaultCustomerId={sp.customer_id}
         defaultLeadId={leadId}

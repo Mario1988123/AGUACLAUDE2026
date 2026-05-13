@@ -10,12 +10,21 @@ import { notify } from "@/shared/hooks/use-toast";
 import { createProposalAction, updateProposalAction } from "./actions";
 import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
 import type { ProductForProposal } from "@/modules/products/actions";
+import { pickPrice, isBusinessParty } from "./pick-price";
 
 type PlanType = "cash" | "rental" | "renting";
 
+interface PartyOption {
+  id: string;
+  name: string;
+  /** party_kind/is_autonomo se usan para elegir precio individual vs business. */
+  party_kind?: "individual" | "company" | null;
+  is_autonomo?: boolean | null;
+}
+
 interface Props {
-  customers: { id: string; name: string }[];
-  leads?: { id: string; name: string }[];
+  customers: PartyOption[];
+  leads?: PartyOption[];
   products: ProductForProposal[];
   defaultCustomerId?: string;
   defaultLeadId?: string;
@@ -68,16 +77,32 @@ function emptyItem(
   plan: PlanType,
   plans: ProductForProposal["plans"],
   duration: number | null,
+  destinatario: PartyOption | null,
 ): ItemRow {
   const planMatch = plans.find((p) => {
     if (p.plan_type !== plan) return false;
     if (plan === "renting" && duration) return p.duration_months === duration;
     return true;
   });
+  if (!planMatch) {
+    return {
+      product_id: productId,
+      quantity: 1,
+      unit_price_cents: 0,
+      installation_included: true,
+      installation_price_cents: null,
+      maintenance_included: false,
+      maintenance_until_date: null,
+      maintenance_price_cents: null,
+      maintenance_periodicity_months: 12,
+      deposit_cents: plan === "rental" ? 0 : null,
+      charge_first_payment_now: false,
+    };
+  }
+  // pickPrice elige individual vs business según destinatario.
+  const picked = pickPrice(planMatch, destinatario);
   const cuota =
-    plan === "cash"
-      ? planMatch?.total_price_cents ?? 0
-      : planMatch?.monthly_price_cents ?? 0;
+    plan === "cash" ? picked.total_cents : picked.monthly_cents ?? 0;
   return {
     product_id: productId,
     quantity: 1,
@@ -106,6 +131,18 @@ export function ProposalCreateForm({
 }: Props) {
   const isEdit = !!editId;
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? defaultCustomerId ?? "");
+  /**
+   * Resuelve el destinatario actual (customer o lead) a partir de los
+   * arrays que llegan por props. Sirve para `pickPrice` (individual vs
+   * business) y para la etiqueta "IVA incluido / Base + IVA".
+   */
+  const leadIdEffective = defaultLeadId ?? initial?.lead_id ?? null;
+  const destinatario: PartyOption | null = customerId
+    ? customers.find((c) => c.id === customerId) ?? null
+    : leadIdEffective
+      ? leads.find((l) => l.id === leadIdEffective) ?? null
+      : null;
+  const destBusiness = isBusinessParty(destinatario);
   const [validityUntil, setValidityUntil] = useState(() => {
     if (initial?.validity_until) return initial.validity_until;
     // Por defecto: hoy + N días según /configuracion/propuestas.
@@ -150,7 +187,10 @@ export function ProposalCreateForm({
       return;
     }
     const first = availableProducts[0]!;
-    setItems((prev) => [...prev, emptyItem(first.id, planType, first.plans, duration)]);
+    setItems((prev) => [
+      ...prev,
+      emptyItem(first.id, planType, first.plans, duration, destinatario),
+    ]);
   }
 
   function updateItem(idx: number, patch: Partial<ItemRow>) {
@@ -161,7 +201,13 @@ export function ProposalCreateForm({
         if (patch.product_id) {
           const prod = products.find((p) => p.id === patch.product_id);
           if (prod) {
-            const fresh = emptyItem(patch.product_id, planType, prod.plans, duration);
+            const fresh = emptyItem(
+              patch.product_id,
+              planType,
+              prod.plans,
+              duration,
+              destinatario,
+            );
             return { ...next, ...fresh, quantity: next.quantity };
           }
         }
@@ -258,6 +304,28 @@ export function ProposalCreateForm({
               </option>
             ))}
           </select>
+        )}
+        {destinatario && (
+          <div
+            className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold ${
+              destBusiness
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-blue-300 bg-blue-50 text-blue-900"
+            }`}
+          >
+            {destBusiness ? (
+              <>
+                💼 Destinatario <strong>empresa/autónomo</strong> · los precios
+                se aplican como <strong>BASE imponible</strong> y la factura
+                añadirá IVA 21% encima.
+              </>
+            ) : (
+              <>
+                👤 Destinatario <strong>particular</strong> · los precios ya
+                incluyen IVA.
+              </>
+            )}
+          </div>
         )}
       </div>
 

@@ -25,7 +25,7 @@ const PLAN_LABEL = {
   rental: "Alquiler",
 } as const;
 
-function formatCents(cents: number | null) {
+function formatCents(cents: number | null | undefined) {
   if (cents == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
@@ -41,9 +41,6 @@ export function PricingPlansPanel({ productId, plans }: Props) {
   const existingRentingDurations = new Set(
     plans.filter((p) => p.plan_type === "renting").map((p) => p.duration_months),
   );
-  // Para alquiler usamos la permanencia como "duración" del plan: cada
-  // permanencia distinta es un plan distinto (la cuota suele variar según
-  // el compromiso del cliente).
   const existingRentalDurations = new Set(
     plans.filter((p) => p.plan_type === "rental").map((p) => p.permanence_months ?? p.duration_months),
   );
@@ -178,45 +175,105 @@ function PlanRow({ plan, productId }: { plan: PricingPlan; productId: string }) 
       }
     });
   }
+  const indivMonthly =
+    plan.monthly_price_individual_cents ?? plan.monthly_price_cents;
+  const indivTotal = plan.total_price_individual_cents ?? plan.total_price_cents;
+  const bizMonthly = plan.monthly_price_business_cents;
+  const bizTotal = plan.total_price_business_cents;
+  const bizFinancier = plan.financier_payment_business_cents;
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
+        <div className="space-y-3 flex-1">
           <div className="flex items-center gap-2">
             <Badge variant="default">{PLAN_LABEL[plan.plan_type]}</Badge>
             {plan.duration_months && (
               <span className="text-sm font-semibold">{plan.duration_months} meses</span>
             )}
-          </div>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3">
-            {plan.monthly_price_cents != null && (
-              <div>
-                <span className="text-xs text-muted-foreground">Cuota</span>
-                <div className="font-bold">{formatCents(plan.monthly_price_cents)}/mes</div>
-              </div>
-            )}
-            <div>
-              <span className="text-xs text-muted-foreground">Total cliente</span>
-              <div className="font-bold">{formatCents(plan.total_price_cents)}</div>
-            </div>
-            {plan.financier_payment_cents != null && (
-              <div>
-                <span className="text-xs text-muted-foreground">Financiera paga</span>
-                <div className="font-bold">{formatCents(plan.financier_payment_cents)}</div>
-              </div>
-            )}
-            <div>
-              <span className="text-xs text-muted-foreground">Min. comercial</span>
-              <div>{formatCents(plan.min_authorized_cents)}</div>
-            </div>
-            <div>
-              <span className="text-xs text-muted-foreground">Min. absoluto</span>
-              <div>{formatCents(plan.absolute_min_cents)}</div>
-            </div>
             {plan.permanence_months && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                Permanencia: {plan.permanence_months}m
+              </span>
+            )}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {/* Particular */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                Particular · IVA incluido
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                {indivMonthly != null && (
+                  <div>
+                    <span className="text-xs text-muted-foreground">Cuota</span>
+                    <div className="font-bold">{formatCents(indivMonthly)}/mes</div>
+                  </div>
+                )}
+                <div>
+                  <span className="text-xs text-muted-foreground">Total</span>
+                  <div className="font-bold">{formatCents(indivTotal)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Empresa/autónomo */}
+            <div
+              className={`rounded-lg border p-3 ${
+                bizTotal != null
+                  ? "border-amber-200 bg-amber-50/40"
+                  : "border-dashed border-muted-foreground/30 bg-muted/20"
+              }`}
+            >
+              <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                Empresa / autónomo · BASE (+IVA al facturar)
+              </div>
+              {bizTotal == null && bizMonthly == null ? (
+                <p className="mt-1 text-xs text-muted-foreground italic">
+                  Sin precio para empresa todavía.
+                </p>
+              ) : (
+                <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                  {bizMonthly != null && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Cuota base</span>
+                      <div className="font-bold">{formatCents(bizMonthly)}/mes</div>
+                    </div>
+                  )}
+                  {bizTotal != null && (
+                    <div>
+                      <span className="text-xs text-muted-foreground">Total base</span>
+                      <div className="font-bold">{formatCents(bizTotal)}</div>
+                    </div>
+                  )}
+                  {plan.plan_type === "renting" && bizFinancier != null && (
+                    <div className="col-span-2">
+                      <span className="text-xs text-muted-foreground">
+                        Financiera paga (base)
+                      </span>
+                      <div className="font-bold">{formatCents(bizFinancier)}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-3 border-t pt-2">
+            <div>
+              <span className="text-muted-foreground">Mín. comercial:</span>{" "}
+              <span className="font-semibold">{formatCents(plan.min_authorized_cents)}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Mín. absoluto:</span>{" "}
+              <span className="font-semibold">{formatCents(plan.absolute_min_cents)}</span>
+            </div>
+            {plan.financing_coefficient != null && (
               <div>
-                <span className="text-xs text-muted-foreground">Permanencia</span>
-                <div>{plan.permanence_months} meses</div>
+                <span className="text-muted-foreground">Coef. renting:</span>{" "}
+                <span className="font-semibold tabular-nums">
+                  {plan.financing_coefficient}
+                </span>
               </div>
             )}
           </div>
@@ -243,49 +300,83 @@ function PlanForm({
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
     duration_months: planType === "cash" ? "" : String(fixedDuration ?? 12),
-    monthly_euros: "",
-    total_euros: "",
-    /** % comisión que retiene la financiera del total cliente (0-100). */
+    // Precios PARTICULAR (IVA incluido)
+    monthly_indiv_euros: "",
+    total_indiv_euros: "",
+    // Precios EMPRESA / AUTÓNOMO (BASE — IVA se añade al facturar)
+    monthly_biz_euros: "",
+    total_biz_euros: "",
+    /** % comisión que retiene la financiera del total empresa (0-100). */
     financier_fee_percent: planType === "renting" ? "5" : "",
-    // Para alquiler la permanencia = duración elegida en el grid (la
-    // permanencia es lo que distingue cada plan de alquiler).
     permanence_months: planType === "rental" ? String(fixedDuration ?? 12) : "",
     min_authorized_euros: "",
     absolute_min_euros: "",
   });
 
-  function calc() {
+  function recalcIndiv() {
     if (planType === "cash") return;
     const months = Number(form.duration_months) || 0;
-    const monthly = Number(form.monthly_euros) || 0;
+    const monthly = Number(form.monthly_indiv_euros) || 0;
     if (months > 0 && monthly > 0) {
-      const total = (months * monthly).toFixed(2);
-      setForm((f) => ({ ...f, total_euros: total }));
+      setForm((f) => ({ ...f, total_indiv_euros: (months * monthly).toFixed(2) }));
+    }
+  }
+  function recalcBiz() {
+    if (planType === "cash") return;
+    const months = Number(form.duration_months) || 0;
+    const monthly = Number(form.monthly_biz_euros) || 0;
+    if (months > 0 && monthly > 0) {
+      setForm((f) => ({ ...f, total_biz_euros: (months * monthly).toFixed(2) }));
     }
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const total = Math.round(Number(form.total_euros) * 100);
-    const monthly = form.monthly_euros ? Math.round(Number(form.monthly_euros) * 100) : null;
-    const minAuth = Math.round(Number(form.min_authorized_euros) * 100);
-    const minAbs = Math.round(Number(form.absolute_min_euros) * 100);
-    if (!total || total <= 0) {
-      notify.warning("Total cliente obligatorio");
+    const indivTotal = form.total_indiv_euros
+      ? Math.round(Number(form.total_indiv_euros) * 100)
+      : null;
+    const indivMonthly = form.monthly_indiv_euros
+      ? Math.round(Number(form.monthly_indiv_euros) * 100)
+      : null;
+    const bizTotal = form.total_biz_euros
+      ? Math.round(Number(form.total_biz_euros) * 100)
+      : null;
+    const bizMonthly = form.monthly_biz_euros
+      ? Math.round(Number(form.monthly_biz_euros) * 100)
+      : null;
+
+    if ((indivTotal == null || indivTotal <= 0) && (bizTotal == null || bizTotal <= 0)) {
+      notify.warning("Indica al menos uno de los dos precios (Particular o Empresa)");
       return;
     }
-    if (minAbs > minAuth || minAuth > total) {
-      notify.warning("Mínimos: absoluto ≤ comercial ≤ total");
+
+    // Mínimos (opcionales, si el admin no los rellena los anclamos al total
+    // individual para no bloquear con los checks de BD).
+    const referenceTotal = indivTotal ?? bizTotal ?? 0;
+    const minAuth = form.min_authorized_euros
+      ? Math.round(Number(form.min_authorized_euros) * 100)
+      : referenceTotal;
+    const minAbs = form.absolute_min_euros
+      ? Math.round(Number(form.absolute_min_euros) * 100)
+      : minAuth;
+    if (minAbs > minAuth || minAuth > referenceTotal) {
+      notify.warning("Mínimos: absoluto ≤ comercial ≤ total particular");
       return;
     }
+
+    // En renting, la financiera anticipa el TOTAL empresa menos comisión.
+    // Si no hay precio empresa, usamos el individual como fallback para
+    // que el campo legacy `financier_payment_cents` siga teniendo dato.
     const monthsVal = form.duration_months ? Number(form.duration_months) : null;
     const feePercent = form.financier_fee_percent ? Number(form.financier_fee_percent) : null;
-    // En renting, la financiera anticipa al proveedor el TOTAL menos su comisión.
-    // Nunca puede ser MAYOR que lo que el cliente acabará pagando.
-    const financier =
-      planType === "renting" && total
-        ? Math.round(total * (1 - (feePercent ?? 0) / 100))
+    const bizFinancier =
+      planType === "renting" && bizTotal != null
+        ? Math.round(bizTotal * (1 - (feePercent ?? 0) / 100))
         : null;
+    const legacyFinancier =
+      planType === "renting" && indivTotal != null
+        ? Math.round(indivTotal * (1 - (feePercent ?? 0) / 100))
+        : bizFinancier;
 
     startTransition(async () => {
       try {
@@ -293,12 +384,23 @@ function PlanForm({
           product_id: productId,
           plan_type: planType,
           duration_months: planType === "cash" ? null : monthsVal,
-          monthly_price_cents: planType === "cash" ? null : monthly,
-          total_price_cents: total,
+          // Legacy (rellenamos con individual para retro-compat)
+          monthly_price_cents: planType === "cash" ? null : indivMonthly,
+          total_price_cents: indivTotal ?? bizTotal,
           financing_coefficient:
             planType === "renting" && feePercent != null ? feePercent / 100 : null,
-          financier_payment_cents: planType === "renting" ? financier : null,
-          permanence_months: planType === "rental" ? Number(form.permanence_months) || null : null,
+          financier_payment_cents: planType === "renting" ? legacyFinancier : null,
+          // Duales
+          monthly_price_individual_cents:
+            planType === "cash" ? null : indivMonthly,
+          monthly_price_business_cents:
+            planType === "cash" ? null : bizMonthly,
+          total_price_individual_cents: indivTotal,
+          total_price_business_cents: bizTotal,
+          financier_payment_business_cents:
+            planType === "renting" ? bizFinancier : null,
+          permanence_months:
+            planType === "rental" ? Number(form.permanence_months) || null : null,
           min_authorized_cents: minAuth,
           absolute_min_cents: minAbs,
         });
@@ -313,7 +415,7 @@ function PlanForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-3 rounded-xl border-2 border-primary bg-primary/5 p-4"
+      className="space-y-4 rounded-xl border-2 border-primary bg-primary/5 p-4"
     >
       <div className="flex items-center gap-2 text-sm font-bold uppercase">
         <Badge variant="default">{PLAN_LABEL[planType]}</Badge>
@@ -333,18 +435,6 @@ function PlanForm({
               }
               value={form.duration_months}
               onChange={(e) => setForm({ ...form, duration_months: e.target.value })}
-              onBlur={calc}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Cuota mensual (€) *</Label>
-            <Input
-              type="number"
-              step="0.01"
-              required
-              value={form.monthly_euros}
-              onChange={(e) => setForm({ ...form, monthly_euros: e.target.value })}
-              onBlur={calc}
             />
           </div>
           {planType === "renting" && (
@@ -378,42 +468,97 @@ function PlanForm({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label>Total cliente (€) *</Label>
-          <Input
-            type="number"
-            step="0.01"
-            required
-            value={form.total_euros}
-            onChange={(e) => setForm({ ...form, total_euros: e.target.value })}
-          />
+      {/* PRECIOS DUALES */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {/* Particular */}
+        <div className="space-y-3 rounded-xl border-2 border-blue-200 bg-blue-50/30 p-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-blue-700">
+            Particular · IVA INCLUIDO
+          </div>
+          {planType !== "cash" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Cuota mensual (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.monthly_indiv_euros}
+                onChange={(e) => setForm({ ...form, monthly_indiv_euros: e.target.value })}
+                onBlur={recalcIndiv}
+              />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Total (€)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={form.total_indiv_euros}
+              onChange={(e) => setForm({ ...form, total_indiv_euros: e.target.value })}
+            />
+          </div>
         </div>
+
+        {/* Empresa / autónomo */}
+        <div className="space-y-3 rounded-xl border-2 border-amber-200 bg-amber-50/30 p-3">
+          <div className="text-xs font-bold uppercase tracking-wider text-amber-700">
+            Empresa / autónomo · BASE (sin IVA)
+          </div>
+          {planType !== "cash" && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Cuota mensual base (€)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.monthly_biz_euros}
+                onChange={(e) => setForm({ ...form, monthly_biz_euros: e.target.value })}
+                onBlur={recalcBiz}
+              />
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label className="text-xs">Total base (€)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={form.total_biz_euros}
+              onChange={(e) => setForm({ ...form, total_biz_euros: e.target.value })}
+            />
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground -mt-1">
+        Puedes rellenar uno solo, los dos, o cualquier combinación. El sistema
+        elige el bloque correspondiente según el tipo de cliente al hacer la
+        propuesta.
+      </p>
+
+      <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label>Mín. comercial (€) *</Label>
+          <Label>Mín. comercial (€) — opcional</Label>
           <Input
             type="number"
             step="0.01"
-            required
             value={form.min_authorized_euros}
             onChange={(e) => setForm({ ...form, min_authorized_euros: e.target.value })}
+            placeholder="por defecto = total"
           />
         </div>
         <div className="space-y-1.5">
-          <Label>Mín. absoluto (€) *</Label>
+          <Label>Mín. absoluto (€) — opcional</Label>
           <Input
             type="number"
             step="0.01"
-            required
             value={form.absolute_min_euros}
             onChange={(e) => setForm({ ...form, absolute_min_euros: e.target.value })}
+            placeholder="por defecto = mín. comercial"
           />
         </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Mínimo comercial = nivel 3 puede vender sin aprobación. Mínimo absoluto = requiere
-        aprobación nivel 1/2.
+        Mínimo comercial = nivel 3 puede vender sin aprobación. Mínimo absoluto =
+        requiere aprobación nivel 1/2.
       </p>
 
       <div className="flex justify-end gap-2">
