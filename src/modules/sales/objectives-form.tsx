@@ -19,9 +19,17 @@ interface Objective {
   scope_department: string | null;
   scope_user_id: string | null;
   metric_kind: string;
+  /** Fase 2 — null = todos los tipos. */
+  plan_type?: "cash" | "rental" | "renting" | null;
   target_amount_cents: number | null;
   target_units: number | null;
 }
+
+const PLAN_TYPE_LABEL: Record<string, string> = {
+  cash: "Contado",
+  renting: "Renting",
+  rental: "Alquiler",
+};
 
 const DEPT_LABEL: Record<string, string> = {
   tech: "Técnico",
@@ -86,6 +94,11 @@ export function ObjectivesManager({ objectives, team }: Props) {
                 </Badge>
               )}
               <Badge variant="outline">{o.metric_kind}</Badge>
+              {o.plan_type && (
+                <Badge variant="secondary">
+                  {PLAN_TYPE_LABEL[o.plan_type] ?? o.plan_type}
+                </Badge>
+              )}
             </div>
             <div className="mt-1 text-sm">
               {o.target_amount_cents != null && (
@@ -142,6 +155,8 @@ function ObjForm({
     scope_department: "sales" as "tech" | "sales" | "tmk",
     scope_user_id: "",
     metric_kind: "sales" as "sales" | "contracts" | "installations" | "recoveries",
+    /** "" = todos los planes; cash/rental/renting = segmentado */
+    plan_type: "" as "" | "cash" | "rental" | "renting",
     target_euros: "",
     target_units: "",
   });
@@ -157,6 +172,7 @@ function ObjForm({
           scope_department: form.scope_type === "department" ? form.scope_department : null,
           scope_user_id: form.scope_type === "user" ? form.scope_user_id : null,
           metric_kind: form.metric_kind,
+          plan_type: form.plan_type || null,
           target_amount_cents: form.target_euros
             ? Math.round(Number(form.target_euros) * 100)
             : null,
@@ -208,6 +224,38 @@ function ObjForm({
                 <option value="recoveries">Recuperaciones</option>
               </select>
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tipo de venta</Label>
+            <div className="flex gap-2 flex-wrap">
+              {(
+                [
+                  { v: "", l: "Todos" },
+                  { v: "cash", l: "Contado" },
+                  { v: "renting", l: "Renting" },
+                  { v: "rental", l: "Alquiler" },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() =>
+                    setForm({ ...form, plan_type: opt.v as typeof form.plan_type })
+                  }
+                  className={`rounded-xl border-2 px-3 py-2 text-sm font-bold ${
+                    form.plan_type === opt.v
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-card hover:bg-muted/30"
+                  }`}
+                >
+                  {opt.l}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              «Todos» suma cualquier venta del mes. «Contado / Renting / Alquiler»
+              solo cuenta esa tipología.
+            </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">

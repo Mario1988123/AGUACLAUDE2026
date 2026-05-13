@@ -44,20 +44,48 @@ export interface ObjectiveRow {
   scope_department: string | null;
   scope_user_id: string | null;
   metric_kind: string;
+  /** Fase 2: null = cualquier tipo de venta. */
+  plan_type: "cash" | "rental" | "renting" | null;
   target_amount_cents: number | null;
   target_units: number | null;
 }
 
 export async function listObjectives(year: number, month: number): Promise<ObjectiveRow[]> {
   await requireSession();
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  // SELECT defensivo: si plan_type no existe en el cache, caemos al
+  // subset legacy y derivamos null.
+  const FULL =
+    "id, period_year, period_month, scope_type, scope_department, scope_user_id, metric_kind, plan_type, target_amount_cents, target_units";
+  const LEGACY =
+    "id, period_year, period_month, scope_type, scope_department, scope_user_id, metric_kind, target_amount_cents, target_units";
+  let res = await supabase
     .from("monthly_objectives")
-    .select(
-      "id, period_year, period_month, scope_type, scope_department, scope_user_id, metric_kind, target_amount_cents, target_units",
-    )
+    .select(FULL)
     .eq("period_year", year)
     .eq("period_month", month);
-  if (error) throw error;
-  return (data ?? []) as ObjectiveRow[];
+  if (
+    res.error &&
+    /plan_type|schema cache|Could not find/i.test(res.error.message ?? "")
+  ) {
+    res = await supabase
+      .from("monthly_objectives")
+      .select(LEGACY)
+      .eq("period_year", year)
+      .eq("period_month", month);
+  }
+  if (res.error) throw res.error;
+  return ((res.data ?? []) as Array<Partial<ObjectiveRow>>).map((r) => ({
+    id: r.id!,
+    period_year: r.period_year!,
+    period_month: r.period_month!,
+    scope_type: r.scope_type!,
+    scope_department: r.scope_department ?? null,
+    scope_user_id: r.scope_user_id ?? null,
+    metric_kind: r.metric_kind ?? "sales",
+    plan_type: (r.plan_type ?? null) as ObjectiveRow["plan_type"],
+    target_amount_cents: r.target_amount_cents ?? null,
+    target_units: r.target_units ?? null,
+  }));
 }

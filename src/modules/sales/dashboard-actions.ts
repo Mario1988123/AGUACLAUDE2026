@@ -61,6 +61,8 @@ export interface DashboardObjectivesResponse {
 export interface ObjectiveProgress {
   id: string;
   metric_kind: string;
+  /** Fase 2: null = total / cash | rental | renting = segmentado. */
+  plan_type: "cash" | "rental" | "renting" | null;
   target_amount_cents: number | null;
   target_units: number | null;
   actual_amount_cents: number;
@@ -161,21 +163,40 @@ async function _getDashboardObjectives(
   });
   const scopeMonthTotal = scopeSales.reduce((s, r) => s + r.total_cents, 0);
 
-  // ---- Objetivos mes en curso ----
-  let objQuery = supabase
+  // ---- Objetivos mes en curso (con plan_type defensivo) ----
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let objQuery: any = supabase
     .from("monthly_objectives")
     .select(
-      "id, scope_type, scope_department, scope_user_id, metric_kind, target_amount_cents, target_units",
+      "id, scope_type, scope_department, scope_user_id, metric_kind, plan_type, target_amount_cents, target_units",
     )
     .eq("company_id", session.company_id)
     .eq("period_year", year)
     .eq("period_month", month);
 
-  // Para nivel 2/3 limitamos a su dpto
   if (level !== 1 && targetDept) {
     objQuery = objQuery.or(`scope_department.eq.${targetDept},scope_user_id.eq.${session.user_id}`);
   }
-  const { data: objRows } = await objQuery;
+  let objRes = await objQuery;
+  if (
+    objRes.error &&
+    /plan_type|schema cache|Could not find/i.test(objRes.error.message ?? "")
+  ) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q2: any = supabase
+      .from("monthly_objectives")
+      .select(
+        "id, scope_type, scope_department, scope_user_id, metric_kind, target_amount_cents, target_units",
+      )
+      .eq("company_id", session.company_id)
+      .eq("period_year", year)
+      .eq("period_month", month);
+    if (level !== 1 && targetDept) {
+      q2 = q2.or(`scope_department.eq.${targetDept},scope_user_id.eq.${session.user_id}`);
+    }
+    objRes = await q2;
+  }
+  const objRows = objRes.data;
 
   type Obj = {
     id: string;
@@ -183,6 +204,7 @@ async function _getDashboardObjectives(
     scope_department: string | null;
     scope_user_id: string | null;
     metric_kind: string;
+    plan_type?: "cash" | "rental" | "renting" | null;
     target_amount_cents: number | null;
     target_units: number | null;
   };
@@ -204,12 +226,17 @@ async function _getDashboardObjectives(
   }
 
   function calcProgress(o: Obj): ObjectiveProgress {
-    const filtered =
+    // Filtro por scope (user vs dpto).
+    let filtered =
       o.scope_type === "user"
         ? sales.filter(
             (s) => s.sales_user_id === o.scope_user_id || s.tmk_user_id === o.scope_user_id,
           )
-        : sales; // dpto: aproximamos al total mes (no hay dpto en sales_records)
+        : sales;
+    // Fase 2: si el objetivo tiene plan_type, restringimos a ese tipo.
+    if (o.plan_type) {
+      filtered = filtered.filter((s) => s.plan_type === o.plan_type);
+    }
 
     let actualAmount = 0;
     let actualUnits = filtered.length;
@@ -286,6 +313,7 @@ async function _getDashboardObjectives(
     return {
       id: o.id,
       metric_kind: o.metric_kind,
+      plan_type: o.plan_type ?? null,
       target_amount_cents: o.target_amount_cents,
       target_units: o.target_units,
       actual_amount_cents: actualAmount,
