@@ -16,6 +16,7 @@ const SECTIONS = [
   { href: "/configuracion/incidencias", label: "Incidencias", icon: "AlertTriangle", desc: "SLA por origen y prioridad" },
   { href: "/configuracion/wallet", label: "Wallet", icon: "Wallet", desc: "Métodos cobro, validación, IBAN" },
   { href: "/configuracion/gocardless", label: "GoCardless", icon: "Banknote", desc: "Domiciliación SEPA · access token + webhook" },
+  { href: "/configuracion/financieras", label: "Financieras", icon: "Landmark", desc: "Renting y financiación, coeficientes por plazo" },
   { href: "/configuracion/gastos", label: "Gastos comerciales", icon: "Receipt", desc: "Dietas, kilometraje, OCR Mindee, límites IRPF" },
   { href: "/configuracion/calculadora-ahorro", label: "Calculadora ahorro", icon: "Calculator", desc: "Marcas de agua, scraper precios, parámetros eco" },
   { href: "/configuracion/notificaciones", label: "Notificaciones", icon: "Bell", desc: "Opt-in por evento y canal" },
