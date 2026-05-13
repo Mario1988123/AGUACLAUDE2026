@@ -107,6 +107,13 @@ export default async function WalletPage({
         </div>
         <div className="hidden sm:flex items-center gap-2">
           <Link
+            href={"/wallet/financieras" as never}
+            prefetch={false}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            🏦 Pagos financieras
+          </Link>
+          <Link
             href={"/api/export/wallet" as never}
             prefetch={false}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"

@@ -339,7 +339,10 @@ export async function getInvoice(id: string): Promise<InvoiceDetail> {
 }
 
 interface CreateInvoiceInput {
-  customer_id: string;
+  /** Cliente final (mutuamente excluyente con financier_id). */
+  customer_id?: string | null;
+  /** Financiera destinataria (Fase 6 — factura del renting). */
+  financier_id?: string | null;
   contract_id?: string | null;
   kind?: InvoiceKind;
   due_date?: string | null;
@@ -352,6 +355,9 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
   if (!input.lines || input.lines.length === 0) throw new Error("Añade al menos una línea");
+  if (!input.customer_id && !input.financier_id) {
+    throw new Error("La factura necesita un destinatario (customer_id o financier_id)");
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -372,21 +378,51 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
   const fiscalYear = new Date().getFullYear();
   const fullRef = `${series.series_code}-${fiscalYear}-${String(num).padStart(5, "0")}`;
 
-  // Snapshots
+  // Snapshots — fuente depende de si el destinatario es customer o financier.
   const fiscal = await getFiscalSettings();
-  const { data: cust } = await admin
-    .from("customers")
-    .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary",
-    )
-    .eq("id", input.customer_id)
-    .maybeSingle();
-  const { data: addr } = await admin
-    .from("addresses")
-    .select("street, street_number, postal_code, city, province")
-    .eq("customer_id", input.customer_id)
-    .eq("is_primary", true)
-    .maybeSingle();
+  let recipientSnapshot: Record<string, unknown> = {};
+  if (input.financier_id) {
+    const { data: fin } = await admin
+      .from("financiers")
+      .select(
+        "id, name, fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban",
+      )
+      .eq("id", input.financier_id)
+      .maybeSingle();
+    const f = fin as Record<string, unknown> | null;
+    if (!f) throw new Error("Financiera no encontrada");
+    recipientSnapshot = {
+      kind: "financier",
+      party_kind: "company",
+      legal_name: f.fiscal_legal_name ?? f.name,
+      tax_id: f.fiscal_tax_id ?? null,
+      email: f.fiscal_email ?? null,
+      phone_primary: f.fiscal_phone ?? null,
+      iban: f.fiscal_iban ?? null,
+      address: {
+        street: f.fiscal_street ?? null,
+        postal_code: f.fiscal_postal_code ?? null,
+        city: f.fiscal_city ?? null,
+        province: f.fiscal_province ?? null,
+        country: f.fiscal_country ?? "España",
+      },
+    };
+  } else if (input.customer_id) {
+    const { data: cust } = await admin
+      .from("customers")
+      .select(
+        "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary",
+      )
+      .eq("id", input.customer_id)
+      .maybeSingle();
+    const { data: addr } = await admin
+      .from("addresses")
+      .select("street, street_number, postal_code, city, province")
+      .eq("customer_id", input.customer_id)
+      .eq("is_primary", true)
+      .maybeSingle();
+    recipientSnapshot = { ...(cust ?? {}), address: addr ?? null };
+  }
 
   // Calcular totales
   let subtotal = 0;
@@ -398,35 +434,41 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
   }
   const total = subtotal + tax;
 
-  const { data: created, error: e2 } = await admin
-    .from("invoices")
-    .insert({
-      company_id: session.company_id,
-      customer_id: input.customer_id,
-      contract_id: input.contract_id ?? null,
-      kind,
-      series_id: series.id,
-      number: num,
-      fiscal_year: fiscalYear,
-      full_reference: fullRef,
-      status: "draft",
-      customer_fiscal_snapshot: { ...(cust ?? {}), address: addr ?? null },
-      company_fiscal_snapshot: fiscal,
-      subtotal_cents: subtotal,
-      tax_cents: tax,
-      total_cents: total,
-      withholdings_cents: 0,
-      issue_date: new Date().toISOString().slice(0, 10),
-      due_date:
-        input.due_date ??
-        new Date(Date.now() + (fiscal.invoice_default_due_days ?? 30) * 86400000)
-          .toISOString()
-          .slice(0, 10),
-      corrects_invoice_id: input.corrects_invoice_id ?? null,
-      notes: input.notes ?? null,
-    })
-    .select("id")
-    .single();
+  const insertPayload: Record<string, unknown> = {
+    company_id: session.company_id,
+    customer_id: input.customer_id ?? null,
+    financier_id: input.financier_id ?? null,
+    contract_id: input.contract_id ?? null,
+    kind,
+    series_id: series.id,
+    number: num,
+    fiscal_year: fiscalYear,
+    full_reference: fullRef,
+    status: "draft",
+    customer_fiscal_snapshot: recipientSnapshot,
+    company_fiscal_snapshot: fiscal,
+    subtotal_cents: subtotal,
+    tax_cents: tax,
+    total_cents: total,
+    withholdings_cents: 0,
+    issue_date: new Date().toISOString().slice(0, 10),
+    due_date:
+      input.due_date ??
+      new Date(Date.now() + (fiscal.invoice_default_due_days ?? 30) * 86400000)
+        .toISOString()
+        .slice(0, 10),
+    corrects_invoice_id: input.corrects_invoice_id ?? null,
+    notes: input.notes ?? null,
+  };
+  // INSERT defensivo: si financier_id no existe en cache, eliminarlo y
+  // dejar la factura sin él (en BD viejas aún sin migrar).
+  let inv = await admin.from("invoices").insert(insertPayload).select("id").single();
+  if (inv.error && /financier_id|schema cache|Could not find/i.test(inv.error.message ?? "")) {
+    delete insertPayload.financier_id;
+    inv = await admin.from("invoices").insert(insertPayload).select("id").single();
+  }
+  const created = inv.data;
+  const e2 = inv.error;
   if (e2) throw new Error(e2.message);
   const invoiceId = (created as { id: string }).id;
 
@@ -816,6 +858,94 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
     customer_id: con.customer_id,
     contract_id: contractId,
     lines,
+  });
+}
+
+/**
+ * Crea la factura emitida a la FINANCIERA por un contrato renting o
+ * financiación. Base = financier_payment_cents del contrato (lo que la
+ * empresa percibe). IVA 21% encima. Una sola línea con concepto que
+ * referencia el contrato.
+ *
+ * Decisión usuario 2026-05-14:
+ *  · renting estricto → factura a la financiera (no al cliente)
+ *  · financiación pura → factura al cliente (createInvoiceFromContractAction)
+ */
+export async function createInvoiceForFinancierFromContractAction(
+  contractId: string,
+): Promise<string> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const { data: c } = await admin
+    .from("contracts")
+    .select(
+      "id, status, reference_code, plan_type, financier_id, financier_payment_cents, financier_term_months",
+    )
+    .eq("id", contractId)
+    .maybeSingle();
+  if (!c) throw new Error("Contrato no encontrado");
+  const con = c as {
+    id: string;
+    status: string;
+    reference_code: string | null;
+    plan_type: "cash" | "rental" | "renting";
+    financier_id: string | null;
+    financier_payment_cents: number | null;
+    financier_term_months: number | null;
+  };
+  if (con.status === "draft" || con.status === "pending_data") {
+    throw new Error("El contrato no está firmado todavía.");
+  }
+  if (con.status === "cancelled") {
+    throw new Error("Contrato cancelado.");
+  }
+  if (!con.financier_id) {
+    throw new Error(
+      "Este contrato no tiene financiera asignada. Asigna una en la propuesta antes de facturar a la financiera.",
+    );
+  }
+  const capital = con.financier_payment_cents ?? 0;
+  if (capital <= 0) {
+    throw new Error(
+      "Falta el importe que la financiera te paga (capital empresa). Edítalo en la propuesta/contrato antes de facturar.",
+    );
+  }
+  // Idempotencia: si ya hay factura emitida a esta financiera por este
+  // contrato, no creamos otra.
+  const { data: existing } = await admin
+    .from("invoices")
+    .select("id, full_reference")
+    .eq("contract_id", contractId)
+    .eq("financier_id", con.financier_id)
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    throw new Error(
+      `Ya hay una factura emitida a esta financiera por este contrato (${(existing as { full_reference: string }).full_reference}).`,
+    );
+  }
+
+  const fiscal = await getFiscalSettings();
+  const description = `${con.plan_type === "renting" ? "Renting" : "Financiación"} ${
+    con.financier_term_months ? `${con.financier_term_months}m ` : ""
+  }· Contrato ${con.reference_code ?? `#${con.id.slice(0, 8)}`}`;
+
+  return createInvoiceAction({
+    customer_id: null,
+    financier_id: con.financier_id,
+    contract_id: contractId,
+    lines: [
+      {
+        description,
+        quantity: 1,
+        unit_price_cents: capital,
+        discount_percent: 0,
+        tax_rate_percent: fiscal.invoice_default_iva,
+      },
+    ],
   });
 }
 

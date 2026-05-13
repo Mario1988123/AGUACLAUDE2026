@@ -457,13 +457,50 @@ export async function createProposalAction(input: unknown) {
     notes: parsed.notes || null,
     created_by: session.user_id,
     version_number: 1,
+    // Datos de financiera (solo si renting y vienen rellenos).
+    financier_id: isRenting ? parsed.financier_id ?? null : null,
+    financier_payment_cents: isRenting
+      ? parsed.financier_payment_cents ?? null
+      : null,
+    financier_term_months: isRenting
+      ? parsed.financier_term_months ?? parsed.chosen_duration_months ?? null
+      : null,
+    financier_coefficient: isRenting ? parsed.financier_coefficient ?? null : null,
+    financier_residual_cents: isRenting
+      ? parsed.financier_residual_cents ?? null
+      : null,
+    financier_reserve_cents: isRenting
+      ? parsed.financier_reserve_cents ?? null
+      : null,
   };
 
-  const { data, error } = await supabase
+  // INSERT defensivo: si las columnas de financiera aún no están en el
+  // schema cache, las quitamos y reintentamos para no bloquear el alta.
+  const FIN_KEYS = [
+    "financier_id",
+    "financier_payment_cents",
+    "financier_term_months",
+    "financier_coefficient",
+    "financier_residual_cents",
+    "financier_reserve_cents",
+  ];
+  let res = await supabase
     .from("proposals")
     .insert(insertPayload)
     .select("id")
     .single();
+  if (
+    res.error &&
+    /financier_|schema cache|Could not find/i.test(res.error.message ?? "")
+  ) {
+    for (const k of FIN_KEYS) delete insertPayload[k];
+    res = await supabase
+      .from("proposals")
+      .insert(insertPayload)
+      .select("id")
+      .single();
+  }
+  const { data, error } = res;
   if (error) throw error;
   const proposalId = (data as { id: string }).id;
 

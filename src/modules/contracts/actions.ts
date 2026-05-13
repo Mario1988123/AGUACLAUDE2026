@@ -200,25 +200,35 @@ export async function createContractFromProposal(proposalId: string) {
   let proposal: unknown = null;
   let pErr: { message?: string } | null = null;
   {
+    // Pedimos también los campos de financiera (Fase 4). Si no están en el
+    // cache caemos al subset legacy.
+    const FIN_COLS =
+      "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents, chosen_plan_type, chosen_duration_months, financier_id, financier_payment_cents, financier_term_months, financier_coefficient, financier_residual_cents, financier_reserve_cents";
     const r = await supabase
       .from("proposals")
-      .select(
-        "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents, chosen_plan_type, chosen_duration_months",
-      )
+      .select(FIN_COLS)
       .eq("id", proposalId)
       .single();
     proposal = r.data;
     pErr = r.error as { message?: string } | null;
-    if (pErr && /column .* does not exist|chosen_plan_type|chosen_duration_months/i.test(pErr.message ?? "")) {
+    if (pErr && /column .* does not exist|chosen_plan_type|chosen_duration_months|financier_/i.test(pErr.message ?? "")) {
       const r2 = await supabase
         .from("proposals")
         .select(
-          "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents",
+          "id, status, customer_id, lead_id, total_cash_cents, monthly_renting_min_cents, monthly_rental_cents, chosen_plan_type, chosen_duration_months",
         )
         .eq("id", proposalId)
         .single();
       proposal = r2.data
-        ? { ...(r2.data as object), chosen_plan_type: null, chosen_duration_months: null }
+        ? {
+            ...(r2.data as object),
+            financier_id: null,
+            financier_payment_cents: null,
+            financier_term_months: null,
+            financier_coefficient: null,
+            financier_residual_cents: null,
+            financier_reserve_cents: null,
+          }
         : null;
       pErr = r2.error as { message?: string } | null;
     }
@@ -234,6 +244,12 @@ export async function createContractFromProposal(proposalId: string) {
     monthly_rental_cents: number | null;
     chosen_plan_type: "cash" | "rental" | "renting" | null;
     chosen_duration_months: number | null;
+    financier_id: string | null;
+    financier_payment_cents: number | null;
+    financier_term_months: number | null;
+    financier_coefficient: number | null;
+    financier_residual_cents: number | null;
+    financier_reserve_cents: number | null;
   };
 
   if (p.status !== "accepted") throw new Error("La propuesta debe estar aceptada");
@@ -356,6 +372,14 @@ export async function createContractFromProposal(proposalId: string) {
     clauses_snapshot: clausesSnapshot,
     pending_fields: pending,
     created_by: session.user_id,
+    // Snapshot de financiera (Fase 4). Si no es renting o no hay
+    // financier_id, todo queda en null.
+    financier_id: p.financier_id ?? null,
+    financier_payment_cents: p.financier_payment_cents ?? null,
+    financier_term_months: p.financier_term_months ?? null,
+    financier_coefficient: p.financier_coefficient ?? null,
+    financier_residual_cents: p.financier_residual_cents ?? null,
+    financier_reserve_cents: p.financier_reserve_cents ?? null,
   };
   let createdRow: { id: string } | null = null;
   {
@@ -365,8 +389,8 @@ export async function createContractFromProposal(proposalId: string) {
       .select("id")
       .single();
     const cErr = r.error as { message?: string } | null;
-    if (cErr && /column .* does not exist|has_provisional_data|customer_snapshot|clauses_snapshot|pending_fields|source_proposal_id/i.test(cErr.message ?? "")) {
-      // Retry con payload mínimo (sin snapshots)
+    if (cErr && /column .* does not exist|has_provisional_data|customer_snapshot|clauses_snapshot|pending_fields|source_proposal_id|financier_/i.test(cErr.message ?? "")) {
+      // Retry con payload mínimo (sin snapshots ni financier_*).
       const minimal: Record<string, unknown> = {
         company_id: session.company_id,
         customer_id: p.customer_id,

@@ -3,6 +3,7 @@ import { listCustomers } from "@/modules/customers/actions";
 import { listLeads, getLead } from "@/modules/leads/actions";
 import { ProposalCreateForm } from "@/modules/proposals/create-form";
 import { getDefaultProposalValidityDays } from "@/modules/config/proposals/actions";
+import { listFinanciers } from "@/modules/financiers/actions";
 
 export default async function NuevaPropuestaPage({
   searchParams,
@@ -17,11 +18,12 @@ export default async function NuevaPropuestaPage({
   const sp = await searchParams;
   const leadId = sp.lead_id ?? sp.lead;
   const directMode = sp.direct === "1";
-  const [products, customers, leads, defaultValidityDays] = await Promise.all([
+  const [products, customers, leads, defaultValidityDays, financiers] = await Promise.all([
     listProductsForProposal(),
     listCustomers(),
     listLeads().catch(() => []),
     getDefaultProposalValidityDays().catch(() => 15),
+    listFinanciers({ only_active: true }).catch(() => []),
   ]);
 
   let leadDisplay: string | null = null;
@@ -84,6 +86,21 @@ export default async function NuevaPropuestaPage({
           is_autonomo: l.is_autonomo ?? false,
         }))}
         products={products}
+        financiers={financiers.map((f) => ({
+          id: f.id,
+          name: f.name,
+          short_name: f.short_name,
+          kind: f.kind,
+          residual_pct: f.residual_pct,
+          reserve_pct: f.reserve_pct,
+          accepts_individual: f.accepts_individual,
+          accepts_autonomo: f.accepts_autonomo,
+          accepts_company: f.accepts_company,
+          coefficients: f.coefficients.map((c) => ({
+            term_months: c.term_months,
+            coefficient: c.coefficient,
+          })),
+        }))}
         defaultCustomerId={sp.customer_id}
         defaultLeadId={leadId}
         directMode={directMode}

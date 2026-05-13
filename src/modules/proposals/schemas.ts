@@ -74,6 +74,13 @@ export const proposalCreateSchema = z
      * contrato. Caso "cliente acepta de palabra sin propuesta formal".
      */
     auto_accept: z.coerce.boolean().default(false),
+    // Datos de financiera (Fase 4 — solo aplicables cuando plan = renting).
+    financier_id: z.string().uuid().optional().nullable(),
+    financier_payment_cents: z.coerce.number().int().min(0).optional().nullable(),
+    financier_term_months: z.coerce.number().int().min(1).optional().nullable(),
+    financier_coefficient: z.coerce.number().positive().optional().nullable(),
+    financier_residual_cents: z.coerce.number().int().min(0).optional().nullable(),
+    financier_reserve_cents: z.coerce.number().int().min(0).optional().nullable(),
   })
   .refine((v) => Boolean(v.customer_id) !== Boolean(v.lead_id), {
     message: "La propuesta debe estar asociada a un cliente o a un lead, no ambos",

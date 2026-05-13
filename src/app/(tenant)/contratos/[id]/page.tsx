@@ -18,6 +18,7 @@ import { ContractStatusActions } from "@/modules/contracts/status-actions";
 import { CreateInstallationButton } from "@/modules/contracts/create-installation-button";
 import { QuickCollectButton } from "@/modules/contracts/quick-collect-button";
 import { InvoiceFromContractButton } from "@/modules/invoices/invoice-from-contract-button";
+import { InvoiceToFinancierButton } from "@/modules/invoices/invoice-to-financier-button";
 import { ContractClausesEditor } from "@/modules/contracts/clauses-editor";
 import { ContractNotesEditor } from "@/modules/contracts/notes-editor";
 import { ReassignContractButton } from "@/modules/contracts/reassign-button";
@@ -84,6 +85,27 @@ export default async function ContractDetailPage({
     listContractSignatures(id),
     getFiscalSettings().catch(() => null),
   ]);
+  // Cargar nombre de la financiera (si aplica) para el botón "Facturar a financiera".
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contractAny = contract as any;
+  let financierLabel: string | null = null;
+  if (contractAny.financier_id) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sbAdmin = (await createClient()) as any;
+      const { data: f } = await sbAdmin
+        .from("financiers")
+        .select("name, short_name")
+        .eq("id", contractAny.financier_id)
+        .maybeSingle();
+      financierLabel =
+        (f as { short_name?: string; name?: string } | null)?.short_name ||
+        (f as { name?: string } | null)?.name ||
+        "Financiera";
+    } catch {
+      /* sin nombre */
+    }
+  }
   const installers = team;
   const canEditClauses =
     session.is_superadmin ||
@@ -238,6 +260,18 @@ export default async function ContractDetailPage({
           {(contract.status === "signed" || contract.status === "active" || contract.status === "completed") && (
             <InvoiceFromContractButton contractId={contract.id} />
           )}
+          {/* Factura a financiera — solo si contrato renting/financiación
+              con financier_id asignado y capital empresa configurado. */}
+          {financierLabel &&
+            contractAny.financier_payment_cents &&
+            (contract.status === "signed" ||
+              contract.status === "active" ||
+              contract.status === "completed") && (
+              <InvoiceToFinancierButton
+                contractId={contract.id}
+                financierName={financierLabel}
+              />
+            )}
           {(contract.status === "signed" || contract.status === "active" || contract.status === "completed") && (
             <SendByEmailButton documentId={contract.id} kind="contract" short />
           )}
