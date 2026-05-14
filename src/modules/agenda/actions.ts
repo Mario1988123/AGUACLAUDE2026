@@ -158,6 +158,7 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
     ...virtuals.filter((v) => !existingKey.has(`${v.subject_type}:${v.subject_id}`)),
   ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
+  await enrichTitlesFromSubjects(merged);
   return await recomputeOutsideHoursForList(merged, session.company_id);
 }
 
@@ -233,7 +234,97 @@ export async function listAgenda(
     ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
 
+  await enrichTitlesFromSubjects(merged);
   return await recomputeOutsideHoursForList(merged, session.company_id);
+}
+
+/** Reescribe el title de los eventos cuyo subject_type sea installation
+ *  o maintenance para incluir el nombre del cliente. No depende de lo
+ *  guardado en agenda_events.title — siempre reconstruye desde la
+ *  installation/maintenance + customer actuales. Así eventos antiguos
+ *  con título "Instalación · I-2026-0007" pasan a mostrar también el
+ *  cliente sin necesidad de backfill. */
+async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
+  if (events.length === 0) return;
+  const installationIds = new Set<string>();
+  const maintenanceIds = new Set<string>();
+  for (const e of events) {
+    if (!e.subject_id) continue;
+    if (e.subject_type === "installation") installationIds.add(e.subject_id);
+    else if (e.subject_type === "maintenance") maintenanceIds.add(e.subject_id);
+  }
+  if (installationIds.size === 0 && maintenanceIds.size === 0) return;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  type InstRow = { id: string; reference_code: string | null; customer_id: string | null };
+  type MaintRow = { id: string; customer_id: string | null };
+
+  const [instRes, maintRes] = await Promise.all([
+    installationIds.size > 0
+      ? supabase
+          .from("installations")
+          .select("id, reference_code, customer_id")
+          .in("id", Array.from(installationIds))
+      : Promise.resolve({ data: [] as InstRow[] }),
+    maintenanceIds.size > 0
+      ? supabase
+          .from("maintenance_jobs")
+          .select("id, customer_id")
+          .in("id", Array.from(maintenanceIds))
+      : Promise.resolve({ data: [] as MaintRow[] }),
+  ]);
+  const insts = (instRes.data ?? []) as InstRow[];
+  const maints = (maintRes.data ?? []) as MaintRow[];
+
+  const custIds = new Set<string>();
+  for (const i of insts) if (i.customer_id) custIds.add(i.customer_id);
+  for (const m of maints) if (m.customer_id) custIds.add(m.customer_id);
+
+  const nameMap = new Map<string, string>();
+  if (custIds.size > 0) {
+    const { data: cs } = await supabase
+      .from("customers")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .in("id", Array.from(custIds));
+    for (const c of (cs ?? []) as Array<{
+      id: string;
+      party_kind: "individual" | "company";
+      legal_name: string | null;
+      trade_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>) {
+      nameMap.set(
+        c.id,
+        c.party_kind === "company"
+          ? c.trade_name || c.legal_name || "Cliente"
+          : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente",
+      );
+    }
+  }
+
+  const instById = new Map(insts.map((i) => [i.id, i]));
+  const maintById = new Map(maints.map((m) => [m.id, m]));
+
+  for (const e of events) {
+    if (!e.subject_id) continue;
+    if (e.subject_type === "installation") {
+      const i = instById.get(e.subject_id);
+      if (!i) continue;
+      const cust = i.customer_id ? nameMap.get(i.customer_id) : null;
+      const ref = i.reference_code;
+      if (ref && cust) e.title = `Instalación · ${ref} · ${cust}`;
+      else if (ref) e.title = `Instalación · ${ref}`;
+      else if (cust) e.title = `Instalación · ${cust}`;
+    } else if (e.subject_type === "maintenance") {
+      const m = maintById.get(e.subject_id);
+      if (!m) continue;
+      const cust = m.customer_id ? nameMap.get(m.customer_id) : null;
+      if (cust) e.title = `Mantenimiento · ${cust}`;
+    }
+  }
 }
 
 /**
