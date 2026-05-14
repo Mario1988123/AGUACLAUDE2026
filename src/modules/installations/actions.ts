@@ -598,7 +598,8 @@ export async function updateInstallationAction(input: unknown) {
   if (parsed.preferred_time_slot !== undefined)
     update.preferred_time_slot = parsed.preferred_time_slot || null;
   if (Object.keys(update).length === 0) return;
-  if (update.scheduled_at && update.installer_user_id) update.status = "scheduled";
+  // Pasar a scheduled si hay fecha. El instalador puede asignarse luego.
+  if (update.scheduled_at) update.status = "scheduled";
 
   const { error } = await admin.from("installations").update(update).eq("id", parsed.id);
   if (error) {
@@ -606,10 +607,12 @@ export async function updateInstallationAction(input: unknown) {
     throw new Error(`No se pudo actualizar: ${error.message}`);
   }
 
-  // Si pasó a estado scheduled (fecha + instalador), comprobar stock y
-  // notificar a admin si falta material para esa instalación.
+  // Si pasó a scheduled, comprobar stock + crear/actualizar evento agenda.
   if (update.status === "scheduled") {
     await checkStockAndNotifyIfShort(parsed.id);
+    await upsertAgendaEventForInstallation(parsed.id).catch((e) =>
+      console.error("[updateInstallation] agenda upsert failed:", e),
+    );
   }
 
   revalidatePath(`/instalaciones/${parsed.id}`);
@@ -633,6 +636,73 @@ async function checkStockAndNotifyIfShort(installationId: string): Promise<void>
     await checkStockAndNotifyIfShortInner(installationId);
   } catch {
     /* no-op */
+  }
+}
+
+/** Crea o actualiza el evento de agenda asociado a la instalación.
+ *  Se llama al pasar la instalación a `scheduled` (cuando admin/nivel 2
+ *  agenda). NO se llama al firmar el contrato — la firma deja la
+ *  instalación unscheduled y sin evento en agenda. */
+async function upsertAgendaEventForInstallation(
+  installationId: string,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: inst } = await admin
+    .from("installations")
+    .select(
+      "id, company_id, reference_code, scheduled_at, installer_user_id, created_by",
+    )
+    .eq("id", installationId)
+    .maybeSingle();
+  const i = inst as
+    | {
+        id: string;
+        company_id: string;
+        reference_code: string | null;
+        scheduled_at: string | null;
+        installer_user_id: string | null;
+        created_by: string | null;
+      }
+    | null;
+  if (!i || !i.scheduled_at) return;
+  const startsAt = new Date(i.scheduled_at).toISOString();
+  const endsAt = new Date(
+    new Date(i.scheduled_at).getTime() + 2 * 60 * 60 * 1000,
+  ).toISOString();
+  const title = `Instalación · ${i.reference_code ?? installationId.slice(0, 8)}`;
+
+  const { data: existing } = await admin
+    .from("agenda_events")
+    .select("id")
+    .eq("subject_type", "installation")
+    .eq("subject_id", installationId)
+    .maybeSingle();
+
+  if (existing) {
+    await admin
+      .from("agenda_events")
+      .update({
+        starts_at: startsAt,
+        ends_at: endsAt,
+        title,
+        status: "scheduled",
+        assigned_user_id: i.installer_user_id ?? null,
+      })
+      .eq("id", (existing as { id: string }).id);
+  } else {
+    await admin.from("agenda_events").insert({
+      company_id: i.company_id,
+      kind: "installation",
+      status: "scheduled",
+      title,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      assigned_user_id: i.installer_user_id ?? null,
+      created_by: i.created_by,
+      subject_type: "installation",
+      subject_id: installationId,
+    });
   }
 }
 

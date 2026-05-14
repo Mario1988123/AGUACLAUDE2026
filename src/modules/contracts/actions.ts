@@ -806,47 +806,17 @@ export async function markContractSigned(id: string) {
         .single();
       const cFull = contractFull as { customer_id: string | null } | null;
 
-      // Resolver fecha sugerida para la instalación. Si el cliente
-      // dejó preferencias en el contrato (preferred_install_dates), las
-      // usamos. Si no, agendamos a 7 días desde hoy a las 10:00.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: contractPrefs } = await admin
-        .from("contracts")
-        .select(
-          "preferred_install_dates, preferred_install_time_slot, customer_id, assigned_user_id",
-        )
-        .eq("id", id)
-        .maybeSingle();
-      const prefs = contractPrefs as
-        | {
-            preferred_install_dates: string[] | null;
-            preferred_install_time_slot: string | null;
-            customer_id: string | null;
-            assigned_user_id: string | null;
-          }
-        | null;
-
-      let scheduledAt: string | null = null;
-      if (prefs?.preferred_install_dates && prefs.preferred_install_dates[0]) {
-        const dateStr = prefs.preferred_install_dates[0];
-        const slot = prefs.preferred_install_time_slot;
-        const hour = slot === "afternoon" ? 16 : slot === "morning" ? 10 : 10;
-        scheduledAt = new Date(`${dateStr}T${String(hour).padStart(2, "0")}:00:00`).toISOString();
-      } else {
-        // Fallback: 7 días desde hoy a las 10:00
-        const d = new Date();
-        d.setDate(d.getDate() + 7);
-        d.setHours(10, 0, 0, 0);
-        scheduledAt = d.toISOString();
-      }
-
+      // Crear la instalación SIN agendar. La firma del contrato NO
+      // programa fecha — eso lo hace nivel 1/2 después, usando las
+      // preferencias del cliente (preferred_install_dates/slot) que ya
+      // quedaron guardadas en el contrato como sugerencia.
       const { data: instCreated } = await admin
         .from("installations")
         .insert({
           company_id: session.company_id!,
           kind: "normal",
-          status: "scheduled",
-          scheduled_at: scheduledAt,
+          status: "unscheduled",
+          scheduled_at: null,
           contract_id: id,
           customer_id: cFull?.customer_id ?? null,
           reference_code: referenceCode,
@@ -880,27 +850,8 @@ export async function markContractSigned(id: string) {
           );
         }
 
-        // Crear evento en agenda. Defensa por si la tabla no está
-        // disponible (PGRST205) o el enum agenda_event_kind no tiene el
-        // valor — fail-soft sin romper la firma.
-        try {
-          await admin.from("agenda_events").insert({
-            company_id: session.company_id!,
-            kind: "installation",
-            status: "scheduled",
-            title: `Instalación · ${referenceCode}`,
-            starts_at: scheduledAt,
-            ends_at: new Date(
-              new Date(scheduledAt).getTime() + 2 * 60 * 60 * 1000,
-            ).toISOString(),
-            assigned_user_id: prefs?.assigned_user_id ?? null,
-            created_by: session.user_id,
-            subject_type: "installation",
-            subject_id: newInstId,
-          });
-        } catch (e) {
-          console.error("[markContractSigned] agenda_events insert failed:", e);
-        }
+        // NO se inserta evento en agenda al firmar. La agenda se rellena
+        // cuando nivel 1/2 agende la instalación con fecha concreta.
 
         installationCreated = true;
       }
