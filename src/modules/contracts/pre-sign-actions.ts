@@ -15,6 +15,9 @@ export interface PreSignReadiness {
   customer: {
     id: string;
     party_kind: "individual" | "company";
+    /** Si party_kind=company pero es autónomo, fiscalmente es persona
+     *  física → su tax_id es DNI/NIE, no CIF. */
+    is_autonomo: boolean;
     legal_name: string | null;
     trade_name: string | null;
     first_name: string | null;
@@ -90,14 +93,34 @@ export async function getContractPreSignReadiness(
   const planType = cr?.plan_type ?? null;
   if (!customerId) return null;
 
-  const { data: customer } = await supabase
+  // SELECT con is_autonomo. Fallback defensivo si el cache no lo ve.
+  let customerRes = await supabase
     .from("customers")
     .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_secondary, tax_id, notes",
+      "id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_secondary, tax_id, notes",
     )
     .eq("id", customerId)
     .single();
+  if (
+    customerRes.error &&
+    /is_autonomo|schema cache|Could not find/i.test(
+      customerRes.error.message ?? "",
+    )
+  ) {
+    customerRes = await supabase
+      .from("customers")
+      .select(
+        "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_secondary, tax_id, notes",
+      )
+      .eq("id", customerId)
+      .single();
+  }
+  const customer = customerRes.data as
+    | (PreSignReadiness["customer"] & { is_autonomo?: boolean | null })
+    | null;
   if (!customer) return null;
+  // Normalizar is_autonomo a boolean (puede venir undefined si cache cae).
+  customer.is_autonomo = Boolean(customer.is_autonomo);
 
   // Admin client para leer addresses: la RLS por scope puede ocultar
   // direcciones recién creadas si el usuario no tiene scope full sobre
@@ -160,12 +183,16 @@ export async function getContractPreSignReadiness(
   // de control; CIF para empresa comprueba formato laxo (no algoritmo
   // estricto, decisión usuario). Antes solo se validaba el regex y se
   // dejaba pasar DNIs con letra incorrecta.
+  // Autónomo = persona física: valida DNI/NIE. Empresa pura: CIF.
+  // Particular: DNI/NIE.
   let taxIdFormatValid = false;
   if (taxId) {
-    if (c.party_kind === "company") {
-      taxIdFormatValid = validateCIF(taxId);
-    } else {
+    const acceptsDniOrNie =
+      c.party_kind === "individual" || c.is_autonomo === true;
+    if (acceptsDniOrNie) {
       taxIdFormatValid = validateDNIorNIE(taxId).valid;
+    } else {
+      taxIdFormatValid = validateCIF(taxId);
     }
   }
 

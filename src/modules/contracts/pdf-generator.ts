@@ -42,7 +42,8 @@ const PLAN_TITLE = {
 const PLAN_SUBTITLE = {
   cash: "Compra al contado de los equipos descritos",
   rental: "Cesión en alquiler con cuota mensual",
-  renting: "Anexo a contrato de renting con financiera",
+  // La financiera la asigna admin tras firma (no aparece en el contrato).
+  renting: "Renting de los equipos descritos con cuotas mensuales",
 } as const;
 
 const METHOD_LABEL: Record<string, string> = {
@@ -1001,35 +1002,68 @@ function addressOneLine(a: {
   return parts.filter(Boolean).join(", ");
 }
 
-async function fetchSignatureImage(
-  pdf: PDFDocument,
-  storagePath: string | null,
-): Promise<PDFImage | null> {
-  if (!storagePath) return null;
+/** Decodifica base64 (con o sin prefijo data:) y devuelve los bytes. */
+function decodeBase64(input: string): Uint8Array | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
-    // El bucket de firmas es 'contract-signatures' o similar — intentamos varios
-    const buckets = ["contract-signatures", "signatures", "documents"];
-    for (const bucket of buckets) {
-      const { data, error } = await admin.storage.from(bucket).download(storagePath);
-      if (error || !data) continue;
-      const ab = await (data as Blob).arrayBuffer();
+    const m = input.match(/^data:[^;]+;base64,(.+)$/);
+    const b64 = m ? m[1] : input;
+    if (!b64) return null;
+    const buf = Buffer.from(b64, "base64");
+    return new Uint8Array(buf);
+  } catch {
+    return null;
+  }
+}
+
+/** Intenta embeber una firma. Soporta tanto data URL (base64 inline) como
+ *  storage path. Se prioriza data_url porque es lo que actualmente guarda
+ *  saveContractSignatureAction. */
+async function embedSignatureImage(
+  pdf: PDFDocument,
+  opts: { dataUrl: string | null; storagePath: string | null },
+): Promise<PDFImage | null> {
+  // 1) Data URL (lo más rápido — sin red ni storage)
+  if (opts.dataUrl) {
+    const bytes = decodeBase64(opts.dataUrl);
+    if (bytes && bytes.length > 0) {
       try {
-        return await pdf.embedPng(new Uint8Array(ab));
+        return await pdf.embedPng(bytes);
       } catch {
         try {
-          return await pdf.embedJpg(new Uint8Array(ab));
+          return await pdf.embedJpg(bytes);
         } catch {
-          continue;
+          /* fallthrough a storage */
         }
       }
     }
-    return null;
-  } catch (e) {
-    console.error("[fetchSignatureImage] failed:", e);
-    return null;
   }
+  // 2) Storage path (legacy)
+  if (opts.storagePath) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const buckets = ["contract-signatures", "signatures", "documents"];
+      for (const bucket of buckets) {
+        const { data, error } = await admin.storage
+          .from(bucket)
+          .download(opts.storagePath);
+        if (error || !data) continue;
+        const ab = await (data as Blob).arrayBuffer();
+        try {
+          return await pdf.embedPng(new Uint8Array(ab));
+        } catch {
+          try {
+            return await pdf.embedJpg(new Uint8Array(ab));
+          } catch {
+            continue;
+          }
+        }
+      }
+    } catch (e) {
+      console.error("[embedSignatureImage] storage failed:", e);
+    }
+  }
+  return null;
 }
 
 // ============================================================================
@@ -1144,20 +1178,38 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
     }));
   }
 
-  // Firmas (descarga PNG/JPG → embed PDFImage)
-  const { data: sigsRaw } = await supabase
-    .from("contract_signatures")
-    .select("signer_role, signer_name, signer_tax_id, signature_image_path, signed_at")
-    .eq("contract_id", contractId)
-    .order("signed_at", { ascending: false });
+  // Firmas — leemos signature_data_url (lo que actualmente guarda
+  // saveContractSignatureAction) y signature_image_path como fallback
+  // para firmas antiguas que fueran a storage. SELECT con fallback
+  // defensivo por si data_url no está aún en el cache.
   type SigRow = {
     signer_role: "customer" | "representative";
     signer_name: string;
     signer_tax_id: string | null;
-    signature_image_path: string;
+    signature_image_path: string | null;
+    signature_data_url: string | null;
     signed_at: string;
   };
-  const sigs = (sigsRaw ?? []) as SigRow[];
+  let sigsRes = await supabase
+    .from("contract_signatures")
+    .select(
+      "signer_role, signer_name, signer_tax_id, signature_image_path, signature_data_url, signed_at",
+    )
+    .eq("contract_id", contractId)
+    .order("signed_at", { ascending: false });
+  if (
+    sigsRes.error &&
+    /signature_data_url|schema cache|Could not find/i.test(
+      sigsRes.error.message ?? "",
+    )
+  ) {
+    sigsRes = await supabase
+      .from("contract_signatures")
+      .select("signer_role, signer_name, signer_tax_id, signature_image_path, signed_at")
+      .eq("contract_id", contractId)
+      .order("signed_at", { ascending: false });
+  }
+  const sigs = (sigsRes.data ?? []) as SigRow[];
   const repSig = sigs.find((s) => s.signer_role === "representative");
   const custSig = sigs.find((s) => s.signer_role === "customer");
 
@@ -1165,10 +1217,16 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
   const today = new Date();
 
   const repSigImage = repSig
-    ? await fetchSignatureImage(doc.pdf, repSig.signature_image_path)
+    ? await embedSignatureImage(doc.pdf, {
+        dataUrl: repSig.signature_data_url ?? null,
+        storagePath: repSig.signature_image_path ?? null,
+      })
     : null;
   const custSigImage = custSig
-    ? await fetchSignatureImage(doc.pdf, custSig.signature_image_path)
+    ? await embedSignatureImage(doc.pdf, {
+        dataUrl: custSig.signature_data_url ?? null,
+        storagePath: custSig.signature_image_path ?? null,
+      })
     : null;
 
   // ---------- HEADER ----------

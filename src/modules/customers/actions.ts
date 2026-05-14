@@ -370,23 +370,47 @@ export async function updateCustomerAction(
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
 
-  // Validación de formato (DNI/CIF, teléfonos, email). Cargamos el
-  // party_kind del cliente para validar tax_id según corresponda.
+  // Validación de formato (DNI/CIF, teléfonos, email). Cargamos
+  // party_kind + is_autonomo del cliente para validar tax_id según
+  // corresponda (autónomo = DNI/NIE, no CIF).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminPre = createAdminClient() as any;
   let partyKind: "individual" | "company" | undefined;
+  let isAutonomo = false;
   try {
-    const { data: cur } = await adminPre
+    let curRes = await adminPre
       .from("customers")
-      .select("party_kind")
+      .select("party_kind, is_autonomo")
       .eq("id", customerId)
       .maybeSingle();
-    partyKind = (cur as { party_kind?: "individual" | "company" } | null)?.party_kind;
+    if (
+      curRes.error &&
+      /is_autonomo|schema cache|Could not find/i.test(curRes.error.message ?? "")
+    ) {
+      curRes = await adminPre
+        .from("customers")
+        .select("party_kind")
+        .eq("id", customerId)
+        .maybeSingle();
+    }
+    const cur = curRes.data as
+      | { party_kind?: "individual" | "company"; is_autonomo?: boolean | null }
+      | null;
+    partyKind = cur?.party_kind;
+    isAutonomo = Boolean(cur?.is_autonomo);
   } catch {
     /* sin party_kind, validador acepta cualquiera de los formatos */
   }
+  // Si el patch trae is_autonomo, lo usamos como autoridad (caso edición
+  // donde se cambia el flag al mismo tiempo que el DNI).
+  if (typeof patch.is_autonomo === "boolean") {
+    isAutonomo = patch.is_autonomo;
+  }
   // Convertimos null → string vacío para que el schema valide bien
-  const validatable: Record<string, unknown> = { party_kind: partyKind };
+  const validatable: Record<string, unknown> = {
+    party_kind: partyKind,
+    is_autonomo: isAutonomo,
+  };
   for (const [k, v] of Object.entries(patch)) {
     validatable[k] = v ?? "";
   }

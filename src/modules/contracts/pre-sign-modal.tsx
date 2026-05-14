@@ -244,10 +244,18 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
               <div className="space-y-3">
                 <SectionStatus
                   ok={readiness.checks.has_tax_id && readiness.checks.tax_id_valid_format}
-                  okLabel={`✓ ${readiness.customer.party_kind === "company" ? "CIF" : "DNI/NIE"} válido: ${readiness.customer.tax_id}`}
+                  okLabel={`✓ ${
+                    readiness.customer.party_kind === "company" && !readiness.customer.is_autonomo
+                      ? "CIF"
+                      : "DNI/NIE"
+                  } válido: ${readiness.customer.tax_id}`}
                   failLabel={
                     readiness.customer.tax_id
-                      ? `${readiness.customer.party_kind === "company" ? "CIF" : "DNI/NIE"} con formato inválido — corrígelo abajo`
+                      ? `${
+                          readiness.customer.party_kind === "company" && !readiness.customer.is_autonomo
+                            ? "CIF"
+                            : "DNI/NIE"
+                        } con formato inválido — corrígelo abajo`
                       : "Falta DNI/CIF — completa los datos abajo"
                   }
                 />
@@ -366,7 +374,11 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
                     ok={readiness.checks.has_tax_id && readiness.checks.tax_id_valid_format}
                     value={
                       readiness.customer.tax_id
-                        ? `${readiness.customer.party_kind === "company" ? "CIF" : "DNI"} ${readiness.customer.tax_id}`
+                        ? `${
+                            readiness.customer.party_kind === "company" && !readiness.customer.is_autonomo
+                              ? "CIF"
+                              : "DNI"
+                          } ${readiness.customer.tax_id}`
                         : "Falta"
                     }
                   />
@@ -780,7 +792,10 @@ function CustomerEditForm({
   function validateLocal(): string | null {
     const t = form.tax_id?.trim().toUpperCase() ?? "";
     if (t) {
-      if (customer.party_kind === "company") {
+      // Autónomo = persona física: DNI/NIE. Empresa pura: CIF. Particular: DNI/NIE.
+      const acceptsDniOrNie =
+        customer.party_kind === "individual" || customer.is_autonomo === true;
+      if (!acceptsDniOrNie) {
         if (!validateCIF(t)) return "CIF con formato inválido";
       } else {
         const r = validateDNIorNIE(t);
@@ -820,9 +835,12 @@ function CustomerEditForm({
     });
   }
 
+  // Autónomo se trata como persona física: nombre+apellidos+DNI (no
+  // razón social, no CIF).
+  const isAutonomo = customer.party_kind === "company" && customer.is_autonomo === true;
   return (
     <div className="space-y-3">
-      {customer.party_kind === "company" ? (
+      {customer.party_kind === "company" && !isAutonomo ? (
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs">Razón social</Label>
