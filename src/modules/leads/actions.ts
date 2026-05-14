@@ -273,17 +273,22 @@ export async function listLeads(filters?: {
       addrMap.get(r.id) ??
       { street: null, city: null, province: null, lat: null, lng: null };
     const isCompany = r.party_kind === "company";
+    const isAutonomo = isCompany && (r.is_autonomo ?? false);
+    const personName = `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim();
     return {
       id: r.id,
       party_kind: r.party_kind,
       is_autonomo: r.is_autonomo ?? false,
-      display_name: isCompany
-        ? r.trade_name || r.legal_name || "Sin nombre"
-        : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Sin nombre",
+      // Autónomo = persona física: muestra su nombre, no la "razón social".
+      display_name: isAutonomo
+        ? personName || r.legal_name || "Sin nombre"
+        : isCompany
+          ? r.trade_name || r.legal_name || "Sin nombre"
+          : personName || "Sin nombre",
       legal_name: r.legal_name,
-      contact_name: isCompany
-        ? `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || null
-        : null,
+      // En empresa pura, mostrar persona de contacto bajo el nombre.
+      // En autónomo el nombre ya ES la persona, no hay contacto extra.
+      contact_name: isCompany && !isAutonomo ? personName || null : null,
       email: r.email,
       phone_primary: r.phone_primary,
       status: r.status,

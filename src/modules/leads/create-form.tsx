@@ -191,11 +191,12 @@ export function LeadCreateForm() {
   }
 
   function validateStep1(): boolean {
-    if (partyKind === "company" && !legalName.trim()) {
+    // Empresa pura → razón social. Autónomo o particular → nombre.
+    if (partyKind === "company" && !isAutonomo && !legalName.trim()) {
       notify.warning("Razón social obligatoria");
       return false;
     }
-    if (partyKind === "individual" && !firstName.trim()) {
+    if ((partyKind === "individual" || (partyKind === "company" && isAutonomo)) && !firstName.trim()) {
       notify.warning("Nombre obligatorio");
       return false;
     }
@@ -249,12 +250,16 @@ export function LeadCreateForm() {
     }
     const fd = new FormData();
     fd.set("party_kind", partyKind);
+    const autonomo = partyKind === "company" && isAutonomo;
+    fd.set("is_autonomo", autonomo ? "true" : "false");
+    // Autónomo = persona física: no tiene razón social, su "nombre legal"
+    // a efectos fiscales es "first last". Guardamos eso para que el
+    // resto del sistema lo lea como display_name si hace falta.
     fd.set(
-      "is_autonomo",
-      partyKind === "company" && isAutonomo ? "true" : "false",
+      "legal_name",
+      autonomo ? `${firstName} ${lastName}`.trim() : legalName,
     );
-    fd.set("legal_name", legalName);
-    fd.set("trade_name", tradeName);
+    fd.set("trade_name", autonomo ? "" : tradeName);
     fd.set("first_name", firstName);
     fd.set("last_name", lastName);
     fd.set("tax_id", taxId);
@@ -365,46 +370,60 @@ export function LeadCreateForm() {
                   onChange={(e) => setIsAutonomo(e.target.checked)}
                   className="h-5 w-5 rounded"
                 />
-                <div className="flex-1">
-                  <div className="font-bold">Autónomo</div>
-                  <div className="text-xs text-muted-foreground">
-                    Persona física con actividad económica. Al convertir a
-                    cliente la facturación irá como empresa (base + IVA) y
-                    se filtrarán las financieras que admitan autónomos.
+                <div className="flex-1 font-bold">Autónomo</div>
+              </label>
+              {isAutonomo ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Nombre *</Label>
+                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellidos</Label>
+                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>DNI / NIE</Label>
+                    <TaxIdInput kind="dni" value={taxId} onChange={setTaxId} placeholder="12345678A" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tel. empresa</Label>
+                    <PhoneInput value={phoneCompany} onChange={setPhoneCompany} />
                   </div>
                 </div>
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Razón social *</Label>
-                  <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Razón social *</Label>
+                    <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre comercial</Label>
+                    <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CIF</Label>
+                    <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} placeholder="B12345678" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tel. empresa</Label>
+                    <PhoneInput value={phoneCompany} onChange={setPhoneCompany} />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Persona de contacto
+                    </Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre</Label>
+                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellidos</Label>
+                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Nombre comercial</Label>
-                  <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>CIF</Label>
-                  <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} placeholder="B12345678" />
-                </div>
-              <div className="space-y-2">
-                <Label>Tel. empresa</Label>
-                <PhoneInput value={phoneCompany} onChange={setPhoneCompany} />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Persona de contacto
-                </Label>
-              </div>
-              <div className="space-y-2">
-                <Label>Nombre</Label>
-                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label>Apellidos</Label>
-                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

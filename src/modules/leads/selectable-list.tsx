@@ -12,6 +12,9 @@ import {
   XCircle,
   X,
   FileText,
+  User,
+  Briefcase,
+  IdCard,
 } from "lucide-react";
 import { LeadBulkToolbar } from "./bulk-toolbar";
 import { STATUS_LABEL, ORIGIN_LABEL } from "./schemas";
@@ -244,6 +247,27 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                         )}`
                       : null;
                 const isCompany = l.party_kind === "company";
+                const isAutonomo = isCompany && Boolean(l.is_autonomo);
+                const kindLabel = isAutonomo
+                  ? "Autónomo"
+                  : isCompany
+                    ? "Empresa"
+                    : "Particular";
+                const kindIcon = (
+                  <span
+                    title={kindLabel}
+                    className="inline-flex items-center"
+                    aria-label={kindLabel}
+                  >
+                    {isAutonomo ? (
+                      <IdCard className="h-4 w-4 shrink-0 text-amber-600" />
+                    ) : isCompany ? (
+                      <Briefcase className="h-4 w-4 shrink-0 text-indigo-600" />
+                    ) : (
+                      <User className="h-4 w-4 shrink-0 text-sky-600" />
+                    )}
+                  </span>
+                );
                 return (
                   <tr key={l.id} className={rowBg(l.status)}>
                     {canBulkReassign && (
@@ -261,6 +285,7 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                         social/comercial en negrita + persona contacto debajo */}
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        {kindIcon}
                         <Link
                           href={`/leads/${l.id}` as never}
                           className="font-bold text-primary hover:underline"

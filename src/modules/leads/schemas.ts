@@ -95,17 +95,27 @@ export const leadCreateSchema = z
   })
   .refine(
     (v) => {
-      if (v.party_kind === "company") return Boolean(v.legal_name?.trim());
+      // Autónomo = persona física con actividad económica → su "nombre" es first_name.
+      // Empresa pura → razón social.
+      // Particular → first_name.
+      if (v.party_kind === "company" && !v.is_autonomo) {
+        return Boolean(v.legal_name?.trim());
+      }
       return Boolean(v.first_name?.trim());
     },
-    { message: "Nombre obligatorio según tipo (razón social o nombre)", path: ["legal_name"] },
+    {
+      message: "Nombre obligatorio (razón social para empresa, nombre para particular/autónomo)",
+      path: ["legal_name"],
+    },
   )
-  // Tax ID válido según tipo (si está informado)
+  // Tax ID válido según tipo (si está informado). Autónomo usa DNI/NIE,
+  // no CIF — fiscalmente es persona física.
   .refine(
     (v) => {
       const t = v.tax_id?.trim();
       if (!t) return true;
-      return v.party_kind === "company" ? validateCIF(t) : validateDNIorNIE(t).valid;
+      const acceptsDniOrNie = v.party_kind === "individual" || v.is_autonomo;
+      return acceptsDniOrNie ? validateDNIorNIE(t).valid : validateCIF(t);
     },
     {
       message: "Documento (DNI/NIE/CIF) con formato inválido",

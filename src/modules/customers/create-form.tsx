@@ -41,11 +41,12 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
   const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });
 
   function validateStep1(): boolean {
-    if (partyKind === "company" && !legalName.trim()) {
+    // Empresa pura → razón social. Autónomo o particular → nombre.
+    if (partyKind === "company" && !isAutonomo && !legalName.trim()) {
       notify.warning("Razón social obligatoria");
       return false;
     }
-    if (partyKind === "individual" && !firstName.trim()) {
+    if ((partyKind === "individual" || (partyKind === "company" && isAutonomo)) && !firstName.trim()) {
       notify.warning("Nombre obligatorio");
       return false;
     }
@@ -75,12 +76,16 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
     }
     const fd = new FormData();
     fd.set("party_kind", partyKind);
+    const autonomo = partyKind === "company" && isAutonomo;
+    fd.set("is_autonomo", autonomo ? "true" : "false");
+    // Autónomo = persona física: no tiene razón social. Guardamos
+    // first + last como legal_name para que el resto del sistema lo
+    // lea como display_name si hace falta.
     fd.set(
-      "is_autonomo",
-      partyKind === "company" && isAutonomo ? "true" : "false",
+      "legal_name",
+      autonomo ? `${firstName} ${lastName}`.trim() : legalName,
     );
-    fd.set("legal_name", legalName);
-    fd.set("trade_name", tradeName);
+    fd.set("trade_name", autonomo ? "" : tradeName);
     fd.set("first_name", firstName);
     fd.set("last_name", lastName);
     fd.set("tax_id", taxId);
@@ -177,29 +182,39 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
                   onChange={(e) => setIsAutonomo(e.target.checked)}
                   className="h-5 w-5 rounded"
                 />
-                <div className="flex-1">
-                  <div className="font-bold">Autónomo</div>
-                  <div className="text-xs text-muted-foreground">
-                    Persona física con actividad económica. A efectos de
-                    precio se trata como empresa (base + IVA) y limita qué
-                    financieras pueden ofrecerse en renting.
+                <div className="flex-1 font-bold">Autónomo</div>
+              </label>
+              {isAutonomo ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Nombre *</Label>
+                    <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Apellidos</Label>
+                    <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>DNI / NIE *</Label>
+                    <TaxIdInput kind="dni" value={taxId} onChange={setTaxId} required placeholder="12345678A" />
                   </div>
                 </div>
-              </label>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Razón social *</Label>
-                  <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Razón social *</Label>
+                    <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nombre comercial</Label>
+                    <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>CIF *</Label>
+                    <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} required placeholder="B12345678" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Nombre comercial</Label>
-                  <Input value={tradeName} onChange={(e) => setTradeName(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>{isAutonomo ? "CIF / NIF *" : "CIF *"}</Label>
-                  <TaxIdInput kind="cif" value={taxId} onChange={setTaxId} required placeholder={isAutonomo ? "B/12345678 o 12345678A" : "B12345678"} />
-                </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">

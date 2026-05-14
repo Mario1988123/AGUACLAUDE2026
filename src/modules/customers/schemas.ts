@@ -26,17 +26,23 @@ export const customerCreateSchema = z
   })
   .refine(
     (v) => {
-      if (v.party_kind === "company") return Boolean(v.legal_name?.trim());
+      // Autónomo = persona física con actividad económica → no tiene
+      // razón social. Su "nombre" es first_name.
+      if (v.party_kind === "company" && !v.is_autonomo) {
+        return Boolean(v.legal_name?.trim());
+      }
       return Boolean(v.first_name?.trim());
     },
     { message: "Razón social o nombre obligatorio", path: ["legal_name"] },
   )
-  // Tax ID válido según tipo de cliente (si está informado).
+  // Tax ID válido según tipo de cliente (si está informado). Autónomo
+  // usa DNI/NIE, no CIF — fiscalmente es persona física.
   .refine(
     (v) => {
       const t = v.tax_id?.trim();
       if (!t) return true;
-      return v.party_kind === "company" ? validateCIF(t) : validateDNIorNIE(t).valid;
+      const acceptsDniOrNie = v.party_kind === "individual" || v.is_autonomo;
+      return acceptsDniOrNie ? validateDNIorNIE(t).valid : validateCIF(t);
     },
     {
       message:
@@ -76,8 +82,9 @@ export const customerUpdateSchema = z
     (v) => {
       const t = v.tax_id?.trim();
       if (!t) return true;
-      // Sin party_kind, intentamos detectar: si empieza por letra "no DNI" tratamos como CIF
       const kind = v.party_kind;
+      // Autónomo = persona física, valida como DNI/NIE.
+      if (kind === "company" && v.is_autonomo) return validateDNIorNIE(t).valid;
       if (kind === "company") return validateCIF(t);
       if (kind === "individual") return validateDNIorNIE(t).valid;
       // Sin pista, aceptamos si cumple cualquiera
