@@ -48,7 +48,7 @@ create unique index if not exists ux_monthly_objectives_scope
     period_year,
     period_month,
     scope_type,
-    coalesce(scope_department, ''),
+    coalesce(scope_department::text, ''),
     coalesce(scope_user_id::text, ''),
     metric_kind,
     coalesce(plan_type, '')
