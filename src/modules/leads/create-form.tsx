@@ -22,10 +22,9 @@ import { STREET_TYPE, STREET_TYPE_LABEL, type StreetType } from "@/modules/addre
 import { reverseGeocodeAction, forwardGeocodeAction } from "@/shared/lib/geocoding/actions";
 
 /**
- * Wizard 3 pasos en lugar de scroll vertical largo. Tablet-first.
- * Paso 1: Tipo + datos contacto + email/tlf (con dedupe live)
- * Paso 2: Origen + potencial + notas
- * Paso 3: Dirección opcional con auto-provincia desde CP
+ * Wizard 2 pasos. Tablet-first.
+ * Paso 1: Tipo + datos contacto + tlf/email + origen + potencial + notas (con dedupe live)
+ * Paso 2: Dirección con auto-provincia desde CP
  */
 export function LeadCreateForm() {
   const [step, setStep] = useState(1);
@@ -233,7 +232,7 @@ export function LeadCreateForm() {
 
   function next() {
     if (step === 1 && !validateStep1()) return;
-    setStep((s) => Math.min(3, s + 1));
+    setStep((s) => Math.min(2, s + 1));
   }
   function back() {
     setStep((s) => Math.max(1, s - 1));
@@ -245,7 +244,7 @@ export function LeadCreateForm() {
       return;
     }
     if (!validateStep3()) {
-      setStep(3);
+      setStep(2);
       return;
     }
     const fd = new FormData();
@@ -298,7 +297,7 @@ export function LeadCreateForm() {
       {/* Indicador pasos */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          {[1, 2, 3].map((n) => (
+          {[1, 2].map((n) => (
             <div key={n} className="flex items-center gap-2">
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${
@@ -311,13 +310,13 @@ export function LeadCreateForm() {
               >
                 {n < step ? <Check className="h-4 w-4" /> : n}
               </div>
-              {n < 3 && <div className={`h-0.5 w-8 ${n < step ? "bg-success" : "bg-muted"}`} />}
+              {n < 2 && <div className={`h-0.5 w-8 ${n < step ? "bg-success" : "bg-muted"}`} />}
             </div>
           ))}
         </div>
         <div className="text-sm text-muted-foreground">
-          Paso {step} de 3 ·{" "}
-          {step === 1 ? "Datos contacto" : step === 2 ? "Origen y notas" : "Dirección"}
+          Paso {step} de 2 ·{" "}
+          {step === 1 ? "Datos contacto y origen" : "Dirección"}
         </div>
       </div>
 
@@ -454,54 +453,52 @@ export function LeadCreateForm() {
           </div>
 
           <DedupeWarning matches={dedupeMatches} />
+
+          <div className="border-t pt-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Origen</Label>
+                <select
+                  value={origin}
+                  onChange={(e) => setOrigin(e.target.value)}
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                >
+                  {LEAD_ORIGIN.map((o) => (
+                    <option key={o} value={o}>
+                      {ORIGIN_LABEL[o]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Potencial</Label>
+                <select
+                  value={potential}
+                  onChange={(e) => setPotential(e.target.value)}
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                >
+                  {LEAD_POTENTIAL.map((p) => (
+                    <option key={p} value={p}>
+                      {p === "unknown" ? "Sin clasificar" : `Clase ${p}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              <Label>Notas</Label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full rounded-xl border border-input bg-background p-3 text-sm"
+              />
+            </div>
+          </div>
         </div>
       )}
 
       {step === 2 && (
-        <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Origen</Label>
-              <select
-                value={origin}
-                onChange={(e) => setOrigin(e.target.value)}
-                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
-              >
-                {LEAD_ORIGIN.map((o) => (
-                  <option key={o} value={o}>
-                    {ORIGIN_LABEL[o]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Potencial</Label>
-              <select
-                value={potential}
-                onChange={(e) => setPotential(e.target.value)}
-                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
-              >
-                {LEAD_POTENTIAL.map((p) => (
-                  <option key={p} value={p}>
-                    {p === "unknown" ? "Sin clasificar" : `Clase ${p}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Notas</Label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={5}
-              className="w-full rounded-xl border border-input bg-background p-3 text-sm"
-            />
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (
         <div className="space-y-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MapPin className="h-4 w-4 text-primary" />
@@ -640,7 +637,7 @@ export function LeadCreateForm() {
             <Link href="/leads">Cancelar</Link>
           </Button>
         )}
-        {step < 3 ? (
+        {step < 2 ? (
           <Button onClick={next} disabled={pending}>
             Siguiente <ChevronRight className="h-4 w-4" />
           </Button>

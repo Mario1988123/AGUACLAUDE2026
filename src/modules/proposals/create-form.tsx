@@ -10,7 +10,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { createProposalAction, updateProposalAction } from "./actions";
 import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
 import type { ProductForProposal } from "@/modules/products/actions";
-import { pickPrice, isBusinessParty } from "./pick-price";
+import { pickPrice } from "./pick-price";
 
 type PlanType = "cash" | "rental" | "renting";
 
@@ -22,24 +22,10 @@ interface PartyOption {
   is_autonomo?: boolean | null;
 }
 
-export interface FinancierOption {
-  id: string;
-  name: string;
-  short_name: string | null;
-  kind: "renting_strict" | "financing";
-  residual_pct: number | null;
-  reserve_pct: number | null;
-  accepts_individual: boolean;
-  accepts_autonomo: boolean;
-  accepts_company: boolean;
-  coefficients: Array<{ term_months: number; coefficient: number }>;
-}
-
 interface Props {
   customers: PartyOption[];
   leads?: PartyOption[];
   products: ProductForProposal[];
-  financiers?: FinancierOption[];
   defaultCustomerId?: string;
   defaultLeadId?: string;
   /**
@@ -136,7 +122,6 @@ export function ProposalCreateForm({
   customers,
   leads = [],
   products,
-  financiers = [],
   defaultCustomerId,
   defaultLeadId,
   directMode = false,
@@ -157,7 +142,6 @@ export function ProposalCreateForm({
     : leadIdEffective
       ? leads.find((l) => l.id === leadIdEffective) ?? null
       : null;
-  const destBusiness = isBusinessParty(destinatario);
   const [validityUntil, setValidityUntil] = useState(() => {
     if (initial?.validity_until) return initial.validity_until;
     // Por defecto: hoy + N días según /configuracion/propuestas.
@@ -173,126 +157,12 @@ export function ProposalCreateForm({
   const [items, setItems] = useState<ItemRow[]>(initial?.items ?? []);
   const [pending, startTransition] = useTransition();
 
-  // ---- Financiera (Fase 4) ----------------------------------------------
-  /** Filtra financieras que aceptan el tipo de cliente actual. Si es
-   *  particular, deja las que aceptan particulares; si es autónomo, las
-   *  que aceptan autónomos; si es empresa, las que aceptan empresa. */
-  const availableFinanciers = useMemo(() => {
-    return financiers.filter((f) => {
-      if (!destinatario) return true; // muestra todas si no hay destinatario
-      if (destinatario.party_kind === "individual") return f.accepts_individual;
-      if (destinatario.is_autonomo) return f.accepts_autonomo;
-      if (destinatario.party_kind === "company") return f.accepts_company;
-      return true;
-    });
-  }, [financiers, destinatario]);
-
-  const [financierId, setFinancierId] = useState<string>("");
-  const selectedFinancier = useMemo(
-    () => availableFinanciers.find((f) => f.id === financierId) ?? null,
-    [availableFinanciers, financierId],
-  );
-  const coefForDuration = useMemo(() => {
-    if (!selectedFinancier || !duration) return null;
-    return (
-      selectedFinancier.coefficients.find((c) => c.term_months === duration)
-        ?.coefficient ?? null
-    );
-  }, [selectedFinancier, duration]);
-
-  /**
-   * Total renting empresa que se va a financiar. Sumamos las cuotas
-   * "business" mensuales × quantity × duración del plan. Si para algún
-   * item no hay precio business cargado, hacemos fallback al individual
-   * (no es lo ideal — el admin debe rellenar los precios empresa).
-   */
-  const rentingBusinessTotal = useMemo(() => {
-    if (planType !== "renting" || !duration) return 0;
-    let acc = 0;
-    for (const it of items) {
-      const prod = products.find((p) => p.id === it.product_id);
-      const plan = prod?.plans.find(
-        (pl) => pl.plan_type === "renting" && pl.duration_months === duration,
-      );
-      if (!plan) continue;
-      const monthlyBase =
-        plan.monthly_price_business_cents ??
-        plan.monthly_price_individual_cents ??
-        plan.monthly_price_cents ??
-        0;
-      acc += monthlyBase * it.quantity * duration;
-    }
-    return acc;
-  }, [items, products, planType, duration]);
-
-  /**
-   * Capital que percibe la empresa por defecto (cuota mensual / coef).
-   * Para mantener consistencia con el ejemplo del usuario:
-   *   cuota_cliente_mes × duracion = total cliente
-   *   capital_empresa  = sum(monthly_business) / coeficiente  por mes
-   *                    = total_business × coeficiente_mensual_eq...
-   * Versión pragmática que él pidió: el comercial puede editarlo a mano.
-   * Por defecto lo calculamos como total_business sin tocar; en propuestas
-   * reales él introducirá el valor enviado por la financiera (scoring).
-   */
-  const defaultFinancierPayment = useMemo(() => {
-    if (planType !== "renting" || !selectedFinancier || !duration) return 0;
-    // Suma de cuotas mensuales empresa
-    let monthlyAcc = 0;
-    for (const it of items) {
-      const prod = products.find((p) => p.id === it.product_id);
-      const plan = prod?.plans.find(
-        (pl) => pl.plan_type === "renting" && pl.duration_months === duration,
-      );
-      if (!plan) continue;
-      const monthlyBase =
-        plan.monthly_price_business_cents ??
-        plan.monthly_price_individual_cents ??
-        plan.monthly_price_cents ??
-        0;
-      monthlyAcc += monthlyBase * it.quantity;
-    }
-    if (!coefForDuration || coefForDuration <= 0) return 0;
-    // cuota_cliente = capital_empresa × coef  ⇒  capital = cuota / coef
-    return Math.round(monthlyAcc / coefForDuration);
-  }, [items, products, planType, selectedFinancier, duration, coefForDuration]);
-
-  const [financierPaymentEuros, setFinancierPaymentEuros] = useState<string>("");
-  // Cuando cambian items o financiera, refrescamos sugerencia.
-  useMemo(() => {
-    if (defaultFinancierPayment > 0) {
-      setFinancierPaymentEuros((defaultFinancierPayment / 100).toFixed(2));
-    } else {
-      setFinancierPaymentEuros("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [defaultFinancierPayment]);
-
-  const financierPaymentCents = financierPaymentEuros
-    ? Math.round(Number(financierPaymentEuros) * 100)
-    : 0;
-
-  // Residual = % sobre el capital empresa (renting estricto)
-  const financierResidualCents =
-    selectedFinancier?.kind === "renting_strict" && selectedFinancier.residual_pct
-      ? Math.round(
-          financierPaymentCents * (selectedFinancier.residual_pct / 100),
-        )
-      : 0;
-  // Reserva = % sobre el capital empresa retenido hasta fin
-  const financierReserveCents = selectedFinancier?.reserve_pct
-    ? Math.round(financierPaymentCents * (selectedFinancier.reserve_pct / 100))
-    : 0;
-  // Lo que el cliente paga al mes (informativo)
-  const monthlyClientCents =
-    coefForDuration && financierPaymentCents
-      ? Math.round(financierPaymentCents * coefForDuration)
-      : 0;
-  // Comisión financiera (informativa)
-  const financierCommissionCents = Math.max(
-    rentingBusinessTotal - financierPaymentCents,
-    0,
-  );
+  // Nota: la financiera NO se elige en la propuesta. La elige el admin
+  // sobre el contrato firmado, después de pasar la solicitud a varias
+  // financieras y recibir la aceptación. El comercial solo trabaja con la
+  // cuota fija del producto. Por eso el form de propuesta no toca
+  // financier_id / financier_payment_cents / coef — quedan null hasta
+  // que admin los asigne desde /contratos/[id].
 
   const availableProducts = useMemo(
     () =>
@@ -403,24 +273,14 @@ export function ProposalCreateForm({
           notes,
           items,
           auto_accept: directMode,
-          // Datos de financiera (solo si renting y hay financiera seleccionada).
-          financier_id:
-            planType === "renting" && financierId ? financierId : null,
-          financier_payment_cents:
-            planType === "renting" && financierPaymentCents > 0
-              ? financierPaymentCents
-              : null,
-          financier_term_months: planType === "renting" ? duration : null,
-          financier_coefficient:
-            planType === "renting" ? coefForDuration : null,
-          financier_residual_cents:
-            planType === "renting" && financierResidualCents > 0
-              ? financierResidualCents
-              : null,
-          financier_reserve_cents:
-            planType === "renting" && financierReserveCents > 0
-              ? financierReserveCents
-              : null,
+          // La financiera (financier_id, payment, coef, residual, reserva)
+          // la asigna admin sobre el contrato firmado, NO el comercial.
+          financier_id: null,
+          financier_payment_cents: null,
+          financier_term_months: null,
+          financier_coefficient: null,
+          financier_residual_cents: null,
+          financier_reserve_cents: null,
         };
         if (isEdit && editId) {
           await updateProposalAction(editId, payload);
@@ -458,28 +318,6 @@ export function ProposalCreateForm({
               </option>
             ))}
           </select>
-        )}
-        {destinatario && (
-          <div
-            className={`rounded-xl border-2 px-3 py-2 text-xs font-semibold ${
-              destBusiness
-                ? "border-amber-300 bg-amber-50 text-amber-900"
-                : "border-blue-300 bg-blue-50 text-blue-900"
-            }`}
-          >
-            {destBusiness ? (
-              <>
-                💼 Destinatario <strong>empresa/autónomo</strong> · los precios
-                se aplican como <strong>BASE imponible</strong> y la factura
-                añadirá IVA 21% encima.
-              </>
-            ) : (
-              <>
-                👤 Destinatario <strong>particular</strong> · los precios ya
-                incluyen IVA.
-              </>
-            )}
-          </div>
         )}
       </div>
 
@@ -546,153 +384,6 @@ export function ProposalCreateForm({
               ))
             )}
           </div>
-        </div>
-      )}
-
-      {/* Bloque FINANCIERA — solo si renting + hay financieras cargadas */}
-      {planType === "renting" && (
-        <div className="space-y-3 rounded-2xl border-2 border-purple-200 bg-purple-50/40 p-4">
-          <div className="flex items-center gap-2 text-sm font-bold text-purple-900">
-            🏦 Financiera del renting
-          </div>
-          {financiers.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-purple-300 bg-white/60 p-3 text-xs text-purple-900">
-              No hay financieras dadas de alta. Ve a{" "}
-              <a
-                href="/configuracion/financieras"
-                className="font-bold underline"
-              >
-                /configuracion/financieras
-              </a>{" "}
-              y crea al menos una para poder asignarla aquí.
-            </div>
-          ) : availableFinanciers.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
-              Ninguna financiera registrada acepta este tipo de cliente
-              {destinatario?.party_kind === "individual"
-                ? " (particular)"
-                : destinatario?.is_autonomo
-                  ? " (autónomo)"
-                  : destinatario?.party_kind === "company"
-                    ? " (empresa)"
-                    : ""}
-              . Revisa los checks &laquo;Acepta cliente&raquo; en{" "}
-              <a
-                href="/configuracion/financieras"
-                className="font-bold underline"
-              >
-                /configuracion/financieras
-              </a>
-              .
-            </div>
-          ) : (
-            <>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Selecciona financiera</Label>
-                <select
-                  value={financierId}
-                  onChange={(e) => setFinancierId(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm"
-                >
-                  <option value="">— elige una —</option>
-                  {availableFinanciers.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} ({f.kind === "renting_strict" ? "renting" : "financiación"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {selectedFinancier && (
-                <div className="space-y-3">
-                  {coefForDuration == null ? (
-                    <div className="rounded-lg border border-dashed border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
-                      ⚠️ {selectedFinancier.name} no tiene coeficiente
-                      configurado a <strong>{duration} meses</strong>. Añádelo
-                      en /configuracion/financieras o usa otro plazo.
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">
-                      Coeficiente {duration}m:{" "}
-                      <span className="font-mono font-bold text-foreground">
-                        {coefForDuration}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">
-                        Capital que percibe la empresa (€) — editable
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min={0}
-                        value={financierPaymentEuros}
-                        onChange={(e) =>
-                          setFinancierPaymentEuros(e.target.value)
-                        }
-                      />
-                      <p className="text-[11px] text-muted-foreground">
-                        Por defecto cuota/coef. La financiera puede ajustarlo
-                        por scoring; mete el importe real que vayas a
-                        recibir.
-                      </p>
-                    </div>
-                    <div className="space-y-1 rounded-lg bg-white/60 p-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">
-                          Cuota cliente/mes (calc.):
-                        </span>{" "}
-                        <strong className="tabular-nums">
-                          {(monthlyClientCents / 100).toFixed(2)} €
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Total cliente:
-                        </span>{" "}
-                        <strong className="tabular-nums">
-                          {((monthlyClientCents * (duration ?? 0)) / 100).toFixed(2)} €
-                        </strong>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">
-                          Comisión financiera:
-                        </span>{" "}
-                        <strong className="tabular-nums">
-                          {(financierCommissionCents / 100).toFixed(2)} €
-                        </strong>
-                      </div>
-                      {selectedFinancier.kind === "renting_strict" &&
-                        selectedFinancier.residual_pct != null && (
-                          <div>
-                            <span className="text-muted-foreground">
-                              Residual ({selectedFinancier.residual_pct}%):
-                            </span>{" "}
-                            <strong className="tabular-nums">
-                              {(financierResidualCents / 100).toFixed(2)} €
-                            </strong>
-                          </div>
-                        )}
-                      {selectedFinancier.reserve_pct != null &&
-                        selectedFinancier.reserve_pct > 0 && (
-                          <div>
-                            <span className="text-muted-foreground">
-                              Reserva ({selectedFinancier.reserve_pct}%):
-                            </span>{" "}
-                            <strong className="tabular-nums">
-                              {(financierReserveCents / 100).toFixed(2)} €
-                            </strong>
-                          </div>
-                        )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
         </div>
       )}
 

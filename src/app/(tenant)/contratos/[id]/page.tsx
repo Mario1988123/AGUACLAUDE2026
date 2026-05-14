@@ -32,6 +32,8 @@ import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
+import { ContractFinancierAssign } from "@/modules/contracts/financier-assign";
+import { listFinanciers } from "@/modules/financiers/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -179,6 +181,41 @@ export default async function ContractDetailPage({
     }
   }
   const canCancel = session.is_superadmin || session.roles.includes("company_admin");
+
+  // Panel de asignación de financiera — solo admin/director, y solo si el
+  // contrato es renting/financing. Cargamos las financieras activas y los
+  // datos de party_kind del cliente para filtrar las compatibles.
+  const canAssignFinancier =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director");
+  const showFinancierAssign =
+    canAssignFinancier &&
+    (contract.plan_type === "renting" || contract.plan_type === "rental");
+  let financiersForAssign: Awaited<ReturnType<typeof listFinanciers>> = [];
+  let customerPartyKind: "individual" | "company" | null = null;
+  let customerIsAutonomo = false;
+  if (showFinancierAssign) {
+    financiersForAssign = await listFinanciers({ only_active: true }).catch(
+      () => [],
+    );
+    if (c.customer_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = (await createClient()) as any;
+      const { data: cust } = await sb
+        .from("customers")
+        .select("party_kind, is_autonomo")
+        .eq("id", c.customer_id)
+        .maybeSingle();
+      const cu = cust as {
+        party_kind: "individual" | "company" | null;
+        is_autonomo: boolean | null;
+      } | null;
+      customerPartyKind = cu?.party_kind ?? null;
+      customerIsAutonomo = cu?.is_autonomo ?? false;
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -557,6 +594,46 @@ export default async function ContractDetailPage({
       </Card>
 
       <ContractPhotosCard contractId={id} />
+
+      {showFinancierAssign && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Financiera del renting</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ContractFinancierAssign
+              contractId={contract.id}
+              planType={contract.plan_type}
+              durationMonths={contract.duration_months}
+              monthlyCents={contract.monthly_cents}
+              partyKind={customerPartyKind}
+              isAutonomo={customerIsAutonomo}
+              currentFinancierId={contractAny.financier_id ?? null}
+              currentFinancierPaymentCents={
+                contractAny.financier_payment_cents ?? null
+              }
+              currentFinancierTermMonths={
+                contractAny.financier_term_months ?? null
+              }
+              financiers={financiersForAssign.map((f) => ({
+                id: f.id,
+                name: f.name,
+                short_name: f.short_name,
+                kind: f.kind,
+                residual_pct: f.residual_pct,
+                reserve_pct: f.reserve_pct,
+                accepts_individual: f.accepts_individual,
+                accepts_autonomo: f.accepts_autonomo,
+                accepts_company: f.accepts_company,
+                coefficients: f.coefficients.map((c) => ({
+                  term_months: c.term_months,
+                  coefficient: c.coefficient,
+                })),
+              }))}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
