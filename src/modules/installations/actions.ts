@@ -651,7 +651,7 @@ async function upsertAgendaEventForInstallation(
   const { data: inst } = await admin
     .from("installations")
     .select(
-      "id, company_id, reference_code, scheduled_at, installer_user_id, created_by",
+      "id, company_id, reference_code, scheduled_at, installer_user_id, created_by, customer_id",
     )
     .eq("id", installationId)
     .maybeSingle();
@@ -663,6 +663,7 @@ async function upsertAgendaEventForInstallation(
         scheduled_at: string | null;
         installer_user_id: string | null;
         created_by: string | null;
+        customer_id: string | null;
       }
     | null;
   if (!i || !i.scheduled_at) return;
@@ -670,7 +671,34 @@ async function upsertAgendaEventForInstallation(
   const endsAt = new Date(
     new Date(i.scheduled_at).getTime() + 2 * 60 * 60 * 1000,
   ).toISOString();
-  const title = `Instalación · ${i.reference_code ?? installationId.slice(0, 8)}`;
+  // Resolver nombre cliente para que aparezca en la agenda junto al nº instalación.
+  let customerLabel: string | null = null;
+  if (i.customer_id) {
+    const { data: cust } = await admin
+      .from("customers")
+      .select("trade_name, legal_name, first_name, last_name")
+      .eq("id", i.customer_id)
+      .maybeSingle();
+    const cu = cust as
+      | {
+          trade_name: string | null;
+          legal_name: string | null;
+          first_name: string | null;
+          last_name: string | null;
+        }
+      | null;
+    if (cu) {
+      customerLabel =
+        cu.trade_name ||
+        cu.legal_name ||
+        `${cu.first_name ?? ""} ${cu.last_name ?? ""}`.trim() ||
+        null;
+    }
+  }
+  const refLabel = i.reference_code ?? installationId.slice(0, 8);
+  const title = customerLabel
+    ? `Instalación · ${refLabel} · ${customerLabel}`
+    : `Instalación · ${refLabel}`;
 
   const { data: existing } = await admin
     .from("agenda_events")

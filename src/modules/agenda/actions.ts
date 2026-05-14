@@ -331,14 +331,21 @@ async function loadVirtualAgendaItems(args: {
 
   const out: AgendaItem[] = [];
   for (const i of instList) {
+    const custName = i.customer_id ? nameMap.get(i.customer_id) : null;
+    const ref = i.reference_code;
+    // Título: "Instalación · {ref} · {cliente}" si tenemos ambos.
+    // Cae a uno solo si falta el otro.
+    let title: string;
+    if (ref && custName) title = `Instalación · ${ref} · ${custName}`;
+    else if (ref) title = `Instalación · ${ref}`;
+    else if (custName) title = `Instalación · ${custName}`;
+    else title = "Instalación";
     out.push({
       id: `virtual-inst-${i.id}`,
       kind: "installation",
       status: i.status,
-      title: i.customer_id
-        ? `Instalación · ${nameMap.get(i.customer_id) ?? "Cliente"}`
-        : `Instalación ${i.reference_code ?? ""}`.trim(),
-      description: i.reference_code ?? null,
+      title,
+      description: ref ?? null,
       starts_at: i.scheduled_at,
       ends_at: null,
       assigned_user_id: i.installer_user_id,

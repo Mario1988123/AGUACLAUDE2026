@@ -238,13 +238,39 @@ export async function createMaintenanceAction(input: unknown) {
   if (error) throw new Error(error.message);
   const id = (created as { id: string }).id;
 
-  // Crear evento agenda si hay técnico asignado
+  // Crear evento agenda si hay técnico asignado. El título incluye
+  // el nombre del cliente para que el técnico lo vea sin abrir el job.
   if (parsed.technician_user_id) {
+    let customerLabel: string | null = null;
+    if (parsed.customer_id) {
+      const { data: cust } = await supabase
+        .from("customers")
+        .select("trade_name, legal_name, first_name, last_name")
+        .eq("id", parsed.customer_id)
+        .maybeSingle();
+      const cu = cust as
+        | {
+            trade_name: string | null;
+            legal_name: string | null;
+            first_name: string | null;
+            last_name: string | null;
+          }
+        | null;
+      if (cu) {
+        customerLabel =
+          cu.trade_name ||
+          cu.legal_name ||
+          `${cu.first_name ?? ""} ${cu.last_name ?? ""}`.trim() ||
+          null;
+      }
+    }
     await supabase.from("agenda_events").insert({
       company_id: session.company_id,
       kind: "maintenance",
       status: "scheduled",
-      title: "Mantenimiento programado",
+      title: customerLabel
+        ? `Mantenimiento · ${customerLabel}`
+        : "Mantenimiento programado",
       starts_at: parsed.scheduled_at,
       assigned_user_id: parsed.technician_user_id,
       subject_type: "maintenance",
