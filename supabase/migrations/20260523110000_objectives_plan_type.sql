@@ -40,18 +40,20 @@ begin
   end loop;
 end $$;
 
--- El nuevo unique incluye plan_type. coalesce no se puede usar en UNIQUE
--- directamente, así que añadimos índice único sobre la expresión.
+-- El nuevo unique incluye plan_type. Usamos NULLS NOT DISTINCT (Postgres 15+)
+-- para que los NULL se traten como iguales, evitando coalesce. El cast
+-- de enum a text es STABLE, no IMMUTABLE, así que no se puede usar en
+-- una expresión de índice — NULLS NOT DISTINCT lo evita por completo.
 create unique index if not exists ux_monthly_objectives_scope
   on public.monthly_objectives (
     company_id,
     period_year,
     period_month,
     scope_type,
-    coalesce(scope_department::text, ''),
-    coalesce(scope_user_id::text, ''),
+    scope_department,
+    scope_user_id,
     metric_kind,
-    coalesce(plan_type, '')
-  );
+    plan_type
+  ) nulls not distinct;
 
 notify pgrst, 'reload schema';
