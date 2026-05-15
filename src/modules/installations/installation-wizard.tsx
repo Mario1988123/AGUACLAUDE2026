@@ -1273,15 +1273,15 @@ export function InstallationWizard(props: Props) {
           {/* Modal pausa */}
           {pauseOpen && (
             <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4"
               onClick={() => setPauseOpen(false)}
             >
               <div
-                className="w-full max-w-md rounded-2xl bg-card shadow-2xl"
+                className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="border-b p-3 font-bold">Pausa</div>
-                <div className="space-y-3 p-4">
+                <div className="shrink-0 border-b p-3 font-bold">Pausa</div>
+                <div className="flex-1 space-y-3 overflow-y-auto p-4">
                   <Label>Motivo</Label>
                   <select
                     value={pauseReason}
@@ -1310,7 +1310,7 @@ export function InstallationWizard(props: Props) {
                     </div>
                   )}
                 </div>
-                <div className="flex justify-end gap-2 border-t p-3">
+                <div className="flex shrink-0 justify-end gap-2 border-t p-3">
                   <Button variant="outline" onClick={() => setPauseOpen(false)}>
                     Cancelar
                   </Button>
@@ -1325,15 +1325,15 @@ export function InstallationWizard(props: Props) {
           {/* Modal incidencia */}
           {incidentOpen && (
             <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4"
               onClick={() => setIncidentOpen(false)}
             >
               <div
-                className="w-full max-w-md rounded-2xl bg-card shadow-2xl"
+                className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="border-b p-3 font-bold">Notificar incidencia</div>
-                <div className="space-y-3 p-4">
+                <div className="shrink-0 border-b p-3 font-bold">Notificar incidencia</div>
+                <div className="flex-1 space-y-3 overflow-y-auto p-4">
                   <Label>Tipo</Label>
                   <select
                     value={incidentKind}
@@ -1371,7 +1371,7 @@ export function InstallationWizard(props: Props) {
                     </span>
                   </label>
                 </div>
-                <div className="flex justify-end gap-2 border-t p-3">
+                <div className="flex shrink-0 justify-end gap-2 border-t p-3">
                   <Button variant="outline" onClick={() => setIncidentOpen(false)}>
                     Cancelar
                   </Button>

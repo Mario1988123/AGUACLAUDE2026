@@ -160,7 +160,7 @@ export function InvoiceActions({
 
       {cancelOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => {
             if (!pending) {
               setCancelOpen(false);
@@ -169,12 +169,12 @@ export function InvoiceActions({
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="space-y-3 p-5">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
               <h2 className="text-base font-bold">Cancelar factura</h2>
               <p className="text-sm text-muted-foreground">
                 Indica el motivo (opcional). Esta acción no se puede deshacer.
@@ -188,7 +188,7 @@ export function InvoiceActions({
                 className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button
                 variant="outline"
                 onClick={() => {

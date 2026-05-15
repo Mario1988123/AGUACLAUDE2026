@@ -319,12 +319,12 @@ export function ValidateWalletButtons({
           }}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="space-y-3 p-5">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
               <h2 className="text-base font-bold">
                 {reasonOpen === "reject" ? "Motivo del rechazo" : "Motivo de la cancelación"}
               </h2>
@@ -346,7 +346,7 @@ export function ValidateWalletButtons({
                 className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -367,16 +367,16 @@ export function ValidateWalletButtons({
 
       {methodOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => !pending && setMethodOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="space-y-3 p-5">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
               <h2 className="text-base font-bold">Cambiar método de cobro</h2>
               <p className="text-xs text-muted-foreground">
                 {isPending
@@ -400,7 +400,7 @@ export function ValidateWalletButtons({
                 ))}
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={() => setMethodOpen(false)} disabled={pending}>
                 Cancelar
               </Button>

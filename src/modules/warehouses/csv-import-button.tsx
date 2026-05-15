@@ -54,14 +54,14 @@ export function CsvImportButton({ warehouseId }: { warehouseId: string }) {
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="border-b p-4">
+            <div className="shrink-0 border-b p-4">
               <h2 className="font-bold">Importar stock desde CSV</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Cabeceras: <code>product_reference,quantity,location_code,notes</code>
@@ -69,7 +69,7 @@ export function CsvImportButton({ warehouseId }: { warehouseId: string }) {
                 puede ser la referencia interna o el nombre del producto.
               </p>
             </div>
-            <div className="space-y-3 p-4">
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
               <div className="space-y-1">
                 <Label>Subir archivo</Label>
                 <input
@@ -106,7 +106,7 @@ export function CsvImportButton({ warehouseId }: { warehouseId: string }) {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
                 Cerrar
               </Button>

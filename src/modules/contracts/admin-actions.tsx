@@ -102,16 +102,16 @@ export function ContractAdminActions({
 
       {cancelOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => !pending && setCancelOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="space-y-3 p-5">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
               <h2 className="text-base font-bold">Cancelar contrato</h2>
               <p className="text-sm text-muted-foreground">
                 Si hay instalaciones pendientes se cancelarán también. Si hay alguna
@@ -127,7 +127,7 @@ export function ContractAdminActions({
                 className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={() => setCancelOpen(false)} disabled={pending}>
                 Volver
               </Button>

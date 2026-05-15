@@ -173,18 +173,18 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="my-6 w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl"
+        className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-border"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b p-4">
-          <div>
+        <div className="flex shrink-0 items-center justify-between border-b p-4">
+          <div className="min-w-0 flex-1 pr-2">
             <h2 className="text-lg font-bold">Firmar contrato</h2>
-            <p className="text-xs text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground">
               Paso {step} de {STEPS.length} · {STEPS[step - 1]?.label}
             </p>
           </div>
@@ -199,7 +199,7 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
         </div>
 
         {/* Stepper */}
-        <div className="flex items-center justify-between gap-1 overflow-x-auto border-b bg-muted/30 px-3 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-1 overflow-x-auto border-b bg-muted/30 px-3 py-3">
           {STEPS.map((s) => {
             const Icon = s.icon;
             const active = step === s.n;
@@ -234,11 +234,11 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
 
         {/* Body */}
         {loading || !readiness ? (
-          <div className="flex items-center justify-center p-12">
+          <div className="flex flex-1 items-center justify-center p-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="space-y-3 p-4">
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {/* PASO 1: Datos cliente */}
             {step === 1 && (
               <div className="space-y-3">
@@ -546,7 +546,7 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
         )}
 
         {/* Footer nav */}
-        <div className="flex items-center justify-between gap-2 border-t bg-muted/20 p-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/20 p-3">
           <Button
             variant="outline"
             onClick={step === 1 ? onClose : goBack}

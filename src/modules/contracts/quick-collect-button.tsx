@@ -106,14 +106,14 @@ export function QuickCollectButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={reset}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 border-b p-4">
+            <div className="flex shrink-0 items-center gap-2 border-b p-4">
               {step > 1 && (
                 <button
                   type="button"
@@ -135,7 +135,7 @@ export function QuickCollectButton({
               <span className="text-xs text-muted-foreground">Paso {step}/3</span>
             </div>
 
-            <div className="space-y-3 p-4">
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {amountLabel && (
                 <div className="rounded-xl bg-muted/40 px-3 py-2 text-sm">
                   Importe: <strong className="tabular-nums">{amountLabel}</strong>

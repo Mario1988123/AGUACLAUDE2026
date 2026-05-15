@@ -89,16 +89,16 @@ export function ChargeWithGoCardlessButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="space-y-4 p-5">
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
               <h2 className="text-base font-bold">Cobrar por GoCardless</h2>
               <div className="grid gap-2">
                 <Label>Cuenta a cobrar</Label>
@@ -129,7 +129,7 @@ export function ChargeWithGoCardlessButton({
                 el banco del cliente. El estado se actualizará automáticamente en el wallet.
               </p>
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
                 Cancelar
               </Button>
