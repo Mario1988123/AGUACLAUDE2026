@@ -24,17 +24,17 @@ export function CustomerBulkToolbar({
 
   function reassign() {
     startTransition(async () => {
-      try {
-        const n = await bulkReassignCustomersAction({
-          customer_ids: selectedIds,
-          user_id: target || null,
-        });
-        notify.success(`Reasignados ${n} clientes`);
-        onClear();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await bulkReassignCustomersAction({
+        customer_ids: selectedIds,
+        user_id: target || null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo reasignar", r.error);
+        return;
       }
+      notify.success(`Reasignados ${r.count} clientes`);
+      onClear();
+      router.refresh();
     });
   }
 

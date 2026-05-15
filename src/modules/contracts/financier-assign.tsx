@@ -143,33 +143,33 @@ export function ContractFinancierAssign({
       return;
     }
     startTransition(async () => {
-      try {
-        await assignFinancierToContractAction({
-          contract_id: contractId,
-          financier_id: financierId,
-          financier_payment_cents: paymentCents,
-          financier_term_months: termMonths,
-          financier_coefficient: coefForTerm,
-          financier_residual_cents: residualCents > 0 ? residualCents : null,
-          financier_reserve_cents: reserveCents > 0 ? reserveCents : null,
-        });
-        notify.success("Financiera asignada al contrato");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await assignFinancierToContractAction({
+        contract_id: contractId,
+        financier_id: financierId,
+        financier_payment_cents: paymentCents,
+        financier_term_months: termMonths,
+        financier_coefficient: coefForTerm,
+        financier_residual_cents: residualCents > 0 ? residualCents : null,
+        financier_reserve_cents: reserveCents > 0 ? reserveCents : null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo asignar", r.error);
+        return;
       }
+      notify.success("Financiera asignada al contrato");
     });
   }
 
   function clear() {
     startTransition(async () => {
-      try {
-        await clearFinancierFromContractAction(contractId);
-        setFinancierId("");
-        setPaymentEuros("");
-        notify.success("Financiera retirada del contrato");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await clearFinancierFromContractAction(contractId);
+      if (!r.ok) {
+        notify.error("No se pudo retirar", r.error);
+        return;
       }
+      setFinancierId("");
+      setPaymentEuros("");
+      notify.success("Financiera retirada del contrato");
     });
   }
 

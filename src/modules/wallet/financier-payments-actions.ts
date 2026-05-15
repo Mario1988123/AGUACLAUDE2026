@@ -22,21 +22,20 @@ export interface FinancierPaymentRow {
 
 async function ensureAdminOrLevel2() {
   const session = await requireSession();
-  if (
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("commercial_director") &&
-    !session.roles.includes("technical_director")
-  )
-    throw new Error("Solo admin / director");
-  return session;
+  const allowed =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director");
+  return { session, allowed };
 }
 
 /** Lista de contratos renting con financiera asignada y estado de pago
  *  abierto (pending / reserve_pending). Para el dashboard "Pagos
  *  financieras" del módulo Wallet. */
 export async function listFinancierPaymentsPending(): Promise<FinancierPaymentRow[]> {
-  const session = await ensureAdminOrLevel2();
+  const { session, allowed } = await ensureAdminOrLevel2();
+  if (!allowed) return [];
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -142,37 +141,45 @@ export async function confirmFinancierPaymentAction(input: {
   paid_amount_cents: number;
   /** Si la financiera retiene reserva → marcar reserve_pending. */
   has_reserve_pending?: boolean;
-}): Promise<void> {
-  await ensureAdminOrLevel2();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const state = input.has_reserve_pending
-    ? "reserve_pending"
-    : "paid_financier";
-  const r = await admin
-    .from("contracts")
-    .update({
-      payment_state: state,
-      financier_paid_at: input.paid_at,
-      financier_paid_amount_cents: input.paid_amount_cents,
-    })
-    .eq("id", input.contract_id);
-  if (r.error) throw new Error(r.error.message);
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { allowed } = await ensureAdminOrLevel2();
+    if (!allowed) return { ok: false, error: "Solo admin / director" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const state = input.has_reserve_pending
+      ? "reserve_pending"
+      : "paid_financier";
+    const r = await admin
+      .from("contracts")
+      .update({
+        payment_state: state,
+        financier_paid_at: input.paid_at,
+        financier_paid_amount_cents: input.paid_amount_cents,
+      })
+      .eq("id", input.contract_id);
+    if (r.error) return { ok: false, error: r.error.message };
 
-  // Evento informativo en el contrato.
-  await admin.from("events").insert({
-    subject_type: "contract",
-    subject_id: input.contract_id,
-    kind: "contract.financier_paid",
-    payload: {
-      paid_at: input.paid_at,
-      paid_amount_cents: input.paid_amount_cents,
-      has_reserve_pending: input.has_reserve_pending ?? false,
-    },
-  });
+    await admin.from("events").insert({
+      subject_type: "contract",
+      subject_id: input.contract_id,
+      kind: "contract.financier_paid",
+      payload: {
+        paid_at: input.paid_at,
+        paid_amount_cents: input.paid_amount_cents,
+        has_reserve_pending: input.has_reserve_pending ?? false,
+      },
+    });
 
-  revalidatePath("/wallet/financieras");
-  revalidatePath(`/contratos/${input.contract_id}`);
+    revalidatePath("/wallet/financieras");
+    revalidatePath(`/contratos/${input.contract_id}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
+  }
 }
 
 /** Cuando finalmente entra la reserva retenida, marcamos paid_financier
@@ -181,31 +188,44 @@ export async function confirmReserveReleaseAction(input: {
   contract_id: string;
   paid_at: string;
   paid_amount_cents: number;
-}): Promise<void> {
-  await ensureAdminOrLevel2();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data } = await admin
-    .from("contracts")
-    .select("financier_paid_amount_cents")
-    .eq("id", input.contract_id)
-    .maybeSingle();
-  const previous =
-    (data as { financier_paid_amount_cents: number | null } | null)
-      ?.financier_paid_amount_cents ?? 0;
-  await admin
-    .from("contracts")
-    .update({
-      payment_state: "paid_financier",
-      financier_paid_amount_cents: previous + input.paid_amount_cents,
-    })
-    .eq("id", input.contract_id);
-  await admin.from("events").insert({
-    subject_type: "contract",
-    subject_id: input.contract_id,
-    kind: "contract.reserve_released",
-    payload: { paid_at: input.paid_at, amount_cents: input.paid_amount_cents },
-  });
-  revalidatePath("/wallet/financieras");
-  revalidatePath(`/contratos/${input.contract_id}`);
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { allowed } = await ensureAdminOrLevel2();
+    if (!allowed) return { ok: false, error: "Solo admin / director" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("contracts")
+      .select("financier_paid_amount_cents")
+      .eq("id", input.contract_id)
+      .maybeSingle();
+    const previous =
+      (data as { financier_paid_amount_cents: number | null } | null)
+        ?.financier_paid_amount_cents ?? 0;
+    const upd = await admin
+      .from("contracts")
+      .update({
+        payment_state: "paid_financier",
+        financier_paid_amount_cents: previous + input.paid_amount_cents,
+      })
+      .eq("id", input.contract_id);
+    if (upd.error) return { ok: false, error: upd.error.message };
+    await admin.from("events").insert({
+      subject_type: "contract",
+      subject_id: input.contract_id,
+      kind: "contract.reserve_released",
+      payload: {
+        paid_at: input.paid_at,
+        amount_cents: input.paid_amount_cents,
+      },
+    });
+    revalidatePath("/wallet/financieras");
+    revalidatePath(`/contratos/${input.contract_id}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
+  }
 }

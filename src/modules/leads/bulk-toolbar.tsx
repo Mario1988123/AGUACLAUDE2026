@@ -22,17 +22,17 @@ export function LeadBulkToolbar({ selectedIds, team, onClear }: Props) {
 
   function reassign() {
     startTransition(async () => {
-      try {
-        const n = await bulkReassignLeadsAction({
-          lead_ids: selectedIds,
-          user_id: target || null,
-        });
-        notify.success(`Reasignados ${n} leads`);
-        onClear();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await bulkReassignLeadsAction({
+        lead_ids: selectedIds,
+        user_id: target || null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo reasignar", r.error);
+        return;
       }
+      notify.success(`Reasignados ${r.count} leads`);
+      onClear();
+      router.refresh();
     });
   }
 

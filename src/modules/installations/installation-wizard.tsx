@@ -312,78 +312,82 @@ export function InstallationWizard(props: Props) {
 
   function callStart(lat: number | null, lng: number | null) {
     startTransition(async () => {
-      try {
-        const r = await startInstallationAction({
-          installation_id: installationId,
-          geo_lat: lat,
-          geo_lng: lng,
-        });
-        setStatus("in_progress");
-        startedAtRef.current = new Date().toISOString();
-        // Feedback GPS detallado y siempre visible:
-        //  - Sin GPS del técnico
-        //  - Con GPS pero sin coordenadas del cliente para validar
-        //  - Con GPS + coords cliente: distancia + estado válido/aviso
-        if (lat == null || lng == null) {
-          notify.success("Parte iniciado", "Sin GPS del dispositivo");
-        } else if (r.meters == null) {
-          notify.success(
-            "Parte iniciado",
-            "Cliente sin coordenadas — no se pudo validar la posición",
-          );
-        } else if (r.far) {
-          notify.warning(
-            `⚠ A ${r.meters} m del cliente (fuera de rango)`,
-            "Aviso enviado a admin/director técnico",
-          );
-        } else {
-          notify.success(
-            `✓ Posición válida (${r.meters} m del cliente)`,
-            "Parte iniciado",
-          );
-        }
-        setStep(2);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await startInstallationAction({
+        installation_id: installationId,
+        geo_lat: lat,
+        geo_lng: lng,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo iniciar", r.error);
+        return;
       }
+      setStatus("in_progress");
+      startedAtRef.current = new Date().toISOString();
+      // Feedback GPS detallado y siempre visible:
+      //  - Sin GPS del técnico
+      //  - Con GPS pero sin coordenadas del cliente para validar
+      //  - Con GPS + coords cliente: distancia + estado válido/aviso
+      if (lat == null || lng == null) {
+        notify.success("Parte iniciado", "Sin GPS del dispositivo");
+      } else if (r.meters == null) {
+        notify.success(
+          "Parte iniciado",
+          "Cliente sin coordenadas — no se pudo validar la posición",
+        );
+      } else if (r.far) {
+        notify.warning(
+          `⚠ A ${r.meters} m del cliente (fuera de rango)`,
+          "Aviso enviado a admin/director técnico",
+        );
+      } else {
+        notify.success(
+          `✓ Posición válida (${r.meters} m del cliente)`,
+          "Parte iniciado",
+        );
+      }
+      setStep(2);
     });
   }
 
   function saveInitialState() {
     startTransition(async () => {
-      try {
-        await setInstallationInitialStateAction({
-          installation_id: installationId,
-          has_previous_damage: hasPreviousDamage,
-          needs_countertop_drilling: needsCountertopDrilling,
-        });
-        // Si marca daño/agujero, exigimos firma del cliente
-        if (
-          (hasPreviousDamage || needsCountertopDrilling) &&
-          !signatures.find((s) => s.signer_role === "customer" && s.context === "initial_state")
-        ) {
-          if (!initialSignatureData) {
-            notify.warning("Firma del cliente obligatoria al marcar daño o agujero");
-            return;
-          }
-          if (!initialSignerName.trim()) {
-            notify.warning("Indica el nombre del firmante");
-            return;
-          }
-          await saveInstallationSignatureAction({
-            installation_id: installationId,
-            signer_role: "customer",
-            signer_name: initialSignerName.trim(),
-            signer_tax_id: null,
-            signature_data_url: initialSignatureData,
-            context: "initial_state",
-          });
-        }
-        notify.success("Estado inicial guardado");
-        setStep(3);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setInstallationInitialStateAction({
+        installation_id: installationId,
+        has_previous_damage: hasPreviousDamage,
+        needs_countertop_drilling: needsCountertopDrilling,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      // Si marca daño/agujero, exigimos firma del cliente
+      if (
+        (hasPreviousDamage || needsCountertopDrilling) &&
+        !signatures.find((s) => s.signer_role === "customer" && s.context === "initial_state")
+      ) {
+        if (!initialSignatureData) {
+          notify.warning("Firma del cliente obligatoria al marcar daño o agujero");
+          return;
+        }
+        if (!initialSignerName.trim()) {
+          notify.warning("Indica el nombre del firmante");
+          return;
+        }
+        const sr = await saveInstallationSignatureAction({
+          installation_id: installationId,
+          signer_role: "customer",
+          signer_name: initialSignerName.trim(),
+          signer_tax_id: null,
+          signature_data_url: initialSignatureData,
+          context: "initial_state",
+        });
+        if (!sr.ok) {
+          notify.error("Error firma", sr.error);
+          return;
+        }
+      }
+      notify.success("Estado inicial guardado");
+      setStep(3);
     });
   }
 
@@ -393,30 +397,30 @@ export function InstallationWizard(props: Props) {
     fd.append("installation_id", installationId);
     fd.append("category", category);
     startTransition(async () => {
-      try {
-        const created = await uploadInstallationPhotoAction(fd);
-        setPhotos((cur) => [created, ...cur]);
-        notify.success("Foto subida");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await uploadInstallationPhotoAction(fd);
+      if (!r.ok) {
+        notify.error("No se pudo subir", r.error);
+        return;
       }
+      setPhotos((cur) => [r.photo, ...cur]);
+      notify.success("Foto subida");
     });
   }
 
   function saveSerials() {
     startTransition(async () => {
-      try {
-        for (const it of items) {
-          const sn = (serials[it.id] ?? "").trim();
-          if ((it.serial_number ?? "") !== sn) {
-            await setInstallationItemSerialAction(it.id, sn || null);
+      for (const it of items) {
+        const sn = (serials[it.id] ?? "").trim();
+        if ((it.serial_number ?? "") !== sn) {
+          const r = await setInstallationItemSerialAction(it.id, sn || null);
+          if (!r.ok) {
+            notify.error("No se pudo guardar nº serie", r.error);
+            return;
           }
         }
-        notify.success("Números de serie guardados");
-        setStep(5);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
       }
+      notify.success("Números de serie guardados");
+      setStep(5);
     });
   }
 
@@ -437,23 +441,22 @@ export function InstallationWizard(props: Props) {
     }
     setSavingSignature(true);
     startTransition(async () => {
-      try {
-        await saveInstallationSignatureAction({
-          installation_id: installationId,
-          signer_role: "customer",
-          signer_name: signerName.trim(),
-          signer_tax_id: signerTaxId.trim() || null,
-          signature_data_url: signatureData,
-          context: "final",
-        });
-        setFinalSignatureSaved(true);
-        notify.success("Firma guardada");
-        if (onDone) onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
-      } finally {
-        setSavingSignature(false);
+      const r = await saveInstallationSignatureAction({
+        installation_id: installationId,
+        signer_role: "customer",
+        signer_name: signerName.trim(),
+        signer_tax_id: signerTaxId.trim() || null,
+        signature_data_url: signatureData,
+        context: "final",
+      });
+      setSavingSignature(false);
+      if (!r.ok) {
+        notify.error("No se pudo guardar firma", r.error);
+        return;
       }
+      setFinalSignatureSaved(true);
+      notify.success("Firma guardada");
+      if (onDone) onDone();
     });
   }
 
@@ -467,85 +470,85 @@ export function InstallationWizard(props: Props) {
       return;
     }
     startTransition(async () => {
-      try {
-        await finishInstallationAction({
-          installation_id: installationId,
-          satisfaction_score: satisfaction,
-          satisfaction_comment: satisfactionComment || null,
-          notes: finishNotes || null,
-        });
-        notify.success("Instalación completada");
-        reset();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await finishInstallationAction({
+        installation_id: installationId,
+        satisfaction_score: satisfaction,
+        satisfaction_comment: satisfactionComment || null,
+        notes: finishNotes || null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo cerrar", r.error);
+        return;
       }
+      notify.success("Instalación completada");
+      reset();
+      router.refresh();
     });
   }
 
   function confirmPause() {
     startTransition(async () => {
-      try {
-        await pauseInstallationAction({
-          installation_id: installationId,
-          reason: pauseReason as "lunch" | "to_warehouse" | "to_buy" | "end_of_day" | "other",
-          reason_notes: pauseNotes || undefined,
-          scheduled_resume_at:
-            pauseReason === "end_of_day" && pauseScheduledAt
-              ? pauseScheduledAt
-              : null,
-        });
-        notify.success("Pausa registrada");
-        setStatus("paused");
-        setPauseOpen(false);
-        setPauseReason("lunch");
-        setPauseNotes("");
-        setPauseScheduledAt("");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await pauseInstallationAction({
+        installation_id: installationId,
+        reason: pauseReason as "lunch" | "to_warehouse" | "to_buy" | "end_of_day" | "other",
+        reason_notes: pauseNotes || undefined,
+        scheduled_resume_at:
+          pauseReason === "end_of_day" && pauseScheduledAt
+            ? pauseScheduledAt
+            : null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo pausar", r.error);
+        return;
       }
+      notify.success("Pausa registrada");
+      setStatus("paused");
+      setPauseOpen(false);
+      setPauseReason("lunch");
+      setPauseNotes("");
+      setPauseScheduledAt("");
     });
   }
 
   function doResume() {
     startTransition(async () => {
-      try {
-        await resumeInstallationAction(installationId);
-        notify.success("Reanudado");
-        setStatus("in_progress");
-        startedAtRef.current = new Date().toISOString();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await resumeInstallationAction(installationId);
+      if (!r.ok) {
+        notify.error("No se pudo reanudar", r.error);
+        return;
       }
+      notify.success("Reanudado");
+      setStatus("in_progress");
+      startedAtRef.current = new Date().toISOString();
     });
   }
 
   function confirmIncident() {
     if (!incidentKind) return;
     startTransition(async () => {
-      try {
-        await reportInstallationIncidentAction({
-          installation_id: installationId,
-          kind: incidentKind as "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other",
-          description: incidentDesc || undefined,
-          pause_and_unschedule: incidentUnschedule,
-        });
-        notify.success(
-          incidentUnschedule
-            ? "Incidencia abierta. Instalación pendiente de reagendar"
-            : "Incidencia notificada a admin/dir. técnico",
-        );
-        setIncidentOpen(false);
-        setIncidentKind("missing_material");
-        setIncidentDesc("");
-        setIncidentUnschedule(false);
-        if (incidentUnschedule) {
-          setStatus("incident_pending");
-          reset();
-          router.refresh();
-        }
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reportInstallationIncidentAction({
+        installation_id: installationId,
+        kind: incidentKind as "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other",
+        description: incidentDesc || undefined,
+        pause_and_unschedule: incidentUnschedule,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo registrar incidencia", r.error);
+        return;
+      }
+      notify.success(
+        incidentUnschedule
+          ? "Incidencia abierta. Instalación pendiente de reagendar"
+          : "Incidencia notificada a admin/dir. técnico",
+      );
+      setIncidentOpen(false);
+      setIncidentKind("missing_material");
+      setIncidentDesc("");
+      setIncidentUnschedule(false);
+      if (incidentUnschedule) {
+        setStatus("incident_pending");
+        reset();
+        router.refresh();
       }
     });
   }

@@ -46,13 +46,13 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
     fd.append("contract_id", contractId);
     fd.append("kind", pickedKind);
     startTransition(async () => {
-      try {
-        const created = await uploadContractPhotoAction(fd);
-        setPhotos((cur) => [created, ...cur]);
-        notify.success("Foto subida");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await uploadContractPhotoAction(fd);
+      if (!r.ok) {
+        notify.error("No se pudo subir", r.error);
+        return;
       }
+      setPhotos((cur) => [r.photo, ...cur]);
+      notify.success("Foto subida");
     });
     e.target.value = "";
   }
@@ -69,7 +69,7 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
         await deleteContractPhotoAction(id);
         setPhotos((cur) => cur.filter((p) => p.id !== id));
       } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+        notify.error("No se pudo borrar", err instanceof Error ? err.message : String(err));
       }
     });
   }

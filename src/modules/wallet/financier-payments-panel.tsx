@@ -108,27 +108,25 @@ function PaymentRow({
       return;
     }
     startTransition(async () => {
-      try {
-        if (mode === "confirm") {
-          await confirmFinancierPaymentAction({
-            contract_id: row.contract_id,
-            paid_at: new Date(`${paidAt}T12:00:00`).toISOString(),
-            paid_amount_cents: cents,
-            has_reserve_pending: hasReserveStill,
-          });
-          notify.success("Pago confirmado");
-        } else {
-          await confirmReserveReleaseAction({
-            contract_id: row.contract_id,
-            paid_at: new Date(`${paidAt}T12:00:00`).toISOString(),
-            paid_amount_cents: cents,
-          });
-          notify.success("Reserva liberada");
-        }
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r =
+        mode === "confirm"
+          ? await confirmFinancierPaymentAction({
+              contract_id: row.contract_id,
+              paid_at: new Date(`${paidAt}T12:00:00`).toISOString(),
+              paid_amount_cents: cents,
+              has_reserve_pending: hasReserveStill,
+            })
+          : await confirmReserveReleaseAction({
+              contract_id: row.contract_id,
+              paid_at: new Date(`${paidAt}T12:00:00`).toISOString(),
+              paid_amount_cents: cents,
+            });
+      if (!r.ok) {
+        notify.error("No se pudo confirmar", r.error);
+        return;
       }
+      notify.success(mode === "confirm" ? "Pago confirmado" : "Reserva liberada");
+      location.reload();
     });
   }
 

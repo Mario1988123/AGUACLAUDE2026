@@ -33,75 +33,101 @@ function fromDocKind(k: string): ContractPhotoKind {
  */
 export async function uploadContractPhotoAction(
   formData: FormData,
-): Promise<ContractPhoto> {
-  const session = await requireSession();
-  if (!session.company_id) throw new Error("Sin empresa");
-  const file = formData.get("file");
-  const contractId = String(formData.get("contract_id") ?? "");
-  const kind = String(formData.get("kind") ?? "other") as ContractPhotoKind;
-  if (!(file instanceof Blob)) throw new Error("Archivo inválido");
-  if (!contractId) throw new Error("Falta contract_id");
-  if (file.size > 10 * 1024 * 1024) throw new Error("Máximo 10 MB");
+): Promise<
+  { ok: true; photo: ContractPhoto } | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const file = formData.get("file");
+    const contractId = String(formData.get("contract_id") ?? "");
+    const kind = String(formData.get("kind") ?? "other") as ContractPhotoKind;
+    if (!(file instanceof Blob)) return { ok: false, error: "Archivo inválido" };
+    if (!contractId) return { ok: false, error: "Falta contract_id" };
+    if (file.size > 10 * 1024 * 1024) return { ok: false, error: "Máximo 10 MB" };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
 
-  const ok = await ensureBucket(admin, BUCKET);
-  if (!ok) throw new Error("No se pudo preparar el bucket de fotos del contrato");
+    const ok = await ensureBucket(admin, BUCKET);
+    if (!ok)
+      return {
+        ok: false,
+        error: "No se pudo preparar el bucket de fotos del contrato",
+      };
 
-  const ext = pickImageExt({
-    name: (file as Blob & { name?: string }).name,
-    type: file.type,
-  });
-  const ts = Date.now();
-  const path = `${session.company_id}/${contractId}/${kind}-${ts}.${ext}`;
-  const buf = Buffer.from(await file.arrayBuffer());
-  const contentType =
-    file.type ||
-    (ext === "heic" ? "image/heic" : ext === "heif" ? "image/heif" : "image/jpeg");
-  const { error } = await admin.storage.from(BUCKET).upload(path, buf, {
-    contentType,
-    upsert: false,
-    cacheControl: "3600",
-  });
-  if (error) {
-    console.error("[uploadContractPhoto] upload failed:", error.message);
-    throw new Error(`Storage: ${error.message}`);
+    const ext = pickImageExt({
+      name: (file as Blob & { name?: string }).name,
+      type: file.type,
+    });
+    const ts = Date.now();
+    const path = `${session.company_id}/${contractId}/${kind}-${ts}.${ext}`;
+    const buf = Buffer.from(await file.arrayBuffer());
+    const contentType =
+      file.type ||
+      (ext === "heic"
+        ? "image/heic"
+        : ext === "heif"
+          ? "image/heif"
+          : "image/jpeg");
+    const { error } = await admin.storage.from(BUCKET).upload(path, buf, {
+      contentType,
+      upsert: false,
+      cacheControl: "3600",
+    });
+    if (error) {
+      console.error("[uploadContractPhoto] upload failed:", error.message);
+      return { ok: false, error: `Almacenamiento: ${error.message}` };
+    }
+
+    const filename =
+      (file as Blob & { name?: string }).name ?? `${kind}-${ts}.${ext}`;
+    const { data: row, error: e2 } = await admin
+      .from("documents")
+      .insert({
+        company_id: session.company_id,
+        subject_type: "contract",
+        subject_id: contractId,
+        kind: toDocKind(kind),
+        filename,
+        storage_bucket: BUCKET,
+        storage_path: path,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by: session.user_id,
+      })
+      .select("id, kind, storage_path, uploaded_at")
+      .single();
+    if (e2) return { ok: false, error: e2.message };
+
+    const { data: signed } = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(path, 3600);
+
+    revalidatePath(`/contratos/${contractId}`);
+    const r = row as {
+      id: string;
+      kind: string;
+      storage_path: string;
+      uploaded_at: string;
+    };
+    return {
+      ok: true,
+      photo: {
+        id: r.id,
+        kind: fromDocKind(r.kind),
+        storage_path: r.storage_path,
+        uploaded_at: r.uploaded_at,
+        signed_url:
+          (signed as { signedUrl: string } | null)?.signedUrl ?? null,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
   }
-
-  const filename =
-    (file as Blob & { name?: string }).name ?? `${kind}-${ts}.${ext}`;
-  const { data: row, error: e2 } = await admin
-    .from("documents")
-    .insert({
-      company_id: session.company_id,
-      subject_type: "contract",
-      subject_id: contractId,
-      kind: toDocKind(kind),
-      filename,
-      storage_bucket: BUCKET,
-      storage_path: path,
-      mime_type: file.type,
-      size_bytes: file.size,
-      uploaded_by: session.user_id,
-    })
-    .select("id, kind, storage_path, uploaded_at")
-    .single();
-  if (e2) throw new Error(e2.message);
-
-  const { data: signed } = await admin.storage
-    .from(BUCKET)
-    .createSignedUrl(path, 3600);
-
-  revalidatePath(`/contratos/${contractId}`);
-  const r = row as { id: string; kind: string; storage_path: string; uploaded_at: string };
-  return {
-    id: r.id,
-    kind: fromDocKind(r.kind),
-    storage_path: r.storage_path,
-    uploaded_at: r.uploaded_at,
-    signed_url: (signed as { signedUrl: string } | null)?.signedUrl ?? null,
-  };
 }
 
 export async function listContractPhotos(contractId: string): Promise<ContractPhoto[]> {

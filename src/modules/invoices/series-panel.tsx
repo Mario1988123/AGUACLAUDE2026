@@ -35,23 +35,23 @@ export function InvoiceSeriesPanel({ series }: { series: SeriesRow[] }) {
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertInvoiceSeriesAction({
-          code,
-          name,
-          prefix: prefix || undefined,
-          year_reset: yearReset,
-          is_default: isDefault,
-        });
-        notify.success("Serie creada");
-        setCode("");
-        setName("");
-        setPrefix("");
-        setOpen(false);
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertInvoiceSeriesAction({
+        code,
+        name,
+        prefix: prefix || undefined,
+        year_reset: yearReset,
+        is_default: isDefault,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo crear", r.error);
+        return;
       }
+      notify.success("Serie creada");
+      setCode("");
+      setName("");
+      setPrefix("");
+      setOpen(false);
+      location.reload();
     });
   }
 

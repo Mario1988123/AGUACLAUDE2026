@@ -31,17 +31,17 @@ export function ReassignLeadButton({
 
   function save() {
     startTransition(async () => {
-      try {
-        await bulkReassignLeadsAction({
-          lead_ids: [leadId],
-          user_id: target || null,
-        });
-        notify.success(target ? "Reasignado" : "Desasignado");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await bulkReassignLeadsAction({
+        lead_ids: [leadId],
+        user_id: target || null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo reasignar", r.error);
+        return;
       }
+      notify.success(target ? "Reasignado" : "Desasignado");
+      setOpen(false);
+      router.refresh();
     });
   }
 
