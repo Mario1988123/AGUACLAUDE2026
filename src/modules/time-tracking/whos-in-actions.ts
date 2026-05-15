@@ -39,20 +39,43 @@ export async function getWhosInSnapshot(): Promise<WhosInSnapshot> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // 1) Lista de usuarios de la empresa. user_profiles NO tiene deleted_at
-  // ni email (email vive en auth.users). Filtramos invited (aún no activos).
-  const { data: users } = await admin
+  // 1) Lista de usuarios de la empresa. Mostramos todos (incluso invited
+   // y suspended). Combinamos user_profiles + user_roles porque puede haber
+   // perfil sin rol o rol sin perfil; queremos cualquier usuario asociado
+   // a la empresa.
+  type U = { user_id: string; full_name: string | null };
+  const profilesRes = await admin
     .from("user_profiles")
-    .select("user_id, full_name, status")
+    .select("user_id, full_name")
     .eq("company_id", session.company_id);
-  type U = {
-    user_id: string;
-    full_name: string | null;
-    status: string | null;
-  };
-  const userList = ((users ?? []) as U[]).filter(
-    (u) => !!u.user_id && u.status !== "invited",
-  );
+  if (profilesRes.error) {
+    console.error("[whos-in profiles]", profilesRes.error.message);
+  }
+  const rolesRes = await admin
+    .from("user_roles")
+    .select("user_id")
+    .eq("company_id", session.company_id)
+    .is("revoked_at", null);
+  if (rolesRes.error) {
+    console.error("[whos-in roles]", rolesRes.error.message);
+  }
+  const seen = new Map<string, U>();
+  for (const p of ((profilesRes.data ?? []) as U[])) {
+    if (p.user_id) seen.set(p.user_id, p);
+  }
+  for (const r of ((rolesRes.data ?? []) as Array<{ user_id: string }>)) {
+    if (r.user_id && !seen.has(r.user_id)) {
+      seen.set(r.user_id, { user_id: r.user_id, full_name: null });
+    }
+  }
+  // Asegurar que el usuario actual aparece aunque no esté en ninguna tabla.
+  if (!seen.has(session.user_id)) {
+    seen.set(session.user_id, {
+      user_id: session.user_id,
+      full_name: session.full_name ?? null,
+    });
+  }
+  const userList = Array.from(seen.values());
   if (userList.length === 0) {
     return { working: [], on_break: [], absences: [], out: [] };
   }
