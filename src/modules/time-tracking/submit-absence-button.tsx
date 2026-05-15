@@ -34,7 +34,16 @@ export function SubmitAbsenceButton() {
     }
     startTransition(async () => {
       try {
-        await submitAbsenceAction({ starts_on: from, ends_on: to, kind, notes });
+        const result = await submitAbsenceAction({
+          starts_on: from,
+          ends_on: to,
+          kind,
+          notes,
+        });
+        if (!result.ok) {
+          notify.error("No se pudo solicitar", result.error);
+          return;
+        }
         notify.success("Solicitud enviada al admin");
         setOpen(false);
         setFrom("");

@@ -41,12 +41,24 @@ export async function submitAbsenceAction(input: {
   ends_on: string;
   kind: AbsenceKind;
   notes?: string;
-}): Promise<void> {
+}): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await requireSession();
-  if (!session.company_id) throw new Error("Sin empresa");
+  if (!session.company_id) return { ok: false, error: "Sin empresa" };
+  // Si pide vacaciones, validar ventanas + cap
+  if (input.kind === "vacation") {
+    const { checkVacationRequestAllowed } = await import(
+      "./vacation-windows-actions"
+    );
+    const check = await checkVacationRequestAllowed({
+      user_id: session.user_id,
+      starts_on: input.starts_on,
+      ends_on: input.ends_on,
+    });
+    if (!check.ok) return { ok: false, error: check.reason };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin.from("time_absences").insert({
+  const ins = await admin.from("time_absences").insert({
     company_id: session.company_id,
     user_id: session.user_id,
     starts_on: input.starts_on,
@@ -55,6 +67,7 @@ export async function submitAbsenceAction(input: {
     status: "pending",
     notes: input.notes ?? null,
   });
+  if (ins.error) return { ok: false, error: ins.error.message };
   // Notificar a los admins
   const { data: admins } = await admin
     .from("user_roles")
@@ -73,6 +86,7 @@ export async function submitAbsenceAction(input: {
     });
   }
   revalidatePath("/fichajes");
+  return { ok: true };
 }
 
 export async function listAbsences(filters?: {

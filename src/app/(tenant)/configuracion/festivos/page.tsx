@@ -9,8 +9,10 @@ import {
   CCAA_LABELS,
   suggestedHolidaysFor,
 } from "@/modules/time-tracking/localities";
+import { listVacationWindowsForYear } from "@/modules/time-tracking/vacation-windows-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { HolidaysManager } from "@/modules/time-tracking/holidays-manager";
+import { VacationWindowsManager } from "@/modules/time-tracking/vacation-windows-manager";
 import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
@@ -21,9 +23,10 @@ export default async function FestivosPage() {
     redirect("/configuracion" as never);
   }
   const year = new Date().getFullYear();
-  const [holidays, locality] = await Promise.all([
+  const [holidays, locality, vacationWindows] = await Promise.all([
     listHolidaysForYear(year),
     getCompanyLocality(),
+    listVacationWindowsForYear(year),
   ]);
   const recommended = suggestedHolidaysFor(locality.ccaa, locality.city_code);
 
@@ -55,6 +58,15 @@ export default async function FestivosPage() {
             ccaaLabels={CCAA_LABELS}
             recommended={recommended}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Ventanas vacacionales {year}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <VacationWindowsManager windows={vacationWindows} year={year} />
         </CardContent>
       </Card>
     </div>
