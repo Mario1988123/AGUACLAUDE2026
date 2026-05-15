@@ -193,13 +193,17 @@ export function PunchPageClient({
           {state.status === "stopped" && (
             <Button
               size="lg"
-              variant="success"
+              variant={state.canPunch ? "success" : "outline"}
               className="w-full text-base"
-              disabled={pending}
+              disabled={pending || !state.canPunch}
               onClick={() => doPunch("clock_in")}
             >
               <Play className="h-5 w-5" />
-              {pending ? "Fichando..." : "Fichar entrada"}
+              {!state.canPunch
+                ? "Ausencia aprobada hoy"
+                : pending
+                  ? "Fichando..."
+                  : "Fichar entrada"}
             </Button>
           )}
           {state.status === "working" && (

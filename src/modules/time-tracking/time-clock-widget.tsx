@@ -133,29 +133,35 @@ export function TimeClockWidget() {
 
   if (!state) return null;
 
-  // Estado: STOPPED → botón de entrada. Si hay un reason (fuera del
-  // turno, error de carga) lo dejamos como tooltip y un punto ámbar,
-  // pero no se bloquea — el usuario puede fichar igualmente.
+  // Estado: STOPPED → botón de entrada. Si canPunch=false (ausencia
+  // aprobada), el botón queda DESHABILITADO con el motivo como tooltip.
+  // En cualquier otro caso (warning suave de fuera de turno), permite
+  // fichar pero con punto ámbar.
   if (state.status === "stopped") {
+    const blocked = !state.canPunch;
     const hasWarning = Boolean(state.reason);
     return (
       <button
         type="button"
-        onClick={() => doPunch("clock_in")}
-        disabled={pending}
-        className="hidden sm:inline-flex h-10 items-center gap-2 rounded-xl border-2 border-border bg-card px-3 text-sm font-bold transition-all hover:bg-muted"
+        onClick={() => !blocked && doPunch("clock_in")}
+        disabled={pending || blocked}
+        className={
+          blocked
+            ? "hidden sm:inline-flex h-10 items-center gap-2 rounded-xl border-2 border-orange-300 bg-orange-50 px-3 text-sm font-bold text-orange-800 cursor-not-allowed"
+            : "hidden sm:inline-flex h-10 items-center gap-2 rounded-xl border-2 border-border bg-card px-3 text-sm font-bold transition-all hover:bg-muted"
+        }
         title={state.reason ?? "Fichar entrada"}
       >
         <Play className="h-4 w-4 fill-current" />
-        <span>Fichar entrada</span>
-        {hasWarning ? (
+        <span>{blocked ? "Ausencia hoy" : "Fichar entrada"}</span>
+        {!blocked && hasWarning ? (
           <span
             className="inline-block h-2 w-2 rounded-full bg-amber-500"
             aria-label={state.reason}
           />
-        ) : (
+        ) : !blocked ? (
           <Clock className="h-3.5 w-3.5 opacity-50" />
-        )}
+        ) : null}
       </button>
     );
   }

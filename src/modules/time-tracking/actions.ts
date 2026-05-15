@@ -244,8 +244,49 @@ export async function getMyClockExtended(): Promise<ClockExtended> {
     // (-30 min antes / +2h después), NO bloqueamos — solo dejamos
     // `reason` como aviso. El usuario puede fichar horas extra o llegar
     // antes; admin verá el fichaje fuera de turno en el listado.
-    const canPunch = true;
+    let canPunch = true;
     let reason: string | undefined;
+
+    // Bloqueo por ausencia aprobada hoy: si el empleado está de
+    // vacaciones, baja, etc. aprobadas y la fecha actual está dentro
+    // del rango, NO puede fichar.
+    try {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const { data: absentToday } = await admin
+        .from("time_absences")
+        .select("kind, starts_on, ends_on")
+        .eq("user_id", session.user_id)
+        .eq("status", "approved")
+        .lte("starts_on", todayStr)
+        .gte("ends_on", todayStr)
+        .limit(1)
+        .maybeSingle();
+      const a = absentToday as
+        | { kind: string; starts_on: string; ends_on: string }
+        | null;
+      if (a) {
+        const KIND_LABEL_LC: Record<string, string> = {
+          vacation: "vacaciones",
+          sick: "baja médica",
+          maternity: "maternidad",
+          paternity: "paternidad",
+          marriage: "permiso por matrimonio",
+          bereavement: "permiso por fallecimiento",
+          lactation: "lactancia",
+          parental_paid_8y: "permiso parental retribuido",
+          parental_unpaid_8y: "permiso parental no retribuido",
+          mudanza: "mudanza",
+          civic_duty: "deber público",
+          personal: "asunto personal",
+          training: "formación",
+          other: "ausencia",
+        };
+        canPunch = false;
+        reason = `Estás de ${KIND_LABEL_LC[a.kind] ?? "ausencia"} hoy (hasta ${new Date(a.ends_on).toLocaleDateString("es-ES")}). No puedes fichar.`;
+      }
+    } catch {
+      /* fail-soft */
+    }
     if (shift) {
       const now = new Date();
       const [sh, sm] = shift.starts_at.split(":").map(Number);

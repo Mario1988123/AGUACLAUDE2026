@@ -14,6 +14,9 @@ import { getMyLeaveBudgets } from "@/modules/time-tracking/leave-budget-actions"
 import { ABSENCE_KIND_LABEL_UC } from "@/modules/time-tracking/absence-labels";
 import { listMyChildren } from "@/modules/time-tracking/children-actions";
 import { ChildrenManager } from "@/modules/time-tracking/children-manager";
+import { listVacationWindowsForYear } from "@/modules/time-tracking/vacation-windows-actions";
+import { listHolidaysForYear } from "@/modules/time-tracking/holidays-actions";
+import { VacationCalendarModal } from "@/modules/time-tracking/vacation-calendar-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +110,8 @@ export default async function FichajesPage({
     myRequests,
     myBudgets,
     myChildren,
+    vacationWindows,
+    yearHolidays,
   ] = await Promise.all([
     getMyHourBalance(isoLocal(weekStart), isoLocal(weekEnd)),
     getMyHourBalance(monthStart, monthEnd),
@@ -115,7 +120,15 @@ export default async function FichajesPage({
     listMyPunchRequests().catch(() => []),
     getMyLeaveBudgets(now.getFullYear()).catch(() => []),
     listMyChildren().catch(() => []),
+    listVacationWindowsForYear(now.getFullYear()).catch(() => []),
+    listHolidaysForYear(now.getFullYear()).catch(() => []),
   ]);
+
+  // Datos para la card grande + modal de vacaciones
+  const vacationBudget = myBudgets.find((b) => b.kind === "vacation");
+  const vacationTotal = Number(vacationBudget?.budget ?? 22);
+  const vacationTaken = Number(vacationBudget?.taken ?? 0);
+  const vacationRemaining = Math.max(0, vacationTotal - vacationTaken);
 
   const today = weekBalance.find((d) => d.date === todayStr);
   const totalWorked = monthBalance.reduce((s, d) => s + d.worked_minutes, 0);
@@ -165,6 +178,26 @@ export default async function FichajesPage({
           </Button>
           <PunchRequestButton />
           <SubmitAbsenceButton />
+          <VacationCalendarModal
+            holidays={yearHolidays.map((h) => ({
+              date: h.holiday_date,
+              name: h.name,
+            }))}
+            vacationWindows={vacationWindows.map((w) => ({
+              starts_on: w.starts_on,
+              ends_on: w.ends_on,
+              label: w.label,
+              max_concurrent_users: w.max_concurrent_users,
+            }))}
+            myAbsences={absencesAll.map((a) => ({
+              starts_on: a.starts_on,
+              ends_on: a.ends_on,
+              status: a.status,
+              kind: a.kind,
+            }))}
+            vacationRemaining={vacationRemaining}
+            vacationTotal={vacationTotal}
+          />
           {isAdmin && (
             <Button asChild variant="outline">
               <Link href={"/fichajes/admin" as never}>Vista admin →</Link>
@@ -172,6 +205,64 @@ export default async function FichajesPage({
           )}
         </div>
       </div>
+
+      {/* Vacaciones — card grande con gauge */}
+      <Card className="overflow-hidden border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white">
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wider text-amber-800">
+                Mis vacaciones {now.getFullYear()}
+              </div>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-5xl font-extrabold tabular-nums text-amber-900">
+                  {vacationRemaining}
+                </span>
+                <span className="text-base text-amber-800">
+                  de {vacationTotal} días disponibles
+                </span>
+              </div>
+              <div className="mt-2 h-2 w-64 overflow-hidden rounded-full bg-amber-100">
+                <div
+                  className="h-full bg-amber-500 transition-all"
+                  style={{
+                    width: `${vacationTotal > 0 ? Math.min(100, (vacationTaken / vacationTotal) * 100) : 0}%`,
+                  }}
+                />
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                Has consumido {vacationTaken}{" "}
+                {vacationTaken === 1 ? "día" : "días"}.
+              </div>
+            </div>
+            <div className="text-right">
+              <VacationCalendarModal
+                holidays={yearHolidays.map((h) => ({
+                  date: h.holiday_date,
+                  name: h.name,
+                }))}
+                vacationWindows={vacationWindows.map((w) => ({
+                  starts_on: w.starts_on,
+                  ends_on: w.ends_on,
+                  label: w.label,
+                  max_concurrent_users: w.max_concurrent_users,
+                }))}
+                myAbsences={absencesAll.map((a) => ({
+                  starts_on: a.starts_on,
+                  ends_on: a.ends_on,
+                  status: a.status,
+                  kind: a.kind,
+                }))}
+                vacationRemaining={vacationRemaining}
+                vacationTotal={vacationTotal}
+              />
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Pulsa para ver calendario con ventanas autorizadas
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Saldo HOY prominente */}
       <Card className="border-2 border-primary/20 bg-primary/5">

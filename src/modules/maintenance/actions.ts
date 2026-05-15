@@ -315,6 +315,20 @@ export async function completeMaintenanceAction(input: unknown) {
     .eq("id", parsed.id);
   if (updR.error) throw new Error(updR.error.message);
 
+  // Auto-resolver notificaciones del mantenimiento (ya completado).
+  try {
+    const { autoResolveNotificationsForSubject } = await import(
+      "@/modules/notifications/subject-actions"
+    );
+    await autoResolveNotificationsForSubject(
+      "maintenance",
+      parsed.id,
+      "Mantenimiento completado",
+    );
+  } catch {
+    /* fail-soft */
+  }
+
   // Insertar items reemplazados + descontar stock del almacén del técnico
   if (parsed.replaced_items.length > 0) {
     await supabase.from("maintenance_items_replaced").insert(

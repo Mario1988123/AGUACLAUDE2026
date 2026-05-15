@@ -494,6 +494,28 @@ export async function validateWalletEntryAction(id: string) {
     }
   }
   revalidatePath("/wallet");
+
+  // Auto-resolver notificaciones del wallet_entry (ya validado) y del
+  // contract (si lo tiene). Fail-soft.
+  try {
+    const { autoResolveNotificationsForSubject } = await import(
+      "@/modules/notifications/subject-actions"
+    );
+    await autoResolveNotificationsForSubject(
+      "wallet_entry",
+      id,
+      finalStatus === "settled" ? "Pago liquidado" : "Pago validado",
+    );
+    if (e.contract_id) {
+      await autoResolveNotificationsForSubject(
+        "contract_payment_pending",
+        e.contract_id,
+        "Pago del contrato validado",
+      );
+    }
+  } catch {
+    /* no-op */
+  }
 }
 
 export async function rejectWalletEntryAction(id: string, reason: string) {
