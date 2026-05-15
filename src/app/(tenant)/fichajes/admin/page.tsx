@@ -20,6 +20,14 @@ const KIND_LABEL: Record<string, string> = {
   break_end: "Fin descanso",
 };
 
+const ABSENCE_KIND_LABEL: Record<string, string> = {
+  vacation: "Vacaciones",
+  sick: "Baja médica",
+  personal: "Asunto personal",
+  training: "Formación",
+  other: "Otro",
+};
+
 export default async function FichajesAdminPage() {
   await assertModuleActive("time_tracking");
   const session = await requireSession();
@@ -149,7 +157,7 @@ export default async function FichajesAdminPage() {
                 <li key={a.id} className="flex items-center justify-between py-2 text-sm">
                   <div>
                     <div className="font-semibold">
-                      {a.user_name} · {a.kind}
+                      {a.user_name} · {ABSENCE_KIND_LABEL[a.kind] ?? a.kind}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       Del {new Date(a.starts_on).toLocaleDateString("es-ES")} al{" "}

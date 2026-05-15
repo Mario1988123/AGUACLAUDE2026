@@ -7,6 +7,14 @@ import { requireSession } from "@/shared/lib/auth/session";
 export type AbsenceKind = "vacation" | "sick" | "personal" | "training" | "other";
 export type AbsenceStatus = "pending" | "approved" | "rejected" | "cancelled";
 
+const ABSENCE_KIND_LABEL: Record<AbsenceKind, string> = {
+  vacation: "vacaciones",
+  sick: "baja médica",
+  personal: "asunto personal",
+  training: "formación",
+  other: "ausencia",
+};
+
 export interface AbsenceRow {
   id: string;
   user_id: string;
@@ -61,7 +69,7 @@ export async function submitAbsenceAction(input: {
       kind: "absence_request",
       severity: "info",
       title: "Solicitud de ausencia",
-      body: `${session.full_name ?? session.email} solicita ${input.kind} del ${input.starts_on} al ${input.ends_on}`,
+      body: `${session.full_name ?? session.email} solicita ${ABSENCE_KIND_LABEL[input.kind]} del ${input.starts_on} al ${input.ends_on}`,
     });
   }
   revalidatePath("/fichajes");

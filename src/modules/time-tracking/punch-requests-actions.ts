@@ -9,6 +9,13 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 export type PunchRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type PunchKind = "clock_in" | "clock_out" | "break_start" | "break_end";
 
+const PUNCH_KIND_LABEL: Record<PunchKind, string> = {
+  clock_in: "entrada",
+  clock_out: "salida",
+  break_start: "inicio de descanso",
+  break_end: "fin de descanso",
+};
+
 export interface PunchRequestRow {
   id: string;
   user_id: string;
@@ -71,7 +78,7 @@ export async function createPunchRequestAction(input: unknown): Promise<void> {
         kind: "punch_request",
         severity: "info",
         title: "Solicitud de fichaje",
-        body: `${session.full_name ?? session.email} pide ${parsed.punch_kind} el ${new Date(parsed.requested_at).toLocaleString("es-ES")}`,
+        body: `${session.full_name ?? session.email} pide fichar ${PUNCH_KIND_LABEL[parsed.punch_kind]} el ${new Date(parsed.requested_at).toLocaleString("es-ES")}`,
       });
     }
   } catch {
@@ -212,7 +219,7 @@ export async function approvePunchRequestAction(
       kind: "punch_request_resolved",
       severity: "success",
       title: "Fichaje aprobado",
-      body: `Tu solicitud de ${r.punch_kind} ha sido aprobada`,
+      body: `Tu solicitud de ${PUNCH_KIND_LABEL[r.punch_kind]} ha sido aprobada`,
     });
   } catch {
     /* fail-soft */
@@ -260,7 +267,7 @@ export async function rejectPunchRequestAction(
       kind: "punch_request_resolved",
       severity: "warning",
       title: "Fichaje rechazado",
-      body: `Tu solicitud de ${r.punch_kind} ha sido rechazada${notes ? ": " + notes : ""}`,
+      body: `Tu solicitud de ${PUNCH_KIND_LABEL[r.punch_kind as PunchKind]} ha sido rechazada${notes ? ": " + notes : ""}`,
     });
   } catch {
     /* fail-soft */
