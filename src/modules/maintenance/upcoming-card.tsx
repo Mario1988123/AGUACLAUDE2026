@@ -12,6 +12,16 @@ interface Row {
   status: string;
 }
 
+const MAINTENANCE_STATUS_LABEL: Record<string, string> = {
+  pending: "Pendiente",
+  scheduled: "Agendado",
+  in_progress: "En curso",
+  completed: "Completado",
+  cancelled: "Cancelado",
+  skipped: "Saltado",
+  invoiced: "Facturado",
+};
+
 export function UpcomingMaintenanceCard({ items }: { items: Row[] }) {
   return (
     <Card>
@@ -53,7 +63,11 @@ export function UpcomingMaintenanceCard({ items }: { items: Row[] }) {
                   </div>
                   {m.is_today && <Badge variant="warning">Hoy</Badge>}
                   {m.is_tomorrow && <Badge variant="default">Mañana</Badge>}
-                  {!m.is_today && !m.is_tomorrow && <Badge variant="outline">{m.status}</Badge>}
+                  {!m.is_today && !m.is_tomorrow && (
+                    <Badge variant="outline">
+                      {MAINTENANCE_STATUS_LABEL[m.status] ?? m.status}
+                    </Badge>
+                  )}
                 </li>
               );
             })}

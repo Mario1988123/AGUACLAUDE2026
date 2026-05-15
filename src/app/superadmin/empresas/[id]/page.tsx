@@ -27,6 +27,13 @@ const statusVariant: Record<string, "default" | "secondary" | "success" | "warni
   cancelled: "secondary",
 };
 
+const userStatusLabel: Record<string, string> = {
+  active: "Activo",
+  invited: "Invitado",
+  suspended: "Suspendido",
+  pending: "Pendiente",
+};
+
 export default async function EmpresaDetallePage({ params }: PageProps) {
   const { id } = await params;
   let company;
@@ -158,7 +165,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
                 {users.map((u) => (
                   <tr key={u.user_id}>
                     <td className="py-2">{u.full_name}</td>
-                    <td className="py-2">{u.status}</td>
+                    <td className="py-2">{userStatusLabel[u.status] ?? u.status}</td>
                     <td className="py-2">{new Date(u.created_at).toLocaleDateString("es-ES")}</td>
                   </tr>
                 ))}

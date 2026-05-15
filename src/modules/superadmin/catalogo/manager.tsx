@@ -26,6 +26,28 @@ import {
 import { Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 
+const DEFAULT_KIND_LABEL: Record<string, string> = {
+  product: "Producto",
+  service: "Servicio",
+  consumable: "Consumible",
+  spare_part: "Repuesto",
+  equipment: "Equipo",
+  filter: "Filtro",
+  membrane: "Membrana",
+  accessory: "Accesorio",
+  extra: "Extra",
+};
+
+const DATA_TYPE_LABEL: Record<string, string> = {
+  text: "Texto",
+  number: "Número",
+  integer: "Entero",
+  boolean: "Sí/No",
+  date: "Fecha",
+  select: "Selección",
+  multi_select: "Multi-selección",
+};
+
 export function CatalogoManager({
   categories,
   attributes,
@@ -105,7 +127,7 @@ function CategoryRow({ item }: { item: GlobalCategory }) {
         <div className="flex items-center gap-2">
           <code className="rounded bg-muted px-2 py-0.5 text-xs">{item.key}</code>
           <span className="font-semibold">{item.name_es}</span>
-          <Badge variant="outline">{item.default_kind}</Badge>
+          <Badge variant="outline">{DEFAULT_KIND_LABEL[item.default_kind] ?? item.default_kind}</Badge>
           {!item.is_active && <Badge variant="secondary">Inactiva</Badge>}
         </div>
         {item.description_es && (
@@ -282,7 +304,7 @@ function AttributeRow({
         <div className="flex items-center gap-2">
           <code className="rounded bg-muted px-2 py-0.5 text-xs">{item.key}</code>
           <span className="font-semibold">{item.name_es}</span>
-          <Badge variant="outline">{item.data_type}</Badge>
+          <Badge variant="outline">{DATA_TYPE_LABEL[item.data_type] ?? item.data_type}</Badge>
           {item.unit && <span className="text-xs text-muted-foreground">({item.unit})</span>}
         </div>
       </div>

@@ -37,6 +37,16 @@ const DEPT_LABEL: Record<string, string> = {
   tmk: "Telemarketing",
 };
 
+const METRIC_KIND_LABEL: Record<string, string> = {
+  amount_eur: "Importe €",
+  units: "Unidades",
+  contracts_signed: "Contratos firmados",
+  installations: "Instalaciones",
+  leads_won: "Leads ganados",
+  appointments: "Visitas",
+  calls: "Llamadas",
+};
+
 interface Props {
   objectives: Objective[];
   team: { user_id: string; full_name: string }[];
@@ -93,7 +103,7 @@ export function ObjectivesManager({ objectives, team }: Props) {
                   {team.find((t) => t.user_id === o.scope_user_id)?.full_name ?? "?"}
                 </Badge>
               )}
-              <Badge variant="outline">{o.metric_kind}</Badge>
+              <Badge variant="outline">{METRIC_KIND_LABEL[o.metric_kind] ?? o.metric_kind}</Badge>
               {o.plan_type && (
                 <Badge variant="secondary">
                   {PLAN_TYPE_LABEL[o.plan_type] ?? o.plan_type}

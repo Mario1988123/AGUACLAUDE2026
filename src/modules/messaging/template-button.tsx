@@ -7,6 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { notify } from "@/shared/hooks/use-toast";
 import { MESSAGE_TEMPLATES, renderTemplate, type MessageTemplate } from "./templates";
 
+const CHANNEL_LABEL: Record<string, string> = {
+  email: "Email",
+  whatsapp: "WhatsApp",
+  sms: "SMS",
+};
+
 interface Props {
   recipientName: string | null;
   companyName?: string | null;
@@ -88,7 +94,9 @@ export function MessageTemplateButton({
                   }`}
                 >
                   <div className="font-semibold">{t.label}</div>
-                  <div className="text-xs text-muted-foreground">{t.channel}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {CHANNEL_LABEL[t.channel] ?? t.channel}
+                  </div>
                 </button>
               </li>
             ))}

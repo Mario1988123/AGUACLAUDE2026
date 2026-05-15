@@ -16,6 +16,12 @@ import {
   type MessageTemplateRow,
 } from "./actions";
 
+const CHANNEL_LABEL: Record<string, string> = {
+  email: "Email",
+  whatsapp: "WhatsApp",
+  sms: "SMS",
+};
+
 export function MessageTemplatesManager({ items }: { items: MessageTemplateRow[] }) {
   const [editing, setEditing] = useState<MessageTemplateRow | "new" | null>(null);
 
@@ -81,7 +87,7 @@ function TemplateRow({
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline">#{item.sort_order}</Badge>
           <span className="font-semibold">{item.label}</span>
-          <Badge variant="secondary">{item.channel}</Badge>
+          <Badge variant="secondary">{CHANNEL_LABEL[item.channel] ?? item.channel}</Badge>
           <code className="rounded bg-muted px-2 py-0.5 text-xs">{item.key}</code>
         </div>
         {item.subject && (

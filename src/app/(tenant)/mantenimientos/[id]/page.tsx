@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMaintenance } from "@/modules/maintenance/actions";
 import { listProducts } from "@/modules/products/actions";
-import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/maintenance/constants";
+import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Timeline } from "@/modules/events/timeline";
@@ -79,7 +79,7 @@ export default async function MaintenanceDetailPage({
             <Badge variant={STATUS_VARIANT[job.status] ?? "default"}>
               {STATUS_LABEL[job.status] ?? job.status}
             </Badge>
-            <Badge variant="outline">{job.kind}</Badge>
+            <Badge variant="outline">{KIND_LABEL[job.kind] ?? job.kind}</Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Cliente: <strong>{customerName}</strong>

@@ -12,6 +12,15 @@ import {
   type SnLookupResult,
 } from "./sn-lookup-actions";
 
+const STATUS_LABEL: Record<string, string> = {
+  active: "Activo",
+  uninstalled: "Desinstalado",
+  relocated: "Reubicado",
+  warranty_replaced: "Sustituido por garantía",
+  returned: "Devuelto",
+  in_stock: "En stock",
+};
+
 export function SnLookup() {
   const [sn, setSn] = useState("");
   const [results, setResults] = useState<SnLookupResult[] | null>(null);
@@ -58,7 +67,11 @@ export function SnLookup() {
                     <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                       {r.serial_number}
                     </code>
-                    {r.status && <Badge variant="outline">{r.status}</Badge>}
+                    {r.status && (
+                      <Badge variant="outline">
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </Badge>
+                    )}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {r.product_name && <span>{r.product_name} · </span>}

@@ -7,6 +7,13 @@ import { CountItemsForm } from "@/modules/warehouses/count-items-form";
 
 export const dynamic = "force-dynamic";
 
+const COUNT_STATUS_LABEL: Record<string, string> = {
+  open: "Abierto",
+  in_progress: "En curso",
+  completed: "Completado",
+  cancelled: "Cancelado",
+};
+
 export default async function CountDetailPage({
   params,
 }: {
@@ -69,7 +76,7 @@ export default async function CountDetailPage({
         <div>
           <h1 className="text-2xl font-bold">{h.label}</h1>
           <p className="text-sm text-muted-foreground">
-            Estado: <strong>{h.status}</strong>
+            Estado: <strong>{COUNT_STATUS_LABEL[h.status] ?? h.status}</strong>
             {h.completed_at &&
               ` · Completado ${new Date(h.completed_at).toLocaleString("es-ES")}`}
           </p>
