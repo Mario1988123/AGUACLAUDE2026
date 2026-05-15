@@ -196,7 +196,172 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border bg-card">
+      {/* Mobile: cards apiladas */}
+      <ul className="space-y-2 md:hidden">
+        {visible.length === 0 ? (
+          <li className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+            No hay leads.
+          </li>
+        ) : (
+          visible.map((l) => {
+            const mapsUrl =
+              l.address_lat != null && l.address_lng != null
+                ? `https://www.google.com/maps/search/?api=1&query=${l.address_lat},${l.address_lng}`
+                : l.address_city
+                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                      [l.address_street, l.address_city, l.address_province, "España"]
+                        .filter(Boolean)
+                        .join(", "),
+                    )}`
+                  : null;
+            const isCompany = l.party_kind === "company";
+            const isAutonomo = isCompany && Boolean(l.is_autonomo);
+            const KindIcon = isAutonomo ? IdCard : isCompany ? Briefcase : User;
+            const kindColor = isAutonomo
+              ? "text-amber-600"
+              : isCompany
+                ? "text-indigo-600"
+                : "text-sky-600";
+            return (
+              <li
+                key={l.id}
+                className={`rounded-xl border p-3 ${rowBg(l.status)}`}
+              >
+                <div className="flex items-start gap-2">
+                  {canBulkReassign && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(l.id)}
+                      onChange={() => toggle(l.id)}
+                      className="mt-1 h-4 w-4"
+                    />
+                  )}
+                  <KindIcon className={`mt-0.5 h-4 w-4 shrink-0 ${kindColor}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <Link
+                        href={`/leads/${l.id}` as never}
+                        className="font-bold text-primary hover:underline truncate"
+                      >
+                        {l.display_name}
+                      </Link>
+                      <StatusPill
+                        label={STATUS_LABEL[l.status]}
+                        tone={LEAD_TONE[l.status] ?? "info"}
+                      />
+                    </div>
+                    {isCompany && l.contact_name && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {l.contact_name}
+                      </div>
+                    )}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      {l.address_city && (
+                        <span className="font-medium">{l.address_city}</span>
+                      )}
+                      {l.address_province && <span>· {l.address_province}</span>}
+                      <span>· {ORIGIN_LABEL[l.origin]}</span>
+                      <span
+                        className={`tabular-nums ${ageClass(l.status, l.days_since_created)}`}
+                      >
+                        · {l.days_since_created}d
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {l.tags?.includes("reabierto") && (
+                        <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-800">
+                          ↻ Reabierto
+                        </span>
+                      )}
+                      {l.has_active_trial && (
+                        <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700">
+                          🎁 Prueba activa
+                        </span>
+                      )}
+                      {l.has_open_incident && (
+                        <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700">
+                          🚨 Incidencia
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-end gap-0.5 border-t pt-2">
+                  <Link
+                    href={`/leads/${l.id}` as never}
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                    title="Ver ficha"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Link>
+                  {l.phone_primary && (
+                    <a
+                      href={`tel:${l.phone_primary}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
+                      title={`Llamar ${l.phone_primary}`}
+                    >
+                      <Phone className="h-4 w-4" />
+                    </a>
+                  )}
+                  {l.email && (
+                    <a
+                      href={`mailto:${l.email}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                      title={`Email a ${l.email}`}
+                    >
+                      <Mail className="h-4 w-4" />
+                    </a>
+                  )}
+                  {mapsUrl && (
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noopener"
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      title="Ver en Google Maps"
+                    >
+                      <MapPin className="h-4 w-4" />
+                    </a>
+                  )}
+                  {l.has_proposals && (
+                    <Link
+                      href={`/propuestas?lead=${l.id}` as never}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-violet-600 hover:bg-violet-100"
+                      title="Ver propuesta"
+                    >
+                      <FileText className="h-4 w-4" />
+                    </Link>
+                  )}
+                  {l.has_proposals ? (
+                    <button
+                      type="button"
+                      onClick={() => openLostModal(l.id, l.display_name)}
+                      disabled={pending}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                      title="Marcar como venta perdida"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(l.id, l.display_name)}
+                      disabled={pending}
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+                      title="Eliminar lead"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })
+        )}
+      </ul>
+
+      {/* Desktop: tabla densa */}
+      <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>

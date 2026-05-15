@@ -106,7 +106,62 @@ export default async function InvoicesPage({
             </p>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            {/* Mobile: cards verticales — Desktop: tabla densa */}
+            <ul className="space-y-2 md:hidden">
+              {pendingInvoice.map((p) => (
+                <li
+                  key={p.id}
+                  className="rounded-xl border border-amber-200 bg-white p-3 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">
+                        {p.customer_id ? (
+                          <Link
+                            href={`/clientes/${p.customer_id}` as never}
+                            className="hover:underline"
+                          >
+                            {p.customer_name ?? "Cliente"}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {p.concept}
+                      </div>
+                    </div>
+                    <div className="text-right tabular-nums">
+                      <div className="font-bold">{eur(p.amount_cents)}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {p.collected_at
+                          ? new Date(p.collected_at).toLocaleDateString("es-ES")
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {p.contract_reference && (
+                        <Link
+                          href={`/contratos/${p.contract_id}` as never}
+                          className="font-mono text-primary hover:underline"
+                        >
+                          {p.contract_reference}
+                        </Link>
+                      )}
+                      {p.collected_by_name && (
+                        <span className="text-muted-foreground">
+                          · {p.collected_by_name}
+                        </span>
+                      )}
+                    </div>
+                    <InvoiceFromWalletButton walletId={p.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
