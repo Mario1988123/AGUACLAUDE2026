@@ -15,6 +15,13 @@ const SEV_VARIANT: Record<string, "default" | "secondary" | "success" | "warning
     error: "destructive",
   };
 
+const SEV_LABEL: Record<string, string> = {
+  info: "Info",
+  success: "OK",
+  warning: "Aviso",
+  error: "Error",
+};
+
 type Category = "all" | "fichajes" | "ausencias" | "ventas" | "operaciones" | "other";
 
 /** Clasifica una notificación por categoría según su kind. */
@@ -194,7 +201,9 @@ export default async function NotificacionesPage({
                       <span className={`text-sm ${!n.read_at ? "font-semibold" : ""}`}>
                         {n.title}
                       </span>
-                      <Badge variant={SEV_VARIANT[n.severity]}>{n.severity}</Badge>
+                      <Badge variant={SEV_VARIANT[n.severity]}>
+                        {SEV_LABEL[n.severity] ?? n.severity}
+                      </Badge>
                     </div>
                     {n.body && <p className="mt-1 text-xs text-muted-foreground">{n.body}</p>}
                     <p className="mt-1 text-xs text-muted-foreground">

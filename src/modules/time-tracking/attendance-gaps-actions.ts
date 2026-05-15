@@ -66,9 +66,22 @@ export async function listPendingAttendanceGaps(): Promise<AttendanceGapRow[]> {
  *  (ej. era el cumpleaños del CEO, día regalo). */
 export async function classifyAttendanceGapAction(input: {
   gap_id: string;
-  classification: "vacation" | "sick" | "personal" | "training" | "other"
-    | "paternity" | "maternity" | "marriage" | "bereavement" | "lactation"
-    | "parental_unpaid" | "mudanza" | "civic_duty" | "dismissed";
+  classification:
+    | "vacation"
+    | "sick"
+    | "personal"
+    | "training"
+    | "other"
+    | "paternity"
+    | "maternity"
+    | "marriage"
+    | "bereavement"
+    | "lactation"
+    | "parental_paid_8y"
+    | "parental_unpaid_8y"
+    | "mudanza"
+    | "civic_duty"
+    | "dismissed";
   notes?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {

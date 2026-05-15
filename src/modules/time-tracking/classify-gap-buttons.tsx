@@ -6,10 +6,24 @@ import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { classifyAttendanceGapAction } from "./attendance-gaps-actions";
-import type { AbsenceKind } from "./absence-labels";
 
+// Subset de AbsenceKind permitido + dismissed. Coincide con el union
+// del server action classifyAttendanceGapAction.
 type Classification =
-  | AbsenceKind
+  | "vacation"
+  | "sick"
+  | "personal"
+  | "training"
+  | "other"
+  | "paternity"
+  | "maternity"
+  | "marriage"
+  | "bereavement"
+  | "lactation"
+  | "parental_paid_8y"
+  | "parental_unpaid_8y"
+  | "mudanza"
+  | "civic_duty"
   | "dismissed";
 
 const OPTIONS: Array<{ value: Classification; label: string }> = [
@@ -21,7 +35,8 @@ const OPTIONS: Array<{ value: Classification; label: string }> = [
   { value: "maternity", label: "Maternidad" },
   { value: "paternity", label: "Paternidad" },
   { value: "lactation", label: "Lactancia" },
-  { value: "parental_unpaid", label: "Parental no remunerado" },
+  { value: "parental_paid_8y", label: "Parental retribuido (hasta 8 años)" },
+  { value: "parental_unpaid_8y", label: "Parental no retribuido (hasta 8 años)" },
   { value: "mudanza", label: "Mudanza" },
   { value: "civic_duty", label: "Deber público" },
   { value: "training", label: "Formación" },
