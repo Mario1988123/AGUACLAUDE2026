@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireSession } from "@/shared/lib/auth/session";
 import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { redirect } from "next/navigation";
@@ -10,6 +9,7 @@ import { ApproveAbsenceButtons } from "@/modules/time-tracking/approve-absence-b
 import { ApprovePunchRequestButtons } from "@/modules/time-tracking/approve-punch-request-buttons";
 import { AutoCloseButton } from "@/modules/time-tracking/auto-close-button";
 import { listPendingPunchRequests } from "@/modules/time-tracking/punch-requests-actions";
+import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
 
@@ -52,13 +52,16 @@ export default async function FichajesAdminPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <AutoCloseButton />
-          <Link
-            href={"/api/export/time-records" as never}
-            prefetch={false}
+          <a
+            href="/api/export/time-records"
+            target="_blank"
+            rel="noopener"
+            download
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
           >
             ⬇ Exportar inspección
-          </Link>
+          </a>
+          <BackButton href="/fichajes" />
         </div>
       </div>
 

@@ -128,7 +128,8 @@ export function PunchPageClient({
     .join("")
     .toUpperCase() || "?";
 
-  const blockedReason = state.status === "stopped" && !state.canPunch ? state.reason : null;
+  // El reason ya no bloquea — solo se muestra como aviso suave si existe.
+  const warningReason = state.status === "stopped" ? (state.reason ?? null) : null;
 
   return (
     <div className="space-y-4">
@@ -179,9 +180,9 @@ export function PunchPageClient({
           height={260}
         />
         <div className="border-t bg-card p-3">
-          {blockedReason && (
+          {warningReason && (
             <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-              ⚠ {blockedReason}
+              ⚠ {warningReason}
             </div>
           )}
           {/* Acciones según estado */}
@@ -190,7 +191,7 @@ export function PunchPageClient({
               size="lg"
               variant="success"
               className="w-full text-base"
-              disabled={pending || !state.canPunch}
+              disabled={pending}
               onClick={() => doPunch("clock_in")}
             >
               <Play className="h-5 w-5" />

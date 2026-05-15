@@ -130,23 +130,29 @@ export function TimeClockWidget() {
 
   if (!state) return null;
 
-  // Estado: STOPPED → botón de entrada (o deshabilitado fuera de ventana)
+  // Estado: STOPPED → botón de entrada. Si hay un reason (fuera del
+  // turno, error de carga) lo dejamos como tooltip y un punto ámbar,
+  // pero no se bloquea — el usuario puede fichar igualmente.
   if (state.status === "stopped") {
+    const hasWarning = Boolean(state.reason);
     return (
       <button
         type="button"
-        onClick={() => state.canPunch && doPunch("clock_in")}
-        disabled={pending || !state.canPunch}
-        className={`hidden sm:inline-flex h-10 items-center gap-2 rounded-xl border-2 px-3 text-sm font-bold transition-all ${
-          state.canPunch
-            ? "border-border bg-card hover:bg-muted"
-            : "border-border bg-muted/40 text-muted-foreground cursor-not-allowed"
-        }`}
+        onClick={() => doPunch("clock_in")}
+        disabled={pending}
+        className="hidden sm:inline-flex h-10 items-center gap-2 rounded-xl border-2 border-border bg-card px-3 text-sm font-bold transition-all hover:bg-muted"
         title={state.reason ?? "Fichar entrada"}
       >
         <Play className="h-4 w-4 fill-current" />
-        <span>{state.canPunch ? "Fichar entrada" : "Fuera de turno"}</span>
-        <Clock className="h-3.5 w-3.5 opacity-50" />
+        <span>Fichar entrada</span>
+        {hasWarning ? (
+          <span
+            className="inline-block h-2 w-2 rounded-full bg-amber-500"
+            aria-label={state.reason}
+          />
+        ) : (
+          <Clock className="h-3.5 w-3.5 opacity-50" />
+        )}
       </button>
     );
   }

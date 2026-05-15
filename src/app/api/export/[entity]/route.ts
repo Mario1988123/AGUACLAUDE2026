@@ -28,6 +28,16 @@ function fmtDate(d: string | null | undefined): string {
   return new Date(d).toLocaleDateString("es-ES");
 }
 
+/** Algunos navegadores / proxies pueden enviar POST al hacer click en un
+ *  link que apunta a un route handler (caso Next 15 con prefetch). Lo
+ *  tratamos como GET para evitar 405. */
+export async function POST(
+  req: NextRequest,
+  ctx: { params: Promise<{ entity: string }> },
+) {
+  return GET(req, ctx);
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ entity: string }> }) {
   const { entity } = await params;
   if (!ENTITIES.includes(entity as Entity)) {

@@ -219,7 +219,11 @@ export async function getMyClockExtended(): Promise<ClockExtended> {
       /* tabla no aplicada todavía */
     }
 
-    let canPunch = true;
+    // Reglas de turno: si hay turno y estás fuera de la ventana
+    // (-30 min antes / +2h después), NO bloqueamos — solo dejamos
+    // `reason` como aviso. El usuario puede fichar horas extra o llegar
+    // antes; admin verá el fichaje fuera de turno en el listado.
+    const canPunch = true;
     let reason: string | undefined;
     if (shift) {
       const now = new Date();
@@ -230,16 +234,17 @@ export async function getMyClockExtended(): Promise<ClockExtended> {
       const earliestPunch = new Date(start.getTime() - 30 * 60 * 1000);
       const latestPunch = new Date(end.getTime() + 2 * 3600 * 1000);
       if (now < earliestPunch) {
-        canPunch = false;
-        reason = `Tu turno empieza a las ${shift.starts_at} (puedes fichar desde 30 min antes).`;
+        reason = `Tu turno empieza a las ${shift.starts_at}.`;
       } else if (now > latestPunch && status === "stopped") {
-        canPunch = false;
         reason = "Tu turno terminó hace más de 2 horas.";
       }
     }
     return { status, since, shift, canPunch, reason };
   } catch {
-    return { status: "stopped", canPunch: false };
+    // Fail-open: si falla la query del estado, permitir fichar de todas
+    // formas. Antes devolvía canPunch=false → widget mostraba "Fuera de
+    // turno" engañosamente cuando era un error de carga.
+    return { status: "stopped", canPunch: true, reason: "No se pudo cargar el estado" };
   }
 }
 
