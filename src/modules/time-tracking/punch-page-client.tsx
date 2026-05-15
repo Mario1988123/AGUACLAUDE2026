@@ -99,12 +99,16 @@ export function PunchPageClient({
     }
     startTransition(async () => {
       try {
-        const next = await punchKindAction(kind, {
+        const result = await punchKindAction(kind, {
           geo_latitude: lat,
           geo_longitude: lng,
           accuracy_meters: accuracy,
         });
-        setState(next);
+        if (!result.ok) {
+          notify.error("No se pudo fichar", result.error);
+          return;
+        }
+        setState(result.state);
         notify.success(
           kind === "clock_in"
             ? "Entrada registrada"

@@ -98,12 +98,15 @@ export function TimeClockWidget() {
     }
     startTransition(async () => {
       try {
-        // punchKindAction ahora devuelve el estado actualizado tras el INSERT
-        const fresh = await punchKindAction(kind, {
+        const result = await punchKindAction(kind, {
           geo_latitude: geo.lat,
           geo_longitude: geo.lng,
           accuracy_meters: geo.acc,
         });
+        if (!result.ok) {
+          notify.error("No se pudo fichar", result.error);
+          return;
+        }
         const labels: Record<typeof kind, string> = {
           clock_in: "Entrada registrada",
           clock_out: "Salida registrada · jornada terminada",
@@ -111,7 +114,7 @@ export function TimeClockWidget() {
           break_end: "Reanudado",
         };
         notify.success(labels[kind]);
-        setState(fresh);
+        setState(result.state);
         router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));

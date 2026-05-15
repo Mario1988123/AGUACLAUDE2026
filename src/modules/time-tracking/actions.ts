@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import type { PunchKind, DayPunch, ClockExtended, AdminPunchRow, PunchRow } from "./types";
+import type {
+  PunchKind,
+  DayPunch,
+  ClockExtended,
+  AdminPunchRow,
+  PunchRow,
+  PunchResult,
+} from "./types";
 
 interface PunchInput {
   geo_latitude: number | null;
@@ -260,10 +267,10 @@ export async function punchKindAction(
     geo_longitude: number | null;
     accuracy_meters: number | null;
   },
-): Promise<ClockExtended> {
+): Promise<PunchResult> {
   try {
     const session = await requireSession();
-    if (!session.company_id) throw new Error("Sin empresa");
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const noGeo = input.geo_latitude == null || input.geo_longitude == null;
@@ -272,6 +279,8 @@ export async function punchKindAction(
     // ---- Validar coherencia: 1 sola jornada al día ----
     // Una jornada = 1 clock_in + descansos arbitrarios + 1 clock_out.
     // No se permite reabrir tras cerrar, ni cerrar dos veces.
+    // Los errores se DEVUELVEN (no se lanzan) para que el mensaje
+    // sobreviva el serializado de Server Actions en producción.
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
     const { data: todayPunches } = await admin
@@ -288,37 +297,34 @@ export async function punchKindAction(
 
     if (kind === "clock_in") {
       if (hasClockIn) {
-        throw new Error(
-          "Ya fichaste entrada hoy. No puedes abrir otra jornada en el mismo día.",
-        );
+        return {
+          ok: false,
+          error: "Ya fichaste entrada hoy. No puedes abrir otra jornada en el mismo día.",
+        };
       }
     } else if (kind === "clock_out") {
       if (!hasClockIn) {
-        throw new Error("No has fichado entrada hoy. Ficha primero la entrada.");
+        return { ok: false, error: "No has fichado entrada hoy. Ficha primero la entrada." };
       }
       if (hasClockOut) {
-        throw new Error("Ya fichaste salida hoy.");
+        return { ok: false, error: "Ya fichaste salida hoy." };
       }
       if (lastKind === "break_start") {
-        throw new Error(
-          "Estás en descanso. Reanuda antes de fichar la salida.",
-        );
+        return { ok: false, error: "Estás en descanso. Reanuda antes de fichar la salida." };
       }
     } else if (kind === "break_start") {
       if (!hasClockIn) {
-        throw new Error("Ficha entrada antes de iniciar un descanso.");
+        return { ok: false, error: "Ficha entrada antes de iniciar un descanso." };
       }
       if (hasClockOut) {
-        throw new Error("La jornada ya está cerrada.");
+        return { ok: false, error: "La jornada ya está cerrada." };
       }
       if (lastKind === "break_start") {
-        throw new Error("Ya estás en descanso. Reanuda primero.");
+        return { ok: false, error: "Ya estás en descanso. Reanuda primero." };
       }
     } else if (kind === "break_end") {
       if (lastKind !== "break_start") {
-        throw new Error(
-          "No hay un descanso abierto que reanudar.",
-        );
+        return { ok: false, error: "No hay un descanso abierto que reanudar." };
       }
     }
     // INSERT con todos los campos. Si la migración 20260503320000 (que añade
@@ -358,7 +364,10 @@ export async function punchKindAction(
     }
     if (insertError) {
       console.error("[punchKindAction insert]", insertError);
-      throw new Error(insertError.message ?? "Error al insertar fichaje");
+      return {
+        ok: false,
+        error: insertError.message ?? "Error al insertar fichaje",
+      };
     }
 
     if (noGeo) {
@@ -386,7 +395,8 @@ export async function punchKindAction(
     // (tabla user_work_schedules no existe aún, etc.) construir uno mínimo
     // basado en el INSERT recién hecho para que el widget refleje el cambio.
     try {
-      return await getMyClockExtended();
+      const state = await getMyClockExtended();
+      return { ok: true, state };
     } catch (err) {
       console.error("[punchKindAction getMyClockExtended]", err);
       const status =
@@ -396,14 +406,20 @@ export async function punchKindAction(
             ? ("on_break" as const)
             : ("stopped" as const);
       return {
-        status,
-        since: status === "working" || status === "on_break" ? nowIso : undefined,
-        canPunch: true,
+        ok: true,
+        state: {
+          status,
+          since: status === "working" || status === "on_break" ? nowIso : undefined,
+          canPunch: true,
+        },
       };
     }
   } catch (err) {
     console.error("[punchKindAction outer]", err);
-    throw err instanceof Error ? err : new Error("Error desconocido al fichar");
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido al fichar",
+    };
   }
 }
 

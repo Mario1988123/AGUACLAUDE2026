@@ -35,3 +35,11 @@ export interface ClockExtended {
 export interface AdminPunchRow extends PunchRow {
   user_name: string | null;
 }
+
+/** Resultado de un fichaje: éxito con estado fresco, o error de
+ *  validación con mensaje legible. Se devuelve en vez de lanzar para
+ *  que el mensaje sobreviva la serialización de server action en
+ *  producción (Next.js redacta los Error.message por defecto). */
+export type PunchResult =
+  | { ok: true; state: ClockExtended }
+  | { ok: false; error: string };
