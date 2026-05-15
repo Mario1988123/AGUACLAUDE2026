@@ -12,6 +12,8 @@ import { PunchRequestButton } from "@/modules/time-tracking/punch-request-button
 import { listMyPunchRequests } from "@/modules/time-tracking/punch-requests-actions";
 import { getMyLeaveBudgets } from "@/modules/time-tracking/leave-budget-actions";
 import { ABSENCE_KIND_LABEL_UC } from "@/modules/time-tracking/absence-labels";
+import { listMyChildren } from "@/modules/time-tracking/children-actions";
+import { ChildrenManager } from "@/modules/time-tracking/children-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +106,7 @@ export default async function FichajesPage({
     absencesAll,
     myRequests,
     myBudgets,
+    myChildren,
   ] = await Promise.all([
     getMyHourBalance(isoLocal(weekStart), isoLocal(weekEnd)),
     getMyHourBalance(monthStart, monthEnd),
@@ -111,6 +114,7 @@ export default async function FichajesPage({
     listAbsences(),
     listMyPunchRequests().catch(() => []),
     getMyLeaveBudgets(now.getFullYear()).catch(() => []),
+    listMyChildren().catch(() => []),
   ]);
 
   const today = weekBalance.find((d) => d.date === todayStr);
@@ -326,6 +330,15 @@ export default async function FichajesPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Mis hijos (para permisos parentales)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ChildrenManager items={myChildren} />
+        </CardContent>
+      </Card>
 
       {myBudgets.length > 0 && (
         <Card>

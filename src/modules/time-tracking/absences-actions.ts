@@ -54,6 +54,30 @@ export async function submitAbsenceAction(input: {
     });
     if (!check.ok) return { ok: false, error: check.reason };
   }
+
+  // Permiso parental hasta 8 años del menor (paid_8y / unpaid_8y):
+  // verificar que el usuario tiene al menos un hijo y que en la
+  // fecha de inicio el menor (el más pequeño) tiene <8 años.
+  if (
+    input.kind === "parental_paid_8y" ||
+    input.kind === "parental_unpaid_8y"
+  ) {
+    const { getMyYoungestChildAgeAt } = await import("./children-actions");
+    const age = await getMyYoungestChildAgeAt(session.user_id, input.starts_on);
+    if (age == null) {
+      return {
+        ok: false,
+        error:
+          "Necesitas registrar al menos un hijo en tu ficha para pedir permiso parental. Hazlo desde /fichajes.",
+      };
+    }
+    if (age >= 8) {
+      return {
+        ok: false,
+        error: `Tu hijo/a tiene ${age} años. El permiso parental sólo es válido hasta que el menor cumple 8 años.`,
+      };
+    }
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const ins = await admin.from("time_absences").insert({
