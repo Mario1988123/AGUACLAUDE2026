@@ -101,6 +101,35 @@ export async function setCompanyRegionAction(regionCode: string): Promise<void> 
   revalidatePath("/configuracion/festivos");
 }
 
+/** Setea CCAA y ciudad simultáneamente. Defensivo si city_code no
+ *  está en cache aún. */
+export async function setCompanyLocalityAction(input: {
+  ccaa: string | null;
+  city_code: string | null;
+}): Promise<void> {
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const payload: Record<string, unknown> = {
+    region_code: input.ccaa ?? null,
+    city_code: input.city_code ?? null,
+  };
+  let r = await admin
+    .from("company_settings")
+    .update(payload)
+    .eq("company_id", session.company_id);
+  if (r.error && /city_code|schema cache|Could not find/i.test(r.error.message ?? "")) {
+    delete payload.city_code;
+    r = await admin
+      .from("company_settings")
+      .update(payload)
+      .eq("company_id", session.company_id);
+  }
+  if (r.error) throw new Error(r.error.message);
+  revalidatePath("/configuracion/festivos");
+}
+
 export async function getCompanyRegion(): Promise<string | null> {
   try {
     const session = await requireSession();
@@ -115,5 +144,42 @@ export async function getCompanyRegion(): Promise<string | null> {
     return (data as { region_code: string | null } | null)?.region_code ?? null;
   } catch {
     return null;
+  }
+}
+
+export async function getCompanyLocality(): Promise<{
+  ccaa: string | null;
+  city_code: string | null;
+}> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ccaa: null, city_code: null };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    let res = await admin
+      .from("company_settings")
+      .select("region_code, city_code")
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (
+      res.error &&
+      /city_code|schema cache|Could not find/i.test(res.error.message ?? "")
+    ) {
+      res = await admin
+        .from("company_settings")
+        .select("region_code")
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+    }
+    const r = res.data as {
+      region_code: string | null;
+      city_code?: string | null;
+    } | null;
+    return {
+      ccaa: r?.region_code ?? null,
+      city_code: r?.city_code ?? null,
+    };
+  } catch {
+    return { ccaa: null, city_code: null };
   }
 }

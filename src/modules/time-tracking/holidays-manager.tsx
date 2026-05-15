@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -12,30 +12,57 @@ import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   addHolidayAction,
   deleteHolidayAction,
-  setCompanyRegionAction,
+  setCompanyLocalityAction,
   type HolidayRow,
 } from "./holidays-actions";
+import type { Province } from "./localities";
 
 interface Props {
   holidays: HolidayRow[];
-  currentRegion: string | null;
-  regions: Array<{ code: string; name: string }>;
+  currentCCAA: string | null;
+  currentCity: string | null;
+  provinces: Province[];
+  ccaaLabels: Record<string, string>;
   recommended: Array<{ date: string; name: string }>;
 }
 
-export function HolidaysManager({ holidays, currentRegion, regions, recommended }: Props) {
-  const [region, setRegion] = useState(currentRegion ?? "");
+export function HolidaysManager({
+  holidays,
+  currentCCAA,
+  currentCity,
+  provinces,
+  ccaaLabels,
+  recommended,
+}: Props) {
+  const [ccaa, setCcaa] = useState(currentCCAA ?? "");
+  const [city, setCity] = useState(currentCity ?? "");
   const [newDate, setNewDate] = useState("");
   const [newName, setNewName] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const ask = useConfirm();
 
-  function saveRegion() {
+  // Provincias agrupadas por CCAA (para el selector)
+  const provincesOfCCAA = useMemo(
+    () => (ccaa ? provinces.filter((p) => p.ccaa === ccaa) : []),
+    [ccaa, provinces],
+  );
+  const allCities = useMemo(
+    () =>
+      provincesOfCCAA.flatMap((p) =>
+        p.cities.map((c) => ({ ...c, province: p.name })),
+      ),
+    [provincesOfCCAA],
+  );
+
+  function saveLocality() {
     startTransition(async () => {
       try {
-        await setCompanyRegionAction(region);
-        notify.success("Provincia guardada");
+        await setCompanyLocalityAction({
+          ccaa: ccaa || null,
+          city_code: city || null,
+        });
+        notify.success("Localidad guardada");
         router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
@@ -46,7 +73,11 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
   function add(date: string, name: string) {
     startTransition(async () => {
       try {
-        await addHolidayAction({ date, name, region_code: region || undefined });
+        await addHolidayAction({
+          date,
+          name,
+          region_code: ccaa || undefined,
+        });
         notify.success("Festivo añadido");
         setNewDate("");
         setNewName("");
@@ -59,7 +90,7 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
 
   async function remove(id: string) {
     const ok = await ask({
-      message: "¿Eliminar este festivo? (los nacionales no se pueden borrar)",
+      message: "¿Eliminar este festivo? Los nacionales no se pueden borrar.",
       confirmText: "Eliminar",
       variant: "destructive",
     });
@@ -77,45 +108,83 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
 
   const existingDates = new Set(holidays.map((h) => h.holiday_date));
   const pendingRecommended = recommended.filter((r) => !existingDates.has(r.date));
+  const dirty = ccaa !== (currentCCAA ?? "") || city !== (currentCity ?? "");
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2 rounded-xl border bg-muted/30 p-4">
-        <Label>Provincia / comunidad de la empresa</Label>
-        <div className="flex gap-2">
-          <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-            className="h-12 flex-1 rounded-xl border border-input bg-background px-3 text-base"
-          >
-            <option value="">— Sin definir —</option>
-            {regions.map((r) => (
-              <option key={r.code} value={r.code}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+      <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Comunidad autónoma</Label>
+            <select
+              value={ccaa}
+              onChange={(e) => {
+                setCcaa(e.target.value);
+                setCity(""); // reset ciudad al cambiar CCAA
+              }}
+              className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+            >
+              <option value="">— Sin definir —</option>
+              {Object.entries(ccaaLabels).map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Ciudad (opcional)</Label>
+            <select
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              disabled={!ccaa}
+              className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base disabled:opacity-50"
+            >
+              <option value="">— Sin ciudad / Solo nacionales y autonómicos —</option>
+              {provincesOfCCAA.map((p) => (
+                <optgroup key={p.code} label={p.name}>
+                  {p.cities.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {ccaa && allCities.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No hay ciudades en el catálogo. Si tu empresa está en un
+                pueblo, déjalo en blanco y añade los festivos a mano abajo.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex justify-end">
           <Button
-            onClick={saveRegion}
-            disabled={pending || region === (currentRegion ?? "")}
+            onClick={saveLocality}
+            disabled={pending || !dirty}
             variant="success"
           >
-            Guardar
+            Guardar localidad
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Marcando tu provincia te recomendaremos sus festivos autonómicos.
+          Al seleccionar comunidad + ciudad, te sugerimos los festivos
+          autonómicos y locales conocidos para 2026.
         </p>
       </div>
 
       {pendingRecommended.length > 0 && (
         <div className="rounded-xl border-2 border-dashed border-primary/40 bg-primary/5 p-4">
           <h3 className="text-sm font-bold text-primary mb-2">
-            Festivos recomendados para tu provincia
+            Festivos recomendados para tu localidad
           </h3>
           <ul className="space-y-1.5">
             {pendingRecommended.map((r) => (
-              <li key={r.date} className="flex items-center justify-between text-sm">
+              <li
+                key={`${r.date}-${r.name}`}
+                className="flex items-center justify-between text-sm"
+              >
                 <span>
                   <strong>{new Date(r.date).toLocaleDateString("es-ES")}</strong> · {r.name}
                 </span>
@@ -140,7 +209,11 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
         </div>
         <div className="space-y-1.5 sm:col-span-2">
           <Label>Nombre del festivo</Label>
-          <Input value={newName} onChange={(e) => setNewName(e.target.value)} />
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Ej. Patrón del pueblo"
+          />
         </div>
         <div className="sm:col-span-3 flex justify-end">
           <Button
@@ -176,7 +249,11 @@ export function HolidaysManager({ holidays, currentRegion, regions, recommended 
                 </span>{" "}
                 · {h.name}{" "}
                 <Badge variant="outline" className="ml-1 text-[10px]">
-                  {h.scope}
+                  {h.scope === "national"
+                    ? "Nacional"
+                    : h.scope === "region"
+                      ? "Autonómico"
+                      : "Empresa"}
                 </Badge>
               </div>
               {!h.is_global && (

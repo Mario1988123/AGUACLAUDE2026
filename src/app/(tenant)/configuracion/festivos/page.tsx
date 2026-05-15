@@ -2,9 +2,13 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import {
   listHolidaysForYear,
-  getCompanyRegion,
+  getCompanyLocality,
 } from "@/modules/time-tracking/holidays-actions";
-import { REGION_HOLIDAYS_2026, REGION_LABELS } from "@/modules/time-tracking/regions";
+import {
+  PROVINCES,
+  CCAA_LABELS,
+  suggestedHolidaysFor,
+} from "@/modules/time-tracking/localities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { HolidaysManager } from "@/modules/time-tracking/holidays-manager";
 import { BackButton } from "@/shared/components/back-button";
@@ -17,8 +21,11 @@ export default async function FestivosPage() {
     redirect("/configuracion" as never);
   }
   const year = new Date().getFullYear();
-  const [holidays, region] = await Promise.all([listHolidaysForYear(year), getCompanyRegion()]);
-  const recommended = region ? REGION_HOLIDAYS_2026[region] ?? [] : [];
+  const [holidays, locality] = await Promise.all([
+    listHolidaysForYear(year),
+    getCompanyLocality(),
+  ]);
+  const recommended = suggestedHolidaysFor(locality.ccaa, locality.city_code);
 
   return (
     <div className="space-y-6">
@@ -28,8 +35,8 @@ export default async function FestivosPage() {
             Configuración · Calendario laboral
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Festivos nacionales (España) precargados. Selecciona tu provincia para sugerencias y
-            añade los festivos locales.
+            Festivos nacionales precargados. Selecciona tu comunidad y ciudad para que te
+            sugiramos los autonómicos y locales. Los pueblos no listados se añaden a mano.
           </p>
         </div>
         <BackButton href="/configuracion" />
@@ -42,8 +49,10 @@ export default async function FestivosPage() {
         <CardContent>
           <HolidaysManager
             holidays={holidays}
-            currentRegion={region}
-            regions={Object.entries(REGION_LABELS).map(([code, name]) => ({ code, name }))}
+            currentCCAA={locality.ccaa}
+            currentCity={locality.city_code}
+            provinces={PROVINCES}
+            ccaaLabels={CCAA_LABELS}
             recommended={recommended}
           />
         </CardContent>
