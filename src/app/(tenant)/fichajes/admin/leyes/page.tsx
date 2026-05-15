@@ -4,7 +4,12 @@ import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { BackButton } from "@/shared/components/back-button";
-import { AlertTriangle, Scale } from "lucide-react";
+import { AlertTriangle, Scale, Bell } from "lucide-react";
+import {
+  listPendingLegalNotices,
+  listResolvedLegalNotices,
+} from "@/modules/time-tracking/legal-notices-actions";
+import { LegalNoticeButtons } from "@/modules/time-tracking/legal-notice-buttons";
 
 export const dynamic = "force-dynamic";
 
@@ -162,6 +167,11 @@ export default async function LeyesPage() {
     session.roles.includes("telemarketing_director");
   if (!isAdmin) redirect("/fichajes" as never);
 
+  const [pendingNotices, resolvedNotices] = await Promise.all([
+    listPendingLegalNotices().catch(() => []),
+    listResolvedLegalNotices().catch(() => []),
+  ]);
+
   const lastReviewed = new Date(LAST_REVIEWED_AT);
   const monthsSinceReview = Math.round(
     (Date.now() - lastReviewed.getTime()) / (30 * 86400000),
@@ -183,6 +193,62 @@ export default async function LeyesPage() {
         </div>
         <BackButton href="/fichajes/admin" />
       </div>
+
+      {pendingNotices.length > 0 && (
+        <Card className="border-blue-300 bg-blue-50">
+          <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+            <Bell className="h-4 w-4 text-blue-700" />
+            <CardTitle className="text-blue-900">
+              Avisos BOE pendientes de revisar ({pendingNotices.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-xs text-muted-foreground">
+              El cron mensual detectó estas publicaciones del BOE que podrían
+              afectar a permisos o vacaciones. Abre el enlace, revisa si tu
+              empresa debe actualizar valores y márcalo como revisado o
+              descártalo si no aplica.
+            </p>
+            <ul className="space-y-3">
+              {pendingNotices.map((n) => (
+                <li key={n.id} className="rounded-xl border bg-card p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {n.boe_id ?? "BOE"}
+                        </Badge>
+                        {n.boe_date && (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            {new Date(n.boe_date).toLocaleDateString("es-ES")}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm font-semibold">{n.title}</p>
+                      {n.keywords_matched && (
+                        <p className="mt-0.5 text-[11px] italic text-muted-foreground">
+                          Coincidió con: {n.keywords_matched}
+                        </p>
+                      )}
+                      {n.url && (
+                        <a
+                          href={n.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-xs font-semibold text-primary hover:underline"
+                        >
+                          Abrir en BOE →
+                        </a>
+                      )}
+                    </div>
+                    <LegalNoticeButtons noticeId={n.id} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {overdue && (
         <Card className="border-amber-300 bg-amber-50">
@@ -272,45 +338,60 @@ export default async function LeyesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>¿Se puede automatizar la actualización?</CardTitle>
+          <CardTitle>Cómo funciona la detección automática</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm">
+        <CardContent className="space-y-2 text-sm">
           <p>
-            <strong>Respuesta corta:</strong> no de forma 100% automática y fiable.
+            Un cron mensual revisa el RSS de Disposiciones Generales del BOE
+            buscando publicaciones que contengan keywords como{" "}
+            <em>permiso, vacaciones, parental, lactancia, conciliación,
+            Estatuto Trabajadores</em>.
           </p>
           <p>
-            El BOE publica las reformas pero NO ofrece una API JSON estructurada
-            con &quot;permiso X cambia de N a M días&quot;. Se podría hacer un
-            scraper de los textos legales, pero parsear lenguaje jurídico para
-            extraer cifras y aplicarlas como cambio en un CRM es arriesgado:
-            una mala interpretación afectaría cálculos de nómina.
+            Cuando aparece una coincidencia, se inserta arriba como aviso
+            pendiente y se notifica a admin/director. <strong>El sistema NO
+            aplica el cambio automáticamente</strong> — el admin revisa el
+            BOE, valora si afecta a tu empresa y actualiza
+            <code className="mx-1 rounded bg-muted px-1">absence-labels.ts</code>
+            si toca. Después marca el aviso como revisado.
           </p>
-          <p>
-            <strong>Lo que sí hacemos:</strong>
-          </p>
-          <ul className="ml-4 list-disc space-y-1">
-            <li>
-              Aviso anual en esta página: si pasan {REVIEW_INTERVAL_MONTHS} meses
-              desde la última revisión, sale el banner ámbar de arriba.
-            </li>
-            <li>
-              Los valores legales están centralizados en
-              <code className="ml-1 rounded bg-muted px-1">absence-labels.ts</code>
-              {" "}— una sola edición y todo el módulo se ajusta.
-            </li>
-            <li>
-              Cuando salga una reforma, basta cambiar el valor + bumpar
-              {" "}<code>LAST_REVIEWED_AT</code>{" "}
-              y la app se auto-actualiza para todas las empresas.
-            </li>
-            <li>
-              Para empresas con presupuesto distinto (convenio que mejora),
-              el admin puede sobreescribir per-empleado desde
-              {" "}<code>user_leave_budgets</code>.
-            </li>
-          </ul>
         </CardContent>
       </Card>
+
+      {resolvedNotices.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Histórico de avisos resueltos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {resolvedNotices.map((n) => (
+                <li
+                  key={n.id}
+                  className="flex items-start justify-between gap-3 py-2 text-sm"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px]">
+                        {n.boe_id ?? "BOE"}
+                      </Badge>
+                      {n.boe_date && (
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {new Date(n.boe_date).toLocaleDateString("es-ES")}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 truncate text-xs">{n.title}</p>
+                  </div>
+                  <Badge variant={n.reviewed_at ? "success" : "secondary"}>
+                    {n.reviewed_at ? "Revisado" : "Descartado"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
