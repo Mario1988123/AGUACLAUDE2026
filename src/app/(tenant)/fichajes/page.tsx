@@ -17,6 +17,8 @@ import { ChildrenManager } from "@/modules/time-tracking/children-manager";
 import { listVacationWindowsForYear } from "@/modules/time-tracking/vacation-windows-actions";
 import { listHolidaysForYear } from "@/modules/time-tracking/holidays-actions";
 import { VacationCalendarModal } from "@/modules/time-tracking/vacation-calendar-modal";
+import { listMyAutoClosedPunches } from "@/modules/time-tracking/autoclose-corrections";
+import { AutocloseCorrectionCard } from "@/modules/time-tracking/autoclose-correction-card";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +126,8 @@ export default async function FichajesPage({
     listHolidaysForYear(now.getFullYear()).catch(() => []),
   ]);
 
+  const autoClosedPunches = await listMyAutoClosedPunches().catch(() => []);
+
   // Datos para la card grande + modal de vacaciones
   const vacationBudget = myBudgets.find((b) => b.kind === "vacation");
   const vacationTotal = Number(vacationBudget?.budget ?? 22);
@@ -205,6 +209,11 @@ export default async function FichajesPage({
           )}
         </div>
       </div>
+
+      {/* Autocierres pendientes de corregir */}
+      {autoClosedPunches.length > 0 && (
+        <AutocloseCorrectionCard items={autoClosedPunches} />
+      )}
 
       {/* Saldo HOY prominente */}
       <Card className="border-2 border-primary/20 bg-primary/5">
@@ -311,6 +320,32 @@ export default async function FichajesPage({
         </CardContent>
       </Card>
 
+      {/* Aviso si no hay horario configurado (expected=0 todo el mes) */}
+      {totalExpected === 0 && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-4">
+            <div className="text-sm text-amber-900">
+              <strong>No tienes horario laboral configurado.</strong>
+              <p className="mt-0.5 text-xs">
+                Sin horario el sistema no puede calcular tu saldo. Pídele al
+                admin que configure tu jornada semanal en{" "}
+                <code className="rounded bg-amber-100 px-1">
+                  /configuracion/horarios
+                </code>
+                .
+              </p>
+            </div>
+            {isAdmin && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={"/configuracion/horarios" as never}>
+                  Configurar horarios
+                </Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPIs del mes */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -329,6 +364,11 @@ export default async function FichajesPage({
             <div className="text-3xl font-extrabold tabular-nums text-muted-foreground">
               {fmtMin(totalExpected)}
             </div>
+            {totalExpected === 0 && (
+              <p className="mt-1 text-[11px] text-amber-700">
+                ⚠ Sin horario configurado
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
