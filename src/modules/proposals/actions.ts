@@ -959,10 +959,47 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
           .from("proposals")
           .update({ customer_id: customerId, lead_id: null })
           .eq("id", id);
-      } catch {
+      } catch (e) {
         // Si falla la conversión, dejamos la propuesta como aceptada y
         // el usuario podrá convertir más tarde con el botón "Pasar a
-        // contrato". No queremos romper la aceptación por esto.
+        // contrato". Registramos el fallo como evento para que admin
+        // lo detecte (antes era silent fail completo).
+        console.error("[markProposalAccepted] convertLeadToCustomer failed:", e);
+        try {
+          await admin.from("events").insert({
+            company_id: session.company_id,
+            subject_type: "proposal",
+            subject_id: id,
+            kind: "proposal.accepted_without_customer",
+            payload: {
+              error: e instanceof Error ? e.message : String(e),
+              lead_id: p.lead_id,
+              note: "La propuesta quedó aceptada pero el lead no se convirtió. Pasar a cliente desde la ficha del lead.",
+            },
+            actor_user_id: session.user_id,
+          });
+          // Notificar a admin para que actúe
+          const { data: admins } = await admin
+            .from("user_roles")
+            .select("user_id")
+            .eq("company_id", session.company_id)
+            .in("role_key", ["company_admin", "commercial_director"])
+            .is("revoked_at", null);
+          for (const a of ((admins ?? []) as Array<{ user_id: string }>)) {
+            await admin.from("notifications").insert({
+              company_id: session.company_id,
+              recipient_user_id: a.user_id,
+              kind: "proposal.accepted_without_customer",
+              severity: "warning",
+              title: "Propuesta aceptada sin cliente",
+              body: "Una propuesta de un lead se aceptó pero la conversión a cliente falló. Conviértelo manualmente.",
+              subject_type: "proposal",
+              subject_id: id,
+            });
+          }
+        } catch {
+          /* fail-soft del log */
+        }
       }
     }
   }

@@ -271,11 +271,27 @@ export async function installFreeTrialAction(
   }
 
   // Crear installation kind='free_trial' status='completed' enlazada
-  // a la prueba (installations.free_trial_id existe en schema). Con
-  // customer_id si lo conocemos. Esto permite que aparezca en
-  // /instalaciones, en el timeline y se enlace al contrato al aceptar.
+  // a la prueba SOLO si el módulo installations está activo. Si la
+  // empresa lo desactivó, no debemos generar registros huérfanos.
   let createdInstallationId: string | null = null;
+  let installationsModuleActive = true;
   try {
+    const { data: mod } = await admin
+      .from("company_modules")
+      .select("is_active")
+      .eq("company_id", session.company_id)
+      .eq("module_key", "installations")
+      .maybeSingle();
+    if (mod && (mod as { is_active: boolean }).is_active === false) {
+      installationsModuleActive = false;
+    }
+  } catch {
+    /* fail-open: si no podemos comprobar, asumimos activo */
+  }
+  try {
+    if (!installationsModuleActive) {
+      throw new Error("__skip__"); // saltar bloque
+    }
     const year = now.getFullYear();
     const yearPrefix = `I-${year}-`;
     const { data: lastCoded } = await admin
@@ -353,7 +369,10 @@ export async function installFreeTrialAction(
       }
     }
   } catch (e) {
-    console.error("[installFreeTrial] installation create:", e);
+    // __skip__ es nuestro flag de "módulo installations off". No log.
+    if (!(e instanceof Error) || e.message !== "__skip__") {
+      console.error("[installFreeTrial] installation create:", e);
+    }
   }
 
   await supabase.from("events").insert({

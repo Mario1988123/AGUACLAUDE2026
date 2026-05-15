@@ -826,11 +826,32 @@ export async function markContractSigned(id: string) {
         .single();
       const newInstId = (instCreated as { id: string } | null)?.id;
       if (newInstId) {
-        // Copiar items del contrato
-        const { data: items } = await admin
+        // Copiar items del contrato. Si falla la query o no hay items,
+        // creamos un evento de alerta para que admin lo vea — no
+        // queremos una instalación huérfana sin productos que confunda
+        // al técnico cuando vaya a instalar.
+        const { data: items, error: itemsErr } = await admin
           .from("contract_items")
           .select("product_id, quantity, display_order, notes")
           .eq("contract_id", id);
+        if (itemsErr) {
+          console.error("[markContractSigned] contract_items select:", itemsErr);
+          try {
+            await admin.from("events").insert({
+              company_id: session.company_id!,
+              subject_type: "installation",
+              subject_id: newInstId,
+              kind: "installation.items_missing",
+              payload: {
+                error: itemsErr.message,
+                reason: "select failed",
+              },
+              actor_user_id: session.user_id,
+            });
+          } catch {
+            /* fail-soft del log */
+          }
+        }
         const list = (items ?? []) as Array<{
           product_id: string;
           quantity: number;
@@ -838,7 +859,7 @@ export async function markContractSigned(id: string) {
           notes: string | null;
         }>;
         if (list.length > 0) {
-          await admin.from("installation_items").insert(
+          const insIt = await admin.from("installation_items").insert(
             list.map((it) => ({
               installation_id: newInstId,
               company_id: session.company_id!,
@@ -848,6 +869,39 @@ export async function markContractSigned(id: string) {
               notes: it.notes,
             })),
           );
+          if (insIt.error) {
+            console.error("[markContractSigned] installation_items insert:", insIt.error);
+            try {
+              await admin.from("events").insert({
+                company_id: session.company_id!,
+                subject_type: "installation",
+                subject_id: newInstId,
+                kind: "installation.items_missing",
+                payload: {
+                  error: insIt.error.message,
+                  reason: "insert failed",
+                  contract_items_count: list.length,
+                },
+                actor_user_id: session.user_id,
+              });
+            } catch {
+              /* fail-soft */
+            }
+          }
+        } else if (!itemsErr) {
+          // El contrato no tenía items — situación rara, registrar
+          try {
+            await admin.from("events").insert({
+              company_id: session.company_id!,
+              subject_type: "installation",
+              subject_id: newInstId,
+              kind: "installation.items_missing",
+              payload: { reason: "contract had no items" },
+              actor_user_id: session.user_id,
+            });
+          } catch {
+            /* fail-soft */
+          }
         }
 
         // NO se inserta evento en agenda al firmar. La agenda se rellena
@@ -1047,6 +1101,10 @@ export async function markContractSigned(id: string) {
   revalidatePath(`/contratos/${id}`);
   revalidatePath("/contratos");
   revalidatePath("/wallet");
+  revalidatePath("/instalaciones");
+  revalidatePath("/mantenimientos");
+  revalidatePath("/dashboard");
+  revalidatePath("/agenda");
 }
 
 // =============================================================================
