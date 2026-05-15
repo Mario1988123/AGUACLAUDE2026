@@ -15,6 +15,7 @@ import { Timeline } from "@/modules/events/timeline";
 import { IncidentActionsPanel } from "@/modules/incidents/incident-actions-panel";
 import { BackButton } from "@/shared/components/back-button";
 import { createClient } from "@/shared/lib/supabase/server";
+import { SubjectNotificationToast } from "@/modules/notifications/subject-toast";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,7 @@ export default async function IncidentDetailPage({
 
   return (
     <div className="space-y-6">
+      <SubjectNotificationToast subjectType="incident" subjectId={id} />
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 flex-wrap">

@@ -18,6 +18,7 @@ import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/mo
 import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { BackButton } from "@/shared/components/back-button";
+import { SubjectNotificationToast } from "@/modules/notifications/subject-toast";
 import { listTeamMembers, listInstallers } from "@/modules/agenda/actions";
 import { ScheduleInstallationButton } from "@/modules/installations/schedule-button";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -198,6 +199,7 @@ export default async function InstallationDetailPage({
 
   return (
     <div className="space-y-6">
+      <SubjectNotificationToast subjectType="installation" subjectId={id} />
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">

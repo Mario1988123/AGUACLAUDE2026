@@ -278,6 +278,22 @@ export async function resolveIncidentAction(id: string, notes: string) {
     actor_user_id: session.user_id,
   });
 
+  // Auto-resolver notificaciones pendientes vinculadas a esta incidencia
+  // (la incidencia ya no es accionable, no tiene sentido que sigan
+  // apareciendo en la campana o como toast).
+  try {
+    const { autoResolveNotificationsForSubject } = await import(
+      "@/modules/notifications/subject-actions"
+    );
+    await autoResolveNotificationsForSubject(
+      "incident",
+      id,
+      "Incidencia resuelta",
+    );
+  } catch {
+    /* fail-soft */
+  }
+
   // Puntos al asignado (o resolutor si no había asignado)
   if (session.company_id) {
     try {

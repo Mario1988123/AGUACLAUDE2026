@@ -28,6 +28,7 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [bd, setBd] = useState("");
+  const [sex, setSex] = useState<"" | "M" | "F" | "X">("");
 
   function submit() {
     if (!bd) {
@@ -38,6 +39,7 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
       const r = await upsertChildAction({
         child_name: name.trim() || null,
         birth_date: bd,
+        sex: sex || null,
       });
       if (!r.ok) {
         notify.error("Error", r.error);
@@ -47,6 +49,7 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
       setOpen(false);
       setName("");
       setBd("");
+      setSex("");
       router.refresh();
     });
   }
@@ -117,7 +120,7 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
       )}
       {open ? (
         <div className="space-y-2 rounded-xl border bg-card p-3">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-3">
             <div className="space-y-1">
               <Label className="text-xs">Nombre (opcional)</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -129,6 +132,19 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
                 value={bd}
                 onChange={(e) => setBd(e.target.value)}
               />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Sexo</Label>
+              <select
+                value={sex}
+                onChange={(e) => setSex(e.target.value as "" | "M" | "F" | "X")}
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              >
+                <option value="">— Sin especificar —</option>
+                <option value="F">Niña</option>
+                <option value="M">Niño</option>
+                <option value="X">Prefiero no decirlo</option>
+              </select>
             </div>
           </div>
           <div className="flex justify-end gap-2">

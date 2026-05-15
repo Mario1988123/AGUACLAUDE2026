@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/di
 import { notify } from "@/shared/hooks/use-toast";
 import { submitAbsenceAction } from "./absences-actions";
 import type { AbsenceKind } from "./absence-labels";
+import { listMyChildren, type ChildRow } from "./children-actions";
 
 const KIND_OPTIONS: Array<{ value: AbsenceKind; label: string }> = [
   { value: "vacation", label: "Vacaciones" },
@@ -34,12 +35,32 @@ export function SubmitAbsenceButton() {
   const [to, setTo] = useState("");
   const [kind, setKind] = useState<AbsenceKind>("vacation");
   const [notes, setNotes] = useState("");
+  const [childId, setChildId] = useState("");
+  const [children, setChildren] = useState<ChildRow[]>([]);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  // Cargar hijos cuando se abre el modal (solo lo necesitamos si kind
+  // requiere hijo). Lo cargamos siempre por simplicidad.
+  function ensureChildren() {
+    if (children.length > 0) return;
+    listMyChildren().then(setChildren).catch(() => {});
+  }
+
+  const requiresChild =
+    kind === "maternity" ||
+    kind === "paternity" ||
+    kind === "parental_paid_8y" ||
+    kind === "parental_unpaid_8y" ||
+    kind === "lactation";
 
   function save() {
     if (!from || !to) {
       notify.warning("Indica fechas de inicio y fin");
+      return;
+    }
+    if (requiresChild && !childId) {
+      notify.warning("Selecciona el hijo/a asociado");
       return;
     }
     startTransition(async () => {
@@ -49,6 +70,7 @@ export function SubmitAbsenceButton() {
           ends_on: to,
           kind,
           notes,
+          child_id: requiresChild ? childId : null,
         });
         if (!result.ok) {
           notify.error("No se pudo solicitar", result.error);
@@ -60,6 +82,7 @@ export function SubmitAbsenceButton() {
         setTo("");
         setKind("vacation");
         setNotes("");
+        setChildId("");
         router.refresh();
       } catch (err) {
         notify.error("Error", err instanceof Error ? err.message : String(err));
@@ -69,7 +92,14 @@ export function SubmitAbsenceButton() {
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)} className="gap-2">
+      <Button
+        variant="outline"
+        onClick={() => {
+          setOpen(true);
+          ensureChildren();
+        }}
+        className="gap-2"
+      >
         <Plus className="h-4 w-4" /> Solicitar ausencia
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -92,6 +122,44 @@ export function SubmitAbsenceButton() {
                 ))}
               </select>
             </div>
+            {requiresChild && (
+              <div className="space-y-1.5">
+                <Label>Hijo/a *</Label>
+                <select
+                  value={childId}
+                  onChange={(e) => setChildId(e.target.value)}
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                >
+                  <option value="">— Selecciona —</option>
+                  {children.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.child_name ?? "Sin nombre"} ·{" "}
+                      {new Date(c.birth_date).toLocaleDateString("es-ES")}
+                    </option>
+                  ))}
+                </select>
+                {children.length === 0 && (
+                  <p className="text-[11px] text-amber-700">
+                    No tienes hijos registrados. Añádelo en{" "}
+                    <strong>/fichajes → Mis hijos</strong> antes de pedir
+                    este permiso.
+                  </p>
+                )}
+                {kind === "maternity" || kind === "paternity" ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Recuerda: las 6 semanas posteriores al parto son
+                    obligatorias e ininterrumpidas. Las 10 restantes son
+                    flexibles hasta los 12 meses del bebé y pueden
+                    repartirse en varios periodos.
+                  </p>
+                ) : kind === "lactation" ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    1 hora diaria reducida hasta los 9 meses del bebé,
+                    acumulable en jornadas completas según convenio.
+                  </p>
+                ) : null}
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Desde</Label>

@@ -31,6 +31,7 @@ import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 import { BackButton } from "@/shared/components/back-button";
+import { SubjectNotificationToast } from "@/modules/notifications/subject-toast";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ContractFinancierAssign } from "@/modules/contracts/financier-assign";
 import { listFinanciers } from "@/modules/financiers/actions";
@@ -219,6 +220,7 @@ export default async function ContractDetailPage({
 
   return (
     <div className="space-y-6">
+      <SubjectNotificationToast subjectType="contract" subjectId={id} />
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
