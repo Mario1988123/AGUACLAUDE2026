@@ -532,16 +532,38 @@ export async function listCompanyUsersForFilter(): Promise<
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data } = await admin
+  // user_profiles NO tiene email ni deleted_at — sólo full_name + status.
+  // Combinamos con user_roles para detectar usuarios con rol activo aunque
+  // no tengan perfil completo (caso recién creado).
+  const profilesRes = await admin
     .from("user_profiles")
-    .select("user_id, full_name, email")
+    .select("user_id, full_name")
     .eq("company_id", session.company_id)
-    .is("deleted_at", null)
     .order("full_name");
-  type U = { user_id: string; full_name: string | null; email: string | null };
-  return ((data ?? []) as U[]).map((u) => ({
+  if (profilesRes.error) {
+    console.error("[listCompanyUsersForFilter profiles]", profilesRes.error.message);
+  }
+  const rolesRes = await admin
+    .from("user_roles")
+    .select("user_id")
+    .eq("company_id", session.company_id)
+    .is("revoked_at", null);
+  if (rolesRes.error) {
+    console.error("[listCompanyUsersForFilter roles]", rolesRes.error.message);
+  }
+  type U = { user_id: string; full_name: string | null };
+  const seen = new Map<string, U>();
+  for (const p of ((profilesRes.data ?? []) as U[])) {
+    if (p.user_id) seen.set(p.user_id, p);
+  }
+  for (const r of ((rolesRes.data ?? []) as Array<{ user_id: string }>)) {
+    if (r.user_id && !seen.has(r.user_id)) {
+      seen.set(r.user_id, { user_id: r.user_id, full_name: null });
+    }
+  }
+  return Array.from(seen.values()).map((u) => ({
     user_id: u.user_id,
-    full_name: u.full_name || u.email || u.user_id.slice(0, 8),
+    full_name: u.full_name || `Usuario ${u.user_id.slice(0, 6)}`,
   }));
 }
 

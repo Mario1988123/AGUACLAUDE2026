@@ -84,6 +84,12 @@ export default async function FichajesAdminPage() {
           >
             📜 Histórico + filtros
           </a>
+          <a
+            href={"/fichajes/admin/leyes"}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            ⚖ Marco legal
+          </a>
           <AutoCloseButton />
           <a
             href="/api/export/time-records"
