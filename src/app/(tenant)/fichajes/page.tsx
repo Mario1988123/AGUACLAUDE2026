@@ -162,14 +162,14 @@ export default async function FichajesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Fichajes</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Fichajes</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Tu jornada, saldo semanal y solicitudes.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <Button asChild variant="success" className="gap-2">
             <Link href={"/fichajes/fichar" as never}>📍 Fichar ahora</Link>
           </Button>
@@ -205,64 +205,6 @@ export default async function FichajesPage({
           )}
         </div>
       </div>
-
-      {/* Vacaciones — card grande con gauge */}
-      <Card className="overflow-hidden border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white">
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-bold uppercase tracking-wider text-amber-800">
-                Mis vacaciones {now.getFullYear()}
-              </div>
-              <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-5xl font-extrabold tabular-nums text-amber-900">
-                  {vacationRemaining}
-                </span>
-                <span className="text-base text-amber-800">
-                  de {vacationTotal} días disponibles
-                </span>
-              </div>
-              <div className="mt-2 h-2 w-64 overflow-hidden rounded-full bg-amber-100">
-                <div
-                  className="h-full bg-amber-500 transition-all"
-                  style={{
-                    width: `${vacationTotal > 0 ? Math.min(100, (vacationTaken / vacationTotal) * 100) : 0}%`,
-                  }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                Has consumido {vacationTaken}{" "}
-                {vacationTaken === 1 ? "día" : "días"}.
-              </div>
-            </div>
-            <div className="text-right">
-              <VacationCalendarModal
-                holidays={yearHolidays.map((h) => ({
-                  date: h.holiday_date,
-                  name: h.name,
-                }))}
-                vacationWindows={vacationWindows.map((w) => ({
-                  starts_on: w.starts_on,
-                  ends_on: w.ends_on,
-                  label: w.label,
-                  max_concurrent_users: w.max_concurrent_users,
-                }))}
-                myAbsences={absencesAll.map((a) => ({
-                  starts_on: a.starts_on,
-                  ends_on: a.ends_on,
-                  status: a.status,
-                  kind: a.kind,
-                }))}
-                vacationRemaining={vacationRemaining}
-                vacationTotal={vacationTotal}
-              />
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                Pulsa para ver calendario con ventanas autorizadas
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Saldo HOY prominente */}
       <Card className="border-2 border-primary/20 bg-primary/5">

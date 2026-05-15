@@ -171,18 +171,20 @@ export function PunchPageClient({
           )}
           {geoStatus === "idle" && "Esperando GPS"}
         </div>
-        <MapPicker
-          latitude={lat}
-          longitude={lng}
-          onChange={(la, ln) => {
-            // Permitir corrección manual si el GPS no es preciso. El admin
-            // verá esto como needs_geo_review si la diferencia es grande.
-            setLat(la);
-            setLng(ln);
-            setGeoStatus("ok");
-          }}
-          height={260}
-        />
+        <div className="relative">
+          <MapPicker
+            latitude={lat}
+            longitude={lng}
+            onChange={(la, ln) => {
+              // Permitir corrección manual si el GPS no es preciso. El admin
+              // verá esto como needs_geo_review si la diferencia es grande.
+              setLat(la);
+              setLng(ln);
+              setGeoStatus("ok");
+            }}
+            height={200}
+          />
+        </div>
         <div className="border-t bg-card p-3">
           {warningReason && (
             <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">

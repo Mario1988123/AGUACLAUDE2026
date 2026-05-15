@@ -189,22 +189,22 @@ export function VacationCalendarModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-3xl rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[95vh] w-full max-w-xl flex-col rounded-t-2xl border bg-card shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-4">
-              <div>
-                <h2 className="text-lg font-bold">Calendario laboral</h2>
-                <p className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between border-b p-3 sm:p-4">
+              <div className="min-w-0">
+                <h2 className="text-base font-bold sm:text-lg">Calendario laboral</h2>
+                <p className="text-[11px] text-muted-foreground sm:text-xs">
                   Te quedan{" "}
                   <strong className="text-emerald-600">
                     {vacationRemaining}
                   </strong>{" "}
-                  de {vacationTotal} días de vacaciones este año.
+                  de {vacationTotal} días.
                 </p>
               </div>
               <button
@@ -215,43 +215,44 @@ export function VacationCalendarModal({
               </button>
             </div>
 
-            {/* Leyenda */}
-            <div className="flex flex-wrap items-center gap-3 border-b bg-muted/30 px-4 py-2 text-[11px]">
-              <span className="flex items-center gap-1">
+            {/* Leyenda — colapsa en una sola línea scrollable en móvil */}
+            <div className="flex items-center gap-2 overflow-x-auto border-b bg-muted/30 px-3 py-1.5 text-[10px] sm:gap-3 sm:px-4 sm:py-2 sm:text-[11px]">
+              <span className="flex items-center gap-1 shrink-0">
                 <span className="h-3 w-3 rounded-sm bg-red-100 border border-red-300" />
                 Festivo
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 shrink-0">
                 <span className="h-3 w-3 rounded-sm bg-amber-100 border border-amber-300" />
-                Ventana vacacional
+                Ventana
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 shrink-0">
                 <span className="h-3 w-3 rounded-sm bg-emerald-100 border border-emerald-300" />
-                Tu ausencia aprobada
+                Aprobada
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 shrink-0">
                 <span className="h-3 w-3 rounded-sm bg-blue-100 border border-blue-300" />
-                Tu ausencia pendiente
+                Pendiente
               </span>
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 shrink-0">
                 <span className="h-3 w-3 rounded-sm bg-primary border border-primary" />
                 Selección
               </span>
             </div>
 
             {/* Nav meses */}
-            <div className="flex items-center justify-between border-b px-4 py-2">
+            <div className="flex items-center justify-between border-b px-3 py-2 sm:px-4">
               <button
                 onClick={() =>
                   setCursor(
                     new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1),
                   )
                 }
-                className="rounded-md p-1 hover:bg-muted"
+                className="rounded-md p-2 hover:bg-muted"
+                aria-label="Mes anterior"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-5 w-5" />
               </button>
-              <div className="text-sm font-bold capitalize tabular-nums">
+              <div className="text-sm font-bold capitalize tabular-nums sm:text-base">
                 {monthLabel}
               </div>
               <button
@@ -260,105 +261,111 @@ export function VacationCalendarModal({
                     new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1),
                   )
                 }
-                className="rounded-md p-1 hover:bg-muted"
+                className="rounded-md p-2 hover:bg-muted"
+                aria-label="Mes siguiente"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Grid días */}
-            <div className="p-4">
-              <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-muted-foreground">
-                {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((d) => (
-                  <div key={d}>{d}</div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-1">
-                {grid.map((d, i) => {
-                  const ds = ymd(d);
-                  const inMonth = d.getMonth() === cursor.getMonth();
-                  const hol = holidayMap.get(ds);
-                  const win = inAnyWindow(d);
-                  const absence = myAbsenceMap.get(ds);
-                  const selected = isSelected(d);
-                  const isToday = ds === todayStr;
-                  const weekend = d.getDay() === 0 || d.getDay() === 6;
-
-                  let bg = "";
-                  let border = "border";
-                  if (selected) {
-                    bg = "bg-primary text-primary-foreground border-primary";
-                  } else if (absence) {
-                    bg =
-                      absence.status === "approved"
-                        ? "bg-emerald-100 text-emerald-900 border-emerald-300"
-                        : "bg-blue-100 text-blue-900 border-blue-300";
-                  } else if (hol) {
-                    bg = "bg-red-100 text-red-900 border-red-300";
-                  } else if (win) {
-                    bg = "bg-amber-100 text-amber-900 border-amber-300";
-                  } else if (weekend) {
-                    bg = "bg-muted/40 text-muted-foreground";
-                  }
-                  if (!inMonth) bg = `${bg} opacity-40`;
-                  if (isToday && !selected) border = "border-2 border-primary";
-
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => cellClick(d)}
-                      title={
-                        hol
-                          ? hol
-                          : win
-                            ? `Ventana: ${win.label}${win.max_concurrent_users != null ? ` (máx ${win.max_concurrent_users})` : ""}`
-                            : absence
-                              ? `Tu ${absence.kind} (${absence.status})`
-                              : ""
-                      }
-                      className={`flex aspect-square items-center justify-center rounded-md text-xs font-bold ${border} ${bg} hover:opacity-80`}
-                    >
-                      {d.getDate()}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Form solicitud */}
-            <div className="space-y-3 border-t bg-muted/20 p-4">
-              <p className="text-xs text-muted-foreground">
-                Pulsa el día de inicio y luego el día de fin para seleccionar
-                un rango. Si solo es un día, pulsa dos veces el mismo.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Desde</Label>
-                  <Input
-                    type="date"
-                    value={from ?? ""}
-                    onChange={(e) => setFrom(e.target.value || null)}
-                  />
+            {/* Bloque scrollable: grid días + form. Footer queda fuera
+                fijo abajo para que los botones siempre se vean. */}
+            <div className="flex-1 overflow-y-auto">
+              {/* Grid días — compacto en escritorio para que TODO el modal
+                  entre sin scroll en pantallas normales (≤ 768px alto). */}
+              <div className="p-2 sm:p-3">
+                <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-muted-foreground">
+                  {["L", "M", "X", "J", "V", "S", "D"].map((d, idx) => (
+                    <div key={`m-${idx}`}>{d}</div>
+                  ))}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Hasta</Label>
-                  <Input
-                    type="date"
-                    value={to ?? ""}
-                    onChange={(e) => setTo(e.target.value || null)}
-                  />
+                <div className="grid grid-cols-7 gap-1">
+                  {grid.map((d, i) => {
+                    const ds = ymd(d);
+                    const inMonth = d.getMonth() === cursor.getMonth();
+                    const hol = holidayMap.get(ds);
+                    const win = inAnyWindow(d);
+                    const absence = myAbsenceMap.get(ds);
+                    const selected = isSelected(d);
+                    const isToday = ds === todayStr;
+                    const weekend = d.getDay() === 0 || d.getDay() === 6;
+
+                    let bg = "";
+                    let border = "border";
+                    if (selected) {
+                      bg = "bg-primary text-primary-foreground border-primary";
+                    } else if (absence) {
+                      bg =
+                        absence.status === "approved"
+                          ? "bg-emerald-100 text-emerald-900 border-emerald-300"
+                          : "bg-blue-100 text-blue-900 border-blue-300";
+                    } else if (hol) {
+                      bg = "bg-red-100 text-red-900 border-red-300";
+                    } else if (win) {
+                      bg = "bg-amber-100 text-amber-900 border-amber-300";
+                    } else if (weekend) {
+                      bg = "bg-muted/40 text-muted-foreground";
+                    }
+                    if (!inMonth) bg = `${bg} opacity-40`;
+                    if (isToday && !selected) border = "border-2 border-primary";
+
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => cellClick(d)}
+                        title={
+                          hol
+                            ? hol
+                            : win
+                              ? `Ventana: ${win.label}${win.max_concurrent_users != null ? ` (máx ${win.max_concurrent_users})` : ""}`
+                              : absence
+                                ? `Tu ${absence.kind} (${absence.status})`
+                                : ""
+                        }
+                        className={`flex h-9 items-center justify-center rounded-md text-xs font-bold sm:h-10 sm:text-sm ${border} ${bg} active:scale-95 hover:opacity-80`}
+                      >
+                        {d.getDate()}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Notas (opcional)</Label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
-                />
-              </div>
+
+              {/* Form solicitud */}
+              <div className="space-y-2 border-t bg-muted/20 p-3">
+                <p className="text-[11px] text-muted-foreground">
+                  Pulsa día inicio → fin para seleccionar un rango.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Desde</Label>
+                    <Input
+                      type="date"
+                      value={from ?? ""}
+                      onChange={(e) => setFrom(e.target.value || null)}
+                      className="h-9"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Hasta</Label>
+                    <Input
+                      type="date"
+                      value={to ?? ""}
+                      onChange={(e) => setTo(e.target.value || null)}
+                      className="h-9"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Notas (opcional)</Label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                  />
+                </div>
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
@@ -376,9 +383,10 @@ export function VacationCalendarModal({
                   className="gap-2"
                 >
                   <Check className="h-4 w-4" />
-                  {pending ? "Enviando..." : "Solicitar vacaciones"}
+                  {pending ? "Enviando..." : "Solicitar"}
                 </Button>
               </div>
+            </div>
             </div>
           </div>
         </div>

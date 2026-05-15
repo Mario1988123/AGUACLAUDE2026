@@ -88,15 +88,15 @@ export default async function HistoricoFichajesPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Histórico de fichajes</h1>
+          <h1 className="text-2xl font-bold sm:text-3xl">Histórico de fichajes</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Filtra por usuario, rango y estado. Hasta 2.000 filas por
             consulta.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <AdminCreatePunchButton users={users} />
           <a
             href={exportUrl}

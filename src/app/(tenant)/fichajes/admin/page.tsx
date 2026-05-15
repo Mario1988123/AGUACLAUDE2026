@@ -68,14 +68,14 @@ export default async function FichajesAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Fichajes · Admin</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Fichajes · Admin</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Hoy. Vista global del equipo.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <AdminCreatePunchButton users={companyUsers} />
           <AdminCreateAbsenceButton users={companyUsers} />
           <a
