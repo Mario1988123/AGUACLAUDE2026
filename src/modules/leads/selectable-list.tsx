@@ -196,8 +196,8 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-lg border bg-card">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               {canBulkReassign && (

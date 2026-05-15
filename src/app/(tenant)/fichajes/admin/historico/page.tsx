@@ -212,79 +212,152 @@ export default async function HistoricoFichajesPage({
               No hay fichajes con esos filtros.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2">Fecha</th>
-                    <th className="py-2">Hora</th>
-                    <th className="py-2">Usuario</th>
-                    <th className="py-2">Tipo</th>
-                    <th className="py-2">GPS</th>
-                    <th className="py-2">Notas</th>
-                    <th className="py-2 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {punches.map((p) => {
-                    const d = new Date(p.punched_at);
-                    const dateLabel = d.toLocaleDateString("es-ES", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "2-digit",
-                      timeZone: "Europe/Madrid",
-                    });
-                    const timeLabel = d.toLocaleTimeString("es-ES", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      timeZone: "Europe/Madrid",
-                    });
-                    const ctx = `${KIND_LABEL[p.punch_kind] ?? p.punch_kind} · ${p.user_name ?? "—"} · ${dateLabel} ${timeLabel}`;
-                    return (
-                      <tr key={p.id} className="border-b last:border-0">
-                        <td className="py-1.5 tabular-nums">{dateLabel}</td>
-                        <td className="py-1.5 tabular-nums">{timeLabel}</td>
-                        <td className="py-1.5 font-semibold">
-                          {p.user_name ?? "—"}
-                        </td>
-                        <td className="py-1.5">
-                          {KIND_LABEL[p.punch_kind] ?? p.punch_kind}
-                        </td>
-                        <td className="py-1.5">
-                          {p.needs_geo_review ? (
-                            <Badge variant="destructive">⚠ Sin GPS</Badge>
-                          ) : (
-                            <span className="text-xs text-emerald-600">OK</span>
-                          )}
-                        </td>
-                        <td className="py-1.5 text-xs text-muted-foreground">
-                          {p.auto_closed && (
-                            <Badge variant="warning" className="mr-1">
-                              Autocerrado
-                            </Badge>
-                          )}
-                          {p.is_manual && (
-                            <Badge variant="secondary" className="mr-1">
-                              Manual
-                            </Badge>
-                          )}
-                          {p.edited_reason && `${p.edited_reason}`}
-                        </td>
-                        <td className="py-1.5 text-right">
-                          <div className="flex justify-end">
-                            <AdminPunchRowActions
-                              punchId={p.id}
-                              currentPunchedAt={p.punched_at}
-                              contextLabel={ctx}
-                            />
+            <>
+              {/* Tabla en pantallas md+ */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="py-2">Fecha</th>
+                      <th className="py-2">Hora</th>
+                      <th className="py-2">Usuario</th>
+                      <th className="py-2">Tipo</th>
+                      <th className="py-2">GPS</th>
+                      <th className="py-2">Notas</th>
+                      <th className="py-2 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {punches.map((p) => {
+                      const d = new Date(p.punched_at);
+                      const dateLabel = d.toLocaleDateString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                        timeZone: "Europe/Madrid",
+                      });
+                      const timeLabel = d.toLocaleTimeString("es-ES", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "Europe/Madrid",
+                      });
+                      const ctx = `${KIND_LABEL[p.punch_kind] ?? p.punch_kind} · ${p.user_name ?? "—"} · ${dateLabel} ${timeLabel}`;
+                      return (
+                        <tr key={p.id} className="border-b last:border-0">
+                          <td className="py-1.5 tabular-nums">{dateLabel}</td>
+                          <td className="py-1.5 tabular-nums">{timeLabel}</td>
+                          <td className="py-1.5 font-semibold">
+                            {p.user_name ?? "—"}
+                          </td>
+                          <td className="py-1.5">
+                            {KIND_LABEL[p.punch_kind] ?? p.punch_kind}
+                          </td>
+                          <td className="py-1.5">
+                            {p.needs_geo_review ? (
+                              <Badge variant="destructive">⚠ Sin GPS</Badge>
+                            ) : (
+                              <span className="text-xs text-emerald-600">OK</span>
+                            )}
+                          </td>
+                          <td className="py-1.5 text-xs text-muted-foreground">
+                            {p.auto_closed && (
+                              <Badge variant="warning" className="mr-1">
+                                Autocerrado
+                              </Badge>
+                            )}
+                            {p.is_manual && (
+                              <Badge variant="secondary" className="mr-1">
+                                Manual
+                              </Badge>
+                            )}
+                            {p.edited_reason && `${p.edited_reason}`}
+                          </td>
+                          <td className="py-1.5 text-right">
+                            <div className="flex justify-end">
+                              <AdminPunchRowActions
+                                punchId={p.id}
+                                currentPunchedAt={p.punched_at}
+                                contextLabel={ctx}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Cards en móvil */}
+              <ul className="space-y-2 md:hidden">
+                {punches.map((p) => {
+                  const d = new Date(p.punched_at);
+                  const dateLabel = d.toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                    timeZone: "Europe/Madrid",
+                  });
+                  const timeLabel = d.toLocaleTimeString("es-ES", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: "Europe/Madrid",
+                  });
+                  const ctx = `${KIND_LABEL[p.punch_kind] ?? p.punch_kind} · ${p.user_name ?? "—"} · ${dateLabel} ${timeLabel}`;
+                  return (
+                    <li
+                      key={p.id}
+                      className="rounded-xl border bg-card p-3 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold">
+                            {p.user_name ?? "—"}
                           </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          <div className="text-xs text-muted-foreground tabular-nums">
+                            {dateLabel} · {timeLabel}
+                          </div>
+                          <div className="mt-1 text-xs">
+                            {KIND_LABEL[p.punch_kind] ?? p.punch_kind}
+                          </div>
+                        </div>
+                        <AdminPunchRowActions
+                          punchId={p.id}
+                          currentPunchedAt={p.punched_at}
+                          contextLabel={ctx}
+                        />
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-1">
+                        {p.needs_geo_review ? (
+                          <Badge variant="destructive" className="text-[10px]">
+                            ⚠ Sin GPS
+                          </Badge>
+                        ) : (
+                          <Badge variant="success" className="text-[10px]">
+                            GPS OK
+                          </Badge>
+                        )}
+                        {p.auto_closed && (
+                          <Badge variant="warning" className="text-[10px]">
+                            Autocerrado
+                          </Badge>
+                        )}
+                        {p.is_manual && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Manual
+                          </Badge>
+                        )}
+                      </div>
+                      {p.edited_reason && (
+                        <p className="mt-1 text-[11px] italic text-muted-foreground">
+                          {p.edited_reason}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>

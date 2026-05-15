@@ -135,9 +135,17 @@ export default async function FichajesPage({
   const vacationRemaining = Math.max(0, vacationTotal - vacationTaken);
 
   const today = weekBalance.find((d) => d.date === todayStr);
-  const totalWorked = monthBalance.reduce((s, d) => s + d.worked_minutes, 0);
-  const totalExpected = monthBalance.reduce((s, d) => s + d.expected_minutes, 0);
-  const totalBalance = totalWorked - totalExpected;
+  // Saldo del mes hasta HOY (no del mes completo): para que el usuario
+  // sepa si va sobrado o debiendo a la empresa según los días ya vividos.
+  const monthBalanceUntilToday = monthBalance.filter((d) => d.date <= todayStr);
+  const totalWorked = monthBalanceUntilToday.reduce((s, d) => s + d.worked_minutes, 0);
+  const totalExpectedUntilToday = monthBalanceUntilToday.reduce(
+    (s, d) => s + d.expected_minutes,
+    0,
+  );
+  const totalBalance = totalWorked - totalExpectedUntilToday;
+  // "Esperado mes completo" para mostrar el global del mes (informativo)
+  const totalExpectedMonth = monthBalance.reduce((s, d) => s + d.expected_minutes, 0);
   const accumulatedBalance = accumulated.reduce((s, d) => s + d.balance_minutes, 0);
 
   // Mapa día → ausencia aprobada que solape (para chip intercalado)
@@ -321,7 +329,7 @@ export default async function FichajesPage({
       </Card>
 
       {/* Aviso si no hay horario configurado (expected=0 todo el mes) */}
-      {totalExpected === 0 && (
+      {totalExpectedMonth === 0 && (
         <Card className="border-amber-300 bg-amber-50">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-4">
             <div className="text-sm text-amber-900">
@@ -347,33 +355,29 @@ export default async function FichajesPage({
       )}
 
       {/* KPIs del mes */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Trabajado (mes)</CardTitle>
+            <CardTitle className="text-sm">Trabajado (mes a hoy)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-extrabold tabular-nums">{fmtMin(totalWorked)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Esperado (mes)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-extrabold tabular-nums text-muted-foreground">
-              {fmtMin(totalExpected)}
+            <div className="text-3xl font-extrabold tabular-nums">
+              {fmtMin(totalWorked)}
             </div>
-            {totalExpected === 0 && (
-              <p className="mt-1 text-[11px] text-amber-700">
-                ⚠ Sin horario configurado
-              </p>
-            )}
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Acumulado desde 1 del mes hasta hoy.
+            </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card
+          className={
+            totalBalance >= 0
+              ? "border-emerald-200 bg-emerald-50/40"
+              : "border-red-200 bg-red-50/40"
+          }
+        >
           <CardHeader>
-            <CardTitle className="text-sm">Saldo (mes)</CardTitle>
+            <CardTitle className="text-sm">Saldo del mes a hoy</CardTitle>
           </CardHeader>
           <CardContent>
             <div
@@ -381,8 +385,19 @@ export default async function FichajesPage({
                 totalBalance >= 0 ? "text-emerald-600" : "text-red-600"
               }`}
             >
+              {totalBalance >= 0 ? "+" : ""}
               {fmtMin(totalBalance)}
             </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {totalBalance >= 0
+                ? "Horas de más sobre lo esperado a esta fecha."
+                : "Horas que debes a la empresa a esta fecha."}
+            </p>
+            {totalExpectedMonth === 0 && (
+              <p className="mt-1 text-[11px] text-amber-700">
+                ⚠ Sin horario configurado
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -413,15 +428,19 @@ export default async function FichajesPage({
         </CardContent>
       </Card>
 
-      {myBudgets.length > 0 && (
+      {/* Solo mostrar permisos con consumo o vacaciones. Evita ruido
+          mostrando "0/5 fallecimiento", "0/16 maternidad a un hombre", etc. */}
+      {myBudgets.filter((b) => b.kind === "vacation" || Number(b.taken) > 0).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Mi balance de días libres ({now.getFullYear()})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {myBudgets.map((b) => {
-                const unitLabel =
+              {myBudgets
+                .filter((b) => b.kind === "vacation" || Number(b.taken) > 0)
+                .map((b) => {
+                  const unitLabel =
                   b.unit === "weeks"
                     ? "semanas"
                     : b.unit === "hours"

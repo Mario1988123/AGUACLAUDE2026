@@ -327,7 +327,8 @@ export default async function ContractDetailPage({
             {items.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sin productos.</p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="py-2 text-left">Producto</th>
@@ -361,6 +362,7 @@ export default async function ContractDetailPage({
                   </tr>
                 </tfoot>
               </table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -456,7 +458,8 @@ export default async function ContractDetailPage({
             <p className="text-sm text-muted-foreground">Sin pagos definidos.</p>
           ) : (
             <>
-            <table className="w-full border-separate border-spacing-x-3 border-spacing-y-1 text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] border-separate border-spacing-x-3 border-spacing-y-1 text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="px-2 py-2 text-left">Concepto</th>
@@ -510,6 +513,7 @@ export default async function ContractDetailPage({
                 ))}
               </tbody>
             </table>
+            </div>
             <p className="mt-2 text-xs text-muted-foreground">
               💡 Cada línea (equipo, instalación, fianza, cuota…) se cobra de forma
               independiente: puedes elegir momento (ahora / instalación) y método de

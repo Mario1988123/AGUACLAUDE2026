@@ -242,48 +242,97 @@ export default async function FichajesAdminPage() {
           {punches.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin fichajes hoy.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="py-2">Hora</th>
-                    <th className="py-2">Usuario</th>
-                    <th className="py-2">Tipo</th>
-                    <th className="py-2">GPS</th>
-                    <th className="py-2">Notas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {punches.map((p) => (
-                    <tr key={p.id} className="border-b last:border-0">
-                      <td className="py-1.5 tabular-nums">
-                        {new Date(p.punched_at).toLocaleTimeString("es-ES", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td className="py-1.5 font-semibold">{p.user_name}</td>
-                      <td className="py-1.5">{KIND_LABEL[p.punch_kind] ?? p.punch_kind}</td>
-                      <td className="py-1.5">
-                        {p.needs_geo_review ? (
-                          <Badge variant="destructive">⚠ Sin GPS</Badge>
-                        ) : (
-                          <span className="text-xs text-emerald-600">OK</span>
-                        )}
-                      </td>
-                      <td className="py-1.5 text-xs text-muted-foreground">
-                        {p.auto_closed && (
-                          <Badge variant="warning" className="mr-1">
-                            Autocerrado
-                          </Badge>
-                        )}
-                        {p.is_manual && p.edited_reason && `Edit: ${p.edited_reason}`}
-                      </td>
+            <>
+              {/* Tabla en md+ */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
+                      <th className="py-2">Hora</th>
+                      <th className="py-2">Usuario</th>
+                      <th className="py-2">Tipo</th>
+                      <th className="py-2">GPS</th>
+                      <th className="py-2">Notas</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {punches.map((p) => (
+                      <tr key={p.id} className="border-b last:border-0">
+                        <td className="py-1.5 tabular-nums">
+                          {new Date(p.punched_at).toLocaleTimeString("es-ES", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="py-1.5 font-semibold">{p.user_name}</td>
+                        <td className="py-1.5">{KIND_LABEL[p.punch_kind] ?? p.punch_kind}</td>
+                        <td className="py-1.5">
+                          {p.needs_geo_review ? (
+                            <Badge variant="destructive">⚠ Sin GPS</Badge>
+                          ) : (
+                            <span className="text-xs text-emerald-600">OK</span>
+                          )}
+                        </td>
+                        <td className="py-1.5 text-xs text-muted-foreground">
+                          {p.auto_closed && (
+                            <Badge variant="warning" className="mr-1">
+                              Autocerrado
+                            </Badge>
+                          )}
+                          {p.is_manual && p.edited_reason && `Edit: ${p.edited_reason}`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Cards en móvil */}
+              <ul className="space-y-2 md:hidden">
+                {punches.map((p) => (
+                  <li key={p.id} className="rounded-xl border bg-card p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold">{p.user_name}</div>
+                        <div className="text-xs text-muted-foreground tabular-nums">
+                          {new Date(p.punched_at).toLocaleTimeString("es-ES", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}{" "}
+                          · {KIND_LABEL[p.punch_kind] ?? p.punch_kind}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      {p.needs_geo_review ? (
+                        <Badge variant="destructive" className="text-[10px]">
+                          ⚠ Sin GPS
+                        </Badge>
+                      ) : (
+                        <Badge variant="success" className="text-[10px]">
+                          GPS OK
+                        </Badge>
+                      )}
+                      {p.auto_closed && (
+                        <Badge variant="warning" className="text-[10px]">
+                          Autocerrado
+                        </Badge>
+                      )}
+                      {p.is_manual && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Manual
+                        </Badge>
+                      )}
+                    </div>
+                    {p.is_manual && p.edited_reason && (
+                      <p className="mt-1 text-[11px] italic text-muted-foreground">
+                        {p.edited_reason}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </CardContent>
       </Card>
