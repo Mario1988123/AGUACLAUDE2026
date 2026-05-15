@@ -4,16 +4,14 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 
-export type AbsenceKind = "vacation" | "sick" | "personal" | "training" | "other";
-export type AbsenceStatus = "pending" | "approved" | "rejected" | "cancelled";
-
-const ABSENCE_KIND_LABEL: Record<AbsenceKind, string> = {
-  vacation: "vacaciones",
-  sick: "baja médica",
-  personal: "asunto personal",
-  training: "formación",
-  other: "ausencia",
-};
+// Los tipos AbsenceKind/AbsenceStatus y los labels viven en
+// ./absence-labels (este archivo es "use server" y solo puede exportar
+// funciones async, no tipos ni constantes).
+import {
+  ABSENCE_KIND_LABEL_LC as ABSENCE_KIND_LABEL,
+  type AbsenceKind,
+  type AbsenceStatus,
+} from "./absence-labels";
 
 export interface AbsenceRow {
   id: string;

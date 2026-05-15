@@ -7,6 +7,9 @@ import {
   listCompanyUsersForFilter,
 } from "@/modules/time-tracking/actions";
 import { AdminCreatePunchButton } from "@/modules/time-tracking/admin-create-punch-button";
+import { AdminCreateAbsenceButton } from "@/modules/time-tracking/admin-create-absence-button";
+import { listPendingAttendanceGaps } from "@/modules/time-tracking/attendance-gaps-actions";
+import { ClassifyGapButtons } from "@/modules/time-tracking/classify-gap-buttons";
 import { listAbsences } from "@/modules/time-tracking/absences-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -47,14 +50,21 @@ export default async function FichajesAdminPage() {
   const today = new Date();
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString();
   const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
-  const [punches, pending, missing, pendingRequests, companyUsers] =
-    await Promise.all([
-      listPunchesAdmin({ from: start, to: end }),
-      listAbsences({ status: "pending" }),
-      getUsersWithoutPunchTodayAction(),
-      listPendingPunchRequests().catch(() => []),
-      listCompanyUsersForFilter().catch(() => []),
-    ]);
+  const [
+    punches,
+    pending,
+    missing,
+    pendingRequests,
+    companyUsers,
+    attendanceGaps,
+  ] = await Promise.all([
+    listPunchesAdmin({ from: start, to: end }),
+    listAbsences({ status: "pending" }),
+    getUsersWithoutPunchTodayAction(),
+    listPendingPunchRequests().catch(() => []),
+    listCompanyUsersForFilter().catch(() => []),
+    listPendingAttendanceGaps().catch(() => []),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -67,6 +77,7 @@ export default async function FichajesAdminPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <AdminCreatePunchButton users={companyUsers} />
+          <AdminCreateAbsenceButton users={companyUsers} />
           <a
             href={"/fichajes/admin/historico"}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
@@ -100,6 +111,42 @@ export default async function FichajesAdminPage() {
                 </Badge>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {attendanceGaps.length > 0 && (
+        <Card className="border-red-300 bg-red-50/40">
+          <CardHeader>
+            <CardTitle className="text-red-900">
+              Días sin fichar pendientes de clasificar ({attendanceGaps.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-xs text-muted-foreground">
+              El empleado no fichó este día y no hay ausencia justificada.
+              Indica si fue vacaciones, baja, formación, etc. o descártalo.
+            </p>
+            <ul className="divide-y">
+              {attendanceGaps.map((g) => (
+                <li
+                  key={g.id}
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                >
+                  <div>
+                    <div className="font-semibold">
+                      {g.user_name ?? "Usuario"} ·{" "}
+                      {new Date(g.gap_date).toLocaleDateString("es-ES", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </div>
+                  </div>
+                  <ClassifyGapButtons gapId={g.id} />
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}

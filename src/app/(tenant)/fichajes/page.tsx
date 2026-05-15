@@ -10,6 +10,8 @@ import { Badge } from "@/shared/ui/badge";
 import { SubmitAbsenceButton } from "@/modules/time-tracking/submit-absence-button";
 import { PunchRequestButton } from "@/modules/time-tracking/punch-request-button";
 import { listMyPunchRequests } from "@/modules/time-tracking/punch-requests-actions";
+import { getMyLeaveBudgets } from "@/modules/time-tracking/leave-budget-actions";
+import { ABSENCE_KIND_LABEL_UC } from "@/modules/time-tracking/absence-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -95,14 +97,21 @@ export default async function FichajesPage({
   const yearStart = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
   const todayStr = isoLocal(now);
 
-  const [weekBalance, monthBalance, accumulated, absencesAll, myRequests] =
-    await Promise.all([
-      getMyHourBalance(isoLocal(weekStart), isoLocal(weekEnd)),
-      getMyHourBalance(monthStart, monthEnd),
-      getMyHourBalance(yearStart, todayStr),
-      listAbsences(),
-      listMyPunchRequests().catch(() => []),
-    ]);
+  const [
+    weekBalance,
+    monthBalance,
+    accumulated,
+    absencesAll,
+    myRequests,
+    myBudgets,
+  ] = await Promise.all([
+    getMyHourBalance(isoLocal(weekStart), isoLocal(weekEnd)),
+    getMyHourBalance(monthStart, monthEnd),
+    getMyHourBalance(yearStart, todayStr),
+    listAbsences(),
+    listMyPunchRequests().catch(() => []),
+    getMyLeaveBudgets(now.getFullYear()).catch(() => []),
+  ]);
 
   const today = weekBalance.find((d) => d.date === todayStr);
   const totalWorked = monthBalance.reduce((s, d) => s + d.worked_minutes, 0);
@@ -317,6 +326,57 @@ export default async function FichajesPage({
           </CardContent>
         </Card>
       </div>
+
+      {myBudgets.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Mi balance de días libres ({now.getFullYear()})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {myBudgets.map((b) => {
+                const unitLabel =
+                  b.unit === "weeks"
+                    ? "semanas"
+                    : b.unit === "hours"
+                      ? "horas"
+                      : b.unit === "months"
+                        ? "meses"
+                        : "días";
+                const used = Number(b.taken);
+                const total = Number(b.budget);
+                const pct = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+                return (
+                  <div
+                    key={`${b.kind}-${b.year}`}
+                    className="rounded-xl border bg-card p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-semibold">
+                        {ABSENCE_KIND_LABEL_UC[b.kind]}
+                      </span>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {used} / {total} {unitLabel}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={`h-full ${pct < 75 ? "bg-emerald-500" : pct < 100 ? "bg-amber-500" : "bg-red-500"}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    {b.remaining < 0 && (
+                      <p className="mt-1 text-[10px] font-bold text-red-600">
+                        Excedido: {Math.abs(b.remaining)} {unitLabel}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

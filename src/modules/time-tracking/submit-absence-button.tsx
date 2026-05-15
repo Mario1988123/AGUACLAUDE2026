@@ -8,12 +8,21 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { submitAbsenceAction, type AbsenceKind } from "./absences-actions";
+import { submitAbsenceAction } from "./absences-actions";
+import type { AbsenceKind } from "./absence-labels";
 
 const KIND_OPTIONS: Array<{ value: AbsenceKind; label: string }> = [
   { value: "vacation", label: "Vacaciones" },
   { value: "sick", label: "Baja médica" },
   { value: "personal", label: "Asunto personal" },
+  { value: "marriage", label: "Permiso matrimonio" },
+  { value: "bereavement", label: "Fallecimiento familiar" },
+  { value: "maternity", label: "Maternidad" },
+  { value: "paternity", label: "Paternidad" },
+  { value: "lactation", label: "Lactancia" },
+  { value: "parental_unpaid", label: "Parental no remunerado" },
+  { value: "mudanza", label: "Mudanza" },
+  { value: "civic_duty", label: "Deber público" },
   { value: "training", label: "Formación" },
   { value: "other", label: "Otro" },
 ];

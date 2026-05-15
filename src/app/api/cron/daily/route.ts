@@ -162,13 +162,15 @@ export async function GET(req: NextRequest) {
         }
         const workedMin = Math.round(worked);
 
-        // Reglas: si no fichó nada, o trabajó <80% del esperado (margen),
-        // o falta clock_out sin auto_closed → incidencia
+        // Reglas:
+        //  - Sin NINGÚN fichaje → attendance_gap (admin clasifica luego)
+        //  - Con clock_in pero sin clock_out (y no autoclosed) → incidencia
+        //  - Trabajó <80% del esperado → incidencia
         let needsIncident = false;
+        let createsGap = false;
         let reason = "";
         if (!hasIn && !hasOut && list.length === 0) {
-          needsIncident = true;
-          reason = "No fichó entrada ni salida (sin ausencia justificada).";
+          createsGap = true;
         } else if (hasIn && !hasOut && !anyAutoClosed) {
           needsIncident = true;
           reason = "Fichó entrada pero no salida.";
@@ -176,6 +178,26 @@ export async function GET(req: NextRequest) {
           needsIncident = true;
           reason = `Trabajó ${Math.floor(workedMin / 60)}h ${workedMin % 60}m de ${Math.floor(expectedMin / 60)}h ${expectedMin % 60}m esperados.`;
         }
+
+        if (createsGap) {
+          // Insertar en attendance_gaps si no existe ya
+          try {
+            await admin
+              .from("attendance_gaps")
+              .insert({
+                company_id: cm.company_id,
+                user_id: s.user_id,
+                gap_date: yStr,
+                status: "pending",
+              })
+              .select("id");
+          } catch {
+            /* idempotente: unique constraint evita duplicar */
+          }
+          stats.schedule_incidents_opened++;
+          continue;
+        }
+
         if (!needsIncident) continue;
 
         // Buscar nombre para el título
