@@ -57,6 +57,55 @@ export async function recomputeStockAlertsAction(): Promise<{
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // 0) Si la EMPRESA tiene menos de N días de vida, no generamos
+    // alertas de rotación (sería absurdo: "sin movimiento 90d" cuando
+    // la empresa lleva 30 días). Leemos también warehouse_settings.
+    const { data: company } = await admin
+      .from("companies")
+      .select("created_at")
+      .eq("id", session.company_id)
+      .maybeSingle();
+    const companyAgeDays =
+      (company as { created_at?: string } | null)?.created_at
+        ? Math.floor(
+            (Date.now() -
+              new Date((company as { created_at: string }).created_at).getTime()) /
+              86400000,
+          )
+        : 0;
+    let alertNoRotationDays = 90;
+    let alertMinCompanyAgeDays = 90;
+    let alertsEnabled = {
+      below_min: true,
+      predictive_low: true,
+      over_max: true,
+      no_rotation_90d: true,
+      no_lead_time_set: true,
+    };
+    try {
+      const { data: ws } = await admin
+        .from("warehouse_settings")
+        .select(
+          "alert_no_rotation_days, alert_min_company_age_days, alerts_enabled",
+        )
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      const s = ws as {
+        alert_no_rotation_days?: number | null;
+        alert_min_company_age_days?: number | null;
+        alerts_enabled?: typeof alertsEnabled | null;
+      } | null;
+      if (s?.alert_no_rotation_days)
+        alertNoRotationDays = s.alert_no_rotation_days;
+      if (s?.alert_min_company_age_days)
+        alertMinCompanyAgeDays = s.alert_min_company_age_days;
+      if (s?.alerts_enabled) alertsEnabled = { ...alertsEnabled, ...s.alerts_enabled };
+    } catch {
+      /* tabla no aplicada todavía: defaults */
+    }
+    const companyTooYoungForRotationAlerts =
+      companyAgeDays < alertMinCompanyAgeDays;
+
     // 1) Productos gestionados con stock
     const { data: prodsRaw, error: prodErr } = await admin
       .from("products")
@@ -253,25 +302,36 @@ export async function recomputeStockAlertsAction(): Promise<{
         });
       }
 
-      // no_rotation_90d: stock>0 y 0 salidas en 90d, PERO solo si la
-      // primera entrada del producto fue hace >90d. Si el producto se
-      // creó/inició stock hace menos, aún no ha tenido tiempo de moverse.
+      // no_rotation_Nd: stock>0 y 0 salidas en N días, PERO solo si:
+      //  - La primera entrada del producto fue hace >N días.
+      //  - La empresa lleva más de min_company_age_days operando.
+      //  - La alerta está habilitada en warehouse_settings.
       const firstMov = firstMovementByProduct.get(p.id);
       const stockedLongAgo = firstMov ? new Date(firstMov) <= since90 : false;
-      if (total > 0 && outs.length === 0 && stockedLongAgo) {
+      if (
+        alertsEnabled.no_rotation_90d &&
+        !companyTooYoungForRotationAlerts &&
+        total > 0 &&
+        outs.length === 0 &&
+        stockedLongAgo
+      ) {
         newAlerts.push({
           company_id: session.company_id,
           product_id: p.id,
           warehouse_id: null,
           kind: "no_rotation_90d",
           severity: KIND_SEVERITY.no_rotation_90d,
-          message: `Sin salidas en 90 días pero hay ${total} ud en stock. Considera dar salida o devolver.`,
-          payload: { total },
+          message: `Sin salidas en ${alertNoRotationDays} días pero hay ${total} ud en stock. Considera dar salida o devolver.`,
+          payload: { total, days: alertNoRotationDays },
         });
       }
 
       // no_lead_time_set
-      if (p.lead_time_days == null && p.stock_managed) {
+      if (
+        alertsEnabled.no_lead_time_set &&
+        p.lead_time_days == null &&
+        p.stock_managed
+      ) {
         newAlerts.push({
           company_id: session.company_id,
           product_id: p.id,
