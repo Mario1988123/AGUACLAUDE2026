@@ -13,6 +13,7 @@ import {
   getProductStockSummary,
 } from "@/modules/products/stock-actions";
 import { ProductStockPanel } from "@/modules/products/stock-panel";
+import { BarcodeScanner } from "@/modules/warehouses/barcode-scanner";
 import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
 import { CollapsibleCard } from "@/modules/products/collapsible-card";
 import { Badge } from "@/shared/ui/badge";
@@ -170,6 +171,26 @@ export default async function ProductDetailPage({
             </div>
           </CollapsibleCard>
         )}
+
+        <CollapsibleCard title="Código de barras del fabricante" className="lg:col-span-2">
+          <div className="space-y-2">
+            <p className="text-sm">
+              Código actual:{" "}
+              {(product as { barcode?: string | null }).barcode ? (
+                <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
+                  {(product as { barcode?: string | null }).barcode}
+                </code>
+              ) : (
+                <span className="text-muted-foreground">— sin asociar —</span>
+              )}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Escanea el código del fabricante una vez y queda memorizado.
+              En las salidas y conteos podrás identificar el producto al instante.
+            </p>
+            <BarcodeScanner associateToProductId={id} />
+          </div>
+        </CollapsibleCard>
 
         <CollapsibleCard title="Stock y predicción" className="lg:col-span-2">
           <ProductStockPanel
