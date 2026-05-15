@@ -611,6 +611,8 @@ export async function createProposalAction(input: unknown) {
     if (customerIdForContract) {
       // Generar contrato. createContractFromProposal hace redirect al
       // detalle del contrato cuando termina, así que no necesitamos otro.
+      revalidatePath("/clientes");
+      revalidatePath(`/clientes/${customerIdForContract}`);
       const { createContractFromProposal } = await import("@/modules/contracts/actions");
       await createContractFromProposal(proposalId);
       // No alcanzamos esta línea — redirect interno
@@ -618,6 +620,7 @@ export async function createProposalAction(input: unknown) {
   }
 
   revalidatePath("/propuestas");
+  revalidatePath("/clientes");
   redirect(`/propuestas/${proposalId}` as never);
 }
 

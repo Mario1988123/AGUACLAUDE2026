@@ -121,6 +121,7 @@ export async function reassignMaintenanceAction(
 
     revalidatePath(`/mantenimientos/${id}`);
     revalidatePath("/mantenimientos");
+    revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };

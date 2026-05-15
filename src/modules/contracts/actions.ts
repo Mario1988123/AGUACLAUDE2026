@@ -1164,6 +1164,7 @@ export async function validateContractAction(id: string): Promise<ContractAction
     });
     revalidatePath(`/contratos/${id}`);
     revalidatePath("/contratos");
+    revalidatePath("/dashboard");
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
@@ -1320,6 +1321,15 @@ export async function reassignContractAction(
   // o activos fallaría silente con cliente RLS-bound.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // Capturar usuario saliente para notificarle también.
+  const { data: prevRow } = await admin
+    .from("contracts")
+    .select("assigned_user_id")
+    .eq("id", contractId)
+    .maybeSingle();
+  const prevUserId = (prevRow as { assigned_user_id: string | null } | null)?.assigned_user_id ?? null;
+
   const r = await admin
     .from("contracts")
     .update({
@@ -1334,7 +1344,7 @@ export async function reassignContractAction(
     subject_type: "contract",
     subject_id: contractId,
     kind: "contract.reassigned",
-    payload: { to_user_id: userId },
+    payload: { from_user_id: prevUserId, to_user_id: userId },
     actor_user_id: session.user_id,
   });
 
@@ -1349,6 +1359,26 @@ export async function reassignContractAction(
         severity: "info",
         title: "Contrato asignado",
         body: `Te han asignado el contrato ${contractId.slice(0, 8)}`,
+        subject_type: "contract",
+        subject_id: contractId,
+        action_url: `/contratos/${contractId}`,
+      });
+    } catch {
+      /* no-op */
+    }
+  }
+
+  // Notificar al saliente para que sepa que ya no es suyo
+  if (prevUserId && prevUserId !== userId && session.company_id) {
+    try {
+      const { notify } = await import("@/modules/notifications/notifier");
+      await notify({
+        company_id: session.company_id,
+        recipient_user_id: prevUserId,
+        kind: "contract.unassigned",
+        severity: "info",
+        title: "Contrato reasignado",
+        body: `El contrato ${contractId.slice(0, 8)} ya no está asignado a ti`,
         subject_type: "contract",
         subject_id: contractId,
         action_url: `/contratos/${contractId}`,

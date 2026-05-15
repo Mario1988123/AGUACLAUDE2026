@@ -996,14 +996,36 @@ export async function completeInstallation(input: unknown) {
 
   if (i.kind === "relocation") {
     // No decrementa stock — el equipo solo cambia de dirección.
-    // Buscar customer_equipment_id en notas (lo metió relocateEquipmentAction)
-    const eqMatch = i.notes?.match(/customer_equipment_id=([0-9a-f-]{36})/i);
-    if (eqMatch && i.address_id) {
+    // Resolución del customer_equipment_id:
+    //  1) Preferimos el evento `equipment.relocation_requested` (payload
+    //     estructurado, no depende del parseo de notes).
+    //  2) Fallback: regex sobre notes (compat con instalaciones anteriores
+    //     al cambio).
+    let eqId: string | null = null;
+    try {
+      const { data: evt } = await admin
+        .from("events")
+        .select("payload")
+        .eq("kind", "equipment.relocation_requested")
+        .filter("payload->>installation_id", "eq", parsed.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const pl = (evt as { payload: { customer_equipment_id?: string } | null } | null)?.payload;
+      if (pl?.customer_equipment_id) eqId = pl.customer_equipment_id;
+    } catch {
+      /* fall through al fallback */
+    }
+    if (!eqId) {
+      const eqMatch = i.notes?.match(/customer_equipment_id=([0-9a-f-]{36})/i);
+      if (eqMatch) eqId = eqMatch[1] ?? null;
+    }
+    if (eqId && i.address_id) {
       try {
         await admin
           .from("customer_equipment")
           .update({ address_id: i.address_id })
-          .eq("id", eqMatch[1]);
+          .eq("id", eqId);
       } catch (e) {
         console.error("[completeInstallation] relocation address update:", e);
       }
