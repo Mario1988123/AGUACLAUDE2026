@@ -53,6 +53,39 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
     remaining -= take;
     moved += take;
   }
+  // FIFO automático sobre stock_lots: descontar del lote más antiguo
+  // primero hasta cubrir `moved`. Si la tabla no existe (migración
+  // pendiente), no se descuenta lote, solo stock_movements.
+  let lotIdForMovement: string | null = null;
+  if (moved > 0) {
+    try {
+      const { data: lots } = await admin
+        .from("stock_lots")
+        .select("id, remaining_quantity, received_at")
+        .eq("product_id", input.product_id)
+        .eq("warehouse_id", input.warehouse_id)
+        .gt("remaining_quantity", 0)
+        .order("received_at", { ascending: true });
+      type L = { id: string; remaining_quantity: number; received_at: string };
+      let toConsume = moved;
+      for (const l of ((lots ?? []) as L[])) {
+        if (toConsume <= 0) break;
+        const take = Math.min(Number(l.remaining_quantity), toConsume);
+        if (take <= 0) continue;
+        await admin
+          .from("stock_lots")
+          .update({
+            remaining_quantity: Number(l.remaining_quantity) - take,
+          })
+          .eq("id", l.id);
+        if (!lotIdForMovement) lotIdForMovement = l.id; // primer lote tocado
+        toConsume -= take;
+      }
+    } catch {
+      /* lotes no aplicados aún → seguimos sin lot_id */
+    }
+  }
+
   if (moved > 0) {
     // Insertamos el movimiento. Defensivo: contract_id puede no existir en
     // schema cache si la migración Fase A no se aplicó todavía.
@@ -69,9 +102,11 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
       contract_id: input.contract_id ?? null,
       performed_by: input.performed_by ?? null,
       notes: input.notes ?? null,
+      lot_id: lotIdForMovement,
     };
     let { error: mErr } = await admin.from("stock_movements").insert(movementPayload);
-    if (mErr && /contract_id/i.test(mErr.message ?? "")) {
+    if (mErr && /lot_id|contract_id/i.test(mErr.message ?? "")) {
+      delete movementPayload.lot_id;
       delete movementPayload.contract_id;
       const r2 = await admin.from("stock_movements").insert(movementPayload);
       mErr = r2.error;

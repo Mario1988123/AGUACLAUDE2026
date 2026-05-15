@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { BackButton } from "@/shared/components/back-button";
 import { SnLookup } from "@/modules/warehouses/sn-lookup";
+import { BarcodeScanner } from "@/modules/warehouses/barcode-scanner";
 
 export const dynamic = "force-dynamic";
 
@@ -201,6 +202,20 @@ export default async function InformesPage() {
         </CardHeader>
         <CardContent>
           <SnLookup />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Escáner de código de barras</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Identifica un producto por su código de fabricante. Si no
+            está memorizado, ve a la ficha del producto y usa &quot;Asociar
+            barcode&quot; para guardarlo (memorización única).
+          </p>
+          <BarcodeScanner />
         </CardContent>
       </Card>
     </div>

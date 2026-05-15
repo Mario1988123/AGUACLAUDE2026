@@ -72,83 +72,10 @@ export async function recomputePurchaseSuggestionsAction(): Promise<{
     if (!session.company_id) return { ok: false, created: 0, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-
-    // 1) Productos gestionados con stock_min
-    const { data: prods } = await admin
-      .from("products")
-      .select("id, name, stock_min, stock_max, lead_time_days")
-      .eq("company_id", session.company_id)
-      .is("deleted_at", null)
-      .eq("stock_managed", true);
-    type P = {
-      id: string;
-      name: string;
-      stock_min: number;
-      stock_max: number | null;
-      lead_time_days: number | null;
-    };
-    const products = (prods ?? []) as P[];
-    if (products.length === 0) return { ok: true, created: 0 };
-
-    // 2) Stock por producto
-    const { data: stocks } = await admin
-      .from("warehouse_stock")
-      .select("product_id, quantity")
-      .in(
-        "product_id",
-        products.map((p) => p.id),
-      );
-    const totalByProduct = new Map<string, number>();
-    for (const s of ((stocks ?? []) as Array<{
-      product_id: string;
-      quantity: number;
-    }>)) {
-      totalByProduct.set(
-        s.product_id,
-        (totalByProduct.get(s.product_id) ?? 0) + Number(s.quantity),
-      );
-    }
-
-    let created = 0;
-    for (const p of products) {
-      const total = totalByProduct.get(p.id) ?? 0;
-      if (total >= p.stock_min) continue;
-      const target = p.stock_max ?? p.stock_min * 2; // reorder hasta max o 2*min
-      const needed = Math.max(1, Math.ceil(target - total));
-
-      // Buscar si ya hay sugerencia pendiente para acumular
-      const { data: existing } = await admin
-        .from("purchase_suggestions")
-        .select("id, suggested_qty")
-        .eq("company_id", session.company_id)
-        .eq("product_id", p.id)
-        .eq("status", "pending")
-        .maybeSingle();
-      if (existing) {
-        const e = existing as { id: string; suggested_qty: number };
-        // Si el cron vuelve a calcular más necesidad, ACUMULAR
-        const newQty = Math.max(Number(e.suggested_qty), needed);
-        if (newQty !== Number(e.suggested_qty)) {
-          await admin
-            .from("purchase_suggestions")
-            .update({ suggested_qty: newQty })
-            .eq("id", e.id);
-        }
-      } else {
-        const r = await admin
-          .from("purchase_suggestions")
-          .insert({
-            company_id: session.company_id,
-            product_id: p.id,
-            suggested_qty: needed,
-            reason: `Stock ${total} < mínimo ${p.stock_min}. Sugerido hasta ${target}.`,
-          });
-        if (!r.error) created++;
-      }
-    }
+    const out = await recomputeInternal(admin, session.company_id);
     revalidatePath("/almacenes/sugerencias");
     revalidatePath("/configuracion/almacenes");
-    return { ok: true, created };
+    return { ok: true, created: out.created };
   } catch (e) {
     return {
       ok: false,
@@ -156,6 +83,85 @@ export async function recomputePurchaseSuggestionsAction(): Promise<{
       error: e instanceof Error ? e.message : "Error",
     };
   }
+}
+
+/** Helper para el cron (sin requireSession). */
+export async function recomputeSuggestionsForCompany(
+  companyId: string,
+): Promise<{ created: number }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  return recomputeInternal(admin, companyId);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recomputeInternal(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  companyId: string,
+): Promise<{ created: number }> {
+  const { data: prods } = await admin
+    .from("products")
+    .select("id, name, stock_min, stock_max, lead_time_days")
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .eq("stock_managed", true);
+  type P = {
+    id: string;
+    name: string;
+    stock_min: number;
+    stock_max: number | null;
+    lead_time_days: number | null;
+  };
+  const products = (prods ?? []) as P[];
+  if (products.length === 0) return { created: 0 };
+  const { data: stocks } = await admin
+    .from("warehouse_stock")
+    .select("product_id, quantity")
+    .in("product_id", products.map((p) => p.id));
+  const totalByProduct = new Map<string, number>();
+  for (const s of ((stocks ?? []) as Array<{
+    product_id: string;
+    quantity: number;
+  }>)) {
+    totalByProduct.set(
+      s.product_id,
+      (totalByProduct.get(s.product_id) ?? 0) + Number(s.quantity),
+    );
+  }
+  let created = 0;
+  for (const p of products) {
+    const total = totalByProduct.get(p.id) ?? 0;
+    if (total >= p.stock_min) continue;
+    const target = p.stock_max ?? p.stock_min * 2;
+    const needed = Math.max(1, Math.ceil(target - total));
+    const { data: existing } = await admin
+      .from("purchase_suggestions")
+      .select("id, suggested_qty")
+      .eq("company_id", companyId)
+      .eq("product_id", p.id)
+      .eq("status", "pending")
+      .maybeSingle();
+    if (existing) {
+      const e = existing as { id: string; suggested_qty: number };
+      const newQty = Math.max(Number(e.suggested_qty), needed);
+      if (newQty !== Number(e.suggested_qty)) {
+        await admin
+          .from("purchase_suggestions")
+          .update({ suggested_qty: newQty })
+          .eq("id", e.id);
+      }
+    } else {
+      const r = await admin.from("purchase_suggestions").insert({
+        company_id: companyId,
+        product_id: p.id,
+        suggested_qty: needed,
+        reason: `Stock ${total} < mínimo ${p.stock_min}. Sugerido hasta ${target}.`,
+      });
+      if (!r.error) created++;
+    }
+  }
+  return { created };
 }
 
 export async function approvePurchaseSuggestionAction(
