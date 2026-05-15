@@ -4,7 +4,7 @@ import { listInstallers } from "@/modules/agenda/actions";
 import { STATUS_LABEL, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
-import { Calendar, Eye, Phone, MessageSquare, MapPin } from "lucide-react";
+import { Calendar, Eye, Phone, MessageSquare, MapPin, AlertTriangle } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
 
@@ -20,12 +20,14 @@ const INST_TONE: Record<
   paused: "neutral",
   completed: "success",
   cancelled: "rejected",
+  incident_pending: "rejected",
 };
 
 const STATUS_OPTIONS = [
   "scheduled",
   "in_progress",
   "paused",
+  "incident_pending",
   "completed",
   "cancelled",
 ] as const;
@@ -124,12 +126,15 @@ export default async function InstalacionesPage({
     listInstallers().catch(() => []),
   ]);
 
-  // Separar agendadas (con scheduled_at) y sin agendar
+  // Separar agendadas (con scheduled_at), sin agendar, y con incidencia
+  // (incident_pending — siempre se muestran arriba para no perderlas).
   type I = (typeof installations)[number];
+  const withIncident: I[] = [];
   const scheduled: I[] = [];
   const unscheduled: I[] = [];
   for (const i of installations) {
-    if (i.scheduled_at) scheduled.push(i);
+    if (i.status === "incident_pending") withIncident.push(i);
+    else if (i.scheduled_at) scheduled.push(i);
     else unscheduled.push(i);
   }
 
@@ -204,6 +209,42 @@ export default async function InstalacionesPage({
           </Link>
         )}
       </form>
+
+      {withIncident.length > 0 && (
+        <Card className="border-2 border-red-300 bg-red-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-900">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Con incidencia abierta ({withIncident.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1.5">
+              {withIncident.map((i) => (
+                <li
+                  key={i.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-red-200 bg-white p-3"
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/instalaciones/${i.id}` as never}
+                      className="font-medium text-red-900 hover:underline"
+                    >
+                      {i.customer_name ?? "—"}
+                    </Link>
+                    <div className="text-xs text-red-800">
+                      {i.reference_code ?? `#${i.id.slice(0, 8)}`} ·{" "}
+                      {KIND_LABEL[i.kind] ?? i.kind} · Pendiente de reagendar
+                    </div>
+                  </div>
+                  <InstallationRowActions inst={i} />
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

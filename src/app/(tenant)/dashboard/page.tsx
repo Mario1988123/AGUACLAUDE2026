@@ -27,6 +27,10 @@ import {
   getCriticalOpenIncidents,
 } from "@/modules/incidents/critical-card";
 import {
+  InstallationsWithIncidentCard,
+  getInstallationsWithIncident,
+} from "@/modules/installations/incidents-card";
+import {
   PendingTrialsCard,
   getPendingTrials,
   CriticalStockAlertsCard,
@@ -160,6 +164,7 @@ async function renderDashboard({
     upcomingMaintenance,
     upcomingInstallations,
     criticalIncidents,
+    installationsWithIncident,
     evolution,
     pendingTrials,
     criticalStockAlerts,
@@ -167,6 +172,7 @@ async function renderDashboard({
     getUpcomingMaintenance().catch(() => []),
     getUpcomingInstallations().catch(() => []),
     getCriticalOpenIncidents().catch(() => []),
+    getInstallationsWithIncident().catch(() => []),
     getMonthlyEvolution().catch(() => []),
     getPendingTrials().catch(() => []),
     getCriticalStockAlerts().catch(() => []),
@@ -329,6 +335,8 @@ async function renderDashboard({
           }
         />
       </div>
+
+      <InstallationsWithIncidentCard items={installationsWithIncident} />
 
       <CriticalIncidentsCard items={criticalIncidents} />
 
