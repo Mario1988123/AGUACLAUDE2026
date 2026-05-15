@@ -40,6 +40,52 @@ export async function getMyHourBalance(
     .from("user_work_schedules")
     .select("day_of_week, expected_hours, starts_at, ends_at, break_minutes")
     .eq("user_id", targetUserId);
+  // Festivos del rango: tanto los de la empresa como los nacionales (company_id IS NULL).
+  // Si la tabla no existe o falla, asumimos sin festivos.
+  let holidayDates = new Set<string>();
+  try {
+    const { data: hol } = await admin
+      .from("holidays")
+      .select("holiday_date, is_workable, company_id")
+      .gte("holiday_date", fromDate)
+      .lte("holiday_date", toDate)
+      .or(`company_id.eq.${session.company_id},company_id.is.null`);
+    type H = {
+      holiday_date: string;
+      is_workable: boolean | null;
+      company_id: string | null;
+    };
+    holidayDates = new Set(
+      ((hol ?? []) as H[])
+        .filter((h) => !h.is_workable)
+        .map((h) => h.holiday_date),
+    );
+  } catch {
+    /* sin festivos */
+  }
+  // Ausencias aprobadas que solapen el rango → días con expected=0.
+  const absentDates = new Set<string>();
+  try {
+    const { data: abs } = await admin
+      .from("time_absences")
+      .select("starts_on, ends_on, status")
+      .eq("user_id", targetUserId)
+      .eq("status", "approved")
+      .lte("starts_on", toDate)
+      .gte("ends_on", fromDate);
+    type A = { starts_on: string; ends_on: string };
+    for (const a of (abs ?? []) as A[]) {
+      const start = new Date(a.starts_on + "T00:00:00");
+      const end = new Date(a.ends_on + "T00:00:00");
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        absentDates.add(cursor.toISOString().slice(0, 10));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+  } catch {
+    /* sin ausencias */
+  }
 
   type P = { punch_kind: string; punched_at: string };
   type S = {
@@ -61,6 +107,8 @@ export async function getMyHourBalance(
   }
 
   function expectedFor(date: string): number {
+    // Festivo o ausencia aprobada → 0 esperado
+    if (holidayDates.has(date) || absentDates.has(date)) return 0;
     const dow = (new Date(date + "T00:00:00").getDay() + 6) % 7;
     const s = ss.find((x) => x.day_of_week === dow);
     if (!s) return 0;

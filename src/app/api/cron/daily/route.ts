@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
     stock_low: 0,
     contracts_activated_today: 0,
     punches_autoclosed: 0,
+    schedule_incidents_opened: 0,
   };
 
   // 0a) Autocierre de fichajes olvidados (también lo hace el cron horario,
@@ -43,6 +44,176 @@ export async function GET(req: NextRequest) {
     stats.punches_autoclosed = Number(closed) || 0;
   } catch {
     /* no-op */
+  }
+
+  // 0b) Incidencia automática si AYER alguien no cumplió su horario.
+  // Solo se ejecuta si la empresa tiene time_tracking activado.
+  try {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yStr = yesterday.toISOString().slice(0, 10);
+    const dow = (yesterday.getDay() + 6) % 7; // 0=Lun
+
+    const { data: activeCompanies } = await admin
+      .from("company_modules")
+      .select("company_id")
+      .eq("module_key", "time_tracking")
+      .eq("is_active", true);
+    type CM = { company_id: string };
+    for (const cm of ((activeCompanies ?? []) as CM[])) {
+      // Horarios de ayer (qué usuarios tenían turno)
+      const { data: scheds } = await admin
+        .from("user_work_schedules")
+        .select("user_id, starts_at, ends_at, expected_hours, break_minutes")
+        .eq("company_id", cm.company_id)
+        .eq("day_of_week", dow)
+        .not("starts_at", "is", null);
+      type Sched = {
+        user_id: string;
+        starts_at: string | null;
+        ends_at: string | null;
+        expected_hours: number | null;
+        break_minutes: number | null;
+      };
+      const schedList = (scheds ?? []) as Sched[];
+      if (schedList.length === 0) continue;
+
+      // Punches de ayer agrupados por usuario
+      const startIso = new Date(yStr + "T00:00:00").toISOString();
+      const endIso = new Date(yStr + "T23:59:59.999").toISOString();
+      const { data: punches } = await admin
+        .from("time_punches")
+        .select("user_id, punch_kind, punched_at, auto_closed")
+        .eq("company_id", cm.company_id)
+        .gte("punched_at", startIso)
+        .lte("punched_at", endIso);
+      type Punch = {
+        user_id: string;
+        punch_kind: string;
+        punched_at: string;
+        auto_closed: boolean;
+      };
+      const byUser = new Map<string, Punch[]>();
+      for (const p of ((punches ?? []) as Punch[])) {
+        if (!byUser.has(p.user_id)) byUser.set(p.user_id, []);
+        byUser.get(p.user_id)!.push(p);
+      }
+
+      // Ausencias aprobadas que cubren ayer
+      const { data: abs } = await admin
+        .from("time_absences")
+        .select("user_id")
+        .eq("company_id", cm.company_id)
+        .eq("status", "approved")
+        .lte("starts_on", yStr)
+        .gte("ends_on", yStr);
+      const absentUsers = new Set<string>(
+        ((abs ?? []) as Array<{ user_id: string }>).map((a) => a.user_id),
+      );
+
+      // Festivo ese día → no esperamos jornada
+      const { data: hol } = await admin
+        .from("holidays")
+        .select("id")
+        .eq("holiday_date", yStr)
+        .or(`company_id.eq.${cm.company_id},company_id.is.null`)
+        .limit(1);
+      const isHoliday = ((hol ?? []) as Array<{ id: string }>).length > 0;
+      if (isHoliday) continue;
+
+      for (const s of schedList) {
+        if (absentUsers.has(s.user_id)) continue;
+        // Calcular minutos esperados
+        let expectedMin = 0;
+        if (s.expected_hours != null) expectedMin = Math.round(s.expected_hours * 60);
+        else if (s.starts_at && s.ends_at) {
+          const [sh, sm] = s.starts_at.split(":").map(Number);
+          const [eh, em] = s.ends_at.split(":").map(Number);
+          expectedMin = (eh! - sh!) * 60 + (em! - sm!) - (s.break_minutes ?? 0);
+        }
+        if (expectedMin <= 0) continue;
+
+        // Calcular minutos trabajados emparejando in/out
+        const list = (byUser.get(s.user_id) ?? []).sort((a, b) =>
+          a.punched_at.localeCompare(b.punched_at),
+        );
+        let worked = 0;
+        let openIn: number | null = null;
+        let breakStart: number | null = null;
+        let anyAutoClosed = false;
+        let hasIn = false;
+        let hasOut = false;
+        for (const p of list) {
+          const ts = new Date(p.punched_at).getTime();
+          if (p.auto_closed) anyAutoClosed = true;
+          if (p.punch_kind === "clock_in") {
+            openIn = ts;
+            hasIn = true;
+          } else if (p.punch_kind === "clock_out" && openIn != null) {
+            worked += (ts - openIn) / 60000;
+            openIn = null;
+            hasOut = true;
+          } else if (p.punch_kind === "break_start") {
+            breakStart = ts;
+          } else if (p.punch_kind === "break_end" && breakStart != null) {
+            worked -= (ts - breakStart) / 60000;
+            breakStart = null;
+          }
+        }
+        const workedMin = Math.round(worked);
+
+        // Reglas: si no fichó nada, o trabajó <80% del esperado (margen),
+        // o falta clock_out sin auto_closed → incidencia
+        let needsIncident = false;
+        let reason = "";
+        if (!hasIn && !hasOut && list.length === 0) {
+          needsIncident = true;
+          reason = "No fichó entrada ni salida (sin ausencia justificada).";
+        } else if (hasIn && !hasOut && !anyAutoClosed) {
+          needsIncident = true;
+          reason = "Fichó entrada pero no salida.";
+        } else if (expectedMin > 0 && workedMin < expectedMin * 0.8) {
+          needsIncident = true;
+          reason = `Trabajó ${Math.floor(workedMin / 60)}h ${workedMin % 60}m de ${Math.floor(expectedMin / 60)}h ${expectedMin % 60}m esperados.`;
+        }
+        if (!needsIncident) continue;
+
+        // Buscar nombre para el título
+        const { data: prof } = await admin
+          .from("user_profiles")
+          .select("full_name, email")
+          .eq("user_id", s.user_id)
+          .maybeSingle();
+        const pName =
+          (prof as { full_name?: string; email?: string } | null)?.full_name ||
+          (prof as { email?: string } | null)?.email ||
+          "Usuario";
+
+        // Evitar duplicar: si ya hay incidencia abierta de horario para
+        // ese user_id + fecha, saltar.
+        const incidentTitle = `Horario incompleto: ${pName} · ${yStr}`;
+        const { data: dup } = await admin
+          .from("incidents")
+          .select("id")
+          .eq("company_id", cm.company_id)
+          .eq("title", incidentTitle)
+          .limit(1)
+          .maybeSingle();
+        if (dup) continue;
+
+        await admin.from("incidents").insert({
+          company_id: cm.company_id,
+          title: incidentTitle,
+          description: reason,
+          origin: "other",
+          priority: "low",
+          status: "open",
+        });
+        stats.schedule_incidents_opened++;
+      }
+    }
+  } catch (e) {
+    console.error("[cron daily] schedule incidents failed:", e);
   }
 
   // 0) Contratos con service_start_date <= hoy y status=signed → activar y

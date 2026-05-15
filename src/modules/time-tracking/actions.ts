@@ -268,6 +268,59 @@ export async function punchKindAction(
     const admin = createAdminClient() as any;
     const noGeo = input.geo_latitude == null || input.geo_longitude == null;
     const nowIso = new Date().toISOString();
+
+    // ---- Validar coherencia: 1 sola jornada al día ----
+    // Una jornada = 1 clock_in + descansos arbitrarios + 1 clock_out.
+    // No se permite reabrir tras cerrar, ni cerrar dos veces.
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const { data: todayPunches } = await admin
+      .from("time_punches")
+      .select("punch_kind, punched_at")
+      .eq("user_id", session.user_id)
+      .gte("punched_at", todayStart.toISOString())
+      .order("punched_at", { ascending: true });
+    type P = { punch_kind: PunchKind; punched_at: string };
+    const todays = (todayPunches ?? []) as P[];
+    const hasClockIn = todays.some((p) => p.punch_kind === "clock_in");
+    const hasClockOut = todays.some((p) => p.punch_kind === "clock_out");
+    const lastKind = todays[todays.length - 1]?.punch_kind ?? null;
+
+    if (kind === "clock_in") {
+      if (hasClockIn) {
+        throw new Error(
+          "Ya fichaste entrada hoy. No puedes abrir otra jornada en el mismo día.",
+        );
+      }
+    } else if (kind === "clock_out") {
+      if (!hasClockIn) {
+        throw new Error("No has fichado entrada hoy. Ficha primero la entrada.");
+      }
+      if (hasClockOut) {
+        throw new Error("Ya fichaste salida hoy.");
+      }
+      if (lastKind === "break_start") {
+        throw new Error(
+          "Estás en descanso. Reanuda antes de fichar la salida.",
+        );
+      }
+    } else if (kind === "break_start") {
+      if (!hasClockIn) {
+        throw new Error("Ficha entrada antes de iniciar un descanso.");
+      }
+      if (hasClockOut) {
+        throw new Error("La jornada ya está cerrada.");
+      }
+      if (lastKind === "break_start") {
+        throw new Error("Ya estás en descanso. Reanuda primero.");
+      }
+    } else if (kind === "break_end") {
+      if (lastKind !== "break_start") {
+        throw new Error(
+          "No hay un descanso abierto que reanudar.",
+        );
+      }
+    }
     // INSERT con todos los campos. Si la migración 20260503320000 (que añade
     // needs_geo_review/accuracy_meters) aún no se ha aplicado, reintentar
     // con el set mínimo de columnas que sí existen desde el inicio.
@@ -391,6 +444,11 @@ export async function listPunchesAdmin(filters: {
   from: string;
   to: string;
   user_id?: string;
+  /** Filtros adicionales para el histórico (todos opcionales). */
+  kind?: PunchKind;
+  only_no_geo?: boolean;
+  only_manual?: boolean;
+  only_autoclosed?: boolean;
 }): Promise<AdminPunchRow[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
@@ -414,6 +472,10 @@ export async function listPunchesAdmin(filters: {
     .order("punched_at", { ascending: false })
     .limit(2000);
   if (filters.user_id) q = q.eq("user_id", filters.user_id);
+  if (filters.kind) q = q.eq("punch_kind", filters.kind);
+  if (filters.only_no_geo) q = q.eq("needs_geo_review", true);
+  if (filters.only_manual) q = q.eq("is_manual", true);
+  if (filters.only_autoclosed) q = q.eq("auto_closed", true);
   const { data } = await q;
   type R = PunchRow;
   const rows = (data ?? []) as R[];
@@ -430,6 +492,27 @@ export async function listPunchesAdmin(filters: {
     }
   }
   return rows.map((r) => ({ ...r, user_name: nameMap.get(r.user_id) ?? null }));
+}
+
+/** Lista usuarios de la empresa (para el filtro de historico). */
+export async function listCompanyUsersForFilter(): Promise<
+  Array<{ user_id: string; full_name: string }>
+> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("user_profiles")
+    .select("user_id, full_name, email")
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null)
+    .order("full_name");
+  type U = { user_id: string; full_name: string | null; email: string | null };
+  return ((data ?? []) as U[]).map((u) => ({
+    user_id: u.user_id,
+    full_name: u.full_name || u.email || u.user_id.slice(0, 8),
+  }));
 }
 
 /** Editar fichaje (solo admin), deja huella de quién y por qué. */
