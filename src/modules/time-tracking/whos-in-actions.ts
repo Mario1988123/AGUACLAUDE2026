@@ -8,7 +8,6 @@ export type WhosInBucket = "working" | "break" | "absence" | "out";
 export interface WhosInPerson {
   user_id: string;
   full_name: string;
-  email: string | null;
   /** Hora ISO de la última transición (entrada / inicio descanso). */
   since: string | null;
   /** Si está de ausencia, etiqueta humana (Vacaciones / Baja / ...). */
@@ -40,14 +39,20 @@ export async function getWhosInSnapshot(): Promise<WhosInSnapshot> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // 1) Lista de usuarios activos de la empresa
+  // 1) Lista de usuarios de la empresa. user_profiles NO tiene deleted_at
+  // ni email (email vive en auth.users). Filtramos invited (aún no activos).
   const { data: users } = await admin
     .from("user_profiles")
-    .select("user_id, full_name, email")
-    .eq("company_id", session.company_id)
-    .is("deleted_at", null);
-  type U = { user_id: string; full_name: string | null; email: string | null };
-  const userList = ((users ?? []) as U[]).filter((u) => !!u.user_id);
+    .select("user_id, full_name, status")
+    .eq("company_id", session.company_id);
+  type U = {
+    user_id: string;
+    full_name: string | null;
+    status: string | null;
+  };
+  const userList = ((users ?? []) as U[]).filter(
+    (u) => !!u.user_id && u.status !== "invited",
+  );
   if (userList.length === 0) {
     return { working: [], on_break: [], absences: [], out: [] };
   }
@@ -93,11 +98,10 @@ export async function getWhosInSnapshot(): Promise<WhosInSnapshot> {
   const out: WhosInPerson[] = [];
 
   for (const u of userList) {
-    const name = u.full_name || u.email || "Usuario";
+    const name = u.full_name || `Usuario ${u.user_id.slice(0, 6)}`;
     const personBase = {
       user_id: u.user_id,
       full_name: name,
-      email: u.email,
     };
     const a = absentMap.get(u.user_id);
     if (a) {
