@@ -14,6 +14,8 @@ interface HeaderProps {
   fullName?: string | null;
   email?: string | null;
   roleLabel?: string | null;
+  /** Si false, oculta el TimeClockWidget — empresa sin módulo fichajes. */
+  showTimeClock?: boolean;
 }
 
 function initials(name: string | null | undefined, email: string | null | undefined): string {
@@ -24,7 +26,13 @@ function initials(name: string | null | undefined, email: string | null | undefi
   return src.slice(0, 2).toUpperCase();
 }
 
-export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderProps) {
+export function Header({
+  unreadCount = 0,
+  fullName,
+  email,
+  roleLabel,
+  showTimeClock = true,
+}: HeaderProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
@@ -62,7 +70,7 @@ export function Header({ unreadCount = 0, fullName, email, roleLabel }: HeaderPr
       </div>
 
       <div className="flex items-center gap-3">
-        <TimeClockWidget />
+        {showTimeClock && <TimeClockWidget />}
         <Link
           href={"/leads/nuevo" as never}
           className="hidden sm:inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:bg-primary/90"

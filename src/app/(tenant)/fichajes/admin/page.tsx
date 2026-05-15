@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { redirect } from "next/navigation";
 import { listPunchesAdmin, getUsersWithoutPunchTodayAction } from "@/modules/time-tracking/actions";
 import { listAbsences } from "@/modules/time-tracking/absences-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { ApproveAbsenceButtons } from "@/modules/time-tracking/approve-absence-buttons";
+import { ApprovePunchRequestButtons } from "@/modules/time-tracking/approve-punch-request-buttons";
 import { AutoCloseButton } from "@/modules/time-tracking/auto-close-button";
+import { listPendingPunchRequests } from "@/modules/time-tracking/punch-requests-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +21,7 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export default async function FichajesAdminPage() {
+  await assertModuleActive("time_tracking");
   const session = await requireSession();
   const isAdmin =
     session.is_superadmin ||
@@ -30,10 +34,11 @@ export default async function FichajesAdminPage() {
   const today = new Date();
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString();
   const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
-  const [punches, pending, missing] = await Promise.all([
+  const [punches, pending, missing, pendingRequests] = await Promise.all([
     listPunchesAdmin({ from: start, to: end }),
     listAbsences({ status: "pending" }),
     getUsersWithoutPunchTodayAction(),
+    listPendingPunchRequests().catch(() => []),
   ]);
 
   return (
@@ -70,6 +75,56 @@ export default async function FichajesAdminPage() {
                 </Badge>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Solicitudes de fichaje pendientes ({pendingRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {pendingRequests.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">
+                      {r.user_name ?? "Usuario"} ·{" "}
+                      {r.punch_kind === "clock_in"
+                        ? "Entrada"
+                        : r.punch_kind === "clock_out"
+                          ? "Salida"
+                          : r.punch_kind === "break_start"
+                            ? "Inicio descanso"
+                            : "Fin descanso"}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Para el{" "}
+                      {new Date(r.requested_at).toLocaleString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "Europe/Madrid",
+                      })}
+                    </div>
+                    {r.reason && (
+                      <div className="mt-1 text-xs italic text-muted-foreground">
+                        “{r.reason}”
+                      </div>
+                    )}
+                  </div>
+                  <ApprovePunchRequestButtons requestId={r.id} />
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       )}

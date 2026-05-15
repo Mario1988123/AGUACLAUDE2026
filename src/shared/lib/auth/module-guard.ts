@@ -1,5 +1,69 @@
 import { redirect } from "next/navigation";
+import { createClient } from "@/shared/lib/supabase/server";
 import type { SessionClaims } from "./session";
+
+/**
+ * Comprueba si un módulo está activo para la empresa actual. Lee
+ * `company_modules.is_active` filtrado por `module_key`. Si la tabla
+ * no existe o falla la query, devuelve `true` (fail-open) — es mejor
+ * mostrar el módulo que ocultarlo por error de infraestructura.
+ *
+ * Usar para gating de páginas/widgets cuando el cliente puede haber
+ * desactivado el módulo desde /configuracion/modulos.
+ */
+export async function isModuleActive(moduleKey: string): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("company_modules")
+      .select("is_active")
+      .eq("module_key", moduleKey)
+      .maybeSingle();
+    if (error) return true; // fail-open
+    if (!data) return true; // sin registro = activo por defecto
+    return Boolean((data as { is_active: boolean }).is_active);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Devuelve el conjunto de módulos activos. Más eficiente que llamar a
+ * `isModuleActive` repetidas veces. Si la tabla falla, devuelve null
+ * (fail-open: el caller debe asumir todo activo).
+ */
+export async function listActiveModules(): Promise<Set<string> | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("company_modules")
+      .select("module_key, is_active")
+      .eq("is_active", true);
+    if (error) return null;
+    return new Set(
+      ((data ?? []) as Array<{ module_key: string }>).map((m) => m.module_key),
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Aserción para páginas: si el módulo no está activo en la empresa,
+ * redirige a /dashboard. Llamar al inicio del componente server.
+ *
+ * Ejemplo:
+ *   export default async function FichajesPage() {
+ *     await assertModuleActive("time_tracking");
+ *     ...
+ *   }
+ */
+export async function assertModuleActive(moduleKey: string): Promise<void> {
+  const active = await isModuleActive(moduleKey);
+  if (!active) redirect("/dashboard");
+}
 
 /**
  * Comprueba si la sesión actual tiene acceso al módulo dado, en base

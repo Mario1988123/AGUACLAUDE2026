@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { getMyHourBalance } from "@/modules/time-tracking/balance";
 import { listAbsences } from "@/modules/time-tracking/absences-actions";
 import { Badge } from "@/shared/ui/badge";
 import { SubmitAbsenceButton } from "@/modules/time-tracking/submit-absence-button";
+import { PunchRequestButton } from "@/modules/time-tracking/punch-request-button";
+import { listMyPunchRequests } from "@/modules/time-tracking/punch-requests-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +40,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function FichajesPage() {
+  await assertModuleActive("time_tracking");
   const session = await requireSession();
   const isAdmin =
     session.is_superadmin ||
@@ -50,10 +54,11 @@ export default async function FichajesPage() {
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
   const yearStart = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
   const todayStr = now.toISOString().slice(0, 10);
-  const [balance, accumulated, absences] = await Promise.all([
+  const [balance, accumulated, absences, myRequests] = await Promise.all([
     getMyHourBalance(monthStart, monthEnd),
     getMyHourBalance(yearStart, todayStr),
     listAbsences(),
+    listMyPunchRequests().catch(() => []),
   ]);
 
   const totalWorked = balance.reduce((s, d) => s + d.worked_minutes, 0);
@@ -72,6 +77,15 @@ export default async function FichajesPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="success" className="gap-2">
+            <Link href={"/fichajes/fichar" as never}>
+              📍 Fichar ahora
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={"/fichajes/equipo" as never}>Quién está</Link>
+          </Button>
+          <PunchRequestButton />
           <SubmitAbsenceButton />
           {isAdmin && (
             <Button asChild variant="outline">
@@ -205,6 +219,64 @@ export default async function FichajesPage() {
           )}
         </CardContent>
       </Card>
+
+      {myRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Mis solicitudes de fichaje</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {myRequests.map((r) => (
+                <li key={r.id} className="flex items-center justify-between py-2 text-sm">
+                  <div>
+                    <div className="font-semibold">
+                      {r.punch_kind === "clock_in"
+                        ? "Entrada"
+                        : r.punch_kind === "clock_out"
+                          ? "Salida"
+                          : r.punch_kind === "break_start"
+                            ? "Inicio descanso"
+                            : "Fin descanso"}
+                      {" · "}
+                      {new Date(r.requested_at).toLocaleString("es-ES", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "Europe/Madrid",
+                      })}
+                    </div>
+                    {r.reason && (
+                      <div className="text-xs text-muted-foreground">{r.reason}</div>
+                    )}
+                  </div>
+                  <Badge
+                    variant={
+                      r.status === "approved"
+                        ? "success"
+                        : r.status === "rejected"
+                          ? "destructive"
+                          : r.status === "cancelled"
+                            ? "secondary"
+                            : "warning"
+                    }
+                  >
+                    {r.status === "approved"
+                      ? "Aprobada"
+                      : r.status === "rejected"
+                        ? "Rechazada"
+                        : r.status === "cancelled"
+                          ? "Cancelada"
+                          : "Pendiente"}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

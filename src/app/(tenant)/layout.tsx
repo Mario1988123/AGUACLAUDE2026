@@ -131,6 +131,7 @@ export default async function TenantLayout({ children }: { children: React.React
           fullName={session.full_name}
           email={session.email}
           roleLabel={roleLabel}
+          showTimeClock={activeModuleKeys.includes("time_tracking")}
         />
         <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-4 lg:p-8">
           {children}
