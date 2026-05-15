@@ -15,16 +15,91 @@ const SEV_VARIANT: Record<string, "default" | "secondary" | "success" | "warning
     error: "destructive",
   };
 
+type Category = "all" | "fichajes" | "ausencias" | "ventas" | "operaciones" | "other";
+
+/** Clasifica una notificación por categoría según su kind. */
+function categoryOf(kind: string): Category {
+  if (kind.startsWith("time_tracking") || kind.startsWith("punch_request")) {
+    return "fichajes";
+  }
+  if (kind.startsWith("absence")) return "ausencias";
+  if (
+    kind.startsWith("lead") ||
+    kind.startsWith("proposal") ||
+    kind.startsWith("contract") ||
+    kind.startsWith("free_trial")
+  ) {
+    return "ventas";
+  }
+  if (
+    kind.startsWith("installation") ||
+    kind.startsWith("maintenance") ||
+    kind.startsWith("incident") ||
+    kind.startsWith("warehouse")
+  ) {
+    return "operaciones";
+  }
+  return "other";
+}
+
+const CAT_LABEL: Record<Exclude<Category, "all">, string> = {
+  fichajes: "Fichajes",
+  ausencias: "Ausencias",
+  ventas: "Ventas",
+  operaciones: "Operaciones",
+  other: "Otras",
+};
+
 export default async function NotificacionesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string }>;
+  searchParams: Promise<{ filter?: string; cat?: string }>;
 }) {
   const sp = await searchParams;
   const filter = sp.filter === "unread" ? "unread" : "all";
+  const cat = (sp.cat as Category | undefined) ?? "all";
   const all = await listMyNotifications();
-  const items = filter === "unread" ? all.filter((n) => !n.read_at) : all;
-  const unread = all.filter((n) => !n.read_at).length;
+
+  // Contar por categoría (sobre la lista total, no filtrada por sin-leer)
+  const catCount: Record<Category, number> = {
+    all: all.length,
+    fichajes: 0,
+    ausencias: 0,
+    ventas: 0,
+    operaciones: 0,
+    other: 0,
+  };
+  const catUnread: Record<Category, number> = {
+    all: 0,
+    fichajes: 0,
+    ausencias: 0,
+    ventas: 0,
+    operaciones: 0,
+    other: 0,
+  };
+  for (const n of all) {
+    const c = categoryOf(n.kind);
+    catCount[c]++;
+    if (!n.read_at) {
+      catUnread[c]++;
+      catUnread.all++;
+    }
+  }
+
+  // Filtrar
+  let items = all;
+  if (cat !== "all") items = items.filter((n) => categoryOf(n.kind) === cat);
+  if (filter === "unread") items = items.filter((n) => !n.read_at);
+
+  const tabs: Category[] = ["all", "fichajes", "ausencias", "ventas", "operaciones", "other"];
+
+  function hrefFor(c: Category, f: "all" | "unread"): string {
+    const params = new URLSearchParams();
+    if (c !== "all") params.set("cat", c);
+    if (f === "unread") params.set("filter", "unread");
+    const qs = params.toString();
+    return qs ? `/notificaciones?${qs}` : "/notificaciones";
+  }
 
   return (
     <div className="space-y-6">
@@ -32,43 +107,80 @@ export default async function NotificacionesPage({
         <div>
           <h1 className="text-2xl font-bold">Notificaciones</h1>
           <p className="text-sm text-muted-foreground">
-            {unread} sin leer · {all.length} total
+            {catUnread.all} sin leer · {all.length} total
           </p>
         </div>
-        {unread > 0 && <MarkAllReadButton />}
+        {catUnread.all > 0 && <MarkAllReadButton />}
       </div>
 
+      {/* Tabs categoría */}
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((c) => {
+          const label = c === "all" ? "Todas" : CAT_LABEL[c];
+          const count = c === "all" ? all.length : catCount[c];
+          const unread = c === "all" ? catUnread.all : catUnread[c];
+          if (c !== "all" && count === 0) return null;
+          return (
+            <Link
+              key={c}
+              href={hrefFor(c, filter) as never}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-xl border-2 px-3 text-xs font-bold ${
+                cat === c
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card hover:bg-muted"
+              }`}
+            >
+              {label}
+              {unread > 0 && (
+                <span
+                  className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+                    cat === c ? "bg-white text-primary" : "bg-red-500 text-white"
+                  }`}
+                >
+                  {unread}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Filtro sin leer */}
       <div className="flex gap-2">
         <Link
-          href={"/notificaciones" as never}
-          className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
+          href={hrefFor(cat, "all") as never}
+          className={`inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold ${
             filter === "all"
-              ? "border-primary bg-primary text-primary-foreground"
+              ? "border-primary bg-primary/10 text-primary"
               : "border-border bg-card hover:bg-muted"
           }`}
         >
           Todas
         </Link>
         <Link
-          href={"/notificaciones?filter=unread" as never}
-          className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
+          href={hrefFor(cat, "unread") as never}
+          className={`inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold ${
             filter === "unread"
-              ? "border-primary bg-primary text-primary-foreground"
+              ? "border-primary bg-primary/10 text-primary"
               : "border-border bg-card hover:bg-muted"
           }`}
         >
-          Sin leer ({unread})
+          Sin leer ({cat === "all" ? catUnread.all : catUnread[cat]})
         </Link>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Centro</CardTitle>
+          <CardTitle>
+            {cat === "all" ? "Centro" : CAT_LABEL[cat]} ({items.length})
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {filter === "unread" ? "No tienes notificaciones sin leer." : "No tienes notificaciones."}
+              {filter === "unread"
+                ? "No tienes notificaciones sin leer."
+                : "No tienes notificaciones."}
             </p>
           ) : (
             <ul className="divide-y">
