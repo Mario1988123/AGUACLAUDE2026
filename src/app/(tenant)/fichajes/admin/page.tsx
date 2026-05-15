@@ -1,7 +1,12 @@
 import { requireSession } from "@/shared/lib/auth/session";
 import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { redirect } from "next/navigation";
-import { listPunchesAdmin, getUsersWithoutPunchTodayAction } from "@/modules/time-tracking/actions";
+import {
+  listPunchesAdmin,
+  getUsersWithoutPunchTodayAction,
+  listCompanyUsersForFilter,
+} from "@/modules/time-tracking/actions";
+import { AdminCreatePunchButton } from "@/modules/time-tracking/admin-create-punch-button";
 import { listAbsences } from "@/modules/time-tracking/absences-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -42,12 +47,14 @@ export default async function FichajesAdminPage() {
   const today = new Date();
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0).toISOString();
   const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
-  const [punches, pending, missing, pendingRequests] = await Promise.all([
-    listPunchesAdmin({ from: start, to: end }),
-    listAbsences({ status: "pending" }),
-    getUsersWithoutPunchTodayAction(),
-    listPendingPunchRequests().catch(() => []),
-  ]);
+  const [punches, pending, missing, pendingRequests, companyUsers] =
+    await Promise.all([
+      listPunchesAdmin({ from: start, to: end }),
+      listAbsences({ status: "pending" }),
+      getUsersWithoutPunchTodayAction(),
+      listPendingPunchRequests().catch(() => []),
+      listCompanyUsersForFilter().catch(() => []),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -59,6 +66,7 @@ export default async function FichajesAdminPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <AdminCreatePunchButton users={companyUsers} />
           <a
             href={"/fichajes/admin/historico"}
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"

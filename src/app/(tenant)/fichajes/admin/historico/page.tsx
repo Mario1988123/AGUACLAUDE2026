@@ -12,6 +12,8 @@ import { Input } from "@/shared/ui/input";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { BackButton } from "@/shared/components/back-button";
+import { AdminCreatePunchButton } from "@/modules/time-tracking/admin-create-punch-button";
+import { AdminPunchRowActions } from "@/modules/time-tracking/admin-punch-row-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +96,8 @@ export default async function HistoricoFichajesPage({
             consulta.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <AdminCreatePunchButton users={users} />
           <a
             href={exportUrl}
             target="_blank"
@@ -219,28 +222,28 @@ export default async function HistoricoFichajesPage({
                     <th className="py-2">Tipo</th>
                     <th className="py-2">GPS</th>
                     <th className="py-2">Notas</th>
+                    <th className="py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {punches.map((p) => {
                     const d = new Date(p.punched_at);
+                    const dateLabel = d.toLocaleDateString("es-ES", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "2-digit",
+                      timeZone: "Europe/Madrid",
+                    });
+                    const timeLabel = d.toLocaleTimeString("es-ES", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone: "Europe/Madrid",
+                    });
+                    const ctx = `${KIND_LABEL[p.punch_kind] ?? p.punch_kind} · ${p.user_name ?? "—"} · ${dateLabel} ${timeLabel}`;
                     return (
                       <tr key={p.id} className="border-b last:border-0">
-                        <td className="py-1.5 tabular-nums">
-                          {d.toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "2-digit",
-                            timeZone: "Europe/Madrid",
-                          })}
-                        </td>
-                        <td className="py-1.5 tabular-nums">
-                          {d.toLocaleTimeString("es-ES", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            timeZone: "Europe/Madrid",
-                          })}
-                        </td>
+                        <td className="py-1.5 tabular-nums">{dateLabel}</td>
+                        <td className="py-1.5 tabular-nums">{timeLabel}</td>
                         <td className="py-1.5 font-semibold">
                           {p.user_name ?? "—"}
                         </td>
@@ -266,6 +269,15 @@ export default async function HistoricoFichajesPage({
                             </Badge>
                           )}
                           {p.edited_reason && `${p.edited_reason}`}
+                        </td>
+                        <td className="py-1.5 text-right">
+                          <div className="flex justify-end">
+                            <AdminPunchRowActions
+                              punchId={p.id}
+                              currentPunchedAt={p.punched_at}
+                              contextLabel={ctx}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

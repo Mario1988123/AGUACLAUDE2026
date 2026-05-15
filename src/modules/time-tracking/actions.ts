@@ -25,6 +25,20 @@ async function ensureAdmin() {
   return session;
 }
 
+/** Admin amplio: admin + directores (los que también ven la vista admin
+ *  de fichajes y aprueban solicitudes). */
+async function ensureAdminOrDirector() {
+  const session = await requireSession();
+  const ok =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+  if (!ok) throw new Error("Solo admin o director");
+  return session;
+}
+
 /**
  * Inserta un fichaje del usuario actual. Si no hay geo, marca needs_geo_review
  * + crea incidencia. El kind se infiere automáticamente: si el último fichaje
@@ -531,27 +545,189 @@ export async function listCompanyUsersForFilter(): Promise<
   }));
 }
 
-/** Editar fichaje (solo admin), deja huella de quién y por qué. */
-export async function editPunchAction(
+/** Editar fichaje (admin/director), deja huella de quién y por qué.
+ *  Devuelve { ok, error } para que el mensaje sobreviva en producción. */
+export async function editPunchAction(input: {
+  punch_id: string;
+  /** Nueva hora ISO (con timezone). */
+  punched_at: string;
+  reason: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdminOrDirector();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!input.reason || input.reason.trim().length < 3) {
+      return { ok: false, error: "Motivo obligatorio (al menos 3 caracteres)" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const r = await admin
+      .from("time_punches")
+      .update({
+        punched_at: input.punched_at,
+        is_manual: true,
+        edited_by_admin: session.user_id,
+        edited_reason: input.reason.trim(),
+      })
+      .eq("id", input.punch_id)
+      .eq("company_id", session.company_id);
+    if (r.error) return { ok: false, error: r.error.message };
+    revalidatePath("/fichajes");
+    revalidatePath("/fichajes/admin");
+    revalidatePath("/fichajes/admin/historico");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error al editar",
+    };
+  }
+}
+
+/** Admin/director crea un fichaje manual para otro usuario (caso: el
+ *  empleado olvidó fichar y no presentó solicitud). Marca is_manual=true
+ *  y edited_by_admin para trazabilidad. */
+export async function adminCreatePunchAction(input: {
+  user_id: string;
+  punch_kind: PunchKind;
+  /** ISO con timezone. */
+  punched_at: string;
+  reason: string;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdminOrDirector();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!input.reason || input.reason.trim().length < 3) {
+      return { ok: false, error: "Motivo obligatorio" };
+    }
+    if (
+      !["clock_in", "clock_out", "break_start", "break_end"].includes(
+        input.punch_kind,
+      )
+    ) {
+      return { ok: false, error: "Tipo de fichaje inválido" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    // Verificar que el user_id pertenece a la empresa
+    const { data: prof } = await admin
+      .from("user_profiles")
+      .select("user_id")
+      .eq("user_id", input.user_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!prof) {
+      return {
+        ok: false,
+        error: "El usuario no pertenece a tu empresa",
+      };
+    }
+    const ins = await admin
+      .from("time_punches")
+      .insert({
+        company_id: session.company_id,
+        user_id: input.user_id,
+        punch_kind: input.punch_kind,
+        punched_at: input.punched_at,
+        geo_latitude: null,
+        geo_longitude: null,
+        needs_geo_review: false,
+        is_manual: true,
+        edited_by_admin: session.user_id,
+        edited_reason: input.reason.trim(),
+      })
+      .select("id")
+      .single();
+    if (ins.error) return { ok: false, error: ins.error.message };
+    const id = (ins.data as { id: string } | null)?.id ?? "";
+
+    // Notificar al empleado
+    try {
+      await admin.from("notifications").insert({
+        company_id: session.company_id,
+        recipient_user_id: input.user_id,
+        kind: "time_tracking.admin_created",
+        severity: "info",
+        title: "Admin ha registrado un fichaje",
+        body: `Se ha añadido un fichaje en tu nombre: ${input.punch_kind === "clock_in" ? "entrada" : input.punch_kind === "clock_out" ? "salida" : input.punch_kind === "break_start" ? "inicio de descanso" : "fin de descanso"} a las ${new Date(input.punched_at).toLocaleString("es-ES")}.`,
+      });
+    } catch {
+      /* fail-soft */
+    }
+
+    revalidatePath("/fichajes");
+    revalidatePath("/fichajes/admin");
+    revalidatePath("/fichajes/admin/historico");
+    return { ok: true, id };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error al crear fichaje",
+    };
+  }
+}
+
+/** Admin/director elimina un fichaje (soft no aplica — borrado físico
+ *  pero queda en events). Útil para fichajes duplicados o erróneos. */
+export async function adminDeletePunchAction(
   punchId: string,
-  newPunchedAt: string,
   reason: string,
-): Promise<void> {
-  const session = await ensureAdmin();
-  if (!reason || reason.trim().length < 3) throw new Error("Motivo obligatorio");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  await admin
-    .from("time_punches")
-    .update({
-      punched_at: newPunchedAt,
-      is_manual: true,
-      edited_by_admin: session.user_id,
-      edited_reason: reason,
-    })
-    .eq("id", punchId)
-    .eq("company_id", session.company_id);
-  revalidatePath("/fichajes");
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdminOrDirector();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!reason || reason.trim().length < 3) {
+      return { ok: false, error: "Motivo obligatorio" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    // Capturar datos antes para audit
+    const { data: prev } = await admin
+      .from("time_punches")
+      .select("user_id, punch_kind, punched_at")
+      .eq("id", punchId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    const r = await admin
+      .from("time_punches")
+      .delete()
+      .eq("id", punchId)
+      .eq("company_id", session.company_id);
+    if (r.error) return { ok: false, error: r.error.message };
+
+    if (prev) {
+      const p = prev as {
+        user_id: string;
+        punch_kind: string;
+        punched_at: string;
+      };
+      try {
+        await admin.from("events").insert({
+          company_id: session.company_id,
+          subject_type: "user",
+          subject_id: p.user_id,
+          kind: "time_tracking.punch_deleted",
+          payload: {
+            punch_kind: p.punch_kind,
+            punched_at: p.punched_at,
+            reason: reason.trim(),
+            deleted_by: session.user_id,
+          },
+        });
+      } catch {
+        /* fail-soft */
+      }
+    }
+    revalidatePath("/fichajes");
+    revalidatePath("/fichajes/admin");
+    revalidatePath("/fichajes/admin/historico");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error al eliminar fichaje",
+    };
+  }
 }
 
 /** Cierra los fichajes abiertos +2h tras fin de jornada. Llama al RPC. */
