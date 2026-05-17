@@ -145,7 +145,100 @@ export default async function PruebasGratuitasPage() {
               Sin pruebas. Se generan desde la ficha de un cliente o lead.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: cards apiladas */}
+            <ul className="space-y-2 md:hidden">
+              {rows.map((r) => {
+                const partyLabel = r.customer_id
+                  ? cMap.get(r.customer_id) ?? "Cliente"
+                  : r.lead_id
+                    ? lMap.get(r.lead_id) ?? "Lead"
+                    : "Sin asignar";
+                const partyHref = r.customer_id
+                  ? `/clientes/${r.customer_id}`
+                  : r.lead_id
+                    ? `/leads/${r.lead_id}`
+                    : null;
+                const items = itemsMap.get(r.id) ?? [];
+                const equiposLabel =
+                  items.length === 0
+                    ? "—"
+                    : items
+                        .map(
+                          (it) =>
+                            `${it.product_name_snapshot}${it.quantity > 1 ? ` ×${it.quantity}` : ""}`,
+                        )
+                        .join(", ");
+                return (
+                  <li key={r.id} className="rounded-xl border bg-card p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/pruebas-gratuitas/${r.id}` as never}
+                          className="font-mono text-[11px] text-primary hover:underline font-semibold"
+                        >
+                          {r.reference_code ?? `#${r.id.slice(0, 8)}`}
+                        </Link>
+                        {partyHref ? (
+                          <Link
+                            href={partyHref as never}
+                            className="block font-medium text-primary hover:underline truncate"
+                          >
+                            {partyLabel}
+                          </Link>
+                        ) : (
+                          <span className="block text-muted-foreground">{partyLabel}</span>
+                        )}
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground" title={equiposLabel}>
+                          {equiposLabel}
+                        </div>
+                      </div>
+                      <Badge variant={STATUS_VARIANT[r.status]} className="shrink-0">
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-[11px] text-muted-foreground">
+                      <div>
+                        {r.installed_at && <>Inst. {fmt(r.installed_at)} · </>}
+                        {r.expires_at && <>Cad. {fmt(r.expires_at)}</>}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          href={`/pruebas-gratuitas/${r.id}` as never}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-primary"
+                          title="Ver ficha"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Link>
+                        {r.status === "installed" && (
+                          <Link
+                            href={`/pruebas-gratuitas/${r.id}` as never}
+                            className="inline-flex h-8 items-center gap-1 rounded-lg border border-success/40 bg-success/10 px-2 text-xs font-semibold text-success hover:bg-success/20"
+                            title="Aceptar y generar contrato"
+                          >
+                            <FileCheck className="h-3.5 w-3.5" /> Aceptar
+                          </Link>
+                        )}
+                        {(r.status === "installed" ||
+                          r.status === "rejected" ||
+                          r.status === "expired") && (
+                          <Link
+                            href={`/pruebas-gratuitas/${r.id}` as never}
+                            className="inline-flex h-8 items-center gap-1 rounded-lg border border-warning/40 bg-warning/10 px-2 text-xs font-semibold text-warning hover:bg-warning/20"
+                            title="Agendar desinstalación"
+                          >
+                            <PackageMinus className="h-3.5 w-3.5" /> Desinst.
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Desktop: tabla */}
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -266,6 +359,7 @@ export default async function PruebasGratuitasPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

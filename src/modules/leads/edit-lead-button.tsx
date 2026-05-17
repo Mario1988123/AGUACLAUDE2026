@@ -60,14 +60,14 @@ export function EditLeadButton({ leadId, initial }: Props) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4"
           onClick={close}
         >
           <div
-            className="my-6 w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-4">
+            <div className="flex shrink-0 items-center justify-between border-b p-4">
               <h2 className="text-base font-bold">Editar lead</h2>
               <button
                 type="button"
@@ -79,7 +79,7 @@ export function EditLeadButton({ leadId, initial }: Props) {
               </button>
             </div>
 
-            <div className="space-y-4 p-5">
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
               {form.party_kind === "company" ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
@@ -209,7 +209,7 @@ export function EditLeadButton({ leadId, initial }: Props) {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-4">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-4">
               <Button variant="outline" onClick={close} disabled={pending}>
                 Cancelar
               </Button>

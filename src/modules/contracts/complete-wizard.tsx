@@ -325,14 +325,14 @@ export function ContractCompleteWizard({
 
       {showPreview && (
         <div
-          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/70 p-2 sm:p-6"
+          className="fixed inset-0 z-[60] flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6"
           onClick={() => setShowPreview(false)}
         >
           <div
-            className="my-6 w-full max-w-3xl rounded-2xl bg-white shadow-2xl"
+            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-white shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-3">
+            <div className="flex shrink-0 items-center justify-between border-b p-3">
               <h3 className="text-base font-bold">Vista previa del contrato</h3>
               <button
                 type="button"
@@ -343,7 +343,9 @@ export function ContractCompleteWizard({
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <PreviewBody {...preview} />
+            <div className="flex-1 overflow-y-auto">
+              <PreviewBody {...preview} />
+            </div>
           </div>
         </div>
       )}

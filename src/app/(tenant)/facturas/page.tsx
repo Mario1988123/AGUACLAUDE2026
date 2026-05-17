@@ -234,7 +234,98 @@ export default async function InvoicesPage({
               automática de los contratos recurrentes.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: cards apiladas */}
+            <ul className="space-y-2 md:hidden">
+              {visibleInvoices.map((i) => (
+                <li
+                  key={i.id}
+                  className="rounded-xl border bg-card p-3 text-sm"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/facturas/${i.id}` as never}
+                        className="font-mono text-xs font-semibold text-primary hover:underline"
+                      >
+                        {i.full_reference}
+                      </Link>
+                      <div className="mt-0.5 font-medium truncate">
+                        {i.customer_name ?? "—"}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {KIND_LABEL[i.kind] ?? i.kind} ·{" "}
+                        {new Date(i.issue_date).toLocaleDateString("es-ES")}
+                      </div>
+                      {i.corrected_by_reference && (
+                        <div className="mt-0.5 text-[11px] text-amber-700">
+                          ↳ rectificada por{" "}
+                          <Link
+                            href={`/facturas/${i.corrected_by_id}` as never}
+                            className="font-bold hover:underline"
+                          >
+                            {i.corrected_by_reference}
+                          </Link>
+                        </div>
+                      )}
+                      {i.corrects_reference && (
+                        <div className="mt-0.5 text-[11px] text-blue-700">
+                          ↳ rectifica a{" "}
+                          <Link
+                            href={`/facturas/${i.corrects_invoice_id}` as never}
+                            className="font-bold hover:underline"
+                          >
+                            {i.corrects_reference}
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right tabular-nums">
+                      <div className="font-bold">{eur(i.total_cents)}</div>
+                      {i.pending_cents > 0 ? (
+                        <div className="text-[11px] font-semibold text-red-600">
+                          Pdte. {eur(i.pending_cents)}
+                        </div>
+                      ) : (
+                        <div className="text-[11px] text-emerald-600">Cobrada</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+                    <StatusPill
+                      label={STATUS_LABEL[i.status] ?? i.status}
+                      tone={STATUS_TONE[i.status] ?? "info"}
+                    />
+                    <div className="flex items-center gap-0.5">
+                      <InvoiceRowActions
+                        invoiceId={i.id}
+                        status={i.status}
+                        pendingCents={i.pending_cents}
+                        isCreditNote={i.kind === "credit_note"}
+                        hasCreditNote={!!i.corrected_by_id}
+                      />
+                      <Link
+                        href={`/facturas/${i.id}` as never}
+                        title="Ver factura"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                      <a
+                        href={`/api/pdf/invoice/${i.id}`}
+                        target="_blank"
+                        rel="noopener"
+                        title="Descargar PDF"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                      >
+                        <Download className="h-4 w-4" />
+                      </a>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
@@ -340,6 +431,7 @@ export default async function InvoicesPage({
                 </tbody>
               </table>
             </div>
+            </>
           )}
           <Pagination
             basePath="/facturas"

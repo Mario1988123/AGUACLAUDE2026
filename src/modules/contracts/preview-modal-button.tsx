@@ -100,14 +100,14 @@ export function ContractPreviewButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-2 sm:p-6"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6 print:p-0"
           onClick={() => setOpen(false)}
         >
           <div
-            className="my-6 w-full max-w-3xl rounded-2xl bg-white shadow-2xl"
+            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-white shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl print:max-h-none print:overflow-visible print:shadow-none"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-3 print:hidden">
+            <div className="flex shrink-0 items-center justify-between border-b p-3 print:hidden">
               <h2 className="text-base font-bold">Vista previa del contrato</h2>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => window.print()}>
@@ -124,7 +124,7 @@ export function ContractPreviewButton({
               </div>
             </div>
 
-            <div className="space-y-6 p-8 text-sm text-slate-900">
+            <div className="flex-1 space-y-6 overflow-y-auto p-8 text-sm text-slate-900 print:overflow-visible">
               {/* Cabecera */}
               <div className="border-b pb-4 text-center">
                 <h1 className="text-2xl font-extrabold uppercase tracking-wide text-primary">

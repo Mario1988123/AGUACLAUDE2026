@@ -170,14 +170,14 @@ export function AdminPunchRowActions({
       {/* Modal Eliminar */}
       {delOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => !pending && setDelOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="space-y-3 p-5">
+            <div className="flex-1 space-y-3 overflow-y-auto p-5">
               <h2 className="text-lg font-bold">Eliminar fichaje</h2>
               <p className="text-xs text-muted-foreground">{contextLabel}</p>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
@@ -195,7 +195,7 @@ export function AdminPunchRowActions({
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button
                 variant="outline"
                 onClick={() => setDelOpen(false)}

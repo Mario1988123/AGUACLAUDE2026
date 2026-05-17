@@ -81,15 +81,15 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4"
           onClick={close}
         >
           <div
-            className="my-6 w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl sm:border sm:border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-4">
-              <div>
+            <div className="flex shrink-0 items-center justify-between border-b p-4">
+              <div className="min-w-0 flex-1 pr-2">
                 <h2 className="text-base font-bold">Añadir equipo al cliente</h2>
                 <p className="text-xs text-muted-foreground">
                   Para registrar un equipo ya instalado (incluso por otra empresa)
@@ -106,7 +106,7 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
               </button>
             </div>
 
-            <div className="space-y-4 p-4">
+            <div className="flex-1 space-y-4 overflow-y-auto p-4">
               {/* Toggle origen del equipo */}
               <div>
                 <Label className="text-xs">Origen del equipo</Label>
@@ -202,7 +202,7 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
               )}
             </div>
 
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={close} disabled={pending}>
                 Cancelar
               </Button>

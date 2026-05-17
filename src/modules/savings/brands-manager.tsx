@@ -226,14 +226,14 @@ function BrandModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
       onClick={() => !pending && onClose()}
     >
       <div
-        className="w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl max-h-[90vh] overflow-y-auto"
+        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="space-y-4 p-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <h2 className="text-lg font-bold">
             {isNew ? "Nueva marca" : `Editar ${brand.name}`} · {brand.kind === "supermarket" ? "Supermercado" : "Servicio"}
           </h2>
@@ -301,7 +301,7 @@ function BrandModal({
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+        <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
           <Button variant="outline" onClick={onClose} disabled={pending}>
             Cancelar
           </Button>

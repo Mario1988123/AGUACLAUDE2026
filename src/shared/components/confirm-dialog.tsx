@@ -65,16 +65,16 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
       {children}
       {open && opts && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => close(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="flex items-start gap-3 p-5">
+            <div className="flex flex-1 items-start gap-3 overflow-y-auto p-5">
               <div
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
                   opts.variant === "destructive"
@@ -103,7 +103,7 @@ export function ConfirmDialogProvider({ children }: { children: React.ReactNode 
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={() => close(false)}>
                 {opts.cancelText ?? "Cancelar"}
               </Button>

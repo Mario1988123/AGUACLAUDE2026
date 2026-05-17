@@ -74,7 +74,48 @@ export default async function IncidenciasPage() {
           {incidents.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin incidencias.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            {/* Mobile: cards apiladas */}
+            <ul className="space-y-2 md:hidden">
+              {incidents.map((i) => (
+                <li key={i.id} className="rounded-xl border bg-card p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/incidencias/${i.id}` as never}
+                        className="font-mono text-[11px] text-primary hover:underline"
+                      >
+                        {i.reference_code ?? `#${i.id.slice(0, 8)}`}
+                      </Link>
+                      <Link
+                        href={`/incidencias/${i.id}` as never}
+                        className="block font-medium hover:underline"
+                      >
+                        {i.title}
+                      </Link>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {ORIGIN_LABEL[i.origin] ?? i.origin} ·{" "}
+                        {new Date(i.created_at).toLocaleDateString("es-ES")}
+                      </div>
+                    </div>
+                    <SlaPill deadlineAt={i.deadline_at} status={i.status} />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2">
+                    <StatusPill
+                      label={PRIORITY_LABEL[i.priority] ?? i.priority}
+                      tone={PRIORITY_TONE[i.priority] ?? "info"}
+                    />
+                    <StatusPill
+                      label={STATUS_LABEL[i.status] ?? i.status}
+                      tone={INCIDENT_TONE[i.status] ?? "info"}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: tabla */}
+            <table className="hidden w-full text-sm md:table">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Ref.</th>
@@ -138,6 +179,7 @@ export default async function IncidenciasPage() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </CardContent>
       </Card>

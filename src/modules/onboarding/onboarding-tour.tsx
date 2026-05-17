@@ -60,9 +60,9 @@ export function OnboardingTour({ steps, enabled }: Props) {
   const isLast = index === steps.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md overflow-hidden rounded-3xl bg-card shadow-2xl">
-        <div className="flex items-center justify-between border-b px-5 py-3">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4">
+      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-card shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Bienvenido · Paso {index + 1} de {steps.length}
           </span>
@@ -76,7 +76,7 @@ export function OnboardingTour({ steps, enabled }: Props) {
           </button>
         </div>
 
-        <div className="px-6 py-6 text-center">
+        <div className="flex-1 overflow-y-auto px-6 py-6 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <Icon className="h-8 w-8" />
           </div>
@@ -105,7 +105,7 @@ export function OnboardingTour({ steps, enabled }: Props) {
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t bg-muted/20 px-5 py-3">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-t bg-muted/20 px-5 py-3">
           <Button
             variant="ghost"
             size="sm"

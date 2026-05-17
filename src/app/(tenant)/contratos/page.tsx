@@ -104,7 +104,77 @@ export default async function ContratosPage({
         )}
       </form>
 
-      <div className="overflow-x-auto rounded-lg border bg-card">
+      {/* Mobile: cards apiladas */}
+      <ul className="space-y-2 md:hidden">
+        {contracts.length === 0 ? (
+          <li className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+            No hay contratos con esos filtros.
+          </li>
+        ) : (
+          contracts.map((c) => (
+            <li
+              key={c.id}
+              className="rounded-xl border bg-card p-3 text-sm"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-[11px] text-muted-foreground">
+                    {c.reference_code ?? "—"}
+                  </div>
+                  <Link
+                    href={`/contratos/${c.id}` as never}
+                    className="font-medium text-primary hover:underline truncate block"
+                  >
+                    {c.customer_name}
+                  </Link>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {PLAN_TYPE_LABEL[c.plan_type]}
+                    {c.signed_at && ` · Firmado ${new Date(c.signed_at).toLocaleDateString("es-ES")}`}
+                  </div>
+                </div>
+                <StatusPill
+                  label={STATUS_LABEL[c.status]}
+                  tone={CONTRACT_TONE[c.status] ?? "info"}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+                <div className="text-xs tabular-nums">
+                  {c.total_cash_cents != null && (
+                    <span className="font-bold">{formatCents(c.total_cash_cents)}</span>
+                  )}
+                  {c.monthly_cents != null && (
+                    <span className="text-muted-foreground">
+                      {c.total_cash_cents != null ? " · " : ""}
+                      {formatCents(c.monthly_cents)}/mes
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-0.5">
+                  <Link
+                    href={`/contratos/${c.id}` as never}
+                    title="Ver contrato"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Link>
+                  <a
+                    href={`/api/pdf/contract/${c.id}`}
+                    target="_blank"
+                    rel="noopener"
+                    title="Descargar PDF"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                  >
+                    <Download className="h-4 w-4" />
+                  </a>
+                </div>
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
+
+      {/* Desktop: tabla densa */}
+      <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>

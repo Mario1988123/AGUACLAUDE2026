@@ -17,16 +17,16 @@ export function WalletInfoButton() {
       </button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="flex items-center justify-between border-b p-4">
+            <div className="flex shrink-0 items-center justify-between border-b p-4">
               <h2 className="text-lg font-bold">Cómo funciona el wallet</h2>
               <button
                 type="button"
@@ -37,7 +37,7 @@ export function WalletInfoButton() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <div className="grid flex-1 gap-4 overflow-y-auto p-5 sm:grid-cols-2">
               <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
                 <div className="mb-2 font-bold text-blue-900">
                   💳 Tarjeta · Transferencia · Bizum · SEPA

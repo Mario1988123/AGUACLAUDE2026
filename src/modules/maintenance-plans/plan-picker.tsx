@@ -86,14 +86,14 @@ export function MaintenancePlanPicker({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-2 sm:p-6"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-6"
           onClick={() => setOpen(false)}
         >
           <div
-            className="my-6 w-full max-w-3xl rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-4">
+            <div className="flex shrink-0 items-center justify-between border-b p-4">
               <h2 className="text-base font-bold">
                 Elige plan de mantenimiento
               </h2>
@@ -107,7 +107,7 @@ export function MaintenancePlanPicker({
               </button>
             </div>
 
-            <div className="p-4">
+            <div className="flex-1 overflow-y-auto p-4">
               <div className="grid gap-3 md:grid-cols-3">
                 {plans.map((p) => {
                   const Icon = TIER_ICON[p.tier];
@@ -190,7 +190,7 @@ export function MaintenancePlanPicker({
               </p>
             </div>
 
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
                 Cancelar
               </Button>
