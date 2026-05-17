@@ -153,7 +153,60 @@ export default async function VentasPerdidasPage() {
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin ventas perdidas.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            {/* Mobile: cards apiladas */}
+            <ul className="space-y-2 md:hidden">
+              {rows.map((r) => (
+                <li key={r.id} className="rounded-xl border bg-card p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      {r.lead_id ? (
+                        <Link
+                          href={`/leads/${r.lead_id}` as never}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {leadName(r.lead_id)}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                      <div className="text-xs text-muted-foreground">
+                        {ORIGIN_LABEL[r.origin] ?? r.origin} ·{" "}
+                        {new Date(r.created_at).toLocaleDateString("es-ES")}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold tabular-nums">
+                        {formatCents(r.amount_cents)}
+                      </div>
+                      {r.is_recovered ? (
+                        <Badge variant="success" className="mt-1">Recuperada</Badge>
+                      ) : (
+                        <Badge variant="destructive" className="mt-1">Sin recuperar</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-start justify-between gap-2 border-t pt-2">
+                    <div className="min-w-0 flex-1 text-xs">
+                      {r.reason_category && (
+                        <Badge variant="secondary" className="mr-1">{r.reason_category}</Badge>
+                      )}
+                      {r.reason}
+                    </div>
+                    <LostSaleRowActions
+                      lostSaleId={r.id}
+                      hasLead={!!r.lead_id}
+                      isRecovered={r.is_recovered}
+                      assignedUserId={r.assigned_recovery_user_id}
+                      team={team}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: tabla */}
+            <table className="hidden w-full text-sm md:table">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Fecha</th>
@@ -211,6 +264,7 @@ export default async function VentasPerdidasPage() {
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </CardContent>
       </Card>

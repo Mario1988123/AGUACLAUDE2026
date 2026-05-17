@@ -114,7 +114,98 @@ export default async function CalculadoraAhorroListPage({
               .
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: cards apiladas */}
+            <ul className="space-y-2 md:hidden">
+              {list.map((s) => {
+                const positiveSavings =
+                  (s.total_saved_5y_cents ?? 0) > 0 && s.payback_months != null;
+                return (
+                  <li key={s.id} className="rounded-xl border bg-card p-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono text-[11px] text-muted-foreground">
+                          {s.reference_code ?? "—"}
+                        </div>
+                        {s.customer_id ? (
+                          <Link
+                            href={`/clientes/${s.customer_id}` as never}
+                            className="font-medium text-primary hover:underline truncate block"
+                          >
+                            {s.customer_name ?? "Cliente"}
+                          </Link>
+                        ) : s.lead_id ? (
+                          <Link
+                            href={`/leads/${s.lead_id}` as never}
+                            className="font-medium text-primary hover:underline truncate block"
+                          >
+                            <Badge variant="secondary" className="mr-1 text-[10px]">LEAD</Badge>
+                            {s.lead_name ?? "Lead"}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-amber-700">⚠ sin asignar</span>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                          {s.product_name_snapshot ?? "—"}
+                          {s.plan_type && ` · ${s.plan_type}`}
+                        </div>
+                      </div>
+                      <Badge variant={STATUS_VARIANT[s.status] ?? "default"}>
+                        {STATUS_LABEL[s.status] ?? s.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 grid grid-cols-3 gap-2 border-t pt-2 text-[11px] tabular-nums">
+                      <div>
+                        <div className="text-muted-foreground">Actual</div>
+                        <div>{eur(s.current_monthly_cost_cents)}/m</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Nuevo</div>
+                        <div>{eur(s.total_monthly_cost_cents)}/m</div>
+                      </div>
+                      <div>
+                        <div className="text-muted-foreground">Ahorro 5y</div>
+                        {positiveSavings ? (
+                          <div className="font-bold text-emerald-700 inline-flex items-center gap-0.5">
+                            <TrendingDown className="h-3 w-3" />
+                            {eur(s.total_saved_5y_cents)}
+                          </div>
+                        ) : (
+                          <div className="text-muted-foreground">—</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatDateES(s.created_at)}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={`/api/pdf/savings/${s.id}`}
+                          target="_blank"
+                          rel="noopener"
+                          title="Ver PDF"
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </a>
+                        <a
+                          href={`/api/pdf/savings/${s.id}`}
+                          download={`ahorro-${s.reference_code ?? s.id.slice(0, 8)}.pdf`}
+                          title="Descargar PDF"
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-blue-100 hover:text-blue-700"
+                        >
+                          <Download className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Desktop: tabla */}
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b">
@@ -237,6 +328,7 @@ export default async function CalculadoraAhorroListPage({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

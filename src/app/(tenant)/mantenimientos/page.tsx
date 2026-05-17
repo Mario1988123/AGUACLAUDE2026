@@ -144,7 +144,47 @@ export default async function MantenimientosPage({
           {jobs.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin mantenimientos con esos filtros.</p>
           ) : (
-            <table className="w-full text-sm">
+            <>
+            {/* Mobile: cards apiladas */}
+            <ul className="space-y-2 md:hidden">
+              {jobs.map((j) => (
+                <li key={j.id} className="rounded-xl border bg-card p-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <Link href={`/mantenimientos/${j.id}`} className="font-medium text-primary hover:underline truncate block">
+                        {j.customer_name ?? "—"}
+                      </Link>
+                      <div className="text-xs text-muted-foreground">
+                        {j.scheduled_at ? new Date(j.scheduled_at).toLocaleString("es-ES") : "—"}
+                      </div>
+                    </div>
+                    <StatusPill
+                      label={STATUS_LABEL[j.status] ?? j.status}
+                      tone={MAINT_TONE[j.status] ?? "info"}
+                    />
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+                    <span className="text-xs tabular-nums">
+                      {j.is_charged ? (
+                        <strong>{formatCents(j.charge_cents)}</strong>
+                      ) : (
+                        <span className="text-muted-foreground">Incluido</span>
+                      )}
+                    </span>
+                    <Link
+                      href={`/mantenimientos/${j.id}` as never}
+                      title="Ver mantenimiento"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/* Desktop: tabla */}
+            <table className="hidden w-full text-sm md:table">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Cliente</th>
@@ -187,6 +227,7 @@ export default async function MantenimientosPage({
                 ))}
               </tbody>
             </table>
+            </>
           )}
         </CardContent>
       </Card>
