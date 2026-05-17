@@ -90,6 +90,10 @@ export interface InstallationRow {
   created_at: string;
   contract_id: string | null;
   address_id: string | null;
+  /** Hay al menos una incidencia abierta para esta instalación
+   *  (de installation_incidents o de incidents). Se usa en /instalaciones
+   *  y /agenda para marcar la fila aunque el status no sea incident_pending. */
+  has_open_incident?: boolean;
 }
 
 export async function listInstallations(filters?: {
@@ -133,9 +137,58 @@ export async function listInstallations(filters?: {
   const { data, error } = await query;
   if (error) throw error;
 
-  return resolvePartyNames(supabase, (data ?? []) as Array<
+  const withNames = await resolvePartyNames(supabase, (data ?? []) as Array<
     Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
   >);
+  return attachOpenIncidents(supabase, withNames);
+}
+
+/**
+ * Marca `has_open_incident=true` en aquellas instalaciones que tengan al
+ * menos una incidencia abierta. Consulta `installation_incidents` con
+ * `resolved_at IS NULL` y, defensivamente, `incidents` con status
+ * abierto enlazadas por `installation_id`. Fail-soft: si la tabla no
+ * existe en BD aún, devuelve los datos sin marcar.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function attachOpenIncidents(supabase: any, rows: InstallationRow[]): Promise<InstallationRow[]> {
+  if (rows.length === 0) return rows;
+  const ids = rows.map((r) => r.id);
+  const withIncident = new Set<string>();
+
+  // 1) installation_incidents (tabla específica, migración 20260504150000)
+  try {
+    const { data, error } = await supabase
+      .from("installation_incidents")
+      .select("installation_id")
+      .in("installation_id", ids)
+      .is("resolved_at", null);
+    if (!error) {
+      for (const r of (data ?? []) as Array<{ installation_id: string }>) {
+        withIncident.add(r.installation_id);
+      }
+    }
+  } catch {
+    /* tabla no migrada aún → fallback */
+  }
+
+  // 2) Tabla genérica `incidents` con installation_id (siempre existe)
+  try {
+    const { data } = await supabase
+      .from("incidents")
+      .select("installation_id")
+      .in("installation_id", ids)
+      .in("status", ["open", "assigned", "in_progress"]);
+    for (const r of (data ?? []) as Array<{ installation_id: string | null }>) {
+      if (r.installation_id) withIncident.add(r.installation_id);
+    }
+  } catch {
+    /* no debería fallar; si lo hace, ignoramos */
+  }
+
+  return rows.map((r) =>
+    withIncident.has(r.id) ? { ...r, has_open_incident: true } : r,
+  );
 }
 
 /**
@@ -258,9 +311,10 @@ export async function listUnscheduledInstallations(): Promise<InstallationRow[]>
     .limit(200);
   if (error) throw error;
 
-  return resolvePartyNames(supabase, (data ?? []) as Array<
+  const withNames = await resolvePartyNames(supabase, (data ?? []) as Array<
     Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
   >);
+  return attachOpenIncidents(supabase, withNames);
 }
 
 export async function getInstallation(id: string) {

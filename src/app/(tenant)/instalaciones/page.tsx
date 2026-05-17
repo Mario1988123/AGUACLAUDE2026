@@ -126,16 +126,22 @@ export default async function InstalacionesPage({
     listInstallers().catch(() => []),
   ]);
 
-  // Separar agendadas (con scheduled_at), sin agendar, y con incidencia
-  // (incident_pending — siempre se muestran arriba para no perderlas).
+  // Separar agendadas (con scheduled_at), sin agendar, y con incidencia.
+  // «Con incidencia» incluye tanto las que tienen `status=incident_pending`
+  // (bloqueadas) como las que mantienen status normal pero tienen alguna
+  // incidencia abierta en BD (notificada sin desagendar).
   type I = (typeof installations)[number];
   const withIncident: I[] = [];
   const scheduled: I[] = [];
   const unscheduled: I[] = [];
   for (const i of installations) {
-    if (i.status === "incident_pending") withIncident.push(i);
-    else if (i.scheduled_at) scheduled.push(i);
-    else unscheduled.push(i);
+    if (i.status === "incident_pending" || i.has_open_incident) {
+      withIncident.push(i);
+    } else if (i.scheduled_at) {
+      scheduled.push(i);
+    } else {
+      unscheduled.push(i);
+    }
   }
 
   // Agrupar agendadas por día (clave en zona Madrid).
@@ -220,27 +226,44 @@ export default async function InstalacionesPage({
           </CardHeader>
           <CardContent>
             <ul className="space-y-1.5">
-              {withIncident.map((i) => (
-                <li
-                  key={i.id}
-                  className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-red-200 bg-white p-3"
-                >
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/instalaciones/${i.id}` as never}
-                      className="font-medium text-red-900 hover:underline"
-                    >
-                      {i.customer_name ?? "—"}
-                    </Link>
-                    <div className="text-xs text-red-800">
-                      {i.reference_code ?? `#${i.id.slice(0, 8)}`} ·{" "}
-                      {KIND_LABEL[i.kind] ?? i.kind} · Pendiente de reagendar
+              {withIncident.map((i) => {
+                const isBlocked = i.status === "incident_pending";
+                const subtitle = isBlocked
+                  ? "Pendiente de reagendar"
+                  : i.scheduled_at
+                    ? `Programada ${new Date(i.scheduled_at).toLocaleString("es-ES", { timeZone: TZ })}`
+                    : "Sin agendar";
+                return (
+                  <li
+                    key={i.id}
+                    className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-red-200 bg-white p-3"
+                  >
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        href={`/instalaciones/${i.id}` as never}
+                        className="font-medium text-red-900 hover:underline"
+                      >
+                        {i.customer_name ?? "—"}
+                      </Link>
+                      <div className="text-xs text-red-800">
+                        {i.reference_code ?? `#${i.id.slice(0, 8)}`} ·{" "}
+                        {KIND_LABEL[i.kind] ?? i.kind} · {subtitle}
+                      </div>
                     </div>
-                  </div>
-                  <InstallationRowActions inst={i} />
-                </li>
-              ))}
+                    {isBlocked ? (
+                      <span className="rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                        Bloqueada
+                      </span>
+                    ) : (
+                      <span className="rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                        Avisada
+                      </span>
+                    )}
+                    <InstallationRowActions inst={i} />
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>

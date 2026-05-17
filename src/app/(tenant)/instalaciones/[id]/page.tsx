@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 import {
   getInstallation,
   getInstallationItems,
@@ -24,6 +25,14 @@ import { ScheduleInstallationButton } from "@/modules/installations/schedule-but
 import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+
+const INCIDENT_KIND_LABEL: Record<string, string> = {
+  missing_material: "Material faltante",
+  wrong_equipment: "Equipo equivocado",
+  broken_equipment: "Equipo dañado",
+  customer_issue: "Problema con el cliente",
+  other: "Otro",
+};
 
 export default async function InstallationDetailPage({
   params,
@@ -74,6 +83,73 @@ export default async function InstallationDetailPage({
   // Cargar cobros del contrato asociado para el wizard
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = (await createClient()) as any;
+
+  // Incidencias abiertas asociadas a esta instalación. Se muestran en
+  // un banner rojo si las hay (puede tener status normal pero incidencia
+  // notificada sin desagendar).
+  let openIncidents: Array<{
+    id: string;
+    kind: string | null;
+    description: string | null;
+    title: string | null;
+    created_at: string;
+    source: "installation_incidents" | "incidents";
+  }> = [];
+  try {
+    const { data } = await sb
+      .from("installation_incidents")
+      .select("id, kind, description, created_at")
+      .eq("installation_id", id)
+      .is("resolved_at", null)
+      .order("created_at", { ascending: false });
+    for (const r of (data ?? []) as Array<{
+      id: string;
+      kind: string;
+      description: string | null;
+      created_at: string;
+    }>) {
+      openIncidents.push({
+        id: r.id,
+        kind: r.kind,
+        description: r.description,
+        title: null,
+        created_at: r.created_at,
+        source: "installation_incidents",
+      });
+    }
+  } catch {
+    /* tabla aún no migrada */
+  }
+  try {
+    const { data } = await sb
+      .from("incidents")
+      .select("id, title, description, created_at, status")
+      .eq("installation_id", id)
+      .in("status", ["open", "assigned", "in_progress"])
+      .order("created_at", { ascending: false });
+    for (const r of (data ?? []) as Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      created_at: string;
+    }>) {
+      openIncidents.push({
+        id: r.id,
+        kind: null,
+        description: r.description,
+        title: r.title,
+        created_at: r.created_at,
+        source: "incidents",
+      });
+    }
+  } catch {
+    /* no debería pasar */
+  }
+  // Ordenar por más recientes primero
+  openIncidents = openIncidents.sort((a, b) =>
+    b.created_at.localeCompare(a.created_at),
+  );
+
   let payments: Array<{
     id: string;
     concept: string;
@@ -202,7 +278,7 @@ export default async function InstallationDetailPage({
       <SubjectNotificationToast subjectType="installation" subjectId={id} />
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-extrabold tracking-tight">
               Instalación {i.reference_code ?? `#${i.id.slice(0, 8)}`}
             </h1>
@@ -210,6 +286,14 @@ export default async function InstallationDetailPage({
               {STATUS_LABEL[i.status] ?? i.status}
             </Badge>
             <Badge variant="outline">{KIND_LABEL[i.kind] ?? i.kind}</Badge>
+            {openIncidents.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                <AlertTriangle className="h-3 w-3" />
+                {openIncidents.length === 1
+                  ? "Con incidencia"
+                  : `${openIncidents.length} incidencias`}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {i.scheduled_at
@@ -268,6 +352,63 @@ export default async function InstallationDetailPage({
           <BackButton href="/instalaciones" />
         </div>
       </div>
+
+      {openIncidents.length > 0 && (
+        <Card className="border-2 border-red-300 bg-red-50/60">
+          <CardContent className="space-y-2 pt-6">
+            <div className="flex items-center gap-2 text-red-900">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              <span className="text-sm font-bold uppercase tracking-wider">
+                {openIncidents.length === 1
+                  ? "Incidencia abierta"
+                  : `${openIncidents.length} incidencias abiertas`}
+              </span>
+            </div>
+            <ul className="space-y-1.5">
+              {openIncidents.map((inc) => {
+                const label = inc.title
+                  ? inc.title
+                  : inc.kind
+                    ? INCIDENT_KIND_LABEL[inc.kind] ?? inc.kind
+                    : "Incidencia";
+                return (
+                  <li
+                    key={`${inc.source}:${inc.id}`}
+                    className="rounded-lg border border-red-200 bg-white p-2.5 text-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-red-900">{label}</div>
+                        {inc.description && (
+                          <div className="mt-0.5 text-xs text-red-800">
+                            {inc.description}
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-[11px] text-red-700">
+                        {new Date(inc.created_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
+                      </div>
+                    </div>
+                    {inc.source === "incidents" && (
+                      <Link
+                        href={`/incidencias/${inc.id}` as never}
+                        className="mt-1 inline-block text-xs font-bold text-red-700 underline hover:text-red-900"
+                      >
+                        Ver en módulo de incidencias →
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="text-[11px] text-red-700">
+              Resuelve la incidencia antes de continuar el parte. Si el
+              problema bloquea el trabajo, pulsa «Notificar incidencia →
+              Parar instalación y reagendar» dentro del parte.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Card destacada del cliente — visible siempre en la cabecera de la
           ficha. Antes solo aparecía dentro del wizard cuando se abría el
