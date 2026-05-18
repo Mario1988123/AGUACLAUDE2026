@@ -11,6 +11,7 @@ import { BackButton } from "@/shared/components/back-button";
 import { PaymentReminderButton } from "@/modules/invoices/payment-reminder-button";
 import { suggestReminderLevel } from "@/modules/invoices/payment-reminder-actions";
 import { createClient } from "@/shared/lib/supabase/server";
+import { VerifactuV2Actions } from "@/modules/invoices/verifactu-v2-actions";
 
 function eur(c: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -50,10 +51,11 @@ export default async function InvoiceDetailPage({
   }
   const gcMandates = await listActiveMandatesForCustomer(inv.customer_id).catch(() => []);
 
-  // Email del cliente para mailto del recordatorio
+  // Email del cliente para mailto del recordatorio + verifactu_mode empresa
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = (await createClient()) as any;
   let customerEmail: string | null = null;
+  let verifactuMode: "no_envio" | "verifactu_test" | "verifactu" = "no_envio";
   try {
     const { data } = await sb
       .from("customers")
@@ -61,6 +63,16 @@ export default async function InvoiceDetailPage({
       .eq("id", inv.customer_id)
       .maybeSingle();
     customerEmail = (data as { email: string | null } | null)?.email ?? null;
+  } catch {
+    /* */
+  }
+  try {
+    const { data: cs } = await sb
+      .from("company_settings")
+      .select("verifactu_mode")
+      .maybeSingle();
+    const m = (cs as { verifactu_mode: string | null } | null)?.verifactu_mode;
+    if (m === "verifactu_test" || m === "verifactu") verifactuMode = m;
   } catch {
     /* */
   }
@@ -220,6 +232,15 @@ export default async function InvoiceDetailPage({
                   />
                 </div>
               )}
+            {(verifactuMode === "verifactu_test" || verifactuMode === "verifactu") && (
+              <div className="mt-3 border-t pt-3">
+                <VerifactuV2Actions
+                  invoiceId={inv.id}
+                  status={inv.status}
+                  mode={verifactuMode}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
