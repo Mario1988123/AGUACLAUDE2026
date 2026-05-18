@@ -23,12 +23,19 @@ function formatCents(cents: number | null) {
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ kind?: string; cat?: string; q?: string; active?: string }>;
+  searchParams: Promise<{
+    kind?: string;
+    cat?: string;
+    q?: string;
+    active?: string;
+    view?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const kind = KIND_OPTIONS.includes(sp.kind as never) ? sp.kind : undefined;
   const categoryId = sp.cat || undefined;
   const activeOnly = sp.active === "1";
+  const viewMode: "list" | "grid" = sp.view === "grid" ? "grid" : "list";
   const session = await requireSession();
   const isUpper =
     session.is_superadmin ||
@@ -47,7 +54,21 @@ export default async function ProductsPage({
           <h1 className="text-2xl font-bold">Productos</h1>
           <p className="text-sm text-muted-foreground">{products.length} productos</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <div className="flex rounded-xl border border-input bg-card overflow-hidden">
+            <Link
+              href={`/productos?${new URLSearchParams({ ...(sp.q ? { q: sp.q } : {}), ...(kind ? { kind } : {}), ...(categoryId ? { cat: categoryId } : {}), ...(activeOnly ? { active: "1" } : {}) }).toString()}` as never}
+              className={`px-3 py-2 text-xs font-semibold ${viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              Lista
+            </Link>
+            <Link
+              href={`/productos?${new URLSearchParams({ view: "grid", ...(sp.q ? { q: sp.q } : {}), ...(kind ? { kind } : {}), ...(categoryId ? { cat: categoryId } : {}), ...(activeOnly ? { active: "1" } : {}) }).toString()}` as never}
+              className={`px-3 py-2 text-xs font-semibold ${viewMode === "grid" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              Grid
+            </Link>
+          </div>
           <Button variant="outline" asChild>
             <Link href={"/configuracion/productos" as never}>Configuración</Link>
           </Button>
@@ -122,6 +143,62 @@ export default async function ProductsPage({
         )}
       </form>
 
+      {/* Vista Grid (todas las pantallas) */}
+      {viewMode === "grid" ? (
+        products.length === 0 ? (
+          <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
+            Sin productos con esos filtros.
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {products.map((p) => {
+              const photoUrl = (p as { photo_url?: string | null }).photo_url;
+              return (
+                <Link
+                  key={p.id}
+                  href={`/productos/${p.id}` as never}
+                  className="group flex flex-col rounded-xl border bg-card overflow-hidden hover:border-primary transition-colors"
+                >
+                  <div className="aspect-square w-full bg-muted/30 flex items-center justify-center text-muted-foreground text-xs overflow-hidden">
+                    {photoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={photoUrl}
+                        alt={p.name}
+                        className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <span>Sin foto</span>
+                    )}
+                  </div>
+                  <div className="p-3 flex-1 flex flex-col">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                      {KIND_LABEL[p.kind]}
+                    </div>
+                    <div className="font-bold truncate">{p.name}</div>
+                    {p.category_name && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {p.category_name}
+                      </div>
+                    )}
+                    <div className="mt-auto flex items-center justify-between pt-2">
+                      <span className="text-base font-extrabold tabular-nums">
+                        {formatCents(p.cash_price_cents)}
+                      </span>
+                      {p.is_active ? (
+                        <Badge variant="success" className="text-[10px]">Activo</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px]">Inactivo</Badge>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )
+      ) : (
+      <>
       {/* Mobile: cards apiladas */}
       <ul className="space-y-2 md:hidden">
         {products.length === 0 ? (
@@ -263,6 +340,8 @@ export default async function ProductsPage({
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }
