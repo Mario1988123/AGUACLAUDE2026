@@ -7,6 +7,13 @@ export interface CustomerKPIs {
   installations_count: number;
   open_incidents: number;
   customer_since: string | null;
+  churn_score: number | null;
+}
+
+function churnColor(score: number): { bg: string; text: string; label: string } {
+  if (score >= 60) return { bg: "bg-red-100", text: "text-red-900", label: "Alto riesgo" };
+  if (score >= 30) return { bg: "bg-amber-100", text: "text-amber-900", label: "Riesgo medio" };
+  return { bg: "bg-emerald-100", text: "text-emerald-900", label: "Bajo riesgo" };
 }
 
 export function CustomerKPIHeader({ kpis }: { kpis: CustomerKPIs }) {
@@ -23,9 +30,20 @@ export function CustomerKPIHeader({ kpis }: { kpis: CustomerKPIs }) {
       )
     : null;
 
+  const churn = kpis.churn_score != null ? churnColor(kpis.churn_score) : null;
+
   return (
     <Card className="border-primary/30 bg-primary/5">
-      <CardContent className="grid gap-3 pt-6 sm:grid-cols-2 lg:grid-cols-5">
+      <CardContent className="space-y-3 pt-6">
+        {churn && (
+          <div
+            className={`flex items-center justify-between rounded-xl px-3 py-2 text-sm font-bold ${churn.bg} ${churn.text}`}
+          >
+            <span>Riesgo de churn · {churn.label}</span>
+            <span className="text-2xl tabular-nums">{kpis.churn_score}/100</span>
+          </div>
+        )}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Facturado año
@@ -76,6 +94,7 @@ export function CustomerKPIHeader({ kpis }: { kpis: CustomerKPIs }) {
             )}
           </div>
         </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -92,6 +111,7 @@ export async function getCustomerKPIs(customerId: string): Promise<CustomerKPIs>
     installations_count: 0,
     open_incidents: 0,
     customer_since: null,
+    churn_score: null,
   };
   const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString();
 
@@ -151,12 +171,24 @@ export async function getCustomerKPIs(customerId: string): Promise<CustomerKPIs>
   try {
     const { data: customer } = await admin
       .from("customers")
-      .select("created_at")
+      .select("created_at, churn_score")
       .eq("id", customerId)
       .maybeSingle();
-    out.customer_since = (customer as { created_at: string | null } | null)?.created_at ?? null;
+    const c = customer as { created_at: string | null; churn_score: number | null } | null;
+    out.customer_since = c?.created_at ?? null;
+    out.churn_score = c?.churn_score ?? null;
   } catch {
-    /* */
+    // Si churn_score no existe todavía (migración pendiente), reintentar sin él
+    try {
+      const { data: customer } = await admin
+        .from("customers")
+        .select("created_at")
+        .eq("id", customerId)
+        .maybeSingle();
+      out.customer_since = (customer as { created_at: string | null } | null)?.created_at ?? null;
+    } catch {
+      /* */
+    }
   }
 
   return out;
