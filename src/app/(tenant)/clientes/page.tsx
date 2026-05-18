@@ -5,6 +5,10 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { SelectableCustomersTable } from "@/modules/customers/selectable-list";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { ImportCustomersButton } from "@/modules/customers/import-form";
+import {
+  CustomerSmartAlerts,
+  getCustomerAlerts,
+} from "@/modules/customers/smart-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +30,12 @@ export default async function CustomersPage({
       ? "mine"
       : "all"
     : "mine";
-  const [customers, team] = await Promise.all([
+  const [customers, team, alerts] = await Promise.all([
     listCustomers(sp.q, scope),
     isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
+    isUpperLevel
+      ? getCustomerAlerts().catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -89,12 +96,14 @@ export default async function CustomersPage({
         </div>
       )}
 
+      {alerts && <CustomerSmartAlerts alerts={alerts} />}
+
       <form className="rounded-lg border bg-card p-4">
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}
         <input
           name="q"
           defaultValue={sp.q ?? ""}
-          placeholder="Buscar..."
+          placeholder="Buscar por nombre, email, teléfono, CIF/DNI…"
           className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
       </form>
