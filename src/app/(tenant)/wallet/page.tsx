@@ -9,6 +9,7 @@ import { RegisterPaymentButton } from "@/modules/wallet/register-button";
 import { ValidateWalletButtons } from "@/modules/wallet/validate-buttons";
 import { PaymentMethodBadge } from "@/modules/wallet/payment-method-badge";
 import { WalletInfoButton } from "@/modules/wallet/info-modal";
+import { WalletSmartAlerts, getWalletAlerts } from "@/modules/wallet/smart-alerts";
 import { Pagination } from "@/shared/components/pagination";
 import { requireSession } from "@/shared/lib/auth/session";
 
@@ -77,7 +78,7 @@ export default async function WalletPage({
   const canInvoice = session.is_superadmin || session.roles.includes("company_admin");
   const isAdmin = canInvoice;
 
-  const [entries, summary, yearHistory] = await Promise.all([
+  const [entries, summary, yearHistory, walletAlerts] = await Promise.all([
     listWalletEntries({
       method,
       status,
@@ -89,6 +90,7 @@ export default async function WalletPage({
     }),
     getWalletSummary({ year: periodYear, month: periodMonth }),
     isAdmin ? getWalletYearlyHistory({ year: historyYear }) : Promise.resolve([]),
+    isAdmin ? getWalletAlerts().catch(() => null) : Promise.resolve(null),
   ]);
 
   const MONTHS = [
@@ -134,6 +136,8 @@ export default async function WalletPage({
           ⬇ CSV
         </Link>
       </div>
+
+      {walletAlerts && <WalletSmartAlerts alerts={walletAlerts} />}
 
       <div className="space-y-3">
         <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">

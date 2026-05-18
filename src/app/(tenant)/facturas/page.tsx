@@ -14,6 +14,10 @@ import {
 } from "@/modules/invoices/verifactu-queue-card";
 import { Pagination } from "@/shared/components/pagination";
 import { InvoiceRowActions } from "@/modules/invoices/row-actions";
+import {
+  InvoiceSmartAlerts,
+  getInvoiceAlerts,
+} from "@/modules/invoices/smart-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -59,10 +63,11 @@ export default async function InvoicesPage({
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? 1));
   const offset = (page - 1) * PAGE_SIZE;
-  const [invoices, pendingInvoice, vfQueue] = await Promise.all([
+  const [invoices, pendingInvoice, vfQueue, alerts] = await Promise.all([
     listInvoices({ limit: PAGE_SIZE + 1, offset }),
     listPendingInvoiceWalletEntries(),
     getVerifactuQueue().catch(() => ({ pending: [], failed: [] })),
+    getInvoiceAlerts().catch(() => null),
   ]);
   const hasMore = invoices.length > PAGE_SIZE;
   const visibleInvoices = invoices.slice(0, PAGE_SIZE);
@@ -87,6 +92,8 @@ export default async function InvoicesPage({
           </Button>
         </div>
       </div>
+
+      {alerts && <InvoiceSmartAlerts alerts={alerts} />}
 
       <VerifactuQueueCard
         pending={vfQueue.pending}
