@@ -67,6 +67,21 @@ export default async function AlmacenesPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+            <span>Almacenes y furgonetas</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {warehouses.filter((w) => w.kind !== "vehicle").length} fijos ·{" "}
+              {warehouses.filter((w) => w.kind === "vehicle").length} furgonetas
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WarehousesManager warehouses={warehouses} teamMembers={team} />
+        </CardContent>
+      </Card>
+
       {valuation.length > 0 && (
         <Card>
           <CardHeader>
@@ -113,21 +128,6 @@ export default async function AlmacenesPage() {
         </CardHeader>
         <CardContent>
           <StockSummaryCards data={stockSummary} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between flex-wrap gap-2">
-            <span>Almacenes y furgonetas</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {warehouses.filter((w) => w.kind !== "vehicle").length} fijos ·{" "}
-              {warehouses.filter((w) => w.kind === "vehicle").length} furgonetas
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <WarehousesManager warehouses={warehouses} teamMembers={team} />
         </CardContent>
       </Card>
 
