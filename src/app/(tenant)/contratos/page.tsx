@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Eye, Download } from "lucide-react";
+import { Eye, Download, Home } from "lucide-react";
 import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
@@ -60,13 +60,21 @@ export default async function ContratosPage({
           <h1 className="text-2xl font-bold">Contratos</h1>
           <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
         </div>
-        <Link
-          href={"/api/export/contracts" as never}
-          prefetch={false}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-        >
-          ⬇ Exportar CSV
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={"/contratos/alquileres" as never}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            <Home className="h-4 w-4" /> Cartera alquileres
+          </Link>
+          <Link
+            href={"/api/export/contracts" as never}
+            prefetch={false}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            ⬇ Exportar CSV
+          </Link>
+        </div>
       </div>
 
       {alerts && <ContractSmartAlerts alerts={alerts} />}
