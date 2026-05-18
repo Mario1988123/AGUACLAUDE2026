@@ -16,6 +16,8 @@ import { ProductStockPanel } from "@/modules/products/stock-panel";
 import { BarcodeScanner } from "@/modules/warehouses/barcode-scanner";
 import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
 import { CollapsibleCard } from "@/modules/products/collapsible-card";
+import { PriceHistoryCard } from "@/modules/products/price-history-card";
+import { listPriceHistory } from "@/modules/products/bulk-actions";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { BackButton } from "@/shared/components/back-button";
@@ -40,7 +42,7 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const [pricingPlans, attributes, attrValues, categories, stockSummary, salesHistory, session] =
+  const [pricingPlans, attributes, attrValues, categories, stockSummary, salesHistory, session, priceHistory] =
     await Promise.all([
       listPricingPlans(id),
       listAttributes((product as { category_id: string | null }).category_id),
@@ -49,6 +51,7 @@ export default async function ProductDetailPage({
       getProductStockSummary(id).catch(() => ({ total: 0, by_warehouse: [] })),
       getProductSalesHistory(id, 90).catch(() => []),
       requireSession(),
+      listPriceHistory(id).catch(() => []),
     ]);
   // El coste real es CMP calculado desde las compras y SOLO lo ve el admin
   // (incluido director comercial). Los niveles 3 nunca lo ven.
@@ -231,6 +234,12 @@ export default async function ProductDetailPage({
             values={attrValues}
           />
         </CollapsibleCard>
+
+        {canSeeCost && (
+          <div className="lg:col-span-2">
+            <PriceHistoryCard rows={priceHistory} />
+          </div>
+        )}
       </div>
     </div>
   );
