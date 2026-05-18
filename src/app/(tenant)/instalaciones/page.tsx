@@ -7,6 +7,10 @@ import { StatusPill } from "@/shared/components/status-pill";
 import { Calendar, Eye, Phone, MessageSquare, MapPin, AlertTriangle } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
+import {
+  InstallationSmartAlerts,
+  getInstallationAlerts,
+} from "@/modules/installations/smart-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -121,9 +125,10 @@ export default async function InstalacionesPage({
   const sp = await searchParams;
   const installerFilter = sp.installer || undefined;
   const statusFilter = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
-  const [installations, team] = await Promise.all([
+  const [installations, team, alerts] = await Promise.all([
     listInstallations({ installer_user_id: installerFilter, status: statusFilter }),
     listInstallers().catch(() => []),
+    getInstallationAlerts().catch(() => null),
   ]);
 
   // Separar agendadas (con scheduled_at), sin agendar, y con incidencia.
@@ -215,6 +220,8 @@ export default async function InstalacionesPage({
           </Link>
         )}
       </form>
+
+      {alerts && <InstallationSmartAlerts alerts={alerts} />}
 
       {withIncident.length > 0 && (
         <Card className="border-2 border-red-300 bg-red-50/50">
