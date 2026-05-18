@@ -996,7 +996,32 @@ export async function GET(req: NextRequest) {
     free_trials_expired: 0,
     next_maintenance_scheduled: 0,
     installations_forgotten_notified: 0,
+    churn_scores_updated: 0,
   };
+
+  // P2-F) Recalcular churn_score para clientes con equipo activo (max 500/día)
+  try {
+    const { data: actives } = await admin
+      .from("customer_equipment")
+      .select("customer_id")
+      .eq("status", "active");
+    const customerIds = Array.from(
+      new Set(
+        ((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id),
+      ),
+    );
+    if (customerIds.length > 0) {
+      const { recomputeChurnScoreAction } = await import(
+        "@/modules/customers/churn-score"
+      );
+      for (const cid of customerIds.slice(0, 500)) {
+        const r = await recomputeChurnScoreAction(cid);
+        if (r.ok) phase2.churn_scores_updated += 1;
+      }
+    }
+  } catch (e) {
+    console.error("[phase2/churn-scores]", e);
+  }
 
   // P2-A) Auto-expire propuestas enviadas hace > 30 días (validez por defecto)
   try {
