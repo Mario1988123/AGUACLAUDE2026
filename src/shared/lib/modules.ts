@@ -84,7 +84,10 @@ export const MODULES: ModuleEntry[] = [
   // ===== 3. VENTAS (resultado) =====
   { key: "sales", label: "Objetivos", icon: "Target", href: "/objetivos", configHref: "/configuracion/objetivos", group: "revenue", rolesAllowed: SALES_ROLES },
   { key: "lost_sales", label: "Ventas perdidas", icon: "TrendingDown", href: "/ventas-perdidas", group: "revenue", rolesAllowed: SALES_ROLES },
-  { key: "commissions", label: "Comisiones", icon: "Coins", href: "/comisiones", configHref: "/configuracion/puntos", group: "revenue", rolesAllowed: ["company_admin", "commercial_director"] },
+  // Comisiones: cualquier comercial/TMK/instalador ve SUS comisiones
+  // personales en /comisiones (sólo lo suyo). Cerrar ciclos sigue
+  // siendo admin/director (gating dentro de la página).
+  { key: "commissions", label: "Comisiones", icon: "Coins", href: "/comisiones", configHref: "/configuracion/puntos", group: "revenue", rolesAllowed: [...LEVEL_1_2, "sales_rep", "telemarketer", "installer"] },
   // mailing — pendiente desarrollo (próxima iteración)
   // { key: "mailing", label: "Campañas", icon: "Mail", href: "/mailing", group: "revenue", rolesAllowed: SALES_ROLES },
 
@@ -112,6 +115,8 @@ export const MODULES: ModuleEntry[] = [
   // 2026-05-18): el timeline ya está accesible en cada ficha
   // individual y el audit log se centraliza en /superadmin/audit con
   // visibilidad solo para superadmin.
-  { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system" },
+  // Mailing: solo nivel 1/2 ve el módulo (gestiona campañas + plantillas).
+  // Nivel 3 no necesita acceso.
+  { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];

@@ -82,22 +82,27 @@ export async function getUpcomingMaintenance(): Promise<Row[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { createClient } = await import("@/shared/lib/supabase/server");
   const { requireSession } = await import("@/shared/lib/auth/session");
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
   const session = await requireSession();
   if (!session.company_id) return [];
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const now = new Date();
   const in7 = new Date(now);
   in7.setDate(now.getDate() + 7);
 
-  const { data } = await supabase
+  let q = supabase
     .from("maintenance_jobs")
-    .select("id, scheduled_at, customer_id, status")
+    .select("id, scheduled_at, customer_id, status, technician_user_id")
     .eq("status", "scheduled")
     .gte("scheduled_at", now.toISOString())
     .lte("scheduled_at", in7.toISOString())
     .order("scheduled_at")
     .limit(10);
+  if (visibleUserIds) q = q.in("technician_user_id", visibleUserIds);
+  const { data } = await q;
   type J = { id: string; scheduled_at: string; customer_id: string; status: string };
   const jobs = (data ?? []) as J[];
   if (jobs.length === 0) return [];

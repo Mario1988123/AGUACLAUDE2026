@@ -1,5 +1,6 @@
 import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
+import { resolveVisibleUserIds } from "@/shared/lib/auth/role-scope";
 import { KpiCard } from "@/shared/components/kpi-card";
 import {
   SalesByMonthChart,
@@ -106,12 +107,28 @@ async function renderDashboard({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  // Scope visible — null = nivel 1 (todos), [...] = nivel 2/3 limitado.
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  const scoped = visibleUserIds !== null;
+  const scopeEmpty = scoped && visibleUserIds.length === 0;
+
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
   const yearStart = new Date(now.getFullYear(), 0, 1).toISOString();
   const lastYearStart = new Date(now.getFullYear() - 1, 0, 1).toISOString();
   const lastYearEnd = new Date(now.getFullYear(), 0, 0, 23, 59, 59).toISOString();
 
+  // Helper para aplicar filtro por scope a una query genérica. Si el campo
+  // no existe en la tabla el caller se encarga (queries individuales).
+  function applyScope<T>(query: T, column: string): T {
+    if (scoped && visibleUserIds && visibleUserIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (query as any).in(column, visibleUserIds);
+    }
+    return query;
+  }
+
+  // Si nivel 2/3 sin team asignado → todo a 0 (no spam de queries).
   const [
     { count: leadsCount },
     { count: customersCount },
@@ -123,46 +140,83 @@ async function renderDashboard({
     objectives,
     ranking,
     teamMembers,
-  ] = await Promise.all([
-    // Sólo leads activos (no convertidos / no perdidos / no caducados): el
-    // lead convertido vive ahora como cliente y no debe contabilizarse aquí.
-    supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .is("deleted_at", null)
-      .in("status", [
-        "new",
-        "contacted",
-        "free_trial_proposed",
-        "proposal_created",
-        "proposal_sent",
-      ]),
-    supabase
-      .from("customers")
-      .select("id", { count: "exact", head: true })
-      .is("deleted_at", null),
-    supabase
-      .from("contracts")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", monthStart),
-    supabase
-      .from("installations")
-      .select("id", { count: "exact", head: true })
-      .gte("created_at", monthStart),
-    supabase
-      .from("sales_records")
-      .select("total_cents, recorded_at")
-      .gte("recorded_at", yearStart),
-    supabase
-      .from("sales_records")
-      .select("total_cents, recorded_at")
-      .gte("recorded_at", lastYearStart)
-      .lte("recorded_at", lastYearEnd),
-    supabase.from("leads").select("status").is("deleted_at", null),
-    getDashboardObjectives(filterUser, filterDept),
-    getMonthRanking(filterDept).catch(() => []),
-    listTeamMembers().catch(() => []),
-  ]);
+  ] = scopeEmpty
+    ? await Promise.all([
+        Promise.resolve({ count: 0 }),
+        Promise.resolve({ count: 0 }),
+        Promise.resolve({ count: 0 }),
+        Promise.resolve({ count: 0 }),
+        Promise.resolve({ data: [] as Array<{ total_cents: number; recorded_at: string }> }),
+        Promise.resolve({ data: [] as Array<{ total_cents: number; recorded_at: string }> }),
+        Promise.resolve({ data: [] as Array<{ status: string }> }),
+        getDashboardObjectives(filterUser, filterDept),
+        Promise.resolve([] as never[]),
+        listTeamMembers().catch(() => []),
+      ])
+    : await Promise.all([
+        // Leads — scope por assigned_user_id (es quien lleva el lead).
+        applyScope(
+          supabase
+            .from("leads")
+            .select("id", { count: "exact", head: true })
+            .is("deleted_at", null)
+            .in("status", [
+              "new",
+              "contacted",
+              "free_trial_proposed",
+              "proposal_created",
+              "proposal_sent",
+            ]),
+          "assigned_user_id",
+        ),
+        // Clientes — scope por created_by (comercial que captó).
+        applyScope(
+          supabase
+            .from("customers")
+            .select("id", { count: "exact", head: true })
+            .is("deleted_at", null),
+          "created_by",
+        ),
+        // Contratos — scope por created_by (el comercial que lo firmó).
+        applyScope(
+          supabase
+            .from("contracts")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", monthStart),
+          "created_by",
+        ),
+        // Instalaciones — scope por installer_user_id (el técnico asignado).
+        applyScope(
+          supabase
+            .from("installations")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", monthStart),
+          "installer_user_id",
+        ),
+        // Sales records — scope por sales_user_id (el comercial atribuido).
+        applyScope(
+          supabase
+            .from("sales_records")
+            .select("total_cents, recorded_at")
+            .gte("recorded_at", yearStart),
+          "sales_user_id",
+        ),
+        applyScope(
+          supabase
+            .from("sales_records")
+            .select("total_cents, recorded_at")
+            .gte("recorded_at", lastYearStart)
+            .lte("recorded_at", lastYearEnd),
+          "sales_user_id",
+        ),
+        applyScope(
+          supabase.from("leads").select("status").is("deleted_at", null),
+          "assigned_user_id",
+        ),
+        getDashboardObjectives(filterUser, filterDept),
+        getMonthRanking(filterDept).catch(() => []),
+        listTeamMembers().catch(() => []),
+      ]);
 
   const [
     upcomingMaintenance,
@@ -293,25 +347,35 @@ async function renderDashboard({
             iconColor="success"
           />
         )}
-        <KpiCard label="Leads activos" value={leadsCount ?? 0} icon="Contact" iconColor="primary" />
-        <KpiCard label="Clientes" value={customersCount ?? 0} icon="Users" iconColor="success" />
+        <KpiCard
+          label={isLevel3 ? "Mis leads activos" : "Leads activos"}
+          value={leadsCount ?? 0}
+          icon="Contact"
+          iconColor="primary"
+        />
+        <KpiCard
+          label={isLevel3 ? "Mis clientes" : "Clientes"}
+          value={customersCount ?? 0}
+          icon="Users"
+          iconColor="success"
+        />
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
-          label="Contratos / mes"
+          label={isLevel3 ? "Mis contratos / mes" : "Contratos / mes"}
           value={contractsMonth ?? 0}
           icon="FileSignature"
           iconColor="warning"
         />
         <KpiCard
-          label="Instalaciones / mes"
+          label={isLevel3 ? "Mis instalaciones / mes" : "Instalaciones / mes"}
           value={installationsMonth ?? 0}
           icon="Wrench"
           iconColor="destructive"
         />
         <KpiCard
-          label="Vendido este año"
+          label={isLevel3 ? "Mi venta este año" : "Vendido este año"}
           value={formatCents(totalYear)}
           icon="Wallet"
           iconColor="primary"
@@ -348,32 +412,49 @@ async function renderDashboard({
         />
       </div>
 
-      <InstallationsWithIncidentCard items={installationsWithIncident} />
+      {/* Instalaciones con incidencia: las muestra si hay alguna en scope */}
+      {installationsWithIncident.length > 0 && (
+        <InstallationsWithIncidentCard items={installationsWithIncident} />
+      )}
 
-      <CriticalIncidentsCard items={criticalIncidents} />
+      {/* Incidencias críticas: solo nivel 1 y 2 (transversal). */}
+      {(isLevel1 || isLevel2) && (
+        <CriticalIncidentsCard items={criticalIncidents} />
+      )}
 
-      {/* Pruebas pendientes + Alertas de stock */}
+      {/* Pruebas pendientes: scope filtrado. Stock crítico: solo nivel 1/2. */}
       <div className="grid gap-5 lg:grid-cols-2">
         <PendingTrialsCard items={pendingTrials} />
-        <CriticalStockAlertsCard items={criticalStockAlerts} />
+        {(isLevel1 || isLevel2) && (
+          <CriticalStockAlertsCard items={criticalStockAlerts} />
+        )}
       </div>
 
-      {/* Próximas instalaciones + mantenimientos */}
+      {/* Próximas instalaciones + mantenimientos: ya filtradas por scope */}
       <div className="grid gap-5 lg:grid-cols-2">
         <UpcomingInstallationsCard items={upcomingInstallations} />
         <UpcomingMaintenanceCard items={upcomingMaintenance} />
       </div>
 
-      <RankingCard rows={ranking} highlightUserId={session.user_id} />
+      {/* Ranking: solo nivel 1 y 2 (nivel 3 ya ve sus KPIs propios arriba). */}
+      {(isLevel1 || isLevel2) && (
+        <RankingCard rows={ranking} highlightUserId={session.user_id} />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SalesByMonthChart data={salesData} />
-        <FunnelChart data={funnelData} />
+        {/* Funnel de leads: solo si la persona ve leads (nivel 1/2 o comercial). */}
+        {(isLevel1 || isLevel2 || session.roles.includes("sales_rep") || session.roles.includes("telemarketer")) && (
+          <FunnelChart data={funnelData} />
+        )}
       </div>
 
-      <YearComparisonChart thisYear={yearMonthly} lastYear={lastYearMonthly} />
+      {/* Year vs year: solo nivel 1 (estratégico). */}
+      {isLevel1 && (
+        <YearComparisonChart thisYear={yearMonthly} lastYear={lastYearMonthly} />
+      )}
 
-      {evolution.length > 0 && (
+      {evolution.length > 0 && (isLevel1 || isLevel2) && (
         <div className="grid gap-5 lg:grid-cols-2">
           <EvolutionChart data={evolution} metric="sales_cents" title="Ventas (€) últimos 12 meses" />
           <EvolutionChart data={evolution} metric="contracts" title="Contratos firmados últimos 12 meses" />

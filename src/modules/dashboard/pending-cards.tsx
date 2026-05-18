@@ -17,18 +17,23 @@ export interface PendingTrial {
 export async function getPendingTrials(): Promise<PendingTrial[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: trials } = await supabase
+  let q = supabase
     .from("free_trials")
     .select(
-      "id, reference_code, status, installed_at, expires_at, customer_id, lead_id, customers(legal_name, trade_name, first_name, last_name, party_kind), leads(legal_name, trade_name, first_name, last_name, party_kind)",
+      "id, reference_code, status, installed_at, expires_at, customer_id, lead_id, assigned_user_id, customers(legal_name, trade_name, first_name, last_name, party_kind), leads(legal_name, trade_name, first_name, last_name, party_kind)",
     )
     .eq("company_id", session.company_id)
     .in("status", ["scheduled", "installed"])
     .is("deleted_at", null)
     .order("installed_at", { ascending: false, nullsFirst: false })
     .limit(10);
+  if (visibleUserIds) q = q.in("assigned_user_id", visibleUserIds);
+  const { data: trials } = await q;
   type T = {
     id: string;
     reference_code: string | null;

@@ -66,17 +66,20 @@ export function UpcomingInstallationsCard({ items }: { items: Row[] }) {
 export async function getUpcomingInstallations(): Promise<Row[]> {
   const { createClient } = await import("@/shared/lib/supabase/server");
   const { requireSession } = await import("@/shared/lib/auth/session");
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
   const session = await requireSession();
   if (!session.company_id) return [];
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const now = new Date();
   const in7 = new Date(now);
   in7.setDate(now.getDate() + 7);
 
-  const { data } = await supabase
+  let q = supabase
     .from("installations")
-    .select("id, reference_code, scheduled_at, customer_id, status")
+    .select("id, reference_code, scheduled_at, customer_id, status, installer_user_id")
     .in("status", ["scheduled", "unscheduled"])
     .not("scheduled_at", "is", null)
     .gte("scheduled_at", now.toISOString())
@@ -84,6 +87,8 @@ export async function getUpcomingInstallations(): Promise<Row[]> {
     .is("deleted_at", null)
     .order("scheduled_at")
     .limit(10);
+  if (visibleUserIds) q = q.in("installer_user_id", visibleUserIds);
+  const { data } = await q;
   type I = {
     id: string;
     reference_code: string | null;

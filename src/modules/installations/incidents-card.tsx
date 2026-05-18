@@ -60,20 +60,26 @@ export function InstallationsWithIncidentCard({ items }: { items: Row[] }) {
 export async function getInstallationsWithIncident(): Promise<Row[]> {
   const { createClient } = await import("@/shared/lib/supabase/server");
   const { requireSession } = await import("@/shared/lib/auth/session");
+  const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
   const session = await requireSession();
   if (!session.company_id) return [];
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  if (visibleUserIds && visibleUserIds.length === 0) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
-  // 1) Instalaciones con status=incident_pending (bloqueadas)
-  const blockedQ = await supabase
+  // 1) Instalaciones con status=incident_pending (bloqueadas) — scoped por
+  // installer_user_id si nivel 2/3.
+  let blockedQuery = supabase
     .from("installations")
-    .select("id, reference_code, kind, updated_at, customer_id")
+    .select("id, reference_code, kind, updated_at, customer_id, installer_user_id")
     .eq("company_id", session.company_id)
     .eq("status", "incident_pending")
     .is("deleted_at", null)
     .order("updated_at", { ascending: false })
     .limit(20);
+  if (visibleUserIds) blockedQuery = blockedQuery.in("installer_user_id", visibleUserIds);
+  const blockedQ = await blockedQuery;
   const blockedRows = ((blockedQ.data ?? []) as Array<{
     id: string;
     reference_code: string | null;
