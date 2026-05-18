@@ -5,6 +5,11 @@ import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { ShowInCalculatorToggle } from "@/modules/products/edit-form";
+import {
+  ProductSmartAlerts,
+  getProductAlerts,
+} from "@/modules/products/smart-alerts";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +29,15 @@ export default async function ProductsPage({
   const kind = KIND_OPTIONS.includes(sp.kind as never) ? sp.kind : undefined;
   const categoryId = sp.cat || undefined;
   const activeOnly = sp.active === "1";
-  const [products, categories] = await Promise.all([
+  const session = await requireSession();
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  const [products, categories, alerts] = await Promise.all([
     listProducts({ kind, category_id: categoryId, q: sp.q, active_only: activeOnly }),
     listCategories().catch(() => []),
+    isUpper ? getProductAlerts().catch(() => null) : Promise.resolve(null),
   ]);
 
   return (
@@ -45,6 +56,8 @@ export default async function ProductsPage({
           </Button>
         </div>
       </div>
+
+      {alerts && <ProductSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1 flex-1 min-w-48">
