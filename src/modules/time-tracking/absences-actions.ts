@@ -58,8 +58,10 @@ export async function submitAbsenceAction(input: {
   }
 
   // Maternidad/paternidad: necesita child_id. Validar:
-  //  · 16 semanas máx por bebé (sumando todas las ausencias del kind
-  //    vinculadas a ese child_id).
+  //  · 17 semanas máx dentro de la ventana de 12 meses
+  //    (6 obligatorias + 11 flexibles, RD-ley 9/2025 Art. 48.4 ET).
+  //    Las 2 semanas extra hasta los 8 años se piden con kind
+  //    parental_paid_8y, NO aquí.
   //  · Permiso debe estar dentro de los 12 meses post-nacimiento.
   //  · Las primeras 6 semanas post-parto son obligatorias e
   //    ininterrumpidas → aviso si no se ha cogido aún.
@@ -122,10 +124,10 @@ export async function submitAbsenceAction(input: {
     const requestedDays =
       Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
     const requestedWeeks = Math.ceil(requestedDays / 7);
-    if (weeksConsumed + requestedWeeks > 16) {
+    if (weeksConsumed + requestedWeeks > 17) {
       return {
         ok: false,
-        error: `Excede las 16 semanas legales (ya consumidas ${weeksConsumed}, pides ${requestedWeeks}).`,
+        error: `Excede las 17 semanas dentro de los 12 meses post-parto (ya consumidas ${weeksConsumed}, pides ${requestedWeeks}). Las 2 semanas extra del Art. 48.4 ET (hasta los 8 años) se solicitan como «Parental retribuido (hasta 8 años)».`,
       };
     }
     // Aviso 6 semanas obligatorias post-parto (no bloquea, solo informa)

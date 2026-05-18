@@ -30,7 +30,7 @@ interface LegalRight {
  *   2. DEFAULT_BUDGETS_2026 en absence-labels.ts.
  *   3. Bumpear LAST_REVIEWED_AT para resetear la alerta de revisión.
  */
-const LAST_REVIEWED_AT = "2026-01-15";
+const LAST_REVIEWED_AT = "2026-05-18";
 const REVIEW_INTERVAL_MONTHS = 12;
 
 const LEGAL_RIGHTS: LegalRight[] = [
@@ -45,41 +45,42 @@ const LEGAL_RIGHTS: LegalRight[] = [
   },
   {
     kind: "maternity",
-    label: "Maternidad",
-    amount: "16 semanas",
-    base: "RD-ley 6/2019 (Art. 48.4 ET)",
-    base_year: 2019,
+    label: "Maternidad (nacimiento y cuidado de menor)",
+    amount: "19 semanas (32 si familia monoparental)",
+    base: "RD-ley 9/2025 (Art. 48.4 ET)",
+    base_year: 2025,
+    changed_recently: true,
     notes:
-      "6 semanas obligatorias e ininterrumpidas tras el parto. 10 semanas restantes flexibles hasta los 12 meses del menor.",
+      "Reforma 2025: 19 semanas totales (antes 16). Estructura: 6 semanas obligatorias e ininterrumpidas tras el parto + 11 flexibles hasta los 12 meses + 2 flexibles hasta que el menor cumpla 8 años. Retribuidas al 100% de la base reguladora. Familias monoparentales: 32 semanas (6 obl + 22 hasta 12m + 4 hasta 8 años).",
   },
   {
     kind: "paternity",
-    label: "Paternidad",
-    amount: "16 semanas",
-    base: "RD-ley 6/2019 (equiparado a maternidad)",
-    base_year: 2019,
+    label: "Paternidad (nacimiento y cuidado de menor)",
+    amount: "19 semanas (32 si familia monoparental)",
+    base: "RD-ley 9/2025 (Art. 48.4 ET, equiparado)",
+    base_year: 2025,
+    changed_recently: true,
     notes:
-      "Igualdad de duración con maternidad. Mismas 6 semanas obligatorias post-parto + 10 flexibles.",
+      "Equiparado en duración y retribución a maternidad. Mismas 6 semanas obligatorias post-nacimiento + 11 hasta 12 meses + 2 hasta 8 años. 100% base reguladora.",
   },
   {
     kind: "parental_paid_8y",
-    label: "Parental retribuido (hasta 8 años)",
+    label: "Permiso parental retribuido (hasta 8 años)",
     amount: "2 semanas",
-    base: "RD-ley 7/2024 (transposición Directiva UE 2019/1158)",
-    base_year: 2024,
+    base: "RD-ley 9/2025 (Art. 48.4 ET — incluidas en las 19)",
+    base_year: 2025,
     changed_recently: true,
     notes:
-      "Novedad 2026: 2 de las 8 semanas de permiso parental pasan a ser retribuidas. Pueden disfrutarse hasta que el menor cumpla 8 años.",
+      "Las 2 semanas finales del permiso de nacimiento, disfrutables hasta los 8 años del menor. Ya no son un permiso aparte: forman parte de las 19 semanas totales del Art. 48.4 ET. Retribuidas al 100%. Disfrute efectivo desde 1 enero 2026 incluso para hijos nacidos desde el 2 de agosto de 2024.",
   },
   {
     kind: "parental_unpaid_8y",
-    label: "Parental no retribuido (hasta 8 años)",
+    label: "Permiso parental no retribuido (hasta 8 años)",
     amount: "6 semanas",
-    base: "RD-ley 7/2024 (transposición Directiva UE 2019/1158)",
+    base: "RD-ley 7/2024 + Art. 48 bis ET (Directiva UE 2019/1158)",
     base_year: 2024,
-    changed_recently: true,
     notes:
-      "Las 6 semanas restantes del permiso parental, que siguen sin remuneración. Hasta los 8 años del menor.",
+      "Permiso adicional NO retribuido (no se descuenta el sueldo, no hay prestación Seg. Social). Antes eran 8 semanas — desde el RD-ley 9/2025 las 2 retribuidas pasan al permiso de nacimiento, quedando 6 sin remuneración. Disfrutable continuo o fraccionado hasta los 8 años.",
   },
   {
     kind: "lactation",
@@ -137,10 +138,16 @@ const LEGAL_RIGHTS: LegalRight[] = [
 
 const RECENT_REFORMS = [
   {
+    year: 2025,
+    title: "RD-ley 9/2025 — Ampliación permiso de nacimiento y cuidado de menor",
+    summary:
+      "Permiso por nacimiento pasa de 16 a 19 semanas por cada progenitor (BOE 30/07/2025, en vigor 31/07/2025). Estructura: 6 semanas obligatorias post-parto + 11 flexibles hasta 12 meses + 2 flexibles hasta los 8 años. Familias monoparentales: 32 semanas (6+22+4). Retribución 100% base reguladora. Aplica a nacimientos desde el 2 de agosto de 2024, pero el disfrute efectivo de las 2 nuevas semanas solo se puede solicitar a partir del 1 de enero de 2026. Completa transposición Directiva UE 2019/1158.",
+  },
+  {
     year: 2024,
     title: "RD-ley 7/2024 — Permiso parental retribuido",
     summary:
-      "Transposición de la Directiva UE 2019/1158. 2 de las 8 semanas de permiso parental pasan a ser retribuidas. Disfrutables hasta los 8 años del menor.",
+      "Primera transposición de la Directiva UE 2019/1158: 2 de las 8 semanas del permiso parental pasan a ser retribuidas. El RD-ley 9/2025 absorbe esas 2 semanas dentro del permiso de nacimiento (Art. 48.4 ET).",
   },
   {
     year: 2023,
@@ -152,7 +159,7 @@ const RECENT_REFORMS = [
     year: 2019,
     title: "RD-ley 6/2019 — Equiparación permisos parentales",
     summary:
-      "Paternidad equiparada a maternidad en duración (16 semanas), eliminando la brecha histórica.",
+      "Paternidad equiparada a maternidad en duración (16 semanas), eliminando la brecha histórica. Ampliada después por el RD-ley 9/2025 a 19 semanas.",
   },
 ];
 
