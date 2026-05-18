@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import * as Icons from "lucide-react";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,10 @@ const SECTIONS = [
 ];
 
 export default async function ConfiguracionPage() {
+  const session = await requireSession();
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    redirect("/dashboard");
+  }
   return (
     <div className="space-y-8">
       <div>

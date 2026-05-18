@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -43,6 +44,15 @@ interface LeadInfo {
 
 export default async function VentasPerdidasPage() {
   const session = await requireSession();
+  // Solo admin / directores ven ventas perdidas. Nivel 3 no necesita
+  // este reporte transversal — su info ya está en leads/clientes.
+  const allowed =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+  if (!allowed) redirect("/dashboard");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 

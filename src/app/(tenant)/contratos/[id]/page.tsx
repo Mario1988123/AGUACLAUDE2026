@@ -89,6 +89,23 @@ export default async function ContractDetailPage({
     listContractSignatures(id),
     getFiscalSettings().catch(() => null),
   ]);
+  // Scope check: nivel 2/3 solo puede ver contratos de su scope. Si
+  // alguien escribe el ID en la URL y el contrato no pertenece a sus
+  // visibleUserIds (created_by ó assigned_user_id), 404.
+  {
+    const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+    const visibleUserIds = await resolveVisibleUserIds(session);
+    if (visibleUserIds !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = contract as any;
+      const createdBy = c.created_by ?? null;
+      const assignedTo = c.assigned_user_id ?? null;
+      const inScope =
+        (createdBy && visibleUserIds.includes(createdBy)) ||
+        (assignedTo && visibleUserIds.includes(assignedTo));
+      if (!inScope) notFound();
+    }
+  }
   // Cargar nombre de la financiera (si aplica) para el botón "Facturar a financiera".
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contractAny = contract as any;

@@ -46,6 +46,19 @@ export default async function LeadDetailPage({
     requireSession(),
     listTeamMembers().catch(() => []),
   ]);
+  // Scope check para nivel 2/3.
+  {
+    const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+    const visibleUserIds = await resolveVisibleUserIds(session);
+    if (visibleUserIds !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const l = lead as any;
+      const inScope =
+        (l.assigned_user_id && visibleUserIds.includes(l.assigned_user_id)) ||
+        (l.created_by && visibleUserIds.includes(l.created_by));
+      if (!inScope) notFound();
+    }
+  }
   const canReassign =
     session.is_superadmin || session.roles.includes("company_admin");
   const hasProposals = proposals.length > 0;

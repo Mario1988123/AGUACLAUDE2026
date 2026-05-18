@@ -69,6 +69,16 @@ export default async function InstallationDetailPage({
       listInstallationPhotosFull(id).catch(() => []),
       listInstallationSignaturesFull(id).catch(() => []),
     ]);
+  // Scope check: nivel 2/3 solo accede a instalaciones de su scope.
+  {
+    const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+    const visibleUserIds = await resolveVisibleUserIds(session);
+    if (visibleUserIds !== null) {
+      const inScope =
+        i.installer_user_id != null && visibleUserIds.includes(i.installer_user_id);
+      if (!inScope) notFound();
+    }
+  }
   // Reasignar instalación restringido a admin de empresa (decisión usuario).
   const canReassign =
     session.is_superadmin || session.roles.includes("company_admin");

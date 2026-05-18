@@ -67,6 +67,17 @@ export default async function CustomerDetailPage({
       : `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() || "Sin nombre";
 
   const session = await requireSession();
+  // Scope check: nivel 2/3 solo accede a sus clientes (created_by ∈ visibleUserIds).
+  {
+    const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
+    const visibleUserIds = await resolveVisibleUserIds(session);
+    if (visibleUserIds !== null) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cust = customer as any;
+      const inScope = cust.created_by && visibleUserIds.includes(cust.created_by);
+      if (!inScope) notFound();
+    }
+  }
   const addresses = await listAddresses({ customer_id: id });
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
