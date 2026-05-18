@@ -128,11 +128,13 @@ export async function getRentalsDashboard(): Promise<RentalsDashboard> {
     ]),
   );
 
-  // Último contract_payments por contrato (más reciente por collected_at o created_at)
+  // Pagos del contrato — el "último cobro" es el contract_payment más
+  // reciente de cualquier tipo. Las "cuotas cobradas" cuentan SOLO las
+  // mensuales con concepto "Cuota mensual" y status validated/collected.
   const contractIds = contracts.map((c) => c.id);
   const { data: payments } = await admin
     .from("contract_payments")
-    .select("contract_id, amount_cents, status, collected_at, created_at")
+    .select("contract_id, amount_cents, status, collected_at, created_at, concept")
     .in("contract_id", contractIds)
     .order("created_at", { ascending: false });
   type P = {
@@ -141,11 +143,22 @@ export async function getRentalsDashboard(): Promise<RentalsDashboard> {
     status: string;
     collected_at: string | null;
     created_at: string;
+    concept: string;
   };
   const lastPaymentByContract = new Map<string, P>();
+  const collectedMonthsByContract = new Map<string, number>();
   for (const p of (payments ?? []) as P[]) {
     if (!lastPaymentByContract.has(p.contract_id)) {
       lastPaymentByContract.set(p.contract_id, p);
+    }
+    if (
+      /^Cuota mensual/i.test(p.concept) &&
+      (p.status === "validated" || p.status === "collected_pending_validation")
+    ) {
+      collectedMonthsByContract.set(
+        p.contract_id,
+        (collectedMonthsByContract.get(p.contract_id) ?? 0) + 1,
+      );
     }
   }
 
@@ -168,21 +181,26 @@ export async function getRentalsDashboard(): Promise<RentalsDashboard> {
     const startSrc = c.service_start_date ?? c.signed_at ?? c.created_at;
     const start = startSrc ? new Date(startSrc) : null;
     let endDateEst: Date | null = null;
-    let monthsElapsed: number | null = null;
+    // Meses cobrados = nº de cuotas mensuales validadas/cobradas
+    const monthsCollected = collectedMonthsByContract.get(c.id) ?? 0;
+    const monthsElapsed: number = monthsCollected;
     let monthsLeft: number | null = null;
     let progressPct: number | null = null;
     if (start && c.duration_months) {
       endDateEst = new Date(start);
       endDateEst.setMonth(endDateEst.getMonth() + c.duration_months);
-      const msPerMonth = 1000 * 60 * 60 * 24 * 30.44;
-      monthsElapsed = Math.max(0, Math.floor((now.getTime() - start.getTime()) / msPerMonth));
-      monthsLeft = Math.max(0, c.duration_months - monthsElapsed);
-      progressPct = Math.min(100, Math.round((monthsElapsed / c.duration_months) * 100));
+      monthsLeft = Math.max(0, c.duration_months - monthsCollected);
+      progressPct = Math.min(
+        100,
+        Math.round((monthsCollected / c.duration_months) * 100),
+      );
     }
+    // Permanencia cumplida = ya cobramos al menos N cuotas (no por
+    // tiempo transcurrido — si los recibos van retrasados, no cuenta).
     const permanenceDone =
       !c.permanence_months ||
       c.permanence_months <= 0 ||
-      (monthsElapsed != null && monthsElapsed >= c.permanence_months);
+      monthsCollected >= c.permanence_months;
 
     const lp = lastPaymentByContract.get(c.id) ?? null;
     const mc = maintCount.get(c.id) ?? { pending: 0, done: 0 };

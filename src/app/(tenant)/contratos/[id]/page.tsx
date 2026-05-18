@@ -35,6 +35,7 @@ import { SubjectNotificationToast } from "@/modules/notifications/subject-toast"
 import { requireSession } from "@/shared/lib/auth/session";
 import { ContractFinancierAssign } from "@/modules/contracts/financier-assign";
 import { listFinanciers } from "@/modules/financiers/actions";
+import { FinalizeRentalButton } from "@/modules/contracts/finalize-rental-modal";
 
 export const dynamic = "force-dynamic";
 
@@ -377,6 +378,24 @@ export default async function ContractDetailPage({
               status={contract.status}
               hasProvisional={contract.has_provisional_data}
             />
+            {/* Finalizar alquiler: solo rental + signed/active. Devuelve
+                fianza íntegra/parcial o la retiene como penalización. */}
+            {contract.plan_type === "rental" &&
+              ["signed", "active"].includes(contract.status) && (
+                <div className="border-t pt-4">
+                  <FinalizeRentalButton
+                    contractId={contract.id}
+                    depositTotalCents={payments
+                      .filter(
+                        (p) =>
+                          /^Fianza/i.test(p.concept) &&
+                          (p.status === "validated" ||
+                            p.status === "collected_pending_validation"),
+                      )
+                      .reduce((s, p) => s + p.amount_cents, 0)}
+                  />
+                </div>
+              )}
             {/* Validar / Cancelar / Editar IBAN */}
             <div className="border-t pt-4">
               <ContractAdminActions

@@ -1239,11 +1239,21 @@ export async function GET(req: NextRequest) {
   // ============================================================================
   // FASE 2 — AUTO-MENSUALIDAD FACTURACIÓN RENTING/RENTAL — día 1 de cada mes
   // ============================================================================
-  let monthlyInvoicing: { contracts: number; generated: number; errors: number } | null = null;
+  // Además de la factura draft, generamos `contract_payment` "Cuota mensual"
+  // y `wallet_entry` vinculado en estado pending. Así la cartera de
+  // alquileres ve el "último cobro" y al validar la factura/cobro, el
+  // contador de meses cobrados refleja la realidad.
+  let monthlyInvoicing: {
+    contracts: number;
+    generated: number;
+    errors: number;
+    payments_created: number;
+  } | null = null;
   if (today.getDate() === 1) {
-    monthlyInvoicing = { contracts: 0, generated: 0, errors: 0 };
+    monthlyInvoicing = { contracts: 0, generated: 0, errors: 0, payments_created: 0 };
     try {
       const monthIso = today.toISOString().slice(0, 10);
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
       const { data: activeContracts } = await admin
         .from("contracts")
         .select("id, company_id, customer_id, monthly_cents, reference_code, plan_type")
@@ -1261,7 +1271,6 @@ export async function GET(req: NextRequest) {
         monthlyInvoicing.contracts += 1;
         try {
           // ¿Existe ya una factura de este mes para este contrato?
-          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
           const { count: already } = await admin
             .from("invoices")
             .select("id", { count: "exact", head: true })
@@ -1290,6 +1299,55 @@ export async function GET(req: NextRequest) {
             continue;
           }
           monthlyInvoicing.generated += 1;
+
+          // contract_payment + wallet_entry para cuota mensual. Pendientes
+          // de cobro (el cliente paga vía domiciliación / transferencia /
+          // GoCardless; admin valida cuando llegue el ingreso).
+          try {
+            const monthLabel = monthIso.slice(0, 7); // "2026-05"
+            // Idempotencia: si ya existe contract_payment de cuota de
+            // este mes para este contrato, no duplicamos.
+            const { count: cpAlready } = await admin
+              .from("contract_payments")
+              .select("id", { count: "exact", head: true })
+              .eq("contract_id", c.id)
+              .ilike("concept", `Cuota mensual%${monthLabel}%`);
+            if ((cpAlready ?? 0) > 0) continue;
+            const { data: cpRow, error: cpErr } = await admin
+              .from("contract_payments")
+              .insert({
+                company_id: c.company_id,
+                contract_id: c.id,
+                concept: `Cuota mensual · ${monthLabel}`,
+                amount_cents: c.monthly_cents,
+                method: "direct_debit",
+                moment: "periodic",
+                status: "pending",
+              })
+              .select("id")
+              .single();
+            if (cpErr) {
+              console.error("[phase2/monthly-payment]", cpErr.message);
+              continue;
+            }
+            try {
+              await admin.from("wallet_entries").insert({
+                company_id: c.company_id,
+                contract_id: c.id,
+                contract_payment_id: (cpRow as { id: string }).id,
+                customer_id: c.customer_id,
+                concept: `Cuota mensual ${monthLabel}`,
+                amount_cents: c.monthly_cents,
+                method: "direct_debit",
+                status: "pending",
+              });
+            } catch (e) {
+              console.error("[phase2/monthly-wallet]", e);
+            }
+            monthlyInvoicing.payments_created += 1;
+          } catch (e) {
+            console.error("[phase2/monthly-payment exception]", e);
+          }
         } catch (e) {
           monthlyInvoicing.errors += 1;
           console.error("[phase2/monthly-invoice exception]", e);
