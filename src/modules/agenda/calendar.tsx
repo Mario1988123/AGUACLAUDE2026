@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { cn } from "@/shared/lib/utils";
+import { notify } from "@/shared/hooks/use-toast";
 import { KIND_LABEL } from "./constants";
 import type { AgendaItem } from "./actions";
+import { rescheduleAgendaEventAction } from "./actions";
 import { MoveEventDialog } from "./move-event-dialog";
 
 interface Props {
@@ -55,6 +58,8 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 export function AgendaCalendar({ events, team = [], canReassign = false }: Props) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const userNameMap = useMemo(
     () => new Map(team.map((u) => [u.user_id, u.full_name])),
     [team],
@@ -64,6 +69,48 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [moveTarget, setMoveTarget] = useState<AgendaItem | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
+  function handleDragStart(ev: AgendaItem, e: React.DragEvent) {
+    if (pending) return;
+    setDraggingId(ev.id);
+    e.dataTransfer.setData("text/plain", ev.id);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragOver(key: string, e: React.DragEvent) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverKey !== key) setDragOverKey(key);
+  }
+
+  function handleDrop(targetKey: string, e: React.DragEvent) {
+    e.preventDefault();
+    setDragOverKey(null);
+    const eventId = e.dataTransfer.getData("text/plain") || draggingId;
+    setDraggingId(null);
+    if (!eventId) return;
+    const ev = events.find((x) => x.id === eventId);
+    if (!ev) return;
+    const originalKey = localDateKey(new Date(ev.starts_at));
+    if (originalKey === targetKey) return;
+    // Construir nueva fecha conservando hora original local
+    const [yy, mm, dd] = targetKey.split("-").map(Number);
+    const orig = new Date(ev.starts_at);
+    const newDate = new Date(yy!, (mm ?? 1) - 1, dd!, orig.getHours(), orig.getMinutes(), 0);
+    startTransition(async () => {
+      try {
+        await rescheduleAgendaEventAction(ev.id, newDate.toISOString());
+        notify.success(
+          `Movido a ${newDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}`,
+        );
+        router.refresh();
+      } catch (err) {
+        notify.error("No se pudo mover", err instanceof Error ? err.message : String(err));
+      }
+    });
+  }
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -134,10 +181,14 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
             return (
               <div
                 key={i}
+                onDragOver={inMonth ? (e) => handleDragOver(key, e) : undefined}
+                onDragLeave={() => dragOverKey === key && setDragOverKey(null)}
+                onDrop={inMonth ? (e) => handleDrop(key, e) : undefined}
                 className={cn(
-                  "min-h-24 border-b border-r border-border p-2 last:border-r-0",
+                  "min-h-24 border-b border-r border-border p-2 last:border-r-0 transition-colors",
                   !inMonth && "bg-muted/20",
                   isToday && "bg-primary/5",
+                  dragOverKey === key && "bg-primary/20 ring-2 ring-primary ring-inset",
                 )}
               >
                 {inMonth && (
@@ -157,12 +208,16 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                         <button
                           type="button"
                           key={ev.id}
+                          draggable={!pending}
+                          onDragStart={(e) => handleDragStart(ev, e)}
+                          onDragEnd={() => setDraggingId(null)}
                           onClick={() => setMoveTarget(ev)}
                           className={cn(
-                            "block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-pointer",
+                            "block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-grab active:cursor-grabbing",
                             KIND_COLOR[ev.kind] ?? KIND_COLOR.manual,
+                            draggingId === ev.id && "opacity-40",
                           )}
-                          title={`${KIND_LABEL[ev.kind]}: ${ev.title} — pulsa para mover`}
+                          title={`${KIND_LABEL[ev.kind]}: ${ev.title} — arrastra para mover o pulsa para reagendar`}
                         >
                           {new Date(ev.starts_at).toLocaleTimeString("es-ES", {
                             hour: "2-digit",
@@ -185,16 +240,22 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 text-xs">
-        {Object.entries(KIND_COLOR).map(([k, c]) => (
-          <span
-            key={k}
-            className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-semibold", c)}
-          >
-            <span className="h-2 w-2 rounded-full bg-current" />
-            {KIND_LABEL[k] ?? k}
-          </span>
-        ))}
+      <div className="space-y-2">
+        <p className="text-xs text-muted-foreground">
+          💡 Tip: arrastra un evento a otro día para reagendarlo (conserva la
+          hora). Pulsa el evento para abrir el detalle con todas las opciones.
+        </p>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {Object.entries(KIND_COLOR).map(([k, c]) => (
+            <span
+              key={k}
+              className={cn("inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 font-semibold", c)}
+            >
+              <span className="h-2 w-2 rounded-full bg-current" />
+              {KIND_LABEL[k] ?? k}
+            </span>
+          ))}
+        </div>
       </div>
 
       {moveTarget && (
