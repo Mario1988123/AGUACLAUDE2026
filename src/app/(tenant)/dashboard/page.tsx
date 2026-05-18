@@ -31,6 +31,10 @@ import {
   getInstallationsWithIncident,
 } from "@/modules/installations/incidents-card";
 import {
+  ConsolidatedAlertsCard,
+  getConsolidatedAlerts,
+} from "@/modules/dashboard/consolidated-alerts";
+import {
   PendingTrialsCard,
   getPendingTrials,
   CriticalStockAlertsCard,
@@ -168,6 +172,7 @@ async function renderDashboard({
     evolution,
     pendingTrials,
     criticalStockAlerts,
+    consolidatedAlerts,
   ] = await Promise.all([
     getUpcomingMaintenance().catch(() => []),
     getUpcomingInstallations().catch(() => []),
@@ -176,6 +181,9 @@ async function renderDashboard({
     getMonthlyEvolution().catch(() => []),
     getPendingTrials().catch(() => []),
     getCriticalStockAlerts().catch(() => []),
+    objectives.level === 1 || objectives.level === 2
+      ? getConsolidatedAlerts().catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
@@ -257,6 +265,10 @@ async function renderDashboard({
           />
         )}
       </div>
+
+      {consolidatedAlerts && (
+        <ConsolidatedAlertsCard data={consolidatedAlerts} />
+      )}
 
       {/* Cabecera totales: el destacado es scope (yo / equipo / empresa según rol),
           y secundario el total empresa para nivel 2/3 */}
