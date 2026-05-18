@@ -211,6 +211,16 @@ export async function createCompanyAction(formData: FormData) {
   // Crear company_settings con defaults
   await supabase.from("company_settings").insert({ company_id: companyId });
 
+  // Audit log
+  try {
+    const { logSuperadminAction } = await import("@/modules/superadmin/audit-actions");
+    await logSuperadminAction({
+      action: "company.created",
+      affected_company_id: companyId,
+      payload: { name: parsed.name, slug: parsed.slug },
+    });
+  } catch { /* fail-soft */ }
+
   revalidatePath("/superadmin");
   redirect(`/superadmin/empresas/${companyId}` as never);
 }
@@ -231,6 +241,16 @@ export async function updateCompanyAction(id: string, input: CompanyUpdateInput)
 
   const { error } = await supabase.from("companies").update(update).eq("id", id);
   if (error) throw error;
+
+  try {
+    const { logSuperadminAction } = await import("@/modules/superadmin/audit-actions");
+    await logSuperadminAction({
+      action: "company.updated",
+      affected_company_id: id,
+      payload: update,
+    });
+  } catch { /* fail-soft */ }
+
   revalidatePath(`/superadmin/empresas/${id}`);
   revalidatePath("/superadmin");
 }
@@ -243,6 +263,16 @@ export async function toggleCompanyModule(companyId: string, moduleKey: string, 
     .from("company_modules")
     .upsert({ company_id: companyId, module_key: moduleKey, is_active: isActive });
   if (error) throw error;
+
+  try {
+    const { logSuperadminAction } = await import("@/modules/superadmin/audit-actions");
+    await logSuperadminAction({
+      action: "module.toggled",
+      affected_company_id: companyId,
+      payload: { module_key: moduleKey, is_active: isActive },
+    });
+  } catch { /* fail-soft */ }
+
   revalidatePath(`/superadmin/empresas/${companyId}`);
 }
 
@@ -259,6 +289,16 @@ export async function resetUserPassword({ user_id, new_password }: ResetUserPass
     password: new_password,
   });
   if (error) throw error;
+
+  try {
+    const { logSuperadminAction } = await import("@/modules/superadmin/audit-actions");
+    await logSuperadminAction({
+      action: "user.password_reset",
+      subject_type: "user",
+      subject_id: user_id,
+      payload: { method: "manual" },
+    });
+  } catch { /* fail-soft */ }
 }
 
 // generateTempPassword vive ahora en src/shared/lib/auth/temp-password.ts
