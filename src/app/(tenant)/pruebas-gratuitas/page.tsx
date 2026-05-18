@@ -5,6 +5,10 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { NewFreeTrialButton } from "@/modules/free-trials/new-trial-button";
+import {
+  FreeTrialSmartAlerts,
+  getFreeTrialAlerts,
+} from "@/modules/free-trials/smart-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -64,14 +68,17 @@ export default async function PruebasGratuitasPage() {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data } = await supabase
-    .from("free_trials")
-    .select(
-      "id, reference_code, status, customer_id, lead_id, scheduled_at, installed_at, expires_at",
-    )
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const [{ data }, alerts] = await Promise.all([
+    supabase
+      .from("free_trials")
+      .select(
+        "id, reference_code, status, customer_id, lead_id, scheduled_at, installed_at, expires_at",
+      )
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(200),
+    getFreeTrialAlerts().catch(() => null),
+  ]);
   const rows = (data ?? []) as Row[];
 
   // Cargar nombres de clientes/leads + items en paralelo
@@ -134,6 +141,8 @@ export default async function PruebasGratuitasPage() {
         </div>
         <NewFreeTrialButton />
       </div>
+
+      {alerts && <FreeTrialSmartAlerts alerts={alerts} />}
 
       <Card>
         <CardHeader>

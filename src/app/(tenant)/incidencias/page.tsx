@@ -11,6 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
 import { CreateIncidentButton } from "@/modules/incidents/create-button";
 import { SlaPill } from "@/modules/incidents/sla-pill";
+import {
+  IncidentSmartAlerts,
+  getIncidentAlerts,
+} from "@/modules/incidents/smart-alerts";
 
 const PRIORITY_TONE: Record<
   string,
@@ -36,9 +40,10 @@ const INCIDENT_TONE: Record<
 export const dynamic = "force-dynamic";
 
 export default async function IncidenciasPage() {
-  const [incidents, session] = await Promise.all([
+  const [incidents, session, alerts] = await Promise.all([
     listIncidents(),
     requireSession(),
+    getIncidentAlerts().catch(() => null),
   ]);
   const canSeeStats =
     session.is_superadmin ||
@@ -65,6 +70,8 @@ export default async function IncidenciasPage() {
           <CreateIncidentButton />
         </div>
       </div>
+
+      {alerts && <IncidentSmartAlerts alerts={alerts} />}
 
       <Card>
         <CardHeader>
