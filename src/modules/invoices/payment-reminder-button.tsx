@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { Mail, Bell } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { logPaymentReminderAction } from "./payment-reminder-actions";
 import {
   getReminderTemplate,
-  logPaymentReminderAction,
   type ReminderLevel,
-} from "./payment-reminder-actions";
+} from "./payment-reminder-templates";
 
 interface Props {
   invoiceId: string;

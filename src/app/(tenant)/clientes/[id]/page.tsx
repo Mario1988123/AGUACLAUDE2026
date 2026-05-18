@@ -31,6 +31,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CustomerKPIHeader, getCustomerKPIs } from "@/modules/customers/kpi-header";
+import { CustomerRGPDPanel } from "@/modules/customers/rgpd-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -454,6 +455,10 @@ export default async function CustomerDetailPage({
           <Timeline subjectType="customer" subjectId={id} />
         </CardContent>
       </Card>
+
+      {canSeeBank && (
+        <CustomerRGPDPanel customerId={id} customerName={displayName} />
+      )}
     </div>
   );
 }

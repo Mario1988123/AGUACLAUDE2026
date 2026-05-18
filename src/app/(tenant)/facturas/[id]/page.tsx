@@ -8,6 +8,9 @@ import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
 import { listActiveMandatesForCustomer } from "@/modules/gocardless/actions";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 import { BackButton } from "@/shared/components/back-button";
+import { PaymentReminderButton } from "@/modules/invoices/payment-reminder-button";
+import { suggestReminderLevel } from "@/modules/invoices/payment-reminder-actions";
+import { createClient } from "@/shared/lib/supabase/server";
 
 function eur(c: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -46,6 +49,36 @@ export default async function InvoiceDetailPage({
     notFound();
   }
   const gcMandates = await listActiveMandatesForCustomer(inv.customer_id).catch(() => []);
+
+  // Email del cliente para mailto del recordatorio
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = (await createClient()) as any;
+  let customerEmail: string | null = null;
+  try {
+    const { data } = await sb
+      .from("customers")
+      .select("email")
+      .eq("id", inv.customer_id)
+      .maybeSingle();
+    customerEmail = (data as { email: string | null } | null)?.email ?? null;
+  } catch {
+    /* */
+  }
+
+  // Días de vencimiento (negativo = vencida)
+  let daysOverdue = 0;
+  if (inv.due_date) {
+    const due = new Date(inv.due_date);
+    daysOverdue = Math.floor((Date.now() - due.getTime()) / 86400000);
+  }
+  const suggestedLevel =
+    inv.pending_cents > 0
+      ? await suggestReminderLevel({
+          invoice_id: inv.id,
+          days_overdue: daysOverdue,
+        }).catch(() => "first" as const)
+      : ("first" as const);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -171,6 +204,22 @@ export default async function InvoiceDetailPage({
                 />
               </div>
             )}
+            {inv.pending_cents > 0 &&
+              inv.status !== "draft" &&
+              inv.status !== "cancelled" &&
+              customerEmail && (
+                <div className="mt-3 border-t pt-3">
+                  <PaymentReminderButton
+                    invoiceId={inv.id}
+                    invoiceRef={inv.full_reference}
+                    customerName={inv.customer_name ?? "Cliente"}
+                    customerEmail={customerEmail}
+                    totalCents={inv.pending_cents}
+                    daysOverdue={daysOverdue}
+                    suggestedLevel={suggestedLevel}
+                  />
+                </div>
+              )}
           </CardContent>
         </Card>
       </div>
