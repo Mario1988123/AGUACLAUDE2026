@@ -71,6 +71,13 @@ export default async function MantenimientosPage({
     "installer",
   ]);
 
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+
   const sp = await searchParams;
   const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const period = sp.period && Object.prototype.hasOwnProperty.call(PERIOD_OPTIONS, sp.period) ? sp.period : "";
@@ -83,12 +90,9 @@ export default async function MantenimientosPage({
   const [allJobs, contracts, alerts, technicians] = await Promise.all([
     listMaintenance({ status, fromDate, toDate }),
     listMaintenanceContracts().catch(() => []),
-    getMaintenanceAlerts().catch(() => ({
-      overdue: 0,
-      unassigned_next_7d: 0,
-      low_nps_30d: 0,
-      active_contracts_without_job: 0,
-    })),
+    isUpper
+      ? getMaintenanceAlerts().catch(() => null)
+      : Promise.resolve(null),
     listInstallers().catch(() => []),
   ]);
   // Filtros adicionales en cliente (no rompemos la signatura existente de listMaintenance).
@@ -137,7 +141,7 @@ export default async function MantenimientosPage({
         </p>
       </div>
 
-      <MaintenanceSmartAlerts alerts={alerts} />
+      {isUpper && alerts && <MaintenanceSmartAlerts alerts={alerts} />}
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-3">

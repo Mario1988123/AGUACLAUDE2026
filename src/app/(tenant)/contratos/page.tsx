@@ -4,6 +4,7 @@ import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
 import { Pagination } from "@/shared/components/pagination";
+import { requireSession } from "@/shared/lib/auth/session";
 import {
   ContractSmartAlerts,
   getContractAlerts,
@@ -37,6 +38,13 @@ export default async function ContratosPage({
   searchParams: Promise<{ status?: string; plan?: string; page?: string }>;
 }) {
   const sp = await searchParams;
+  const session = await requireSession();
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
   const status = CONTRACT_STATUS.includes(sp.status as never) ? sp.status : undefined;
   const planType = sp.plan === "cash" || sp.plan === "renting" || sp.plan === "rental" ? sp.plan : undefined;
   const page = Math.max(1, Number(sp.page ?? 1));
@@ -48,7 +56,7 @@ export default async function ContratosPage({
       limit: PAGE_SIZE + 1,
       offset,
     }),
-    getContractAlerts().catch(() => null),
+    isUpper ? getContractAlerts().catch(() => null) : Promise.resolve(null),
   ]);
   const hasMore = contractsAll.length > PAGE_SIZE;
   const contracts = contractsAll.slice(0, PAGE_SIZE);
@@ -77,7 +85,7 @@ export default async function ContratosPage({
         </div>
       </div>
 
-      {alerts && <ContractSmartAlerts alerts={alerts} />}
+      {isUpper && alerts && <ContractSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">

@@ -42,7 +42,9 @@ export default async function LeadsPage({
       assigned_user_id: assignedFilter as string | "unassigned" | undefined,
     }),
     isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
-    getLeadAlerts(scope === "mine" ? session.user_id : null).catch(() => null),
+    isUpperLevel
+      ? getLeadAlerts(scope === "mine" ? session.user_id : null).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   return (
@@ -94,7 +96,7 @@ export default async function LeadsPage({
         </div>
       )}
 
-      {alerts && <LeadSmartAlerts alerts={alerts} />}
+      {isUpperLevel && alerts && <LeadSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}

@@ -96,7 +96,7 @@ export default async function CustomersPage({
         </div>
       )}
 
-      {alerts && <CustomerSmartAlerts alerts={alerts} />}
+      {isUpperLevel && alerts && <CustomerSmartAlerts alerts={alerts} />}
 
       <form className="rounded-lg border bg-card p-4">
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}

@@ -6,6 +6,7 @@ import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PROPOSAL_STATUS } from "@/modules/proposals/schemas";
 import { ProposalRowActions } from "@/modules/proposals/row-actions";
 import { formatDateES } from "@/shared/lib/format-date";
+import { requireSession } from "@/shared/lib/auth/session";
 import {
   ProposalSmartAlerts,
   getProposalAlerts,
@@ -52,10 +53,17 @@ export default async function PropuestasPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const sp = await searchParams;
+  const session = await requireSession();
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
   const status = PROPOSAL_STATUS.includes(sp.status as never) ? sp.status : undefined;
   const [proposals, alerts] = await Promise.all([
     listProposals({ status }),
-    getProposalAlerts().catch(() => null),
+    isUpper ? getProposalAlerts().catch(() => null) : Promise.resolve(null),
   ]);
   return (
     <div className="space-y-6">
@@ -71,7 +79,7 @@ export default async function PropuestasPage({
         </Button>
       </div>
 
-      {alerts && <ProposalSmartAlerts alerts={alerts} />}
+      {isUpper && alerts && <ProposalSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">

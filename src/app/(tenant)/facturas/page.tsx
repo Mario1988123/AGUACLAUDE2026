@@ -14,6 +14,7 @@ import {
 } from "@/modules/invoices/verifactu-queue-card";
 import { Pagination } from "@/shared/components/pagination";
 import { InvoiceRowActions } from "@/modules/invoices/row-actions";
+import { requireSession } from "@/shared/lib/auth/session";
 import {
   InvoiceSmartAlerts,
   getInvoiceAlerts,
@@ -61,13 +62,20 @@ export default async function InvoicesPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const sp = await searchParams;
+  const session = await requireSession();
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
   const page = Math.max(1, Number(sp.page ?? 1));
   const offset = (page - 1) * PAGE_SIZE;
   const [invoices, pendingInvoice, vfQueue, alerts] = await Promise.all([
     listInvoices({ limit: PAGE_SIZE + 1, offset }),
     listPendingInvoiceWalletEntries(),
     getVerifactuQueue().catch(() => ({ pending: [], failed: [] })),
-    getInvoiceAlerts().catch(() => null),
+    isUpper ? getInvoiceAlerts().catch(() => null) : Promise.resolve(null),
   ]);
   const hasMore = invoices.length > PAGE_SIZE;
   const visibleInvoices = invoices.slice(0, PAGE_SIZE);
@@ -93,7 +101,7 @@ export default async function InvoicesPage({
         </div>
       </div>
 
-      {alerts && <InvoiceSmartAlerts alerts={alerts} />}
+      {isUpper && alerts && <InvoiceSmartAlerts alerts={alerts} />}
 
       <VerifactuQueueCard
         pending={vfQueue.pending}

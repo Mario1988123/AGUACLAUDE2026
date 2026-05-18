@@ -77,6 +77,12 @@ export default async function WalletPage({
     session.roles.includes("commercial_director");
   const canInvoice = session.is_superadmin || session.roles.includes("company_admin");
   const isAdmin = canInvoice;
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
 
   const [entries, summary, yearHistory, walletAlerts] = await Promise.all([
     listWalletEntries({
@@ -90,7 +96,7 @@ export default async function WalletPage({
     }),
     getWalletSummary({ year: periodYear, month: periodMonth }),
     isAdmin ? getWalletYearlyHistory({ year: historyYear }) : Promise.resolve([]),
-    isAdmin ? getWalletAlerts().catch(() => null) : Promise.resolve(null),
+    isUpper ? getWalletAlerts().catch(() => null) : Promise.resolve(null),
   ]);
 
   const MONTHS = [
@@ -137,7 +143,7 @@ export default async function WalletPage({
         </Link>
       </div>
 
-      {walletAlerts && <WalletSmartAlerts alerts={walletAlerts} />}
+      {isUpper && walletAlerts && <WalletSmartAlerts alerts={walletAlerts} />}
 
       <div className="space-y-3">
         <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">

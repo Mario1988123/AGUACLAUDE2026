@@ -122,13 +122,20 @@ export default async function InstalacionesPage({
     "installer",
   ]);
 
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+
   const sp = await searchParams;
   const installerFilter = sp.installer || undefined;
   const statusFilter = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const [installations, team, alerts] = await Promise.all([
     listInstallations({ installer_user_id: installerFilter, status: statusFilter }),
     listInstallers().catch(() => []),
-    getInstallationAlerts().catch(() => null),
+    isUpper ? getInstallationAlerts().catch(() => null) : Promise.resolve(null),
   ]);
 
   // Separar agendadas (con scheduled_at), sin agendar, y con incidencia.
@@ -221,7 +228,7 @@ export default async function InstalacionesPage({
         )}
       </form>
 
-      {alerts && <InstallationSmartAlerts alerts={alerts} />}
+      {isUpper && alerts && <InstallationSmartAlerts alerts={alerts} />}
 
       {withIncident.length > 0 && (
         <Card className="border-2 border-red-300 bg-red-50/50">
