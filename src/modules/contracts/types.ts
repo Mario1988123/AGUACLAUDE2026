@@ -11,6 +11,8 @@ export interface ContractListItem {
   monthly_cents: number | null;
   signed_at: string | null;
   created_at: string;
+  /** Financiera asignada (solo aplica a renting). null = pendiente. */
+  financier_id: string | null;
 }
 
 export interface ContractDetail {

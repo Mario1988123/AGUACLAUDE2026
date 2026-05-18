@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Eye, Download, Home } from "lucide-react";
+import { Eye, Download, Home, AlertCircle } from "lucide-react";
 import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
+import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
 import { Pagination } from "@/shared/components/pagination";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -32,10 +33,31 @@ function formatCents(cents: number | null) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
+/**
+ * Renting firmado/activo sin financiera asignada → requiere atención del
+ * admin. Los alquileres NO usan financiera (cobramos al cliente directo).
+ */
+function needsFinancier(c: {
+  plan_type: string;
+  status: string;
+  financier_id: string | null;
+}): boolean {
+  return (
+    c.plan_type === "renting" &&
+    (c.status === "signed" || c.status === "active") &&
+    !c.financier_id
+  );
+}
+
 export default async function ContratosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; plan?: string; page?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    plan?: string;
+    page?: string;
+    missing_financier?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const session = await requireSession();
@@ -47,12 +69,14 @@ export default async function ContratosPage({
     session.roles.includes("telemarketing_director");
   const status = CONTRACT_STATUS.includes(sp.status as never) ? sp.status : undefined;
   const planType = sp.plan === "cash" || sp.plan === "renting" || sp.plan === "rental" ? sp.plan : undefined;
+  const missingFinancier = sp.missing_financier === "1";
   const page = Math.max(1, Number(sp.page ?? 1));
   const offset = (page - 1) * PAGE_SIZE;
   const [contractsAll, alerts] = await Promise.all([
     listContracts({
       status,
       plan_type: planType,
+      missing_financier: missingFinancier,
       limit: PAGE_SIZE + 1,
       offset,
     }),
@@ -66,7 +90,18 @@ export default async function ContratosPage({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Contratos</h1>
-          <p className="text-sm text-muted-foreground">{contracts.length} contratos</p>
+          <p className="text-sm text-muted-foreground">
+            {contracts.length} contratos
+            {missingFinancier && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                <AlertCircle className="h-3 w-3" /> filtro: renting sin
+                financiera ·{" "}
+                <Link href="/contratos" className="underline">
+                  quitar
+                </Link>
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -156,6 +191,11 @@ export default async function ContratosPage({
                     {PLAN_TYPE_LABEL[c.plan_type]}
                     {c.signed_at && ` · Firmado ${new Date(c.signed_at).toLocaleDateString("es-ES")}`}
                   </div>
+                  {needsFinancier(c) && (
+                    <Badge variant="warning" className="mt-1 gap-1 text-[10px]">
+                      <AlertCircle className="h-3 w-3" /> Sin financiera
+                    </Badge>
+                  )}
                 </div>
                 <StatusPill
                   label={STATUS_LABEL[c.status]}
@@ -238,7 +278,18 @@ export default async function ContratosPage({
                       tone={CONTRACT_TONE[c.status] ?? "info"}
                     />
                   </td>
-                  <td className="px-4 py-3 text-xs">{PLAN_TYPE_LABEL[c.plan_type]}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {PLAN_TYPE_LABEL[c.plan_type]}
+                    {needsFinancier(c) && (
+                      <Badge
+                        variant="warning"
+                        className="ml-2 gap-1 text-[10px]"
+                        title="Renting firmado sin financiera asignada"
+                      >
+                        <AlertCircle className="h-3 w-3" /> Sin financiera
+                      </Badge>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {formatCents(c.total_cash_cents)}
                   </td>

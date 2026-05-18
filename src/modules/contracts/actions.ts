@@ -12,6 +12,7 @@ import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-s
 export async function listContracts(filters?: {
   status?: string;
   plan_type?: string;
+  missing_financier?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<ContractListItem[]> {
@@ -24,25 +25,36 @@ export async function listContracts(filters?: {
   const supabase = await createClient();
   const limit = Math.min(500, filters?.limit ?? 50);
   const offset = Math.max(0, filters?.offset ?? 0);
-  let query = supabase
-    .from("contracts")
-    .select(
-      "id, reference_code, status, customer_id, plan_type, total_cash_cents, monthly_cents, signed_at, created_at",
-    )
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
-  // Filtro de scope: nivel 3 ve solo los suyos (created_by); nivel 2
-  // ve los suyos + los de su equipo. Nivel 1 ve todos.
-  if (visibleUserIds) {
-    query = query.in("created_by", visibleUserIds);
+  // Query defensiva: financier_id se añadió en migración tardía. Si no
+  // está en el cache de PostgREST, retry sin él.
+  const FULL_COLS =
+    "id, reference_code, status, customer_id, plan_type, total_cash_cents, monthly_cents, signed_at, created_at, financier_id";
+  const BASE_COLS =
+    "id, reference_code, status, customer_id, plan_type, total_cash_cents, monthly_cents, signed_at, created_at";
+  async function runQuery(cols: string) {
+    let q = supabase
+      .from("contracts")
+      .select(cols)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (visibleUserIds) q = q.in("created_by", visibleUserIds);
+    if (filters?.status) q = q.eq("status", filters.status);
+    if (filters?.plan_type) q = q.eq("plan_type", filters.plan_type);
+    if (filters?.missing_financier && cols.includes("financier_id")) {
+      q = q.eq("plan_type", "renting").is("financier_id", null);
+    }
+    return q;
   }
-  if (filters?.status) query = query.eq("status", filters.status);
-  if (filters?.plan_type) query = query.eq("plan_type", filters.plan_type);
-  const { data, error } = await query;
+  let { data, error } = await runQuery(FULL_COLS);
+  if (error && /financier_id|column .* does not exist/i.test(error.message ?? "")) {
+    const retry = await runQuery(BASE_COLS);
+    data = retry.data;
+    error = retry.error;
+  }
   if (error) throw error;
 
-  const rows = (data ?? []) as Array<{
+  const rows = ((data ?? []) as unknown) as Array<{
     id: string;
     reference_code: string | null;
     status: ContractListItem["status"];
@@ -52,6 +64,7 @@ export async function listContracts(filters?: {
     monthly_cents: number | null;
     signed_at: string | null;
     created_at: string;
+    financier_id?: string | null;
   }>;
   if (rows.length === 0) return [];
 
@@ -76,7 +89,11 @@ export async function listContracts(filters?: {
         : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre",
     ]),
   );
-  return rows.map((r) => ({ ...r, customer_name: nameMap.get(r.customer_id) ?? "Cliente" }));
+  return rows.map((r) => ({
+    ...r,
+    customer_name: nameMap.get(r.customer_id) ?? "Cliente",
+    financier_id: r.financier_id ?? null,
+  }));
 }
 
 export async function getContract(id: string): Promise<ContractDetail> {

@@ -45,11 +45,11 @@ export function ContractSmartAlerts({ alerts }: { alerts: ContractAlerts }) {
   if (alerts.renting_no_financier > 0)
     items.push({
       key: "no_financier",
-      label: "Renting/Alquiler sin financiera",
+      label: "Renting sin financiera asignada",
       value: alerts.renting_no_financier,
       icon: Banknote,
       color: "border-orange-300 bg-orange-50 text-orange-900",
-      href: "/contratos?plan=renting",
+      href: "/contratos?plan=renting&missing_financier=1",
     });
   if (alerts.cancelled_this_month > 0)
     items.push({
@@ -151,14 +151,15 @@ export async function getContractAlerts(): Promise<ContractAlerts> {
     /* */
   }
 
-  // 3) Renting/rental sin financiera
+  // 3) Renting sin financiera. SOLO renting — el alquiler no usa
+  // financiera (cobramos la cuota directamente al cliente).
   try {
     const { count } = await admin
       .from("contracts")
       .select("id", { count: "exact", head: true })
       .eq("company_id", session.company_id)
       .in("status", ["signed", "active"])
-      .in("plan_type", ["renting", "rental"])
+      .eq("plan_type", "renting")
       .is("financier_id", null)
       .is("deleted_at", null);
     out.renting_no_financier = count ?? 0;
