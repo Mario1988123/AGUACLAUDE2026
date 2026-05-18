@@ -1,5 +1,14 @@
 import Link from "next/link";
-import { Wrench, ShieldCheck, Calendar, MapPin, Clock, ArrowRight } from "lucide-react";
+import {
+  Wrench,
+  ShieldCheck,
+  Calendar,
+  MapPin,
+  Clock,
+  ArrowRight,
+  Phone,
+  MessageCircle,
+} from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getMyDayItems } from "@/modules/my-day/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -121,6 +130,32 @@ export default async function MiDiaPage() {
                         </Link>
                         {it.subtitle && (
                           <div className="text-xs text-muted-foreground">{it.subtitle}</div>
+                        )}
+                        {it.address_summary && (
+                          <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            {it.address_summary}
+                          </div>
+                        )}
+                        {it.customer_phone && (
+                          <div className="mt-2 flex gap-1.5">
+                            <a
+                              href={`tel:${it.customer_phone}`}
+                              className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-100 px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                            >
+                              <Phone className="h-3 w-3" />
+                              Llamar
+                            </a>
+                            <a
+                              href={`https://wa.me/${it.customer_phone.replace(/[^0-9+]/g, "")}`}
+                              target="_blank"
+                              rel="noopener"
+                              className="inline-flex h-8 items-center gap-1 rounded-md bg-[#25D366] px-2 text-xs font-semibold text-white hover:opacity-90"
+                            >
+                              <MessageCircle className="h-3 w-3" />
+                              WhatsApp
+                            </a>
+                          </div>
                         )}
                       </div>
                       <div className="flex flex-col shrink-0 gap-1.5">

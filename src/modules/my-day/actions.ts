@@ -19,6 +19,10 @@ export interface DayItem {
   href: string;
   geo_latitude?: number | null;
   geo_longitude?: number | null;
+  /** Para botones rápidos llamar/whatsapp en /mi-dia (técnico). */
+  customer_phone?: string | null;
+  /** Calle + número + ciudad para que el técnico vea destino directamente. */
+  address_summary?: string | null;
 }
 
 function startOfToday(): { from: string; to: string } {
@@ -94,15 +98,16 @@ export async function getMyDayItems(): Promise<DayItem[]> {
   const maints = (maintRes.data ?? []) as Maint[];
   const agendas = (agendaRes.data ?? []) as Ag[];
 
-  // Resolver nombres de cliente
+  // Resolver nombres + teléfono de cliente
   const cIds = Array.from(
     new Set([...insts.map((i) => i.customer_id), ...maints.map((m) => m.customer_id)].filter(Boolean)),
   );
   const nameMap = new Map<string, string>();
+  const phoneMap = new Map<string, string>();
   if (cIds.length > 0) {
     const { data: cs } = await supabase
       .from("customers")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
       .in("id", cIds);
     type CC = {
       id: string;
@@ -111,6 +116,7 @@ export async function getMyDayItems(): Promise<DayItem[]> {
       trade_name: string | null;
       first_name: string | null;
       last_name: string | null;
+      phone_primary: string | null;
     };
     for (const c of (cs ?? []) as CC[]) {
       const n =
@@ -118,21 +124,47 @@ export async function getMyDayItems(): Promise<DayItem[]> {
           ? c.trade_name || c.legal_name || "—"
           : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "—";
       nameMap.set(c.id, n);
+      if (c.phone_primary) phoneMap.set(c.id, c.phone_primary);
     }
   }
 
   const items: DayItem[] = [];
 
-  // Resolver geo de address de instalaciones
+  // Resolver geo + dirección de instalaciones
   const addrIds = insts.map((i) => i.address_id).filter((v): v is string => !!v);
-  const addrGeoMap = new Map<string, { lat: number | null; lng: number | null }>();
+  const addrGeoMap = new Map<
+    string,
+    { lat: number | null; lng: number | null; summary: string | null }
+  >();
   if (addrIds.length > 0) {
     const { data: addrs } = await supabase
       .from("addresses")
-      .select("id, latitude, longitude")
+      .select("id, latitude, longitude, street_type, street, street_number, postal_code, city")
       .in("id", addrIds);
-    for (const a of (addrs ?? []) as Array<{ id: string; latitude: number | null; longitude: number | null }>) {
-      addrGeoMap.set(a.id, { lat: a.latitude, lng: a.longitude });
+    for (const a of (addrs ?? []) as Array<{
+      id: string;
+      latitude: number | null;
+      longitude: number | null;
+      street_type: string | null;
+      street: string | null;
+      street_number: string | null;
+      postal_code: string | null;
+      city: string | null;
+    }>) {
+      const summary = [
+        a.street_type,
+        a.street,
+        a.street_number,
+        a.postal_code,
+        a.city,
+      ]
+        .filter(Boolean)
+        .join(" ");
+      addrGeoMap.set(a.id, {
+        lat: a.latitude,
+        lng: a.longitude,
+        summary: summary || null,
+      });
     }
   }
 
@@ -148,6 +180,8 @@ export async function getMyDayItems(): Promise<DayItem[]> {
       href: `/instalaciones/${i.id}`,
       geo_latitude: geo?.lat ?? null,
       geo_longitude: geo?.lng ?? null,
+      customer_phone: phoneMap.get(i.customer_id) ?? null,
+      address_summary: geo?.summary ?? null,
     });
   }
   for (const m of maints) {
@@ -159,6 +193,7 @@ export async function getMyDayItems(): Promise<DayItem[]> {
       scheduled_at: m.scheduled_at,
       status: m.status,
       href: `/mantenimientos/${m.id}`,
+      customer_phone: phoneMap.get(m.customer_id) ?? null,
     });
   }
   for (const a of agendas) {
