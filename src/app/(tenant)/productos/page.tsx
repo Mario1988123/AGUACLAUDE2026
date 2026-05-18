@@ -70,6 +70,11 @@ export default async function ProductsPage({
             </Link>
           </div>
           <Button variant="outline" asChild>
+            <a href="/api/pdf/catalog" target="_blank" rel="noopener noreferrer">
+              📄 Catálogo PDF
+            </a>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href={"/configuracion/productos" as never}>Configuración</Link>
           </Button>
           <Button asChild>
