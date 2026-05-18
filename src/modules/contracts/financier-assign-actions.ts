@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { reconcileSalesRecordsForCompany } from "@/modules/sales/reconcile";
 
 async function ensureAdminOrLevel2() {
   const session = await requireSession();
@@ -14,6 +15,31 @@ async function ensureAdminOrLevel2() {
     session.roles.includes("commercial_director") ||
     session.roles.includes("technical_director");
   return { session, allowed };
+}
+
+/**
+ * Tras cambiar los datos de financiera de un contrato, regeneramos sus
+ * `sales_records` con force=true para que el total_cents refleje el nuevo
+ * `financier_payment_cents` (ya descontado el coeficiente). Si la
+ * regeneración falla, lo silenciamos: el cron diario reconcilia.
+ */
+async function regenerateContractSalesRecords(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  companyId: string,
+  contractId: string,
+) {
+  try {
+    await reconcileSalesRecordsForCompany(admin, companyId, {
+      force: true,
+      onlyContractIds: [contractId],
+    });
+  } catch (e) {
+    console.error(
+      "[financier-assign] reconcile sales_records failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
 }
 
 const assignSchema = z.object({
@@ -35,7 +61,7 @@ export async function assignFinancierToContractAction(
   input: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const { allowed } = await ensureAdminOrLevel2();
+    const { session, allowed } = await ensureAdminOrLevel2();
     if (!allowed) {
       return {
         ok: false,
@@ -70,8 +96,18 @@ export async function assignFinancierToContractAction(
       },
     });
 
+    if (session.company_id) {
+      await regenerateContractSalesRecords(
+        admin,
+        session.company_id,
+        parsed.contract_id,
+      );
+    }
+
     revalidatePath(`/contratos/${parsed.contract_id}`);
     revalidatePath("/wallet/financieras");
+    revalidatePath("/dashboard");
+    revalidatePath("/objetivos");
     return { ok: true };
   } catch (err) {
     return {
@@ -87,7 +123,7 @@ export async function clearFinancierFromContractAction(
   contractId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const { allowed } = await ensureAdminOrLevel2();
+    const { session, allowed } = await ensureAdminOrLevel2();
     if (!allowed) {
       return {
         ok: false,
@@ -116,7 +152,13 @@ export async function clearFinancierFromContractAction(
       payload: {},
     });
 
+    if (session.company_id) {
+      await regenerateContractSalesRecords(admin, session.company_id, contractId);
+    }
+
     revalidatePath(`/contratos/${contractId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/objetivos");
     return { ok: true };
   } catch (err) {
     return {

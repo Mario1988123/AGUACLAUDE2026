@@ -72,6 +72,19 @@ function eur(cents: number | null | undefined): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
 }
 
+/**
+ * Para alquiler: el mantenimiento se incluye por defecto (cláusula
+ * habitual del contrato). El comercial puede desmarcarlo si el cliente no
+ * lo quiere. Para cash/renting queda opcional como antes.
+ */
+function rentalDefaultMaintenance(plan: PlanType, duration: number | null) {
+  if (plan !== "rental") return { included: false, untilDate: null as string | null };
+  const months = duration && duration > 0 ? duration : 12;
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return { included: true, untilDate: d.toISOString().slice(0, 10) };
+}
+
 function emptyItem(
   productId: string,
   plan: PlanType,
@@ -84,6 +97,7 @@ function emptyItem(
     if (plan === "renting" && duration) return p.duration_months === duration;
     return true;
   });
+  const maintDef = rentalDefaultMaintenance(plan, duration);
   if (!planMatch) {
     return {
       product_id: productId,
@@ -91,11 +105,11 @@ function emptyItem(
       unit_price_cents: 0,
       installation_included: true,
       installation_price_cents: null,
-      maintenance_included: false,
-      maintenance_until_date: null,
+      maintenance_included: maintDef.included,
+      maintenance_until_date: maintDef.untilDate,
       maintenance_price_cents: null,
       maintenance_periodicity_months: 12,
-      deposit_cents: plan === "rental" ? 0 : null,
+      deposit_cents: null,
       charge_first_payment_now: false,
     };
   }
@@ -109,11 +123,11 @@ function emptyItem(
     unit_price_cents: cuota,
     installation_included: true,
     installation_price_cents: null,
-    maintenance_included: false,
-    maintenance_until_date: null,
+    maintenance_included: maintDef.included,
+    maintenance_until_date: maintDef.untilDate,
     maintenance_price_cents: null,
     maintenance_periodicity_months: 12,
-    deposit_cents: plan === "rental" ? 0 : null,
+    deposit_cents: null,
     charge_first_payment_now: false,
   };
 }
@@ -692,33 +706,50 @@ function ItemEditor({
       </div>
 
       {planType === "rental" && (
-        <div className="rounded-lg border bg-muted/20 p-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Fianza (€)</Label>
-              <MoneyInput
-                valueCents={item.deposit_cents ?? 0}
-                onChangeCents={(c) => onChange({ deposit_cents: c })}
+        <div className="rounded-lg border bg-muted/20 p-3 space-y-3">
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={item.deposit_cents != null}
+                onChange={(e) =>
+                  onChange({ deposit_cents: e.target.checked ? 0 : null })
+                }
+                className="h-4 w-4"
               />
-              <p className="text-[10px] text-muted-foreground">Por producto. Puede ser 0.</p>
-            </div>
-            <div className="space-y-1">
-              <label className="flex items-center gap-2 pt-6">
-                <input
-                  type="checkbox"
-                  checked={item.charge_first_payment_now}
-                  onChange={(e) =>
-                    onChange({ charge_first_payment_now: e.target.checked })
-                  }
-                  className="h-4 w-4"
+              <span className="text-sm font-bold">Lleva fianza</span>
+            </label>
+            {item.deposit_cents != null && (
+              <div className="mt-2 space-y-1">
+                <Label className="text-xs">Importe fianza (€)</Label>
+                <MoneyInput
+                  valueCents={item.deposit_cents}
+                  onChangeCents={(c) => onChange({ deposit_cents: c })}
+                  className="max-w-[200px]"
                 />
-                <span className="text-sm font-bold">Cobrar 1ª cuota al firmar</span>
-              </label>
-              <p className="text-[10px] text-muted-foreground">
-                Si activo: el cliente paga {duration ? duration - 1 : "N-1"} cuotas restantes a
-                partir del mes siguiente.
-              </p>
-            </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Por producto. Al finalizar el contrato podrás devolverla
+                  íntegra, parcial o retenerla como penalización.
+                </p>
+              </div>
+            )}
+          </div>
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={item.charge_first_payment_now}
+                onChange={(e) =>
+                  onChange({ charge_first_payment_now: e.target.checked })
+                }
+                className="h-4 w-4"
+              />
+              <span className="text-sm font-bold">Cobrar 1ª cuota al firmar</span>
+            </label>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Si activo: el cliente paga {duration ? duration - 1 : "N-1"} cuotas
+              restantes a partir del mes siguiente.
+            </p>
           </div>
         </div>
       )}

@@ -937,15 +937,14 @@ export async function markContractSigned(id: string) {
   //     al TMK (origen del lead) según points_settings de la empresa.
   // Fail-soft: si algo falla NO se rompe la firma.
   try {
-    // Query defensiva: `assigned_user_id` lo añadió la migración
-    // 20260503150000. Si por cualquier motivo (schema cache o migración
-    // pendiente) no está, recuperamos solo lo esencial y dejamos el
-    // sales_user_id en null.
+    // Query defensiva: `assigned_user_id` y `financier_payment_cents` se
+    // añadieron en migraciones tardías. Si schema cache no está al día,
+    // reintentamos con el subset mínimo.
     const BASE_COLS =
       "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months";
     let { data: contractFull, error: cfErr } = await admin
       .from("contracts")
-      .select(`${BASE_COLS}, assigned_user_id`)
+      .select(`${BASE_COLS}, assigned_user_id, financier_payment_cents`)
       .eq("id", id)
       .single();
     if (cfErr && /column .* does not exist/i.test(cfErr.message ?? "")) {
@@ -966,6 +965,7 @@ export async function markContractSigned(id: string) {
       monthly_cents: number | null;
       duration_months: number | null;
       assigned_user_id?: string | null;
+      financier_payment_cents?: number | null;
     };
 
     // TMK origen: si el cliente vino de un lead con origin_tmk_user_id
@@ -990,12 +990,21 @@ export async function markContractSigned(id: string) {
       }
     }
 
-    // Importe total de la venta (lo que se usa para el objetivo €)
+    // Importe total — depende del tipo de venta (decisión 2026-05-18):
+    //   cash    → total_cash_cents
+    //   renting → lo que paga la financiera (financier_payment_cents, ya
+    //             descontado el coeficiente). Fallback: cuota×meses si aún
+    //             no hay financiera asignada (se ajustará en el reconcile).
+    //   rental  → SOLO una cuota mensual (baja libre, nunca × duración).
     let totalCents = 0;
     if (cf.plan_type === "cash") {
       totalCents = cf.total_cash_cents ?? 0;
+    } else if (cf.plan_type === "renting") {
+      totalCents =
+        cf.financier_payment_cents ??
+        (cf.monthly_cents ?? 0) * (cf.duration_months ?? 0);
     } else {
-      totalCents = (cf.monthly_cents ?? 0) * (cf.duration_months ?? 0);
+      totalCents = cf.monthly_cents ?? 0;
     }
 
     // Items para crear un sales_record por cada uno

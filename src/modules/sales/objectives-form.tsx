@@ -38,10 +38,15 @@ const DEPT_LABEL: Record<string, string> = {
 };
 
 const METRIC_KIND_LABEL: Record<string, string> = {
+  // Enums oficiales del schema
+  sales: "Ventas",
+  contracts: "Contratos",
+  installations: "Instalaciones",
+  recoveries: "Recuperaciones",
+  // Enums legados (filas viejas)
   amount_eur: "Importe €",
   units: "Unidades",
   contracts_signed: "Contratos firmados",
-  installations: "Instalaciones",
   leads_won: "Leads ganados",
   appointments: "Visitas",
   calls: "Llamadas",

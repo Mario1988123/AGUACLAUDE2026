@@ -30,6 +30,14 @@ const PAYMENT_STATE_LABEL: Record<string, string> = {
   reserve_pending: "Reserva pendiente",
 };
 
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  pending: "Pendiente",
+  collected_pending_validation: "Pdte. validar",
+  validated: "Validado",
+  rejected: "Rechazado",
+  cancelled: "Cancelado",
+};
+
 const ALERT_META: Record<
   string,
   { label: string; tone: "destructive" | "warning" | "secondary" }
@@ -74,7 +82,7 @@ export default async function AlquileresPage() {
         />
         <KpiCard
           icon={<CalendarClock className="h-5 w-5" />}
-          label="MRR alquiler"
+          label="Cuota mensual total"
           value={formatCents(kpi.mrr_cents)}
           tone="primary"
         />
@@ -144,10 +152,8 @@ export default async function AlquileresPage() {
                     {r.progress_pct != null && (
                       <div className="mt-2">
                         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                          <span>{r.months_elapsed} meses</span>
-                          <span>
-                            {r.months_left} meses restantes
-                          </span>
+                          <span>{r.months_elapsed} meses cobrados</span>
+                          <span>{r.months_left} restantes</span>
                         </div>
                         <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                           <div
@@ -226,7 +232,7 @@ export default async function AlquileresPage() {
                             <div className="min-w-[120px]">
                               <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                                 <span>{r.months_elapsed}m</span>
-                                <span>{r.months_left}m left</span>
+                                <span>{r.months_left}m restantes</span>
                               </div>
                               <div className="mt-0.5 h-1.5 w-full rounded-full bg-muted overflow-hidden">
                                 <div
@@ -252,7 +258,8 @@ export default async function AlquileresPage() {
                                 }
                                 className="text-[10px]"
                               >
-                                {r.last_payment_status}
+                                {PAYMENT_STATUS_LABEL[r.last_payment_status] ??
+                                  r.last_payment_status}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground">—</span>

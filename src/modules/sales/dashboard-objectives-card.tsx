@@ -19,6 +19,22 @@ const METRIC_LABEL: Record<string, string> = {
   any_total: "Total ventas",
 };
 
+const PLAN_TYPE_LABEL: Record<string, string> = {
+  cash: "Contado",
+  renting: "Renting",
+  rental: "Alquiler",
+};
+
+/**
+ * Etiqueta del objetivo en el card: prioriza `plan_type` cuando está
+ * informado (la métrica `sales` repetida 3 veces no aporta nada visual;
+ * lo que diferencia los cards es Contado / Renting / Alquiler).
+ */
+function objectiveLabel(metric: string, planType: string | null): string {
+  if (planType) return PLAN_TYPE_LABEL[planType] ?? planType;
+  return METRIC_LABEL[metric] ?? metric;
+}
+
 function fmtEur(c: number | null | undefined) {
   if (c == null) return "—";
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -77,7 +93,7 @@ export function DashboardObjectivesCard({
                 <li key={o.id} className="space-y-1.5 rounded-xl border border-border p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold">
-                      {METRIC_LABEL[o.metric_kind] ?? o.metric_kind}
+                      {objectiveLabel(o.metric_kind, o.plan_type)}
                     </span>
                     <Badge variant="outline">{o.scope_label}</Badge>
                   </div>

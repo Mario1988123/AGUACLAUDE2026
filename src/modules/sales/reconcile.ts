@@ -18,6 +18,8 @@ export interface ReconcileResult {
 interface Options {
   /** Si true: borra previos antes de reinsertar (modo "Recalcular ventas"). */
   force?: boolean;
+  /** Si está, filtra el reconcile a solo estos contratos (resto se ignora). */
+  onlyContractIds?: string[];
 }
 
 /**
@@ -48,23 +50,27 @@ export async function reconcileSalesRecordsForCompany(
     errors: [],
   };
 
-  // 1) Cargar contratos firmados/activos. Query defensiva (signed_at y
-  // assigned_user_id son columnas opcionales que añadieron migraciones
-  // tardías — si el cache de PostgREST está sin recargar reintentamos con
-  // un subset mínimo).
+  // 1) Cargar contratos firmados/activos. Query defensiva (signed_at,
+  // assigned_user_id y financier_payment_cents son columnas opcionales que
+  // añadieron migraciones tardías — si el cache de PostgREST está sin
+  // recargar reintentamos con un subset mínimo).
   const BASE_COLS =
     "id, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, created_at, status";
-  const FULL_COLS = `${BASE_COLS}, assigned_user_id, signed_at`;
+  const FULL_COLS = `${BASE_COLS}, assigned_user_id, signed_at, financier_payment_cents`;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminAny = admin as any;
   async function loadContracts(cols: string) {
-    return adminAny
+    let q = adminAny
       .from("contracts")
       .select(cols)
       .eq("company_id", companyId)
       .is("deleted_at", null)
       .in("status", ["signed", "active"]);
+    if (opts.onlyContractIds && opts.onlyContractIds.length > 0) {
+      q = q.in("id", opts.onlyContractIds);
+    }
+    return q;
   }
   let { data: contractsData, error: cErr } = await loadContracts(FULL_COLS);
   if (cErr && /column .* does not exist/i.test(cErr.message ?? "")) {
@@ -86,6 +92,7 @@ export async function reconcileSalesRecordsForCompany(
     duration_months: number | null;
     assigned_user_id?: string | null;
     signed_at?: string | null;
+    financier_payment_cents?: number | null;
     created_at: string;
     status: string;
   }>;
@@ -133,12 +140,22 @@ export async function reconcileSalesRecordsForCompany(
         }
       }
 
-      // Importe total
+      // Importe total — depende del tipo de venta (decisión 2026-05-18):
+      //   cash    → total_cash_cents (lo que paga el cliente al contado)
+      //   renting → financier_payment_cents (lo que paga la financiera ya
+      //             descontado el coeficiente de intereses). Fallback a
+      //             cuota×meses si aún no hay financiera asignada.
+      //   rental  → SOLO una cuota mensual (es indefinido / baja libre,
+      //             nunca multiplicamos por duración).
       let totalCents = 0;
       if (cf.plan_type === "cash") {
         totalCents = cf.total_cash_cents ?? 0;
+      } else if (cf.plan_type === "renting") {
+        totalCents =
+          cf.financier_payment_cents ??
+          (cf.monthly_cents ?? 0) * (cf.duration_months ?? 0);
       } else {
-        totalCents = (cf.monthly_cents ?? 0) * (cf.duration_months ?? 0);
+        totalCents = cf.monthly_cents ?? 0;
       }
 
       // Items
