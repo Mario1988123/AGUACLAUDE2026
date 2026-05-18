@@ -1,8 +1,17 @@
 import Link from "next/link";
-import { AlertTriangle, AlertOctagon, CalendarClock, CheckCircle2, Home } from "lucide-react";
+import {
+  AlertTriangle,
+  AlertOctagon,
+  CalendarClock,
+  CheckCircle2,
+  Home,
+  Pause,
+} from "lucide-react";
 import { getRentalsDashboard } from "@/modules/contracts/rentals-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { RentalActionsMenu } from "@/modules/contracts/rental-actions-menu";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -45,11 +54,20 @@ const ALERT_META: Record<
   overdue: { label: "Vencido", tone: "destructive" },
   expiring_soon: { label: "Vence pronto", tone: "warning" },
   unpaid: { label: "Impago", tone: "destructive" },
+  paused: { label: "Pausado", tone: "secondary" },
 };
 
 export default async function AlquileresPage() {
-  const data = await getRentalsDashboard();
+  const [data, session] = await Promise.all([
+    getRentalsDashboard(),
+    requireSession(),
+  ]);
   const { rows, kpi } = data;
+  const canManage =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  const canCancel = session.is_superadmin || session.roles.includes("company_admin");
 
   return (
     <div className="space-y-6">
@@ -73,7 +91,7 @@ export default async function AlquileresPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-6">
         <KpiCard
           icon={<Home className="h-5 w-5" />}
           label="Activos"
@@ -81,8 +99,14 @@ export default async function AlquileresPage() {
           tone="primary"
         />
         <KpiCard
+          icon={<Pause className="h-5 w-5" />}
+          label="Pausados"
+          value={kpi.paused_count}
+          tone={kpi.paused_count > 0 ? "warning" : "muted"}
+        />
+        <KpiCard
           icon={<CalendarClock className="h-5 w-5" />}
-          label="Cuota mensual total"
+          label="Cuota mensual"
           value={formatCents(kpi.mrr_cents)}
           tone="primary"
         />
@@ -179,6 +203,16 @@ export default async function AlquileresPage() {
                         </span>
                       </div>
                     </div>
+                    {canManage && (
+                      <div className="mt-2 flex justify-end border-t pt-2">
+                        <RentalActionsMenu
+                          contractId={r.id}
+                          isPaused={r.is_paused}
+                          depositTotalCents={r.deposit_collected_cents}
+                          canCancel={canCancel}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -197,6 +231,7 @@ export default async function AlquileresPage() {
                       <th className="px-3 py-2 text-left">Cobro</th>
                       <th className="px-3 py-2 text-left">Mantenim.</th>
                       <th className="px-3 py-2 text-left">Alerta</th>
+                      {canManage && <th className="px-3 py-2 text-right">Acciones</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -212,9 +247,20 @@ export default async function AlquileresPage() {
                         </td>
                         <td className="px-3 py-2">
                           <div className="font-medium">{r.customer_name}</div>
-                          {r.permanence_done && r.status === "active" && (
+                          {r.permanence_done && r.status === "active" && !r.is_paused && (
                             <div className="text-[10px] text-emerald-600">
                               Sin permanencia
+                            </div>
+                          )}
+                          {r.duration_months_original != null &&
+                            r.duration_months_original !== r.duration_months && (
+                              <div className="text-[10px] text-primary">
+                                Prorrogado · original {r.duration_months_original}m
+                              </div>
+                            )}
+                          {r.is_paused && r.pause_reason && (
+                            <div className="text-[10px] text-amber-700">
+                              Pausado: {r.pause_reason}
                             </div>
                           )}
                         </td>
@@ -292,6 +338,16 @@ export default async function AlquileresPage() {
                             </span>
                           )}
                         </td>
+                        {canManage && (
+                          <td className="px-3 py-2 text-right">
+                            <RentalActionsMenu
+                              contractId={r.id}
+                              isPaused={r.is_paused}
+                              depositTotalCents={r.deposit_collected_cents}
+                              canCancel={canCancel}
+                            />
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

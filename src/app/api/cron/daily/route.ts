@@ -1254,20 +1254,40 @@ export async function GET(req: NextRequest) {
     try {
       const monthIso = today.toISOString().slice(0, 10);
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
-      const { data: activeContracts } = await admin
+      // Query defensiva — paused_at se añadió en migración tardía.
+      let activeContractsRaw: unknown[] | null = null;
+      const initial = await admin
         .from("contracts")
-        .select("id, company_id, customer_id, monthly_cents, reference_code, plan_type")
+        .select(
+          "id, company_id, customer_id, monthly_cents, reference_code, plan_type, paused_at",
+        )
         .eq("status", "active")
         .in("plan_type", ["renting", "rental"])
         .gt("monthly_cents", 0)
         .is("deleted_at", null);
+      if (initial.error && /paused_at/i.test(initial.error.message ?? "")) {
+        const retry = await admin
+          .from("contracts")
+          .select("id, company_id, customer_id, monthly_cents, reference_code, plan_type")
+          .eq("status", "active")
+          .in("plan_type", ["renting", "rental"])
+          .gt("monthly_cents", 0)
+          .is("deleted_at", null);
+        activeContractsRaw = retry.data;
+      } else {
+        activeContractsRaw = initial.data;
+      }
+      const activeContracts = activeContractsRaw;
       for (const c of ((activeContracts ?? []) as Array<{
         id: string;
         company_id: string;
         customer_id: string;
         monthly_cents: number;
         reference_code: string | null;
+        paused_at?: string | null;
       }>)) {
+        // Skip pausados — no se factura mientras esté en pausa.
+        if (c.paused_at) continue;
         monthlyInvoicing.contracts += 1;
         try {
           // ¿Existe ya una factura de este mes para este contrato?
@@ -1359,6 +1379,82 @@ export async function GET(req: NextRequest) {
   }
 
   // ============================================================================
+  // ALQUILERES PAUSADOS >30 DÍAS — mantenimiento preventivo automático
+  // ----------------------------------------------------------------------------
+  // Si un alquiler lleva más de 30 días pausado y NO tiene maintenance_job
+  // futuro programado, creamos uno preventivo. El equipo sigue instalado en
+  // casa del cliente y necesita revisión aunque no se esté facturando.
+  // Idempotente: si ya hay job futuro, salta.
+  // ============================================================================
+  const pausedMaintenance = {
+    contracts_scanned: 0,
+    jobs_created: 0,
+    errors: 0,
+  };
+  try {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const todayDate = new Date().toISOString().slice(0, 10);
+    const { data: pausedContracts } = await admin
+      .from("contracts")
+      .select("id, company_id, customer_id, paused_at, reference_code")
+      .not("paused_at", "is", null)
+      .lte("paused_at", thirtyDaysAgo.toISOString())
+      .eq("plan_type", "rental")
+      .in("status", ["signed", "active"])
+      .is("deleted_at", null);
+    for (const c of ((pausedContracts ?? []) as Array<{
+      id: string;
+      company_id: string;
+      customer_id: string | null;
+      paused_at: string;
+      reference_code: string | null;
+    }>)) {
+      pausedMaintenance.contracts_scanned += 1;
+      try {
+        const { count: futureJobs } = await admin
+          .from("maintenance_jobs")
+          .select("id", { count: "exact", head: true })
+          .eq("contract_id", c.id)
+          .in("status", ["scheduled", "in_progress"])
+          .gte("scheduled_at", todayDate);
+        if ((futureJobs ?? 0) > 0) continue;
+        const scheduled = new Date();
+        scheduled.setDate(scheduled.getDate() + 7);
+        scheduled.setHours(9, 0, 0, 0);
+        await admin.from("maintenance_jobs").insert({
+          company_id: c.company_id,
+          customer_id: c.customer_id,
+          contract_id: c.id,
+          kind: "preventive",
+          status: "scheduled",
+          scheduled_at: scheduled.toISOString(),
+          notes: `Mantenimiento preventivo automático — alquiler pausado >30d`,
+        });
+        pausedMaintenance.jobs_created += 1;
+        try {
+          await notifyByRoles(c.company_id, ["company_admin", "technical_director"], {
+            kind: "maintenance.paused_rental",
+            severity: "info",
+            title: "Mantenimiento programado · alquiler pausado",
+            body: `${c.reference_code ?? c.id.slice(0, 8)} lleva +30d pausado. Revisión preventiva agendada para dentro de 7 días.`,
+            subject_type: "contract",
+            subject_id: c.id,
+            action_url: `/contratos/${c.id}`,
+          });
+        } catch {
+          /* no-op */
+        }
+      } catch (e) {
+        pausedMaintenance.errors += 1;
+        console.error("[cron/daily] paused-rental maintenance failed:", e);
+      }
+    }
+  } catch (e) {
+    console.error("[cron/daily] paused-rental scan outer failed:", e);
+  }
+
+  // ============================================================================
   // RECONCILIO sales_records ↔ contracts (autorreparación silenciosa)
   // ----------------------------------------------------------------------------
   // Si al firmar un contrato el INSERT en sales_records falló (enum, FK, schema
@@ -1433,6 +1529,7 @@ export async function GET(req: NextRequest) {
       phase2,
       monthly_invoicing: monthlyInvoicing,
       sales_reconcile: salesReconcile,
+      paused_maintenance: pausedMaintenance,
     },
     ranAt: new Date().toISOString(),
   });

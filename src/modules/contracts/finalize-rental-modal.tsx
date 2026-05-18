@@ -51,6 +51,15 @@ export function FinalizeRentalButton({ contractId, depositTotalCents }: Props) {
   );
 }
 
+/** Variante controlada externamente. */
+export function FinalizeRentalDialog(props: {
+  contractId: string;
+  depositTotalCents: number;
+  onClose: () => void;
+}) {
+  return <FinalizeDialog {...props} />;
+}
+
 function FinalizeDialog({
   contractId,
   depositTotalCents,

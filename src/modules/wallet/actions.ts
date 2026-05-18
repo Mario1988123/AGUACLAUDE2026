@@ -428,13 +428,16 @@ export async function validateWalletEntryAction(id: string) {
   const admin = createAdminClient() as any;
   const { data: entry } = await admin
     .from("wallet_entries")
-    .select("id, contract_id, collected_by_user_id, concept, amount_cents, method, status")
+    .select(
+      "id, contract_id, contract_payment_id, collected_by_user_id, concept, amount_cents, method, status",
+    )
     .eq("id", id)
     .maybeSingle();
   const e = entry as
     | {
         id: string;
         contract_id: string | null;
+        contract_payment_id: string | null;
         collected_by_user_id: string | null;
         concept: string;
         amount_cents: number;
@@ -467,6 +470,31 @@ export async function validateWalletEntryAction(id: string) {
     })
     .eq("id", id);
   if (r.error) throw new Error(r.error.message);
+
+  // PROPAGAR al contract_payment vinculado. El estado válido en
+  // contract_payments es 'validated' tanto para cash como para banco
+  // (no usa el 'settled' interno del wallet). Sin esta propagación la
+  // cartera de alquileres (que mira contract_payments) seguía mostrando
+  // "Pendiente" aunque el wallet ya estuviera validado en banco.
+  if (e.contract_payment_id) {
+    try {
+      await admin
+        .from("contract_payments")
+        .update({
+          status: "validated",
+          collected_at: new Date().toISOString(),
+          collected_by_user_id: e.collected_by_user_id ?? session.user_id,
+          validated_at: new Date().toISOString(),
+          validated_by_user_id: session.user_id,
+        })
+        .eq("id", e.contract_payment_id);
+    } catch (err) {
+      console.error(
+        "[validateWalletEntry] sync contract_payment falló:",
+        err,
+      );
+    }
+  }
   // Event timeline + notify al cobrador
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -494,6 +522,8 @@ export async function validateWalletEntryAction(id: string) {
     }
   }
   revalidatePath("/wallet");
+  revalidatePath("/contratos/alquileres");
+  if (e.contract_id) revalidatePath(`/contratos/${e.contract_id}`);
 
   // Auto-resolver notificaciones del wallet_entry (ya validado) y del
   // contract (si lo tiene). Fail-soft.
