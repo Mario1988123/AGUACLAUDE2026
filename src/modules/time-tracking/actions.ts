@@ -802,7 +802,13 @@ export async function autoCloseStalePunchesAction(): Promise<{ closed: number }>
   return { closed: Number(data) || 0 };
 }
 
-/** Listado de usuarios sin fichar hoy (para notificaciones). */
+/** Listado de usuarios sin fichar hoy (para notificaciones).
+ *  Excluye automáticamente:
+ *   - Usuarios sin horario hoy (festivos personales / día libre del cuadrante).
+ *   - Usuarios con ausencia APROBADA cuyo rango incluye hoy
+ *     (vacaciones, baja, permiso, maternidad/paternidad, etc.).
+ *   - Festivos de la empresa (time_holidays para hoy).
+ */
 export async function getUsersWithoutPunchTodayAction(): Promise<
   Array<{ user_id: string; full_name: string }>
 > {
@@ -810,9 +816,24 @@ export async function getUsersWithoutPunchTodayAction(): Promise<
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const dow = (new Date().getDay() + 6) % 7; // lunes=0
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const todayIso = todayStart.toISOString().slice(0, 10); // YYYY-MM-DD
+  const dow = (now.getDay() + 6) % 7; // lunes=0
+
+  // Si hoy es festivo de empresa, nadie está obligado a fichar.
+  // Holidays globales (company_id IS NULL) o de empresa.
+  try {
+    const { data: hols } = await admin
+      .from("holidays")
+      .select("id")
+      .eq("holiday_date", todayIso)
+      .or(`company_id.eq.${session.company_id},company_id.is.null`)
+      .limit(1);
+    if ((hols ?? []).length > 0) return [];
+  } catch {
+    /* tabla puede no estar migrada en algunos entornos */
+  }
 
   // Usuarios con horario hoy
   const { data: scheds } = await admin
@@ -826,15 +847,35 @@ export async function getUsersWithoutPunchTodayAction(): Promise<
   );
   if (expected.length === 0) return [];
 
+  // Quitar a los que están de ausencia aprobada que cubre hoy.
+  let onLeave = new Set<string>();
+  try {
+    const { data: abs } = await admin
+      .from("time_absences")
+      .select("user_id")
+      .eq("company_id", session.company_id)
+      .eq("status", "approved")
+      .lte("starts_on", todayIso)
+      .gte("ends_on", todayIso)
+      .in("user_id", expected);
+    onLeave = new Set(
+      ((abs ?? []) as Array<{ user_id: string }>).map((r) => r.user_id),
+    );
+  } catch {
+    /* tabla no migrada → sin filtro */
+  }
+  const expectedActive = expected.filter((u) => !onLeave.has(u));
+  if (expectedActive.length === 0) return [];
+
   const { data: punched } = await admin
     .from("time_punches")
     .select("user_id")
     .eq("company_id", session.company_id)
     .gte("punched_at", todayStart.toISOString())
-    .in("user_id", expected);
+    .in("user_id", expectedActive);
   const punchedSet = new Set(((punched ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
 
-  const missing = expected.filter((u) => !punchedSet.has(u));
+  const missing = expectedActive.filter((u) => !punchedSet.has(u));
   if (missing.length === 0) return [];
   const { data: profs } = await admin
     .from("user_profiles")
