@@ -9,6 +9,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { SelectableLeadsTable } from "@/modules/leads/selectable-list";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { ImportLeadsButton } from "@/modules/leads/import-form";
+import { LeadSmartAlerts, getLeadAlerts } from "@/modules/leads/smart-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function LeadsPage({
     session.roles.includes("technical_director");
   const scope = isUpperLevel ? (sp.scope === "mine" ? "mine" : "all") : "mine";
   const assignedFilter = isUpperLevel && sp.assigned ? sp.assigned : undefined;
-  const [leads, team] = await Promise.all([
+  const [leads, team, alerts] = await Promise.all([
     listLeads({
       status,
       q: sp.q,
@@ -41,6 +42,7 @@ export default async function LeadsPage({
       assigned_user_id: assignedFilter as string | "unassigned" | undefined,
     }),
     isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
+    getLeadAlerts(scope === "mine" ? session.user_id : null).catch(() => null),
   ]);
 
   return (
@@ -91,6 +93,8 @@ export default async function LeadsPage({
           </Link>
         </div>
       )}
+
+      {alerts && <LeadSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}
