@@ -108,8 +108,10 @@ export const MODULES: ModuleEntry[] = [
   { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "personal" },
 
   // ===== 8. SISTEMA =====
-  { key: "events", label: "Eventos", icon: "Activity", href: "/eventos", group: "system", rolesAllowed: LEVEL_1_2 },
+  // Eventos y Auditoría retirados del sidebar admin (decisión usuario
+  // 2026-05-18): el timeline ya está accesible en cada ficha
+  // individual y el audit log se centraliza en /superadmin/audit con
+  // visibilidad solo para superadmin.
   { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system" },
-  { key: "audit", label: "Auditoría", icon: "ScrollText", href: "/auditoria", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];

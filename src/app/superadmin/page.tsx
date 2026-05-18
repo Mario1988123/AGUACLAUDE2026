@@ -3,6 +3,7 @@ import { listCompanies, getCompaniesMetrics } from "@/modules/superadmin/compani
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { Building2, Users, Contact, FileSignature } from "lucide-react";
+import { ErrorReportsSuperadminCard } from "@/modules/error-reports/superadmin-card";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,8 @@ export default async function SuperadminCompaniesPage({
           </div>
         </div>
       </div>
+
+      <ErrorReportsSuperadminCard />
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">

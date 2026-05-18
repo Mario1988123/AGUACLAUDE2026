@@ -14,6 +14,7 @@ import { getMyModuleOverrides } from "@/modules/tenant/users/permissions-actions
 import { getStepsForRoles } from "@/modules/onboarding/steps";
 import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
+import { ReportErrorButton } from "@/modules/error-reports/report-button";
 import { redirect } from "next/navigation";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -142,6 +143,7 @@ export default async function TenantLayout({ children }: { children: React.React
       <BottomNav unreadCount={unread} />
       <OnboardingTour steps={onboardingSteps} enabled={!seenOnboarding} />
       <ShiftReminders enabled={activeModuleKeys.includes("time_tracking")} />
+      <ReportErrorButton />
     </div>
   );
 }
