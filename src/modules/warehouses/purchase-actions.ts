@@ -22,6 +22,9 @@ export interface PurchaseLineInput {
   quantity: number;
   unit_cost_cents: number;
   notes?: string;
+  /** Código de lote del proveedor (opcional). Si null, usamos
+   *  invoice_number como lot_code. */
+  lot_code?: string | null;
 }
 
 /**
@@ -173,14 +176,16 @@ export async function createPurchaseAction(input: {
       });
 
       // Auto-crear lote FIFO para trazabilidad. Fail-soft si la tabla no
-      // está migrada todavía. lot_code = nº de albarán para identificarlo
-      // físicamente con el papel que viene con la mercancía.
+      // está migrada todavía. lot_code preferentemente el del proveedor
+      // (línea); si no se rellenó, usamos el nº de albarán.
       try {
         await admin.from("stock_lots").insert({
           company_id: session.company_id,
           product_id: it.product_id,
           warehouse_id: input.warehouse_id,
-          lot_code: input.invoice_number.trim() || null,
+          lot_code:
+            (it.lot_code?.trim() || null) ??
+            (input.invoice_number.trim() || null),
           received_at: new Date(input.invoice_date + "T12:00:00").toISOString(),
           initial_quantity: it.quantity,
           remaining_quantity: it.quantity,

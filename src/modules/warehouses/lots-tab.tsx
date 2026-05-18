@@ -109,14 +109,6 @@ export function LotsTab({ warehouseId, lots, products, canManage }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs text-blue-900">
-        <strong className="font-bold">FIFO automático.</strong> Cuando se hace
-        una salida (instalación, traspaso, ajuste) el sistema consume el lote
-        más antiguo primero. No hay caducidad — los equipos de agua no caducan
-        pero conviene rotar el stock más viejo. Si has registrado una compra
-        en la pestaña «Compras», el lote se crea automáticamente.
-      </div>
-
       {canManage && (
         <div className="flex justify-end">
           <Button onClick={() => setOpen(true)} size="sm" className="gap-2">

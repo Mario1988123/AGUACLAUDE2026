@@ -55,11 +55,19 @@ export default async function AlmacenesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            🧠 Alertas inteligentes
+          <CardTitle className="flex items-center gap-2 flex-wrap">
+            <span>🧠 Alertas inteligentes</span>
             {alerts.length > 0 && (
-              <Badge variant="destructive">{alerts.length}</Badge>
+              <Badge variant="destructive">{alerts.length} stock</Badge>
             )}
+            {(() => {
+              const pendingLoads = requests.filter(
+                (r) => r.status !== "delivered" && r.status !== "cancelled",
+              ).length;
+              return pendingLoads > 0 ? (
+                <Badge variant="warning">{pendingLoads} cargas pendientes</Badge>
+              ) : null;
+            })()}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -79,6 +87,72 @@ export default async function AlmacenesPage() {
         </CardHeader>
         <CardContent>
           <WarehousesManager warehouses={warehouses} teamMembers={team} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              Solicitudes de carga
+              {(() => {
+                const pendingCount = requests.filter(
+                  (r) => r.status !== "delivered" && r.status !== "cancelled",
+                ).length;
+                return pendingCount > 0 ? (
+                  <Badge variant="warning">{pendingCount} pendientes</Badge>
+                ) : (
+                  <span className="text-xs font-normal text-muted-foreground">
+                    {requests.length} total
+                  </span>
+                );
+              })()}
+            </CardTitle>
+            <CreateLoadingRequestButton
+              warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, kind: w.kind }))}
+              products={products.map((p) => ({ id: p.id, name: p.name }))}
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          {requests.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Sin solicitudes. El sistema genera sugerencias automáticas cada
+              noche según las instalaciones agendadas para mañana.
+            </p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="py-2 text-left">Origen → Destino</th>
+                  <th className="py-2 text-left">Para</th>
+                  <th className="py-2 text-left">Estado</th>
+                  <th className="py-2 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td className="py-2">
+                      {whMap.get(r.source_warehouse_id) ?? "?"} →{" "}
+                      {whMap.get(r.destination_warehouse_id) ?? "?"}
+                    </td>
+                    <td className="py-2 text-xs">{r.needed_for ?? "—"}</td>
+                    <td className="py-2">
+                      <Badge variant={r.status === "delivered" ? "success" : "secondary"}>
+                        {STATUS_LABEL_LR[r.status] ?? r.status}
+                      </Badge>
+                    </td>
+                    <td className="py-2 text-right">
+                      {r.status !== "delivered" && r.status !== "cancelled" && (
+                        <DeliverLoadingRequestButton id={r.id} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </CardContent>
       </Card>
 
@@ -128,55 +202,6 @@ export default async function AlmacenesPage() {
         </CardHeader>
         <CardContent>
           <StockSummaryCards data={stockSummary} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Solicitudes de carga ({requests.length})</CardTitle>
-            <CreateLoadingRequestButton
-              warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, kind: w.kind }))}
-              products={products.map((p) => ({ id: p.id, name: p.name }))}
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {requests.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sin solicitudes.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Origen → Destino</th>
-                  <th className="py-2 text-left">Para</th>
-                  <th className="py-2 text-left">Estado</th>
-                  <th className="py-2 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {requests.map((r) => (
-                  <tr key={r.id}>
-                    <td className="py-2">
-                      {whMap.get(r.source_warehouse_id) ?? "?"} →{" "}
-                      {whMap.get(r.destination_warehouse_id) ?? "?"}
-                    </td>
-                    <td className="py-2 text-xs">{r.needed_for ?? "—"}</td>
-                    <td className="py-2">
-                      <Badge variant={r.status === "delivered" ? "success" : "secondary"}>
-                        {STATUS_LABEL_LR[r.status] ?? r.status}
-                      </Badge>
-                    </td>
-                    <td className="py-2 text-right">
-                      {r.status !== "delivered" && r.status !== "cancelled" && (
-                        <DeliverLoadingRequestButton id={r.id} />
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </CardContent>
       </Card>
     </div>

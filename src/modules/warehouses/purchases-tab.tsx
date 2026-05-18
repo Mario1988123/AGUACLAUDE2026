@@ -270,6 +270,9 @@ interface DraftLine {
   product_id: string;
   quantity: string;
   unit_cost: string; // €
+  /** Código de lote del proveedor (opcional). Si se deja vacío, se usa
+   *  el nº de albarán como lot_code en stock_lots. */
+  lot_code: string;
 }
 
 function NewPurchaseForm({
@@ -291,14 +294,17 @@ function NewPurchaseForm({
   );
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<DraftLine[]>([
-    { product_id: "", quantity: "1", unit_cost: "" },
+    { product_id: "", quantity: "1", unit_cost: "", lot_code: "" },
   ]);
 
   function setLine(idx: number, patch: Partial<DraftLine>) {
     setLines((arr) => arr.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
   }
   function addLine() {
-    setLines((arr) => [...arr, { product_id: "", quantity: "1", unit_cost: "" }]);
+    setLines((arr) => [
+      ...arr,
+      { product_id: "", quantity: "1", unit_cost: "", lot_code: "" },
+    ]);
   }
   function removeLine(idx: number) {
     setLines((arr) => arr.filter((_, i) => i !== idx));
@@ -334,6 +340,7 @@ function NewPurchaseForm({
         unit_cost_cents: Math.round(
           Number((l.unit_cost ?? "0").replace(",", ".")) * 100,
         ),
+        lot_code: l.lot_code.trim() || null,
       }));
     if (items.length === 0) {
       notify.warning("Añade al menos una línea válida");
@@ -408,7 +415,7 @@ function NewPurchaseForm({
           {lines.map((l, idx) => (
             <div
               key={idx}
-              className="grid gap-2 sm:grid-cols-[1fr_90px_110px_auto] items-end rounded-lg border bg-card p-2"
+              className="grid gap-2 sm:grid-cols-[1fr_80px_100px_120px_auto] items-end rounded-lg border bg-card p-2"
             >
               <div className="space-y-1">
                 <Label className="text-xs">Producto</Label>
@@ -444,6 +451,17 @@ function NewPurchaseForm({
                   value={l.unit_cost}
                   onChange={(e) => setLine(idx, { unit_cost: e.target.value })}
                   className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs" title="Si se deja vacío se usa el nº de albarán como lot_code.">
+                  Nº lote
+                </Label>
+                <Input
+                  value={l.lot_code}
+                  onChange={(e) => setLine(idx, { lot_code: e.target.value })}
+                  placeholder="Opcional"
+                  className="h-9 font-mono text-xs"
                 />
               </div>
               <Button

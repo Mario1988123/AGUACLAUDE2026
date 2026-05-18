@@ -1041,7 +1041,55 @@ function ReservationsTab({
   );
 }
 
+// Tipos considerados entrada vs salida. Las transferencias se incluyen
+// en ambos según la dirección (transfer_in es entrada, transfer_out salida).
+const INBOUND_TYPES = new Set([
+  "inbound",
+  "transfer_in",
+  "return",
+  "adjustment_plus",
+]);
+const OUTBOUND_TYPES = new Set([
+  "outbound_install",
+  "outbound_trial",
+  "outbound_maintenance",
+  "outbound_return_supplier",
+  "transfer_out",
+  "adjustment_minus",
+]);
+
 function HistoryTab({ movements }: { movements: StockMovementRow[] }) {
+  const [direction, setDirection] = useState<"all" | "in" | "out">("all");
+  const [productId, setProductId] = useState<string>("");
+
+  // Lista de productos únicos (para el select) — ordenados alfabéticamente.
+  const productOptions = (() => {
+    const map = new Map<string, string>();
+    for (const m of movements) {
+      if (m.product_id && !map.has(m.product_id)) {
+        map.set(m.product_id, m.product_name ?? "Producto");
+      }
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  })();
+
+  const filtered = movements.filter((m) => {
+    if (productId && m.product_id !== productId) return false;
+    if (direction === "in" && !INBOUND_TYPES.has(m.movement_type)) return false;
+    if (direction === "out" && !OUTBOUND_TYPES.has(m.movement_type)) return false;
+    return true;
+  });
+
+  // Totales del bloque filtrado: nº movimientos + unidades sumadas (in - out).
+  const totalIn = filtered
+    .filter((m) => INBOUND_TYPES.has(m.movement_type))
+    .reduce((s, m) => s + m.quantity, 0);
+  const totalOut = filtered
+    .filter((m) => OUTBOUND_TYPES.has(m.movement_type))
+    .reduce((s, m) => s + m.quantity, 0);
+
   if (movements.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
@@ -1049,45 +1097,133 @@ function HistoryTab({ movements }: { movements: StockMovementRow[] }) {
       </div>
     );
   }
+
   return (
-    <div className="overflow-hidden rounded-xl border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-          <tr>
-            <th className="px-4 py-2 text-left">Fecha</th>
-            <th className="px-4 py-2 text-left">Tipo</th>
-            <th className="px-4 py-2 text-left">Producto</th>
-            <th className="px-4 py-2 text-right">Cant.</th>
-            <th className="px-4 py-2 text-left">Detalle</th>
-            <th className="px-4 py-2 text-left">Usuario</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {movements.map((m) => (
-            <tr key={m.id}>
-              <td className="px-4 py-2 text-xs text-muted-foreground tabular-nums">
-                {new Date(m.performed_at).toLocaleString("es-ES")}
-              </td>
-              <td className="px-4 py-2">
-                <Badge variant={MOVEMENT_VARIANT[m.movement_type] ?? "default"}>
-                  {MOVEMENT_LABEL[m.movement_type] ?? m.movement_type}
-                </Badge>
-              </td>
-              <td className="px-4 py-2">{m.product_name}</td>
-              <td className="px-4 py-2 text-right tabular-nums font-bold">
-                {m.quantity}
-              </td>
-              <td className="px-4 py-2 text-xs text-muted-foreground">
-                {m.destination_warehouse_name && (
-                  <>→ {m.destination_warehouse_name} · </>
-                )}
-                {m.notes}
-              </td>
-              <td className="px-4 py-2 text-xs">{m.performed_by_name ?? "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
+        <div className="space-y-1">
+          <Label className="text-xs uppercase text-muted-foreground">Tipo</Label>
+          <div className="flex rounded-xl border border-input bg-background overflow-hidden">
+            {(
+              [
+                { v: "all", label: "Todos" },
+                { v: "in", label: "Entradas" },
+                { v: "out", label: "Salidas" },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.v}
+                type="button"
+                onClick={() => setDirection(o.v)}
+                className={`h-9 px-3 text-xs font-semibold transition-colors ${
+                  direction === o.v
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1 min-w-[200px]">
+          <Label className="text-xs uppercase text-muted-foreground">Producto</Label>
+          <select
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos ({productOptions.length})</option>
+            {productOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        {(direction !== "all" || productId) && (
+          <button
+            type="button"
+            onClick={() => {
+              setDirection("all");
+              setProductId("");
+            }}
+            className="text-xs text-muted-foreground hover:underline"
+          >
+            Limpiar
+          </button>
+        )}
+        <div className="ml-auto rounded-xl bg-muted/40 px-3 py-2 text-xs">
+          <span className="font-bold tabular-nums">{filtered.length}</span> mov ·
+          {" "}
+          <span className="font-bold tabular-nums text-emerald-700">
+            +{totalIn}
+          </span>{" "}
+          / {" "}
+          <span className="font-bold tabular-nums text-red-700">
+            −{totalOut}
+          </span>{" "}
+          <span className="text-muted-foreground">
+            (neto {totalIn - totalOut >= 0 ? "+" : ""}
+            {totalIn - totalOut})
+          </span>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+          No hay movimientos para esos filtros.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2 text-left">Fecha</th>
+                <th className="px-4 py-2 text-left">Tipo</th>
+                <th className="px-4 py-2 text-left">Producto</th>
+                <th className="px-4 py-2 text-right">Cant.</th>
+                <th className="px-4 py-2 text-left">Detalle</th>
+                <th className="px-4 py-2 text-left">Usuario</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {filtered.map((m) => (
+                <tr key={m.id}>
+                  <td className="px-4 py-2 text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                    {new Date(m.performed_at).toLocaleString("es-ES")}
+                  </td>
+                  <td className="px-4 py-2">
+                    <Badge variant={MOVEMENT_VARIANT[m.movement_type] ?? "default"}>
+                      {MOVEMENT_LABEL[m.movement_type] ?? m.movement_type}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-2">{m.product_name}</td>
+                  <td
+                    className={`px-4 py-2 text-right tabular-nums font-bold ${
+                      INBOUND_TYPES.has(m.movement_type)
+                        ? "text-emerald-700"
+                        : OUTBOUND_TYPES.has(m.movement_type)
+                          ? "text-red-700"
+                          : ""
+                    }`}
+                  >
+                    {INBOUND_TYPES.has(m.movement_type) ? "+" : OUTBOUND_TYPES.has(m.movement_type) ? "−" : ""}
+                    {m.quantity}
+                  </td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">
+                    {m.destination_warehouse_name && (
+                      <>→ {m.destination_warehouse_name} · </>
+                    )}
+                    {m.notes}
+                  </td>
+                  <td className="px-4 py-2 text-xs">{m.performed_by_name ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
