@@ -6,6 +6,10 @@ import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PROPOSAL_STATUS } from "@/modules/proposals/schemas";
 import { ProposalRowActions } from "@/modules/proposals/row-actions";
 import { formatDateES } from "@/shared/lib/format-date";
+import {
+  ProposalSmartAlerts,
+  getProposalAlerts,
+} from "@/modules/proposals/smart-alerts";
 
 const PROP_TONE: Record<
   string,
@@ -49,7 +53,10 @@ export default async function PropuestasPage({
 }) {
   const sp = await searchParams;
   const status = PROPOSAL_STATUS.includes(sp.status as never) ? sp.status : undefined;
-  const proposals = await listProposals({ status });
+  const [proposals, alerts] = await Promise.all([
+    listProposals({ status }),
+    getProposalAlerts().catch(() => null),
+  ]);
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -63,6 +70,8 @@ export default async function PropuestasPage({
           </Link>
         </Button>
       </div>
+
+      {alerts && <ProposalSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">

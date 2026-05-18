@@ -4,6 +4,10 @@ import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
 import { STATUS_LABEL, PLAN_TYPE_LABEL, CONTRACT_STATUS } from "@/modules/contracts/schemas";
 import { Pagination } from "@/shared/components/pagination";
+import {
+  ContractSmartAlerts,
+  getContractAlerts,
+} from "@/modules/contracts/smart-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -37,12 +41,15 @@ export default async function ContratosPage({
   const planType = sp.plan === "cash" || sp.plan === "renting" || sp.plan === "rental" ? sp.plan : undefined;
   const page = Math.max(1, Number(sp.page ?? 1));
   const offset = (page - 1) * PAGE_SIZE;
-  const contractsAll = await listContracts({
-    status,
-    plan_type: planType,
-    limit: PAGE_SIZE + 1,
-    offset,
-  });
+  const [contractsAll, alerts] = await Promise.all([
+    listContracts({
+      status,
+      plan_type: planType,
+      limit: PAGE_SIZE + 1,
+      offset,
+    }),
+    getContractAlerts().catch(() => null),
+  ]);
   const hasMore = contractsAll.length > PAGE_SIZE;
   const contracts = contractsAll.slice(0, PAGE_SIZE);
 
@@ -61,6 +68,8 @@ export default async function ContratosPage({
           ⬇ Exportar CSV
         </Link>
       </div>
+
+      {alerts && <ContractSmartAlerts alerts={alerts} />}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">
