@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -9,6 +10,13 @@ import {
   assignFinancierToContractAction,
   clearFinancierFromContractAction,
 } from "./financier-assign-actions";
+
+function eur(cents: number): string {
+  return new Intl.NumberFormat("es-ES", {
+    style: "currency",
+    currency: "EUR",
+  }).format(cents / 100);
+}
 
 export interface FinancierForAssign {
   id: string;
@@ -107,6 +115,33 @@ export function ContractFinancierAssign({
   const reserveCents = selected?.reserve_pct
     ? Math.round(paymentCents * (selected.reserve_pct / 100))
     : 0;
+
+  // Cálculos económicos derivados (transparencia para el admin):
+  //   total_cuotas = lo que cobra la empresa al cliente durante todo el plazo
+  //   margen_empresa = capital cobrado de la financiera - reserva - residual
+  //   intereses_financiera = total_cuotas - capital (lo que la financiera "gana")
+  const totalCuotasClienteCents =
+    monthlyCents != null && termMonths ? monthlyCents * termMonths : 0;
+  const margenEmpresaCents = paymentCents - reserveCents - residualCents;
+  const interesesFinancieraCents = totalCuotasClienteCents - paymentCents;
+
+  // Detección de coeficiente sospechoso. En renting real, capital sugerido
+  // suele ser entre 60% y 120% del total de cuotas que cobrará el cliente.
+  // Si se sale mucho de ese rango, el coeficiente probablemente está mal
+  // configurado para ese plazo.
+  const coefRatio =
+    totalCuotasClienteCents > 0 && suggestedPaymentCents > 0
+      ? suggestedPaymentCents / totalCuotasClienteCents
+      : null;
+  const coefSospechoso = coefRatio != null && (coefRatio > 1.3 || coefRatio < 0.5);
+
+  // Aviso si el capital introducido por admin difiere mucho del sugerido
+  // (>50% de desviación). Útil cuando admin se equivoca al teclear.
+  const desviacionVsSugerido =
+    paymentCents > 0 && suggestedPaymentCents > 0
+      ? Math.abs(paymentCents - suggestedPaymentCents) / suggestedPaymentCents
+      : 0;
+  const capitalDispar = desviacionVsSugerido > 0.5;
 
   if (planType !== "renting" && planType !== "rental") {
     return (
@@ -241,6 +276,31 @@ export function ContractFinancierAssign({
         </div>
       </div>
 
+      {/* Resumen contrato (read-only) — para que admin vea con qué juega */}
+      {monthlyCents != null && termMonths && (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 text-xs">
+          <div className="font-bold text-blue-900">Datos del contrato</div>
+          <div className="mt-1 grid gap-1 sm:grid-cols-3">
+            <div>
+              <span className="text-muted-foreground">Cuota cliente/mes:</span>{" "}
+              <strong className="tabular-nums">{eur(monthlyCents)}</strong>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Plazo:</span>{" "}
+              <strong>{termMonths} meses</strong>
+            </div>
+            <div>
+              <span className="text-muted-foreground">
+                Total cuotas cliente:
+              </span>{" "}
+              <strong className="tabular-nums">
+                {eur(totalCuotasClienteCents)}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selected && (
         <div className="space-y-3 rounded-xl border-2 border-purple-200 bg-purple-50/40 p-3">
           {coefForTerm == null ? (
@@ -250,24 +310,52 @@ export function ContractFinancierAssign({
               en /configuracion/financieras o usa otro plazo.
             </div>
           ) : (
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                Coeficiente {termMonths}m:{" "}
-                <span className="font-mono font-bold text-foreground">
-                  {coefForTerm}
+            <>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Coeficiente {termMonths}m:{" "}
+                  <span className="font-mono font-bold text-foreground">
+                    {coefForTerm}
+                  </span>
                 </span>
-              </span>
-              {monthlyCents != null && suggestedPaymentCents > 0 && (
-                <button
-                  type="button"
-                  className="rounded-md border border-purple-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-purple-900 hover:bg-purple-50"
-                  onClick={applySuggestion}
-                >
-                  Aplicar sugerido (
-                  {(suggestedPaymentCents / 100).toFixed(2)} €)
-                </button>
+                {monthlyCents != null && suggestedPaymentCents > 0 && (
+                  <button
+                    type="button"
+                    className="rounded-md border border-purple-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-purple-900 hover:bg-purple-50"
+                    onClick={applySuggestion}
+                  >
+                    Aplicar sugerido ({eur(suggestedPaymentCents)})
+                  </button>
+                )}
+              </div>
+              {coefSospechoso && (
+                <div className="flex items-start gap-2 rounded border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <strong>El coeficiente parece inconsistente para {termMonths} meses.</strong>
+                    {coefRatio != null && coefRatio > 1.3 && (
+                      <> El capital sugerido ({eur(suggestedPaymentCents)})
+                      supera el total de cuotas del cliente ({eur(totalCuotasClienteCents)}) — la financiera te
+                      pagaría más de lo que cobrarás al cliente, lo cual es
+                      poco habitual.</>
+                    )}
+                    {coefRatio != null && coefRatio < 0.5 && (
+                      <> El capital sugerido ({eur(suggestedPaymentCents)})
+                      es muy inferior al total de cuotas del cliente ({eur(totalCuotasClienteCents)}) — implicaría
+                      una comisión negativa enorme.</>
+                    )}{" "}
+                    Revisa el coeficiente en{" "}
+                    <a
+                      href="/configuracion/financieras"
+                      className="font-bold underline"
+                    >
+                      /configuracion/financieras
+                    </a>
+                    .
+                  </div>
+                </div>
               )}
-            </div>
+            </>
           )}
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -283,41 +371,56 @@ export function ContractFinancierAssign({
                 onChange={(e) => setPaymentEuros(e.target.value)}
               />
               <p className="text-[11px] text-muted-foreground">
-                Importe que confirma la financiera tras scoring. Sugerido =
-                cuota cliente / coeficiente.
+                Importe que la financiera ingresa a la empresa tras aceptar
+                la operación. Sugerido = cuota cliente / coeficiente.
               </p>
-            </div>
-            <div className="space-y-1 rounded-lg bg-white/70 p-2 text-xs">
-              {monthlyCents != null && (
-                <div>
-                  <span className="text-muted-foreground">
-                    Cuota cliente/mes:
-                  </span>{" "}
-                  <strong className="tabular-nums">
-                    {(monthlyCents / 100).toFixed(2)} €
-                  </strong>
+              {capitalDispar && (
+                <div className="flex items-start gap-1.5 rounded border border-amber-300 bg-amber-50 p-1.5 text-[11px] text-amber-900">
+                  <Info className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    El valor introducido difiere{" "}
+                    {Math.round(desviacionVsSugerido * 100)}% del sugerido
+                    ({eur(suggestedPaymentCents)}). Verifica que es correcto.
+                  </span>
                 </div>
               )}
+            </div>
+            <div className="space-y-1 rounded-lg bg-white/70 p-2 text-xs">
+              <div className="font-bold text-purple-900">
+                Desglose económico
+              </div>
               {selected.kind === "renting_strict" &&
                 selected.residual_pct != null && (
-                  <div>
-                    <span className="text-muted-foreground">
-                      Residual ({selected.residual_pct}%):
-                    </span>{" "}
-                    <strong className="tabular-nums">
-                      {(residualCents / 100).toFixed(2)} €
-                    </strong>
-                  </div>
+                  <Row
+                    label={`Residual (${selected.residual_pct}%)`}
+                    value={eur(residualCents)}
+                    muted
+                  />
                 )}
               {selected.reserve_pct != null && selected.reserve_pct > 0 && (
-                <div>
-                  <span className="text-muted-foreground">
-                    Reserva ({selected.reserve_pct}%):
-                  </span>{" "}
-                  <strong className="tabular-nums">
-                    {(reserveCents / 100).toFixed(2)} €
-                  </strong>
-                </div>
+                <Row
+                  label={`Reserva (${selected.reserve_pct}%)`}
+                  value={eur(reserveCents)}
+                  muted
+                />
+              )}
+              {paymentCents > 0 && (
+                <>
+                  <Row
+                    label="Margen neto empresa"
+                    value={eur(margenEmpresaCents)}
+                    strong
+                    color={margenEmpresaCents >= 0 ? "emerald" : "red"}
+                  />
+                  {totalCuotasClienteCents > 0 && (
+                    <Row
+                      label="Intereses financiera"
+                      value={eur(interesesFinancieraCents)}
+                      muted
+                      title={`Diferencia entre lo que cobra al cliente (${eur(totalCuotasClienteCents)}) y lo que paga a la empresa (${eur(paymentCents)})`}
+                    />
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -343,6 +446,41 @@ export function ContractFinancierAssign({
               : "Asignar financiera"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  muted = false,
+  strong = false,
+  color,
+  title,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+  strong?: boolean;
+  color?: "emerald" | "red";
+  title?: string;
+}) {
+  const colorCls =
+    color === "emerald"
+      ? "text-emerald-700"
+      : color === "red"
+        ? "text-red-700"
+        : "";
+  return (
+    <div className="flex items-baseline justify-between gap-2" title={title}>
+      <span className={muted ? "text-muted-foreground" : "text-foreground"}>
+        {label}
+      </span>
+      <span
+        className={`tabular-nums ${strong ? "font-bold" : ""} ${colorCls}`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
