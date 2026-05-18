@@ -11,6 +11,11 @@ import {
 } from "@/modules/maintenance-plans/contracts-table";
 import { requireSession } from "@/shared/lib/auth/session";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
+import {
+  MaintenanceSmartAlerts,
+  getMaintenanceAlerts,
+} from "@/modules/maintenance/smart-alerts";
+import { listInstallers } from "@/modules/agenda/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +57,12 @@ function periodToRange(period: string): { fromDate?: string; toDate?: string } {
 export default async function MantenimientosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; period?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    period?: string;
+    technician?: string;
+    kind?: string;
+  }>;
 }) {
   const session = await requireSession();
   requireModuleAccess(session, [
@@ -64,13 +74,59 @@ export default async function MantenimientosPage({
   const sp = await searchParams;
   const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const period = sp.period && Object.prototype.hasOwnProperty.call(PERIOD_OPTIONS, sp.period) ? sp.period : "";
+  const technicianFilter = sp.technician || undefined;
+  const kindFilter =
+    sp.kind === "contracted" || sp.kind === "one_off" || sp.kind === "warranty"
+      ? sp.kind
+      : undefined;
   const { fromDate, toDate } = periodToRange(period);
-  const [jobs, contracts] = await Promise.all([
+  const [allJobs, contracts, alerts, technicians] = await Promise.all([
     listMaintenance({ status, fromDate, toDate }),
     listMaintenanceContracts().catch(() => []),
+    getMaintenanceAlerts().catch(() => ({
+      overdue: 0,
+      unassigned_next_7d: 0,
+      low_nps_30d: 0,
+      active_contracts_without_job: 0,
+    })),
+    listInstallers().catch(() => []),
   ]);
+  // Filtros adicionales en cliente (no rompemos la signatura existente de listMaintenance).
+  const jobs = allJobs.filter((j) => {
+    if (technicianFilter === "unassigned" && j.technician_user_id) return false;
+    if (technicianFilter && technicianFilter !== "unassigned" && j.technician_user_id !== technicianFilter) {
+      return false;
+    }
+    if (kindFilter && j.kind !== kindFilter) return false;
+    return true;
+  });
   const isAdmin =
     session.is_superadmin || session.roles.includes("company_admin");
+
+  // KPIs cabecera
+  const completedThisMonth = jobs.filter((j) => {
+    if (j.status !== "completed" || !j.completed_at) return false;
+    const d = new Date(j.completed_at);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+  const scheduledNext7 = jobs.filter((j) => {
+    if (j.status !== "scheduled" || !j.scheduled_at) return false;
+    const d = new Date(j.scheduled_at).getTime();
+    const now = Date.now();
+    return d >= now && d <= now + 7 * 86400000;
+  }).length;
+  const totalChargedThisMonth = jobs.reduce((s, j) => {
+    if (
+      j.status === "completed" &&
+      j.is_charged &&
+      j.completed_at &&
+      new Date(j.completed_at).getMonth() === new Date().getMonth()
+    ) {
+      return s + (j.charge_cents ?? 0);
+    }
+    return s;
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -79,6 +135,26 @@ export default async function MantenimientosPage({
         <p className="text-sm text-muted-foreground">
           {contracts.length} contratos · {jobs.length} trabajos
         </p>
+      </div>
+
+      <MaintenanceSmartAlerts alerts={alerts} />
+
+      {/* KPIs */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-xs uppercase text-muted-foreground">Completados este mes</div>
+          <div className="mt-1 text-3xl font-extrabold tabular-nums">{completedThisMonth}</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-xs uppercase text-muted-foreground">Próximos 7 días</div>
+          <div className="mt-1 text-3xl font-extrabold tabular-nums">{scheduledNext7}</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4">
+          <div className="text-xs uppercase text-muted-foreground">Cobrado este mes</div>
+          <div className="mt-1 text-3xl font-extrabold tabular-nums">
+            {new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(totalChargedThisMonth / 100)}
+          </div>
+        </div>
       </div>
 
       <Card>
@@ -123,13 +199,42 @@ export default async function MantenimientosPage({
             ))}
           </select>
         </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Técnico</label>
+          <select
+            name="technician"
+            defaultValue={technicianFilter ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            <option value="unassigned">— Sin asignar —</option>
+            {technicians.map((t) => (
+              <option key={t.user_id} value={t.user_id}>
+                {t.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs uppercase text-muted-foreground">Tipo</label>
+          <select
+            name="kind"
+            defaultValue={kindFilter ?? ""}
+            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          >
+            <option value="">Todos</option>
+            <option value="contracted">Contratado</option>
+            <option value="one_off">Puntual</option>
+            <option value="warranty">Garantía</option>
+          </select>
+        </div>
         <button
           type="submit"
           className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Aplicar
         </button>
-        {(status || period) && (
+        {(status || period || technicianFilter || kindFilter) && (
           <Link href="/mantenimientos" className="text-sm text-muted-foreground hover:underline">
             Limpiar
           </Link>
