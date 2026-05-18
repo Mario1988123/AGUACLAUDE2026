@@ -9,10 +9,18 @@ import {
   CalendarPlus,
   Home,
   Ban,
+  History,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/shared/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -27,8 +35,9 @@ import {
 } from "./rental-lifecycle-actions";
 import { cancelContractAction } from "./actions";
 import { FinalizeRentalDialog } from "./finalize-rental-modal";
+import { PaymentHistoryDialog } from "./payment-history-dialog";
 
-type DialogKind = null | "pause" | "extend" | "cancel" | "finalize";
+type DialogKind = null | "pause" | "extend" | "cancel" | "finalize" | "history";
 
 interface Props {
   contractId: string;
@@ -44,17 +53,14 @@ export function RentalActionsMenu({
   canCancel,
 }: Props) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [openMenu, setOpenMenu] = useState(false);
+  const [, startTransition] = useTransition();
   const [dialog, setDialog] = useState<DialogKind>(null);
 
   function close() {
     setDialog(null);
-    setOpenMenu(false);
   }
 
   function resume() {
-    setOpenMenu(false);
     startTransition(async () => {
       const r = await resumeRentalAction(contractId);
       if (!r.ok) {
@@ -67,61 +73,56 @@ export function RentalActionsMenu({
   }
 
   return (
-    <div className="relative inline-block">
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => setOpenMenu((v) => !v)}
-        disabled={pending}
-        className="gap-1"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
-      {openMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-20"
-            onClick={() => setOpenMenu(false)}
-            aria-hidden="true"
-          />
-          <div className="absolute right-0 top-full z-30 mt-1 min-w-[200px] rounded-xl border border-border bg-card p-1 shadow-lg">
-            {isPaused ? (
-              <MenuItem icon={<Play className="h-4 w-4" />} onClick={resume}>
-                Reanudar alquiler
-              </MenuItem>
-            ) : (
-              <MenuItem
-                icon={<Pause className="h-4 w-4" />}
-                onClick={() => setDialog("pause")}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="sm" variant="outline" className="gap-1">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[220px]">
+          <DropdownMenuItem onSelect={() => setDialog("history")}>
+            <History className="h-4 w-4" />
+            Ver historial de cobros
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {isPaused ? (
+            <DropdownMenuItem onSelect={resume}>
+              <Play className="h-4 w-4" />
+              Reanudar alquiler
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onSelect={() => setDialog("pause")}>
+              <Pause className="h-4 w-4" />
+              Pausar alquiler
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => setDialog("extend")}>
+            <CalendarPlus className="h-4 w-4" />
+            Prorrogar
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setDialog("finalize")}>
+            <Home className="h-4 w-4" />
+            Finalizar contrato
+          </DropdownMenuItem>
+          {canCancel && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onSelect={() => setDialog("cancel")}
+                variant="destructive"
               >
-                Pausar alquiler
-              </MenuItem>
-            )}
-            <MenuItem
-              icon={<CalendarPlus className="h-4 w-4" />}
-              onClick={() => setDialog("extend")}
-            >
-              Prorrogar
-            </MenuItem>
-            <MenuItem
-              icon={<Home className="h-4 w-4" />}
-              onClick={() => setDialog("finalize")}
-            >
-              Finalizar contrato
-            </MenuItem>
-            {canCancel && (
-              <MenuItem
-                icon={<Ban className="h-4 w-4 text-destructive" />}
-                onClick={() => setDialog("cancel")}
-                destructive
-              >
+                <Ban className="h-4 w-4" />
                 Cancelar contrato
-              </MenuItem>
-            )}
-          </div>
-        </>
-      )}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
 
+      {dialog === "history" && (
+        <PaymentHistoryDialog contractId={contractId} onClose={close} />
+      )}
       {dialog === "pause" && (
         <PauseDialog
           contractId={contractId}
@@ -162,34 +163,7 @@ export function RentalActionsMenu({
           }}
         />
       )}
-    </div>
-  );
-}
-
-function MenuItem({
-  icon,
-  children,
-  onClick,
-  destructive = false,
-}: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  onClick: () => void;
-  destructive?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-left transition ${
-        destructive
-          ? "text-destructive hover:bg-destructive/10"
-          : "hover:bg-muted"
-      }`}
-    >
-      {icon}
-      {children}
-    </button>
+    </>
   );
 }
 
@@ -412,4 +386,3 @@ function CancelDialog({
     </Dialog>
   );
 }
-
