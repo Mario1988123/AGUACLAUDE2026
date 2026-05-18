@@ -2,14 +2,21 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { BackButton } from "@/shared/components/back-button";
+import { listTagsCatalog } from "@/modules/customers/tags-actions";
+import { TagsCatalogManager } from "@/modules/customers/tags-catalog-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConfigClientesPage() {
   const session = await requireSession();
-  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (!isUpper) {
     redirect("/dashboard");
   }
+  const tags = await listTagsCatalog().catch(() => []);
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-3">
@@ -21,6 +28,19 @@ export default async function ConfigClientesPage() {
         </div>
         <BackButton href="/configuracion" />
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Etiquetas (tags) de cliente</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Etiquetas libres para clasificar clientes (VIP, conflictivo,
+            recomendador, etc.). Se asignan desde la ficha del cliente.
+          </p>
+          <TagsCatalogManager initial={tags} />
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Reglas de duplicado</CardTitle>

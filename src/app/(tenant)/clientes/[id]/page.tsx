@@ -36,6 +36,11 @@ import {
   MaintenanceHistoryCard,
   getCustomerMaintenanceHistory,
 } from "@/modules/customers/maintenance-history-card";
+import { CustomerTagsSelector } from "@/modules/customers/tags-selector";
+import {
+  listCustomerTags,
+  listTagsCatalog,
+} from "@/modules/customers/tags-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +110,10 @@ export default async function CustomerDetailPage({
   const customerConsents = await getCustomerConsents(id).catch(() => []);
   const kpis = await getCustomerKPIs(id).catch(() => null);
   const maintenanceHistory = await getCustomerMaintenanceHistory(id).catch(() => []);
+  const [tagsCatalog, tagsAssigned] = await Promise.all([
+    listTagsCatalog().catch(() => []),
+    listCustomerTags(id).catch(() => []),
+  ]);
 
   // Bandera "cliente en riesgo": incidencia abierta con prioridad
   // critical/high + al menos un contrato activo.
@@ -189,6 +198,12 @@ export default async function CustomerDetailPage({
         </div>
       )}
       {kpis && <CustomerKPIHeader kpis={kpis} />}
+
+      <CustomerTagsSelector
+        customerId={id}
+        catalog={tagsCatalog}
+        assigned={tagsAssigned}
+      />
 
       <div className="flex items-start justify-between">
         <div>
