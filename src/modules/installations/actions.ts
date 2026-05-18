@@ -879,6 +879,49 @@ async function checkStockAndNotifyIfShortInner(installationId: string): Promise<
     actor_user_id: null,
   });
 
+  // Crear/actualizar incidencia formal en installation_incidents para que
+  // aparezca en el banner rojo de /instalaciones y en la ficha. Antes solo
+  // se metía un evento — el técnico abría la ficha y veía la línea en el
+  // Timeline pero no había badge claro.
+  // Idempotente: si ya existe una incidencia abierta de tipo stock_shortage
+  // (o missing_material en versiones previas), actualizamos el `description`.
+  // Defensivo: si el CHECK constraint no incluye 'stock_shortage' todavía
+  // (migración 20260526100000 no aplicada), caemos a 'missing_material'.
+  try {
+    const { data: existing } = await admin
+      .from("installation_incidents")
+      .select("id")
+      .eq("installation_id", installationId)
+      .in("kind", ["stock_shortage", "missing_material"])
+      .is("resolved_at", null)
+      .maybeSingle();
+    if (existing) {
+      await admin
+        .from("installation_incidents")
+        .update({ description: body, kind: "stock_shortage" })
+        .eq("id", (existing as { id: string }).id);
+    } else {
+      const insRes = await admin.from("installation_incidents").insert({
+        company_id: i.company_id,
+        installation_id: installationId,
+        kind: "stock_shortage",
+        description: body,
+        reported_by: null,
+      });
+      if (insRes.error && /check constraint|installation_incidents_kind_check/i.test(insRes.error.message ?? "")) {
+        await admin.from("installation_incidents").insert({
+          company_id: i.company_id,
+          installation_id: installationId,
+          kind: "missing_material",
+          description: `[Stock insuficiente] ${body}`,
+          reported_by: null,
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[stockShortage] installation_incidents upsert:", e);
+  }
+
   // Notificar a admin y director técnico
   try {
     const { notifyByRoles } = await import("@/modules/notifications/notifier");

@@ -373,7 +373,7 @@ export async function resumeInstallationAction(installationId: string): Promise<
 
 export async function reportInstallationIncidentAction(input: {
   installation_id: string;
-  kind: "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other";
+  kind: "stock_shortage" | "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other";
   description?: string;
   pause_and_unschedule?: boolean;
 }): Promise<SimpleResult> {
@@ -386,15 +386,36 @@ export async function reportInstallationIncidentAction(input: {
     // Defensivo: tabla installation_incidents añadida en migración
     // 20260504150000. Si no está aplicada, registramos la incidencia
     // genérica en la tabla `incidents` (existe desde el inicio).
+    // El kind 'stock_shortage' se añade en migración 20260526100000; si el
+    // CHECK constraint todavía no lo incluye, mapeamos a missing_material
+    // y prefijamos la descripción.
     let inserted = false;
+    let kind: string = input.kind;
+    let description: string | null = input.description ?? null;
     try {
-      const { error } = await admin.from("installation_incidents").insert({
+      let { error } = await admin.from("installation_incidents").insert({
         company_id: session.company_id,
         installation_id: input.installation_id,
-        kind: input.kind,
-        description: input.description ?? null,
+        kind,
+        description,
         reported_by: session.user_id,
       });
+      if (
+        error &&
+        kind === "stock_shortage" &&
+        /check constraint|installation_incidents_kind_check/i.test(error.message ?? "")
+      ) {
+        kind = "missing_material";
+        description = `[Stock insuficiente] ${input.description ?? ""}`.trim();
+        const retry = await admin.from("installation_incidents").insert({
+          company_id: session.company_id,
+          installation_id: input.installation_id,
+          kind,
+          description,
+          reported_by: session.user_id,
+        });
+        error = retry.error;
+      }
       if (!error) inserted = true;
       else if (!/relation .* does not exist|schema cache/i.test(error.message ?? "")) {
         return { ok: false, error: error.message };
@@ -476,6 +497,139 @@ export async function reportInstallationIncidentAction(input: {
     }
 
     revalidatePath(`/instalaciones/${input.installation_id}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
+  }
+}
+
+type IncidentKind =
+  | "stock_shortage"
+  | "missing_material"
+  | "wrong_equipment"
+  | "broken_equipment"
+  | "customer_issue"
+  | "other";
+
+/**
+ * Marca una incidencia de instalación como resuelta. Solo admin /
+ * director técnico. Acepta tanto `installation_incidents` como
+ * `incidents` genérica (distinguidos por el campo `source`).
+ */
+export async function resolveInstallationIncidentAction(input: {
+  incident_id: string;
+  source: "installation_incidents" | "incidents";
+}): Promise<SimpleResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const isUpper =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director");
+    if (!isUpper) return { ok: false, error: "Solo admin o director técnico" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    if (input.source === "installation_incidents") {
+      // Defensivo: la columna resolved_by se añade en migración
+      // 20260526100000. Si aún no está aplicada, hacemos solo resolved_at.
+      let r = await admin
+        .from("installation_incidents")
+        .update({
+          resolved_at: new Date().toISOString(),
+          resolved_by: session.user_id,
+        })
+        .eq("id", input.incident_id);
+      if (r.error && /resolved_by/i.test(r.error.message ?? "")) {
+        r = await admin
+          .from("installation_incidents")
+          .update({ resolved_at: new Date().toISOString() })
+          .eq("id", input.incident_id);
+      }
+      if (r.error) return { ok: false, error: r.error.message };
+    } else {
+      const r = await admin
+        .from("incidents")
+        .update({
+          status: "resolved",
+          resolved_at: new Date().toISOString(),
+          resolved_by: session.user_id,
+        })
+        .eq("id", input.incident_id);
+      if (r.error) return { ok: false, error: r.error.message };
+    }
+
+    // Localizar installation_id para revalidar la ficha
+    let instId: string | null = null;
+    if (input.source === "installation_incidents") {
+      const { data } = await admin
+        .from("installation_incidents")
+        .select("installation_id")
+        .eq("id", input.incident_id)
+        .maybeSingle();
+      instId = (data as { installation_id: string | null } | null)?.installation_id ?? null;
+    } else {
+      const { data } = await admin
+        .from("incidents")
+        .select("installation_id")
+        .eq("id", input.incident_id)
+        .maybeSingle();
+      instId = (data as { installation_id: string | null } | null)?.installation_id ?? null;
+    }
+    if (instId) {
+      revalidatePath(`/instalaciones/${instId}`);
+    }
+    revalidatePath("/instalaciones");
+    revalidatePath("/dashboard");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
+  }
+}
+
+/**
+ * Re-clasifica el `kind` de una incidencia de instalación
+ * (`installation_incidents` solamente). Permite al admin corregir cuando
+ * el técnico eligió mal el motivo (p.ej. puso «equipo equivocado» pero
+ * era falta de stock).
+ */
+export async function reclassifyInstallationIncidentAction(input: {
+  incident_id: string;
+  kind: IncidentKind;
+}): Promise<SimpleResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const isUpper =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director");
+    if (!isUpper) return { ok: false, error: "Solo admin o director técnico" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const r = await admin
+      .from("installation_incidents")
+      .update({ kind: input.kind })
+      .eq("id", input.incident_id);
+    if (r.error) return { ok: false, error: r.error.message };
+
+    const { data } = await admin
+      .from("installation_incidents")
+      .select("installation_id")
+      .eq("id", input.incident_id)
+      .maybeSingle();
+    const instId = (data as { installation_id: string | null } | null)?.installation_id ?? null;
+    if (instId) {
+      revalidatePath(`/instalaciones/${instId}`);
+    }
+    revalidatePath("/instalaciones");
     return { ok: true };
   } catch (err) {
     return {

@@ -20,19 +20,12 @@ import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { BackButton } from "@/shared/components/back-button";
 import { SubjectNotificationToast } from "@/modules/notifications/subject-toast";
+import { InstallationIncidentRow } from "@/modules/installations/incident-row";
 import { listTeamMembers, listInstallers } from "@/modules/agenda/actions";
 import { ScheduleInstallationButton } from "@/modules/installations/schedule-button";
 import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-const INCIDENT_KIND_LABEL: Record<string, string> = {
-  missing_material: "Material faltante",
-  wrong_equipment: "Equipo equivocado",
-  broken_equipment: "Equipo dañado",
-  customer_issue: "Problema con el cliente",
-  other: "Otro",
-};
 
 export default async function InstallationDetailPage({
   params,
@@ -79,6 +72,11 @@ export default async function InstallationDetailPage({
   // Reasignar instalación restringido a admin de empresa (decisión usuario).
   const canReassign =
     session.is_superadmin || session.roles.includes("company_admin");
+  // Resolver / reclasificar incidencias: admin + director técnico.
+  const canResolveIncidents =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
 
   // Cargar cobros del contrato asociado para el wizard
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -365,41 +363,18 @@ export default async function InstallationDetailPage({
               </span>
             </div>
             <ul className="space-y-1.5">
-              {openIncidents.map((inc) => {
-                const label = inc.title
-                  ? inc.title
-                  : inc.kind
-                    ? INCIDENT_KIND_LABEL[inc.kind] ?? inc.kind
-                    : "Incidencia";
-                return (
-                  <li
-                    key={`${inc.source}:${inc.id}`}
-                    className="rounded-lg border border-red-200 bg-white p-2.5 text-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-red-900">{label}</div>
-                        {inc.description && (
-                          <div className="mt-0.5 text-xs text-red-800">
-                            {inc.description}
-                          </div>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-[11px] text-red-700">
-                        {new Date(inc.created_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
-                      </div>
-                    </div>
-                    {inc.source === "incidents" && (
-                      <Link
-                        href={`/incidencias/${inc.id}` as never}
-                        className="mt-1 inline-block text-xs font-bold text-red-700 underline hover:text-red-900"
-                      >
-                        Ver en módulo de incidencias →
-                      </Link>
-                    )}
-                  </li>
-                );
-              })}
+              {openIncidents.map((inc) => (
+                <InstallationIncidentRow
+                  key={`${inc.source}:${inc.id}`}
+                  id={inc.id}
+                  kind={inc.kind}
+                  title={inc.title}
+                  description={inc.description}
+                  createdAt={inc.created_at}
+                  source={inc.source}
+                  canManage={canResolveIncidents}
+                />
+              ))}
             </ul>
             <p className="text-[11px] text-red-700">
               Resuelve la incidencia antes de continuar el parte. Si el

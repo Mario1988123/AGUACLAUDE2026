@@ -111,9 +111,10 @@ const PAUSE_REASONS: Array<{ value: string; label: string }> = [
 ];
 
 const INCIDENT_KINDS: Array<{ value: string; label: string }> = [
-  { value: "missing_material", label: "Falta material" },
+  { value: "stock_shortage", label: "Stock insuficiente (no hay equipo)" },
+  { value: "missing_material", label: "Falta material auxiliar (tornillos, tubos…)" },
   { value: "wrong_equipment", label: "Equipo equivocado" },
-  { value: "broken_equipment", label: "Equipo roto" },
+  { value: "broken_equipment", label: "Equipo roto / defectuoso" },
   { value: "customer_issue", label: "Problema con el cliente" },
   { value: "other", label: "Otro" },
 ];
@@ -197,7 +198,7 @@ export function InstallationWizard(props: Props) {
 
   // Incidencia modal
   const [incidentOpen, setIncidentOpen] = useState(false);
-  const [incidentKind, setIncidentKind] = useState<string>("missing_material");
+  const [incidentKind, setIncidentKind] = useState<string>("stock_shortage");
   const [incidentDesc, setIncidentDesc] = useState("");
   const [incidentUnschedule, setIncidentUnschedule] = useState(false);
 
@@ -528,7 +529,7 @@ export function InstallationWizard(props: Props) {
     startTransition(async () => {
       const r = await reportInstallationIncidentAction({
         installation_id: installationId,
-        kind: incidentKind as "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other",
+        kind: incidentKind as "stock_shortage" | "missing_material" | "wrong_equipment" | "broken_equipment" | "customer_issue" | "other",
         description: incidentDesc || undefined,
         pause_and_unschedule: incidentUnschedule,
       });
@@ -542,7 +543,7 @@ export function InstallationWizard(props: Props) {
           : "Incidencia notificada a admin/dir. técnico",
       );
       setIncidentOpen(false);
-      setIncidentKind("missing_material");
+      setIncidentKind("stock_shortage");
       setIncidentDesc("");
       setIncidentUnschedule(false);
       if (incidentUnschedule) {
