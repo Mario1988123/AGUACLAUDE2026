@@ -476,7 +476,36 @@ export async function validateWalletEntryAction(id: string) {
   // (no usa el 'settled' interno del wallet). Sin esta propagación la
   // cartera de alquileres (que mira contract_payments) seguía mostrando
   // "Pendiente" aunque el wallet ya estuviera validado en banco.
-  if (e.contract_payment_id) {
+  //
+  // Si contract_payment_id NO está poblado pero sí hay contract_id, se
+  // intenta vincular por mejor match: contract_payment del mismo contrato
+  // con mismo importe y status pending/collected_pending_validation, el
+  // más antiguo. Esto recoge el caso de wallets pre-existentes a la
+  // migración de wallet_entries.contract_payment_id.
+  let resolvedContractPaymentId: string | null = e.contract_payment_id;
+  if (!resolvedContractPaymentId && e.contract_id) {
+    try {
+      const { data: candidates } = await admin
+        .from("contract_payments")
+        .select("id, amount_cents, status, created_at")
+        .eq("contract_id", e.contract_id)
+        .eq("amount_cents", e.amount_cents)
+        .in("status", ["pending", "collected_pending_validation"])
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const cand = (candidates as Array<{ id: string }> | null)?.[0];
+      if (cand) {
+        resolvedContractPaymentId = cand.id;
+        await admin
+          .from("wallet_entries")
+          .update({ contract_payment_id: resolvedContractPaymentId })
+          .eq("id", id);
+      }
+    } catch (err) {
+      console.error("[validateWalletEntry] backfill cp_id falló:", err);
+    }
+  }
+  if (resolvedContractPaymentId) {
     try {
       await admin
         .from("contract_payments")
@@ -486,8 +515,9 @@ export async function validateWalletEntryAction(id: string) {
           collected_by_user_id: e.collected_by_user_id ?? session.user_id,
           validated_at: new Date().toISOString(),
           validated_by_user_id: session.user_id,
+          wallet_entry_id: id,
         })
-        .eq("id", e.contract_payment_id);
+        .eq("id", resolvedContractPaymentId);
     } catch (err) {
       console.error(
         "[validateWalletEntry] sync contract_payment falló:",

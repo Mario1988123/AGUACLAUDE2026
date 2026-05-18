@@ -11,6 +11,7 @@ import { getRentalsDashboard } from "@/modules/contracts/rentals-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { RentalActionsMenu } from "@/modules/contracts/rental-actions-menu";
+import { SyncPaymentsButton } from "@/modules/wallet/sync-button";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -82,12 +83,15 @@ export default async function AlquileresPage() {
             renovaciones e impagos.
           </p>
         </div>
-        <Link
-          href="/contratos"
-          className="inline-flex h-10 items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-        >
-          ← Volver a contratos
-        </Link>
+        <div className="flex items-center gap-2">
+          {canManage && <SyncPaymentsButton />}
+          <Link
+            href="/contratos"
+            className="inline-flex h-10 items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            ← Volver a contratos
+          </Link>
+        </div>
       </div>
 
       {/* KPIs */}

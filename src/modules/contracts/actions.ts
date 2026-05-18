@@ -490,6 +490,43 @@ export async function createContractFromProposal(proposalId: string) {
       display_order: idx,
     }));
     await supabase.from("contract_items").insert(rows as never);
+
+    // Propagar flags de mantenimiento al CONTRATO (no se hizo en el insert
+    // inicial porque ps se carga después). Agregamos: maintenance_included
+    // = true si CUALQUIER item lo lleva; periodicity = del primer item con
+    // mantenimiento; months_included = duración hasta maintenance_until_date
+    // (en meses) si está informada, fallback a duration_months.
+    const itemWithMaint = ps.find((it) => it.maintenance_included);
+    if (itemWithMaint) {
+      let monthsIncluded: number | null = null;
+      if (itemWithMaint.maintenance_until_date) {
+        const until = new Date(itemWithMaint.maintenance_until_date);
+        const now = new Date();
+        monthsIncluded = Math.max(
+          1,
+          Math.round(
+            (until.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30.44),
+          ),
+        );
+      }
+      const maintenanceUpdate: Record<string, unknown> = {
+        maintenance_included: true,
+        maintenance_periodicity_months:
+          itemWithMaint.maintenance_periodicity_months ?? 12,
+        maintenance_months_included: monthsIncluded ?? durationMonths ?? 12,
+      };
+      try {
+        await supabase
+          .from("contracts")
+          .update(maintenanceUpdate)
+          .eq("id", contractId);
+      } catch (e) {
+        console.error(
+          "[createContractFromProposal] update maintenance flags falló:",
+          e,
+        );
+      }
+    }
   }
 
   // === Generar pagos del contrato según plan ===

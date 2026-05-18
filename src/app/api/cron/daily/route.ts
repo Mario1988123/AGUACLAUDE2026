@@ -1379,6 +1379,42 @@ export async function GET(req: NextRequest) {
   }
 
   // ============================================================================
+  // RECONCILE wallet_entries ↔ contract_payments (red de seguridad)
+  // ----------------------------------------------------------------------------
+  // Si un cobro avanzó por un lado y el otro lado no, el cron arregla los
+  // huecos: vincula entries sin contract_payment_id, propaga validated.
+  // ============================================================================
+  const walletReconcile = {
+    companies: 0,
+    wallet_links_repaired: 0,
+    payments_propagated: 0,
+    errors: 0,
+  };
+  try {
+    const { data: companiesAllW } = await admin
+      .from("companies")
+      .select("id")
+      .is("cancelled_at", null);
+    const { reconcileContractPaymentsForCompany } = await import(
+      "@/modules/wallet/reconcile-payments"
+    );
+    for (const c of ((companiesAllW ?? []) as Array<{ id: string }>)) {
+      walletReconcile.companies += 1;
+      try {
+        const r = await reconcileContractPaymentsForCompany(admin, c.id);
+        walletReconcile.wallet_links_repaired += r.wallet_links_repaired;
+        walletReconcile.payments_propagated += r.payments_propagated;
+        walletReconcile.errors += r.errors.length;
+      } catch (e) {
+        console.error("[cron/daily] wallet reconcile failed for", c.id, e);
+        walletReconcile.errors += 1;
+      }
+    }
+  } catch (e) {
+    console.error("[cron/daily] wallet reconcile outer failed:", e);
+  }
+
+  // ============================================================================
   // ALQUILERES PAUSADOS >30 DÍAS — mantenimiento preventivo automático
   // ----------------------------------------------------------------------------
   // Si un alquiler lleva más de 30 días pausado y NO tiene maintenance_job
@@ -1530,6 +1566,7 @@ export async function GET(req: NextRequest) {
       monthly_invoicing: monthlyInvoicing,
       sales_reconcile: salesReconcile,
       paused_maintenance: pausedMaintenance,
+      wallet_reconcile: walletReconcile,
     },
     ranAt: new Date().toISOString(),
   });

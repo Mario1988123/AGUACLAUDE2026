@@ -145,38 +145,82 @@ export async function getRentalsDashboard(): Promise<RentalsDashboard> {
   );
 
   // Pagos del contrato — el "último cobro" es el contract_payment más
-  // reciente de cualquier tipo. Las "cuotas cobradas" cuentan SOLO las
-  // mensuales con concepto "Cuota mensual" y status validated/collected.
+  // reciente. Las "cuotas cobradas" cuentan las que matchean isFee() y
+  // están en status validated/collected_pending_validation.
+  //
+  // FALLBACK: si el contract_payment está en pending pero existe un
+  // wallet_entry vinculado validated/settled, lo consideramos cobrado.
+  // Esto evita el bug "wallet validado · cartera dice pendiente" si la
+  // propagación falló por algún motivo (cobro pre-fix, migración, etc.).
   const contractIds = contracts.map((c) => c.id);
   const { data: payments } = await admin
     .from("contract_payments")
-    .select("contract_id, amount_cents, status, collected_at, created_at, concept")
+    .select(
+      "id, contract_id, amount_cents, status, collected_at, created_at, concept, wallet_entry_id",
+    )
     .in("contract_id", contractIds)
     .order("created_at", { ascending: false });
   type P = {
+    id: string;
     contract_id: string;
     amount_cents: number;
     status: string;
     collected_at: string | null;
     created_at: string;
     concept: string;
+    wallet_entry_id: string | null;
   };
+  // Cargar wallet_entries vinculados para resolver el estado real.
+  const walletEntryIds = ((payments ?? []) as P[])
+    .map((p) => p.wallet_entry_id)
+    .filter((v): v is string => !!v);
+  const walletStatusById = new Map<string, string>();
+  if (walletEntryIds.length > 0) {
+    const { data: wes } = await admin
+      .from("wallet_entries")
+      .select("id, status")
+      .in("id", walletEntryIds);
+    for (const w of ((wes ?? []) as Array<{ id: string; status: string }>)) {
+      walletStatusById.set(w.id, w.status);
+    }
+  }
+  // Mapear el status efectivo: si CP dice pending pero wallet dice
+  // validated/settled → efectivo "validated".
+  function effectiveStatus(p: P): string {
+    if (p.status === "validated") return "validated";
+    if (p.wallet_entry_id) {
+      const ws = walletStatusById.get(p.wallet_entry_id);
+      if (ws === "validated" || ws === "settled") return "validated";
+      if (ws === "collected") return "collected_pending_validation";
+    }
+    return p.status;
+  }
   const lastPaymentByContract = new Map<string, P>();
   const collectedMonthsByContract = new Map<string, number>();
   const depositCollectedByContract = new Map<string, number>();
+  // Reglas de clasificación (en ES, sobre concept):
+  //   - "Fianza" / "Devolución fianza" / "Retención fianza" → fianza
+  //   - "Instalación" / "Pago contado" → otro
+  //   - "Cuota mensual" / "1ª cuota" / "Renta" / cualquier "cuota" → cuota
+  const isDeposit = (concept: string) => /Fianza/i.test(concept);
+  const isInstall = (concept: string) =>
+    /Instalación|Pago contado/i.test(concept);
+  const isFee = (concept: string) =>
+    !isDeposit(concept) && !isInstall(concept) && /Cuota|Renta|1ª|primera/i.test(concept);
   for (const p of (payments ?? []) as P[]) {
     if (!lastPaymentByContract.has(p.contract_id)) {
       lastPaymentByContract.set(p.contract_id, p);
     }
-    const isCollected =
-      p.status === "validated" || p.status === "collected_pending_validation";
-    if (/^Cuota mensual/i.test(p.concept) && isCollected) {
+    const eff = effectiveStatus(p);
+    const isCollected = eff === "validated" || eff === "collected_pending_validation";
+    if (isFee(p.concept) && isCollected) {
       collectedMonthsByContract.set(
         p.contract_id,
         (collectedMonthsByContract.get(p.contract_id) ?? 0) + 1,
       );
     }
-    if (/^Fianza/i.test(p.concept) && isCollected) {
+    if (isDeposit(p.concept) && isCollected && p.amount_cents > 0) {
+      // Solo fianzas con importe positivo (las devoluciones tienen negativo).
       depositCollectedByContract.set(
         p.contract_id,
         (depositCollectedByContract.get(p.contract_id) ?? 0) + p.amount_cents,
@@ -257,7 +301,7 @@ export async function getRentalsDashboard(): Promise<RentalsDashboard> {
       permanence_done: permanenceDone,
       deposit_collected_cents: depositCollectedByContract.get(c.id) ?? 0,
       last_payment_at: lp ? (lp.collected_at ?? lp.created_at) : null,
-      last_payment_status: lp ? lp.status : null,
+      last_payment_status: lp ? effectiveStatus(lp) : null,
       last_payment_amount_cents: lp ? lp.amount_cents : null,
       maintenance_pending: mc.pending,
       maintenance_done: mc.done,
