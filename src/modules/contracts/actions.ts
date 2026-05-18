@@ -1033,8 +1033,9 @@ export async function markContractSigned(id: string) {
     }));
     // Antes el INSERT no comprobaba `error` y, si fallaba (enum, FK,
     // tipos…), el dashboard de objetivos quedaba en 0 sin avisar. Ahora
-    // logueamos el error para que aparezca en Vercel logs y podamos
-    // diagnosticarlo.
+    // logueamos el error y, si falla, lanzamos un reintento usando el
+    // reconcile helper (idempotente). Si tampoco va, el cron diario lo
+    // arreglará por la mañana → ya no hace falta el botón manual.
     const { error: srErr } = await admin
       .from("sales_records")
       .insert(recordRows);
@@ -1045,6 +1046,22 @@ export async function markContractSigned(id: string) {
         "rows:",
         JSON.stringify(recordRows),
       );
+      try {
+        const { reconcileSalesRecordsForCompany } = await import(
+          "@/modules/sales/reconcile"
+        );
+        const rec = await reconcileSalesRecordsForCompany(
+          admin,
+          session.company_id!,
+          { force: false },
+        );
+        console.warn(
+          "[markContractSigned] reconcile fallback:",
+          `repaired=${rec.contracts_with_missing_records} inserted=${rec.records_inserted} errors=${rec.errors.length}`,
+        );
+      } catch (e) {
+        console.error("[markContractSigned] reconcile fallback failed:", e);
+      }
     }
 
     // PUNTOS: decisión usuario 2026-05-10 — los puntos por la venta NO

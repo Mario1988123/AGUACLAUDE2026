@@ -7,10 +7,16 @@ import { notify } from "@/shared/hooks/use-toast";
 import { backfillSalesRecordsAction } from "./backfill-sales-records";
 
 /**
- * Botón para regenerar `sales_records` desde los contratos firmados.
- * Útil cuando el insert automático de `markContractSigned` se silenció
- * por algún error (enum, schema cache…) y el dashboard muestra 0 €
- * pese a tener contratos firmados.
+ * Botón "Recalcular ventas del mes" — fuerza un recompute completo de
+ * `sales_records` desde los contratos firmados.
+ *
+ * Desde 2026-05-18 NO suele hacer falta: el cron diario reconcilia
+ * automáticamente los contratos sin registros, y `markContractSigned`
+ * dispara un reintento inmediato si el insert inicial falla. Este botón
+ * es de "emergencia" — por ejemplo si tras cambios manuales en contratos
+ * los totales del dashboard quedan desfasados.
+ *
+ * Borra previos por contrato y reinserta (idempotente, seguro de repetir).
  */
 export function BackfillSalesRecordsButton() {
   const [pending, startTransition] = useTransition();

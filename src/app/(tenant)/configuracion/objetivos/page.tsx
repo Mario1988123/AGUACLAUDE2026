@@ -56,21 +56,21 @@ export default async function ObjectivesConfigPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Recalcular ventas (debug)
+            Recalcular ventas (emergencia)
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            Si en el dashboard ves <strong>0 € vendido</strong> aunque hay
-            contratos firmados, este botón regenera la tabla{" "}
-            <code>sales_records</code> a partir de los contratos firmados de
-            la empresa. Es seguro y se puede ejecutar varias veces (no
-            duplica registros).
+            ✅ <strong>Ya no suele hacer falta.</strong> El cron diario
+            reconcilia automáticamente cualquier contrato firmado sin
+            registros de venta, y el flujo de firma reintenta de inmediato
+            si el insert inicial falla.
           </p>
           <p>
-            Causa típica: el insert automático al firmar contrato fue
-            silenciado por un error transitorio (schema cache, enum) y los
-            objetivos se quedaron sin datos.
+            Usa este botón solo si tras cambios manuales en contratos los
+            totales del dashboard quedan desfasados. Borra los{" "}
+            <code>sales_records</code> previos por contrato y los reinserta
+            (idempotente, seguro de repetir).
           </p>
           <BackfillSalesRecordsButton />
         </CardContent>

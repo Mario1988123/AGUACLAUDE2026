@@ -1300,6 +1300,61 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ============================================================================
+  // RECONCILIO sales_records ↔ contracts (autorreparación silenciosa)
+  // ----------------------------------------------------------------------------
+  // Si al firmar un contrato el INSERT en sales_records falló (enum, FK, schema
+  // cache…), el dashboard de objetivos quedaba en 0 hasta que el admin pulsaba
+  // "Recalcular ventas del mes". Ahora el cron lo arregla solo: detecta los
+  // contratos signed/active SIN sales_records y los reinserta. Modo NO-force
+  // (no toca contratos que ya tienen registros). Si se reparan >0 contratos
+  // se notifica a admin para que sepa que hubo un fallo silencioso.
+  // ============================================================================
+  const salesReconcile = {
+    companies: 0,
+    contracts_repaired: 0,
+    records_inserted: 0,
+    errors: 0,
+  };
+  try {
+    const { data: companiesAll } = await admin
+      .from("companies")
+      .select("id")
+      .is("cancelled_at", null);
+    const { reconcileSalesRecordsForCompany } = await import(
+      "@/modules/sales/reconcile"
+    );
+    for (const c of (companiesAll ?? []) as Array<{ id: string }>) {
+      salesReconcile.companies += 1;
+      try {
+        const r = await reconcileSalesRecordsForCompany(admin, c.id, {
+          force: false,
+        });
+        salesReconcile.contracts_repaired += r.contracts_with_missing_records;
+        salesReconcile.records_inserted += r.records_inserted;
+        salesReconcile.errors += r.errors.length;
+        if (r.contracts_with_missing_records > 0) {
+          try {
+            await notifyByRoles(c.id, ["company_admin"], {
+              kind: "sales_records.reconciled",
+              severity: "info",
+              title: "Ventas recalculadas automáticamente",
+              body: `El cron reparó ${r.contracts_with_missing_records} contrato(s) firmado(s) sin sales_records. El dashboard de objetivos vuelve a estar al día.`,
+              action_url: "/configuracion/objetivos",
+            });
+          } catch {
+            /* no-op */
+          }
+        }
+      } catch (e) {
+        console.error("[cron/daily] sales reconcile failed for", c.id, e);
+        salesReconcile.errors += 1;
+      }
+    }
+  } catch (e) {
+    console.error("[cron/daily] sales reconcile outer failed:", e);
+  }
+
   return NextResponse.json({
     ok: true,
     stats: {
@@ -1319,6 +1374,7 @@ export async function GET(req: NextRequest) {
       mailing_purged: mailingPurged,
       phase2,
       monthly_invoicing: monthlyInvoicing,
+      sales_reconcile: salesReconcile,
     },
     ranAt: new Date().toISOString(),
   });
