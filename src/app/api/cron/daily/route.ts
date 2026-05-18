@@ -1211,6 +1211,70 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ============================================================================
+  // FASE 2 — AUTO-MENSUALIDAD FACTURACIÓN RENTING/RENTAL — día 1 de cada mes
+  // ============================================================================
+  let monthlyInvoicing: { contracts: number; generated: number; errors: number } | null = null;
+  if (today.getDate() === 1) {
+    monthlyInvoicing = { contracts: 0, generated: 0, errors: 0 };
+    try {
+      const monthIso = today.toISOString().slice(0, 10);
+      const { data: activeContracts } = await admin
+        .from("contracts")
+        .select("id, company_id, customer_id, monthly_cents, reference_code, plan_type")
+        .eq("status", "active")
+        .in("plan_type", ["renting", "rental"])
+        .gt("monthly_cents", 0)
+        .is("deleted_at", null);
+      for (const c of ((activeContracts ?? []) as Array<{
+        id: string;
+        company_id: string;
+        customer_id: string;
+        monthly_cents: number;
+        reference_code: string | null;
+      }>)) {
+        monthlyInvoicing.contracts += 1;
+        try {
+          // ¿Existe ya una factura de este mes para este contrato?
+          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+          const { count: already } = await admin
+            .from("invoices")
+            .select("id", { count: "exact", head: true })
+            .eq("contract_id", c.id)
+            .gte("issued_at", monthStart)
+            .is("deleted_at", null);
+          if ((already ?? 0) > 0) continue;
+          // Insertar factura mínima draft (admin la emite a mano si quiere)
+          const { error } = await admin.from("invoices").insert({
+            company_id: c.company_id,
+            customer_id: c.customer_id,
+            contract_id: c.id,
+            kind: "invoice",
+            status: "draft",
+            total_cents: c.monthly_cents,
+            pending_cents: c.monthly_cents,
+            issue_date: monthIso,
+            due_date: new Date(today.getFullYear(), today.getMonth() + 1, 0)
+              .toISOString()
+              .slice(0, 10),
+            notes: `Mensualidad ${monthIso.slice(0, 7)} contrato ${c.reference_code ?? c.id.slice(0, 8)}`,
+          });
+          if (error) {
+            monthlyInvoicing.errors += 1;
+            console.error("[phase2/monthly-invoice]", error.message);
+            continue;
+          }
+          monthlyInvoicing.generated += 1;
+        } catch (e) {
+          monthlyInvoicing.errors += 1;
+          console.error("[phase2/monthly-invoice exception]", e);
+        }
+      }
+    } catch (e) {
+      console.error("[phase2/monthly-invoicing]", e);
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     stats: {
@@ -1229,6 +1293,7 @@ export async function GET(req: NextRequest) {
       },
       mailing_purged: mailingPurged,
       phase2,
+      monthly_invoicing: monthlyInvoicing,
     },
     ranAt: new Date().toISOString(),
   });
