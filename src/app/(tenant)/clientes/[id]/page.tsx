@@ -30,6 +30,7 @@ import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { CustomerKPIHeader, getCustomerKPIs } from "@/modules/customers/kpi-header";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,7 @@ export default async function CustomerDetailPage({
   const contracts = await listContractsByCustomer(id).catch(() => []);
   const installations = await listInstallationsByCustomer(id).catch(() => []);
   const customerConsents = await getCustomerConsents(id).catch(() => []);
+  const kpis = await getCustomerKPIs(id).catch(() => null);
 
   // Bandera "cliente en riesgo": incidencia abierta con prioridad
   // critical/high + al menos un contrato activo.
@@ -180,6 +182,8 @@ export default async function CustomerDetailPage({
           </div>
         </div>
       )}
+      {kpis && <CustomerKPIHeader kpis={kpis} />}
+
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
