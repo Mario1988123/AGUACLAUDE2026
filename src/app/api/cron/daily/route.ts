@@ -987,6 +987,214 @@ export async function GET(req: NextRequest) {
   }
 
   // ============================================================================
+  // ============================================================================
+  // FASE 2 — Automatizaciones cross-módulo
+  // ============================================================================
+  const phase2 = {
+    proposals_expired: 0,
+    proposals_followup_notified: 0,
+    free_trials_expired: 0,
+    next_maintenance_scheduled: 0,
+    installations_forgotten_notified: 0,
+  };
+
+  // P2-A) Auto-expire propuestas enviadas hace > 30 días (validez por defecto)
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const { data: expired } = await admin
+      .from("proposals")
+      .update({ status: "expired" })
+      .eq("status", "sent")
+      .lt("sent_at", cutoff.toISOString())
+      .is("deleted_at", null)
+      .select("id");
+    phase2.proposals_expired = ((expired ?? []) as Array<unknown>).length;
+  } catch (e) {
+    console.error("[phase2/expire-proposals]", e);
+  }
+
+  // P2-B) Notificar al comercial propuestas sent >7d sin respuesta (una vez)
+  try {
+    const cutoff7 = new Date();
+    cutoff7.setDate(cutoff7.getDate() - 7);
+    const cutoff8 = new Date();
+    cutoff8.setDate(cutoff8.getDate() - 8);
+    // Solo notificamos las que entraron en la ventana hoy (entre día 7 y 8)
+    // para no spamear cada día. Si la query falla queda en 0.
+    const { data: stale } = await admin
+      .from("proposals")
+      .select("id, company_id, created_by")
+      .eq("status", "sent")
+      .gte("sent_at", cutoff8.toISOString())
+      .lte("sent_at", cutoff7.toISOString())
+      .is("deleted_at", null);
+    for (const p of ((stale ?? []) as Array<{
+      id: string;
+      company_id: string;
+      created_by: string | null;
+    }>)) {
+      if (!p.created_by) continue;
+      try {
+        await admin.from("notifications").insert({
+          company_id: p.company_id,
+          recipient_user_id: p.created_by,
+          kind: "proposal.followup",
+          severity: "info",
+          title: "Propuesta sin respuesta hace 7 días",
+          body: "Considera contactar al cliente para seguimiento.",
+          subject_type: "proposal",
+          subject_id: p.id,
+          action_url: `/propuestas/${p.id}`,
+        });
+        phase2.proposals_followup_notified += 1;
+      } catch {
+        /* */
+      }
+    }
+  } catch (e) {
+    console.error("[phase2/followup]", e);
+  }
+
+  // P2-C) Marcar pruebas gratuitas caducadas (expires_at < hoy, status installed)
+  try {
+    const todayDate = new Date().toISOString().slice(0, 10);
+    const { data: expiredTrials } = await admin
+      .from("free_trials")
+      .update({ status: "expired" })
+      .eq("status", "installed")
+      .lt("expires_at", todayDate)
+      .select("id, company_id, assigned_user_id");
+    phase2.free_trials_expired = ((expiredTrials ?? []) as Array<unknown>).length;
+    for (const t of (expiredTrials ?? []) as Array<{
+      id: string;
+      company_id: string;
+      assigned_user_id: string | null;
+    }>) {
+      if (t.assigned_user_id) {
+        try {
+          await admin.from("notifications").insert({
+            company_id: t.company_id,
+            recipient_user_id: t.assigned_user_id,
+            kind: "free_trial.expired",
+            severity: "warning",
+            title: "Prueba gratuita caducada",
+            body: "Decisión pendiente: contratar o desinstalar.",
+            subject_type: "free_trial",
+            subject_id: t.id,
+            action_url: `/pruebas-gratuitas/${t.id}`,
+          });
+        } catch {
+          /* */
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[phase2/free-trials-expire]", e);
+  }
+
+  // P2-D) Programar siguiente mantenimiento para contratos activos con
+  // maintenance_included que no tengan job futuro programado.
+  try {
+    const todayDate2 = new Date().toISOString().slice(0, 10);
+    const { data: activeContracts } = await admin
+      .from("contracts")
+      .select("id, company_id, customer_id, service_start_date")
+      .eq("status", "active")
+      .eq("maintenance_included", true)
+      .is("deleted_at", null);
+    for (const c of (activeContracts ?? []) as Array<{
+      id: string;
+      company_id: string;
+      customer_id: string;
+      service_start_date: string | null;
+    }>) {
+      // ¿Tiene job futuro?
+      const { count } = await admin
+        .from("maintenance_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("contract_id", c.id)
+        .in("status", ["scheduled", "in_progress"])
+        .gte("scheduled_at", todayDate2);
+      if ((count ?? 0) > 0) continue;
+      // Crear próximo job a 6 meses del último completado (o desde service_start_date).
+      const { data: last } = await admin
+        .from("maintenance_jobs")
+        .select("completed_at")
+        .eq("contract_id", c.id)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const baseDate = (last as { completed_at: string | null } | null)?.completed_at
+        ?? c.service_start_date
+        ?? todayDate2;
+      const next = new Date(baseDate);
+      next.setMonth(next.getMonth() + 6);
+      if (next < new Date()) {
+        // Si por fechas raras quedaría en el pasado, lo programamos en +14d.
+        next.setTime(Date.now() + 14 * 86400000);
+      }
+      try {
+        await admin.from("maintenance_jobs").insert({
+          company_id: c.company_id,
+          customer_id: c.customer_id,
+          contract_id: c.id,
+          kind: "contracted",
+          status: "scheduled",
+          scheduled_at: next.toISOString(),
+        });
+        phase2.next_maintenance_scheduled += 1;
+      } catch {
+        /* */
+      }
+    }
+  } catch (e) {
+    console.error("[phase2/next-maintenance]", e);
+  }
+
+  // P2-E) Avisar de instalaciones del día que siguen in_progress después de
+  // las 22:00 (probable olvido del técnico).
+  try {
+    const nowHour = new Date().getHours();
+    if (nowHour >= 22) {
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      const { data: forgotten } = await admin
+        .from("installations")
+        .select("id, company_id, installer_user_id, reference_code")
+        .eq("status", "in_progress")
+        .gte("scheduled_at", dayStart.toISOString())
+        .is("deleted_at", null);
+      for (const ins of (forgotten ?? []) as Array<{
+        id: string;
+        company_id: string;
+        installer_user_id: string | null;
+        reference_code: string | null;
+      }>) {
+        if (!ins.installer_user_id) continue;
+        try {
+          await admin.from("notifications").insert({
+            company_id: ins.company_id,
+            recipient_user_id: ins.installer_user_id,
+            kind: "installation.forgotten",
+            severity: "warning",
+            title: "Instalación en curso sin cerrar",
+            body: `${ins.reference_code ?? "Instalación"} sigue en curso. ¿Olvidaste cerrar el parte?`,
+            subject_type: "installation",
+            subject_id: ins.id,
+            action_url: `/instalaciones/${ins.id}`,
+          });
+          phase2.installations_forgotten_notified += 1;
+        } catch {
+          /* */
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[phase2/installations-forgotten]", e);
+  }
+
   // SCRAPER PRECIOS AGUA — solo el día 1 del mes
   // ============================================================================
   let scraperStats: { ok: number; failed: number; total: number } | null = null;
@@ -1020,6 +1228,7 @@ export async function GET(req: NextRequest) {
         critical: slaCritical,
       },
       mailing_purged: mailingPurged,
+      phase2,
     },
     ranAt: new Date().toISOString(),
   });
