@@ -4,6 +4,10 @@ import { getPointsSettingsAdmin } from "@/modules/points/config-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
+import {
+  MyCommissionsCard,
+  getMyCommissionData,
+} from "@/modules/points/my-commissions-card";
 
 export const dynamic = "force-dynamic";
 
@@ -40,9 +44,10 @@ export default async function ComisionesPage() {
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
 
-  const [cycles, settings] = await Promise.all([
+  const [cycles, settings, myData] = await Promise.all([
     listCycles(),
     getPointsSettingsAdmin().catch(() => null),
+    getMyCommissionData(session.user_id).catch(() => null),
   ]);
 
   const closeDayLabel =
@@ -60,6 +65,8 @@ export default async function ComisionesPage() {
           — el dato cerrado se traslada manualmente a nómina.
         </p>
       </div>
+
+      {myData && <MyCommissionsCard data={myData} />}
 
       <Card>
         <CardHeader>
