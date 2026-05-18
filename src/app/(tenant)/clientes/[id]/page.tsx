@@ -32,6 +32,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CustomerKPIHeader, getCustomerKPIs } from "@/modules/customers/kpi-header";
 import { CustomerRGPDPanel } from "@/modules/customers/rgpd-panel";
+import {
+  MaintenanceHistoryCard,
+  getCustomerMaintenanceHistory,
+} from "@/modules/customers/maintenance-history-card";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +104,7 @@ export default async function CustomerDetailPage({
   const installations = await listInstallationsByCustomer(id).catch(() => []);
   const customerConsents = await getCustomerConsents(id).catch(() => []);
   const kpis = await getCustomerKPIs(id).catch(() => null);
+  const maintenanceHistory = await getCustomerMaintenanceHistory(id).catch(() => []);
 
   // Bandera "cliente en riesgo": incidencia abierta con prioridad
   // critical/high + al menos un contrato activo.
@@ -446,6 +451,8 @@ export default async function CustomerDetailPage({
       </div>
 
       <CustomerConsentsCard customerId={id} consents={customerConsents} />
+
+      <MaintenanceHistoryCard rows={maintenanceHistory} />
 
       <Card>
         <CardHeader>
