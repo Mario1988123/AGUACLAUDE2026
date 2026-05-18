@@ -118,7 +118,13 @@ export default async function AlmacenesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Almacenes y furgonetas</CardTitle>
+          <CardTitle className="flex items-center justify-between flex-wrap gap-2">
+            <span>Almacenes y furgonetas</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {warehouses.filter((w) => w.kind !== "vehicle").length} fijos ·{" "}
+              {warehouses.filter((w) => w.kind === "vehicle").length} furgonetas
+            </span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <WarehousesManager warehouses={warehouses} teamMembers={team} />

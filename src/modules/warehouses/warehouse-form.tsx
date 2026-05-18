@@ -54,49 +54,85 @@ export function WarehousesManager({ warehouses, teamMembers = [] }: Props) {
     );
   }
 
+  // Separar visualmente almacenes fijos (main / secondary / external_supplier)
+  // de furgonetas (vehicle) — el usuario reportó que mezclados era confuso.
+  const fixedWarehouses = warehouses.filter((w) => w.kind !== "vehicle");
+  const vehicles = warehouses.filter((w) => w.kind === "vehicle");
+
+  function renderRow(w: WarehouseRow) {
+    return (
+      <div
+        key={w.id}
+        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold">{w.name}</span>
+            <Badge variant="outline">{KIND_LABEL[w.kind]}</Badge>
+            {w.vehicle_plate && <Badge variant="secondary">{w.vehicle_plate}</Badge>}
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          <Button variant="ghost" size="icon" asChild aria-label="Ver almacén">
+            <Link href={`/almacenes/${w.id}` as never} title="Ver stock, traspasos, inventario, historial">
+              <Eye className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setEditing(w)} aria-label="Editar">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => remove(w.id)}
+            disabled={pending}
+            aria-label="Eliminar"
+          >
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {warehouses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
           Sin almacenes. Crea el primero.
         </div>
       ) : (
-        warehouses.map((w) => (
-          <div
-            key={w.id}
-            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">{w.name}</span>
-                <Badge variant="outline">{KIND_LABEL[w.kind]}</Badge>
-                {w.vehicle_plate && <Badge variant="secondary">{w.vehicle_plate}</Badge>}
+        <>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <span>🏢 Almacenes ({fixedWarehouses.length})</span>
+            </div>
+            {fixedWarehouses.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                Sin almacenes fijos. Crea uno con el botón inferior.
               </div>
-            </div>
-            <div className="flex gap-1.5">
-              <Button variant="ghost" size="icon" asChild aria-label="Ver almacén">
-                <Link href={`/almacenes/${w.id}` as never} title="Ver stock, traspasos, inventario, historial">
-                  <Eye className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button variant="ghost" size="icon" onClick={() => setEditing(w)} aria-label="Editar">
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => remove(w.id)}
-                disabled={pending}
-                aria-label="Eliminar"
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
-            </div>
+            ) : (
+              <div className="space-y-2">{fixedWarehouses.map(renderRow)}</div>
+            )}
           </div>
-        ))
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <span>🚐 Furgonetas ({vehicles.length})</span>
+            </div>
+            {vehicles.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                Sin furgonetas dadas de alta. Crea una para asignarle stock
+                móvil y rutas.
+              </div>
+            ) : (
+              <div className="space-y-2">{vehicles.map(renderRow)}</div>
+            )}
+          </div>
+        </>
       )}
       <Button onClick={() => setEditing("new")} variant="outline" className="w-full">
-        <Plus className="h-4 w-4" /> Nuevo almacén
+        <Plus className="h-4 w-4" /> Nuevo almacén / furgoneta
       </Button>
     </div>
   );

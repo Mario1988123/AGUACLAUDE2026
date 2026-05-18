@@ -15,6 +15,7 @@ import {
   Pencil,
   Truck,
   Lock,
+  Package,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -40,6 +41,8 @@ import { CsvImportButton } from "./csv-import-button";
 import type { PurchaseRow, PurchaseDetail } from "./purchase-actions";
 import type { StockReservation } from "./reservation-actions";
 import type { WarehouseStockDetail } from "./stock-summary-actions";
+import { LotsTab } from "./lots-tab";
+import type { StockLotRow } from "./lot-actions";
 
 interface ProductLite {
   id: string;
@@ -56,6 +59,7 @@ const TAB_LABEL: Record<string, string> = {
   stock: "Stock",
   locations: "Ubicaciones",
   purchases: "Compras",
+  lots: "Lotes (FIFO)",
   reservations: "Reservas",
   transfer: "Traspasos",
   inventory: "Inventario",
@@ -99,6 +103,8 @@ export function WarehouseDetailTabs({
   purchases,
   purchaseDetails,
   reservations,
+  lots = [],
+  canManageLots = false,
 }: {
   warehouseId: string;
   stock: WarehouseStockDetail[];
@@ -110,16 +116,21 @@ export function WarehouseDetailTabs({
   purchases: PurchaseRow[];
   purchaseDetails: Map<string, PurchaseDetail>;
   reservations: StockReservation[];
+  lots?: StockLotRow[];
+  canManageLots?: boolean;
 }) {
   const [tab, setTab] = useState<
     | "stock"
     | "locations"
     | "purchases"
+    | "lots"
     | "reservations"
     | "transfer"
     | "inventory"
     | "history"
   >("stock");
+
+  const activeLots = lots.filter((l) => Number(l.remaining_quantity) > 0).length;
 
   return (
     <div className="space-y-4">
@@ -129,6 +140,7 @@ export function WarehouseDetailTabs({
             "stock",
             "locations",
             "purchases",
+            "lots",
             "reservations",
             "transfer",
             "inventory",
@@ -148,6 +160,7 @@ export function WarehouseDetailTabs({
             {t === "stock" && <Boxes className="h-4 w-4" />}
             {t === "locations" && <MapPin className="h-4 w-4" />}
             {t === "purchases" && <Truck className="h-4 w-4" />}
+            {t === "lots" && <Package className="h-4 w-4" />}
             {t === "reservations" && <Lock className="h-4 w-4" />}
             {t === "transfer" && <ArrowRightLeft className="h-4 w-4" />}
             {t === "inventory" && <ClipboardList className="h-4 w-4" />}
@@ -156,6 +169,11 @@ export function WarehouseDetailTabs({
             {t === "reservations" && reservations.length > 0 && (
               <Badge variant="secondary" className="ml-1">
                 {reservations.length}
+              </Badge>
+            )}
+            {t === "lots" && activeLots > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {activeLots}
               </Badge>
             )}
           </button>
@@ -180,6 +198,14 @@ export function WarehouseDetailTabs({
           purchases={purchases}
           details={purchaseDetails}
           products={products}
+        />
+      )}
+      {tab === "lots" && (
+        <LotsTab
+          warehouseId={warehouseId}
+          lots={lots}
+          products={products}
+          canManage={canManageLots}
         />
       )}
       {tab === "reservations" && <ReservationsTab reservations={reservations} />}

@@ -171,6 +171,26 @@ export async function createPurchaseAction(input: {
         performed_by: session.user_id,
         notes: `Albarán ${input.invoice_number} (${input.supplier_name})`,
       });
+
+      // Auto-crear lote FIFO para trazabilidad. Fail-soft si la tabla no
+      // está migrada todavía. lot_code = nº de albarán para identificarlo
+      // físicamente con el papel que viene con la mercancía.
+      try {
+        await admin.from("stock_lots").insert({
+          company_id: session.company_id,
+          product_id: it.product_id,
+          warehouse_id: input.warehouse_id,
+          lot_code: input.invoice_number.trim() || null,
+          received_at: new Date(input.invoice_date + "T12:00:00").toISOString(),
+          initial_quantity: it.quantity,
+          remaining_quantity: it.quantity,
+          unit_cost_cents: it.unit_cost_cents,
+          notes: input.supplier_name.trim() || null,
+          created_by: session.user_id,
+        });
+      } catch (e) {
+        console.error("[createPurchase] stock_lots insert failed:", e);
+      }
     }
 
     revalidatePath(`/almacenes/${input.warehouse_id}`);

@@ -10,6 +10,8 @@ import { listPurchases, getPurchase } from "@/modules/warehouses/purchase-action
 import { listReservations } from "@/modules/warehouses/reservation-actions";
 import { listNonNewStock } from "@/modules/warehouses/used-stock-actions";
 import { UsedStockPanel } from "@/modules/warehouses/used-stock-panel";
+import { listStockLots } from "@/modules/warehouses/lot-actions";
+import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { listProducts } from "@/modules/products/actions";
 import { WarehouseDetailTabs } from "@/modules/warehouses/warehouse-detail-tabs";
@@ -38,6 +40,8 @@ export default async function WarehouseDetailPage({
     productLocations,
     purchases,
     reservations,
+    lots,
+    session,
   ] = await Promise.all([
     getWarehouseStockDetail(id).catch(() => []),
     listStockMovements(id).catch(() => []),
@@ -47,8 +51,15 @@ export default async function WarehouseDetailPage({
     listProductLocations(id).catch(() => []),
     listPurchases(id).catch(() => []),
     listReservations({ warehouse_id: id, status: "active" }).catch(() => []),
+    listStockLots({ warehouse_id: id, include_depleted: true }).catch(() => []),
+    requireSession(),
   ]);
   const usedStock = await listNonNewStock(id).catch(() => []);
+  const canManageLots =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("installer");
 
   // Detalles de compras (carga upfront — cuando crezca, paginar / lazy)
   const purchaseDetailsList = await Promise.all(
@@ -124,6 +135,8 @@ export default async function WarehouseDetailPage({
             purchases={purchases}
             purchaseDetails={purchaseDetails}
             reservations={reservations}
+            lots={lots}
+            canManageLots={canManageLots}
           />
         </CardContent>
       </Card>
