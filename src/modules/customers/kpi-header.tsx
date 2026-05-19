@@ -8,6 +8,10 @@ export interface CustomerKPIs {
   open_incidents: number;
   customer_since: string | null;
   churn_score: number | null;
+  /** Meses restantes del contrato de alquiler/renting más cercano a vencer. */
+  rental_months_left: number | null;
+  /** Fecha del próximo mantenimiento agendado. */
+  next_maintenance_at: string | null;
 }
 
 function churnColor(score: number): { bg: string; text: string; label: string } {
@@ -78,23 +82,70 @@ export function CustomerKPIHeader({ kpis }: { kpis: CustomerKPIs }) {
         </div>
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-            {kpis.open_incidents > 0 ? "⚠ Incidencias abiertas" : "Cliente desde"}
+            Cliente desde
           </div>
           <div className="text-xl font-extrabold tabular-nums">
-            {kpis.open_incidents > 0 ? (
-              <span className="text-red-700">{kpis.open_incidents}</span>
-            ) : ageMonths != null ? (
+            {kpis.customer_since ? (
               <span>
-                {ageMonths < 12
-                  ? `${ageMonths} m`
-                  : `${Math.floor(ageMonths / 12)} a ${ageMonths % 12} m`}
+                {new Date(kpis.customer_since).toLocaleDateString("es-ES", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
               </span>
             ) : (
               "—"
             )}
           </div>
+          {ageMonths != null && (
+            <div className="text-[10px] text-muted-foreground">
+              {ageMonths < 12
+                ? `hace ${ageMonths} m`
+                : `hace ${Math.floor(ageMonths / 12)} a ${ageMonths % 12} m`}
+            </div>
+          )}
         </div>
         </div>
+
+        {/* Línea adicional con info crítica del cliente */}
+        {(kpis.rental_months_left != null || kpis.next_maintenance_at || kpis.open_incidents > 0) && (
+          <div className="grid gap-3 sm:grid-cols-3 border-t pt-3">
+            {kpis.rental_months_left != null && (
+              <div className="rounded-xl bg-amber-50 border border-amber-200 p-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+                  Alquiler/Renting · restante
+                </div>
+                <div className="text-base font-extrabold text-amber-900 tabular-nums">
+                  {kpis.rental_months_left} {kpis.rental_months_left === 1 ? "mes" : "meses"}
+                </div>
+              </div>
+            )}
+            {kpis.next_maintenance_at && (
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700">
+                  Próximo mantenimiento
+                </div>
+                <div className="text-base font-extrabold text-blue-900 tabular-nums">
+                  {new Date(kpis.next_maintenance_at).toLocaleDateString("es-ES", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </div>
+              </div>
+            )}
+            {kpis.open_incidents > 0 && (
+              <div className="rounded-xl bg-red-50 border border-red-200 p-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-red-700">
+                  ⚠ Incidencias abiertas
+                </div>
+                <div className="text-base font-extrabold text-red-900 tabular-nums">
+                  {kpis.open_incidents}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -112,6 +163,8 @@ export async function getCustomerKPIs(customerId: string): Promise<CustomerKPIs>
     open_incidents: 0,
     customer_since: null,
     churn_score: null,
+    rental_months_left: null,
+    next_maintenance_at: null,
   };
   const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString();
 
@@ -189,6 +242,91 @@ export async function getCustomerKPIs(customerId: string): Promise<CustomerKPIs>
     } catch {
       /* */
     }
+  }
+
+  // Meses restantes de alquiler/renting activo. Tomamos el más próximo a
+  // vencer (signed_at + duration_months - now).
+  try {
+    const { data: rentals } = await admin
+      .from("contracts")
+      .select("plan_type, status, signed_at, duration_months, service_start_date")
+      .eq("customer_id", customerId)
+      .in("plan_type", ["rental", "renting"])
+      .in("status", ["signed", "active"])
+      .is("deleted_at", null)
+      .is("paused_at", null);
+    type R = {
+      plan_type: "rental" | "renting";
+      status: string;
+      signed_at: string | null;
+      duration_months: number | null;
+      service_start_date: string | null;
+    };
+    let minLeft: number | null = null;
+    const now = new Date();
+    for (const r of ((rentals ?? []) as R[])) {
+      if (!r.duration_months) continue;
+      const start = new Date(r.service_start_date ?? r.signed_at ?? new Date());
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + r.duration_months);
+      const monthsLeft = Math.max(
+        0,
+        Math.round(
+          (end.getTime() - now.getTime()) / (30 * 86400000),
+        ),
+      );
+      if (minLeft == null || monthsLeft < minLeft) minLeft = monthsLeft;
+    }
+    out.rental_months_left = minLeft;
+  } catch {
+    /* fail-soft: paused_at puede no existir si migración no aplicada */
+    try {
+      const { data: rentals } = await admin
+        .from("contracts")
+        .select("plan_type, status, signed_at, duration_months")
+        .eq("customer_id", customerId)
+        .in("plan_type", ["rental", "renting"])
+        .in("status", ["signed", "active"])
+        .is("deleted_at", null);
+      type R2 = {
+        plan_type: string;
+        signed_at: string | null;
+        duration_months: number | null;
+      };
+      const now = new Date();
+      let minLeft: number | null = null;
+      for (const r of ((rentals ?? []) as R2[])) {
+        if (!r.duration_months || !r.signed_at) continue;
+        const end = new Date(r.signed_at);
+        end.setMonth(end.getMonth() + r.duration_months);
+        const monthsLeft = Math.max(
+          0,
+          Math.round((end.getTime() - now.getTime()) / (30 * 86400000)),
+        );
+        if (minLeft == null || monthsLeft < minLeft) minLeft = monthsLeft;
+      }
+      out.rental_months_left = minLeft;
+    } catch {
+      /* */
+    }
+  }
+
+  // Próximo mantenimiento scheduled.
+  try {
+    const { data: m } = await admin
+      .from("maintenance_jobs")
+      .select("scheduled_at, status")
+      .eq("customer_id", customerId)
+      .in("status", ["scheduled", "in_progress"])
+      .gte("scheduled_at", new Date().toISOString())
+      .order("scheduled_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (m) {
+      out.next_maintenance_at = (m as { scheduled_at: string | null }).scheduled_at;
+    }
+  } catch {
+    /* */
   }
 
   return out;

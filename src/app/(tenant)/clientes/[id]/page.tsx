@@ -485,7 +485,7 @@ export default async function CustomerDetailPage({
           <CardTitle>Timeline</CardTitle>
         </CardHeader>
         <CardContent>
-          <Timeline subjectType="customer" subjectId={id} />
+          <Timeline subjectType="customer" subjectId={id} enriched />
         </CardContent>
       </Card>
 

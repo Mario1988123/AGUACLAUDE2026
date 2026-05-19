@@ -785,6 +785,13 @@ export async function rescheduleAgendaEventAction(
   eventId: string,
   newStartsAtIso: string,
 ): Promise<void> {
+  // Validación: la nueva fecha no puede estar en el pasado.
+  const _newDt = new Date(newStartsAtIso);
+  if (!isNaN(_newDt.getTime()) && _newDt.getTime() < Date.now() - 60 * 1000) {
+    throw new Error(
+      "No puedes reagendar a una fecha/hora pasada. Elige un momento futuro.",
+    );
+  }
   // Items VIRTUALES (instalaciones / mantenimientos directos) tienen
   // id "virtual-inst-{uuid}" o "virtual-maint-{uuid}". No están en
   // agenda_events; reagendamos directamente la tabla origen.

@@ -738,6 +738,16 @@ export async function updateInstallationAction(input: unknown) {
   }
 
   const parsed = parseOrFriendly(installationUpdateSchema, input, "Instalación");
+  // Validación: no permitir agendar en el pasado (decisión 2026-05-19).
+  // Margen de 1 min para evitar carreras por desfase de reloj cliente.
+  if (parsed.scheduled_at) {
+    const dt = new Date(parsed.scheduled_at);
+    if (!isNaN(dt.getTime()) && dt.getTime() < Date.now() - 60 * 1000) {
+      throw new Error(
+        "No puedes agendar una instalación en el pasado. Elige una fecha y hora futura.",
+      );
+    }
+  }
   // Admin client: la policy installations_update por scope puede bloquear.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -968,24 +978,13 @@ async function checkStockAndNotifyIfShortInner(installationId: string): Promise<
   );
   const body = lines.join(" · ");
 
-  // Event timeline
-  await admin.from("events").insert({
-    company_id: i.company_id,
-    subject_type: "installation",
-    subject_id: installationId,
-    kind: "installation.stock_shortage",
-    payload: { shortages, scheduled_at: i.scheduled_at, source_warehouse_id: i.source_warehouse_id },
-    actor_user_id: null,
-  });
-
-  // Crear/actualizar incidencia formal en installation_incidents para que
-  // aparezca en el banner rojo de /instalaciones y en la ficha. Antes solo
-  // se metía un evento — el técnico abría la ficha y veía la línea en el
-  // Timeline pero no había badge claro.
-  // Idempotente: si ya existe una incidencia abierta de tipo stock_shortage
-  // (o missing_material en versiones previas), actualizamos el `description`.
-  // Defensivo: si el CHECK constraint no incluye 'stock_shortage' todavía
-  // (migración 20260526100000 no aplicada), caemos a 'missing_material'.
+  // Crear/actualizar incidencia formal en installation_incidents.
+  // Idempotente: si ya existe una incidencia abierta de stock_shortage,
+  // actualizamos el `description` SIN insertar nuevo evento en timeline.
+  // Si NO existe, creamos incidencia + evento (primera vez).
+  // Esto evita la avalancha de eventos repetidos cada vez que se recalcula
+  // el stock (decisión 2026-05-19).
+  let createdNew = false;
   try {
     const { data: existing } = await admin
       .from("installation_incidents")
@@ -1000,6 +999,7 @@ async function checkStockAndNotifyIfShortInner(installationId: string): Promise<
         .update({ description: body, kind: "stock_shortage" })
         .eq("id", (existing as { id: string }).id);
     } else {
+      createdNew = true;
       const insRes = await admin.from("installation_incidents").insert({
         company_id: i.company_id,
         installation_id: installationId,
@@ -1021,24 +1021,42 @@ async function checkStockAndNotifyIfShortInner(installationId: string): Promise<
     console.error("[stockShortage] installation_incidents upsert:", e);
   }
 
-  // Notificar a admin y director técnico
-  try {
-    const { notifyByRoles } = await import("@/modules/notifications/notifier");
-    await notifyByRoles(
-      i.company_id,
-      ["company_admin", "technical_director"],
-      {
-        kind: "installation.stock_shortage",
-        severity: "warning",
-        title: "⚠ Stock insuficiente para instalación programada",
-        body: `${i.reference_code ?? "Instalación"}: ${body}`,
+  // Event timeline + notificación SOLO si se creó incidencia nueva.
+  if (createdNew) {
+    try {
+      await admin.from("events").insert({
+        company_id: i.company_id,
         subject_type: "installation",
         subject_id: installationId,
-        action_url: `/instalaciones/${installationId}`,
-      },
-    );
-  } catch {
-    /* no-op */
+        kind: "installation.stock_shortage",
+        payload: {
+          shortages,
+          scheduled_at: i.scheduled_at,
+          source_warehouse_id: i.source_warehouse_id,
+        },
+        actor_user_id: null,
+      });
+    } catch {
+      /* */
+    }
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      await notifyByRoles(
+        i.company_id,
+        ["company_admin", "technical_director"],
+        {
+          kind: "installation.stock_shortage",
+          severity: "warning",
+          title: "⚠ Stock insuficiente para instalación programada",
+          body: `${i.reference_code ?? "Instalación"}: ${body}`,
+          subject_type: "installation",
+          subject_id: installationId,
+          action_url: `/instalaciones/${installationId}`,
+        },
+      );
+    } catch {
+      /* no-op */
+    }
   }
 }
 
@@ -1132,7 +1150,9 @@ export async function completeInstallation(input: unknown) {
   // Calcular duración si tenemos started_at
   const { data: inst } = await admin
     .from("installations")
-    .select("started_at, contract_id, customer_id, address_id, kind, notes, free_trial_id")
+    .select(
+      "started_at, scheduled_at, company_id, reference_code, installer_user_id, contract_id, customer_id, address_id, kind, notes, free_trial_id",
+    )
     .eq("id", parsed.id)
     .single();
   const startTs = (inst as { started_at: string | null })?.started_at;
@@ -1152,6 +1172,56 @@ export async function completeInstallation(input: unknown) {
     })
     .eq("id", parsed.id);
   // installation_steps_log dropeada — los wizards escriben en `events`.
+
+  // Incidencia silenciosa si se completó FUERA DE HORARIO programado.
+  // Umbral: completed_at > scheduled_at + 30 min. Notifica admin/director
+  // técnico SIN bloquear el cierre del parte (decisión 2026-05-19).
+  const scheduledAt = (inst as { scheduled_at: string | null } | null)
+    ?.scheduled_at;
+  const companyId = (inst as { company_id: string | null } | null)?.company_id;
+  const referenceCode = (inst as { reference_code: string | null } | null)
+    ?.reference_code;
+  if (scheduledAt && companyId) {
+    const expected = new Date(scheduledAt).getTime();
+    const lateMs = now.getTime() - expected - 30 * 60 * 1000;
+    if (lateMs > 0) {
+      const lateMin = Math.round(lateMs / 60000);
+      try {
+        await admin.from("events").insert({
+          company_id: companyId,
+          subject_type: "installation",
+          subject_id: parsed.id,
+          kind: "installation.late_completion",
+          payload: {
+            scheduled_at: scheduledAt,
+            completed_at: nowIso,
+            late_minutes: lateMin,
+          },
+          actor_user_id: null,
+        });
+      } catch {
+        /* */
+      }
+      try {
+        const { notifyByRoles } = await import("@/modules/notifications/notifier");
+        await notifyByRoles(
+          companyId,
+          ["company_admin", "technical_director"],
+          {
+            kind: "installation.late_completion",
+            severity: "warning",
+            title: "Instalación completada fuera de horario",
+            body: `${referenceCode ?? "Instalación"}: completada ${lateMin} min después de la hora programada.`,
+            subject_type: "installation",
+            subject_id: parsed.id,
+            action_url: `/instalaciones/${parsed.id}`,
+          },
+        );
+      } catch {
+        /* no-op */
+      }
+    }
+  }
 
   const i = inst as {
     contract_id: string | null;

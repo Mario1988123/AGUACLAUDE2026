@@ -1,10 +1,13 @@
 import * as Icons from "lucide-react";
-import { listSubjectEvents } from "./actions";
+import { listSubjectEvents, listCustomerTimeline } from "./actions";
 import { eventLabel } from "./labels";
 
 interface Props {
   subjectType: string;
   subjectId: string;
+  /** Si true Y subjectType='customer', incluye eventos de contratos,
+   *  instalaciones, mantenimientos e incidencias relacionados. */
+  enriched?: boolean;
 }
 
 const ICON_MAP: Record<string, keyof typeof Icons> = {
@@ -28,8 +31,11 @@ const ICON_MAP: Record<string, keyof typeof Icons> = {
   "wallet.payment_recorded": "Wallet",
 };
 
-export async function Timeline({ subjectType, subjectId }: Props) {
-  const events = await listSubjectEvents(subjectType, subjectId);
+export async function Timeline({ subjectType, subjectId, enriched }: Props) {
+  const events =
+    enriched && subjectType === "customer"
+      ? await listCustomerTimeline(subjectId)
+      : await listSubjectEvents(subjectType, subjectId);
 
   if (events.length === 0) {
     return (
