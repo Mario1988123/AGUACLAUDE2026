@@ -103,6 +103,64 @@ export default async function InvoicesPage({
 
       {isUpper && alerts && <InvoiceSmartAlerts alerts={alerts} />}
 
+      {/* KPIs cabecera facturas (decisión 2026-05-20) */}
+      {(() => {
+        const now = new Date();
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        const issuedYTD = invoices.filter(
+          (i) =>
+            i.status !== "draft" &&
+            i.status !== "cancelled" &&
+            i.status !== "void" &&
+            new Date(i.issue_date) >= yearStart,
+        );
+        const totalYTD = issuedYTD.reduce((s, i) => s + (i.total_cents ?? 0), 0);
+        const overdue = invoices.filter(
+          (i) =>
+            (i.status === "overdue" || i.status === "issued") &&
+            i.due_date &&
+            new Date(i.due_date) < now &&
+            (i.pending_cents ?? i.total_cents ?? 0) > 0,
+        );
+        const overdueCents = overdue.reduce(
+          (s, i) => s + (i.pending_cents ?? i.total_cents ?? 0),
+          0,
+        );
+        const pendingCents = invoices
+          .filter(
+            (i) =>
+              i.status !== "paid" &&
+              i.status !== "cancelled" &&
+              i.status !== "void" &&
+              i.status !== "draft",
+          )
+          .reduce((s, i) => s + (i.pending_cents ?? i.total_cents ?? 0), 0);
+        return (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Facturado YTD</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums">{eur(totalYTD)}</div>
+              <div className="text-[11px] text-muted-foreground">{issuedYTD.length} facturas</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Pendiente de cobro</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums">{eur(pendingCents)}</div>
+            </div>
+            <div className={`rounded-xl border p-4 ${overdue.length > 0 ? "border-red-300 bg-red-50" : "bg-card"}`}>
+              <div className="text-xs uppercase text-muted-foreground">Vencidas impagadas</div>
+              <div className={`mt-1 text-2xl font-extrabold tabular-nums ${overdue.length > 0 ? "text-red-700" : ""}`}>
+                {eur(overdueCents)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">{overdue.length} facturas</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Total emitidas</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{invoices.length}</div>
+            </div>
+          </div>
+        );
+      })()}
+
       <VerifactuQueueCard
         pending={vfQueue.pending}
         failed={vfQueue.failed}

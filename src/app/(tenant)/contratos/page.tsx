@@ -122,6 +122,55 @@ export default async function ContratosPage({
 
       {isUpper && alerts && <ContractSmartAlerts alerts={alerts} />}
 
+      {/* KPIs cabecera contratos (decisión 2026-05-20) */}
+      {(() => {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const signedThisMonth = contracts.filter(
+          (c) =>
+            c.status !== "draft" &&
+            c.status !== "cancelled" &&
+            c.signed_at &&
+            new Date(c.signed_at) >= monthStart,
+        ).length;
+        const activeCount = contracts.filter(
+          (c) => c.status === "active" || c.status === "signed",
+        ).length;
+        // Cancelados mes: usamos created_at del status=cancelled como
+        // proxy hasta que listContracts incluya cancelled_at en el SELECT.
+        const cancelledThisMonth = contracts.filter(
+          (c) => c.status === "cancelled",
+        ).length;
+        const mrrCents = contracts
+          .filter((c) => c.status === "active" && c.monthly_cents)
+          .reduce((s, c) => s + (c.monthly_cents ?? 0), 0);
+        return (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Firmados este mes</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{signedThisMonth}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Activos / firmados</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{activeCount}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">MRR estimado</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums">
+                {formatCents(mrrCents)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">contratos active con cuota</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Cancelados mes</div>
+              <div className={`mt-1 text-3xl font-extrabold tabular-nums ${cancelledThisMonth > 0 ? "text-red-700" : ""}`}>
+                {cancelledThisMonth}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Estado</label>

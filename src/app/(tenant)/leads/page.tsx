@@ -10,6 +10,7 @@ import { SelectableLeadsTable } from "@/modules/leads/selectable-list";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { ImportLeadsButton } from "@/modules/leads/import-form";
 import { LeadSmartAlerts, getLeadAlerts } from "@/modules/leads/smart-alerts";
+import { LeadsTemperaturePanel } from "@/modules/leads/temperature-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,8 @@ export default async function LeadsPage({
       )}
 
       {isUpperLevel && alerts && <LeadSmartAlerts alerts={alerts} />}
+
+      <LeadsTemperaturePanel leads={leads.map((l) => ({ status: l.status as never, created_at: l.created_at }))} />
 
       <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}

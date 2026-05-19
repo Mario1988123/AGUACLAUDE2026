@@ -234,6 +234,56 @@ export default async function InstalacionesPage({
 
       {isUpper && <InstallationSatisfactionRanking />}
 
+      {/* KPIs cabecera instalaciones (decisión 2026-05-20) */}
+      {isUpper && (() => {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const completedThisMonth = installations.filter(
+          (i) =>
+            i.status === "completed" &&
+            i.completed_at &&
+            new Date(i.completed_at) >= monthStart,
+        );
+        // Duración media en minutos
+        const durations = completedThisMonth
+          .map((i) => (i as { duration_seconds?: number | null }).duration_seconds)
+          .filter((d): d is number => typeof d === "number" && d > 0);
+        const avgMin =
+          durations.length > 0
+            ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length / 60)
+            : null;
+        const next7 = installations.filter((i) => {
+          if (!i.scheduled_at) return false;
+          const t = new Date(i.scheduled_at).getTime();
+          return t >= Date.now() && t <= Date.now() + 7 * 86400000;
+        });
+        const inProgress = installations.filter((i) => i.status === "in_progress");
+        return (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Completadas mes</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{completedThisMonth.length}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Duración media</div>
+              <div className="mt-1 text-2xl font-extrabold tabular-nums">
+                {avgMin != null ? `${avgMin} min` : "—"}
+              </div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Próximos 7 días</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{next7.length}</div>
+            </div>
+            <div className={`rounded-xl border p-4 ${inProgress.length > 0 ? "border-amber-300 bg-amber-50" : "bg-card"}`}>
+              <div className="text-xs uppercase text-muted-foreground">En curso ahora</div>
+              <div className={`mt-1 text-3xl font-extrabold tabular-nums ${inProgress.length > 0 ? "text-amber-700" : ""}`}>
+                {inProgress.length}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {withIncident.length > 0 && (
         <Card className="border-2 border-red-300 bg-red-50/50">
           <CardHeader>
