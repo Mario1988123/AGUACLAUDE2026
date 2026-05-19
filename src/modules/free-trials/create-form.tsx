@@ -210,22 +210,39 @@ export function FreeTrialCreateForm({
           <div className="space-y-1">
             <Label>Dirección instalación *</Label>
             {addresses.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-                Sin direcciones. Añade una desde la ficha del{" "}
-                {ownerKind === "customer" ? "cliente" : "lead"}.
+              <div className="space-y-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                <p>Sin direcciones registradas para este {ownerKind === "customer" ? "cliente" : "lead"}.</p>
+                <Link
+                  href={`/${ownerKind === "customer" ? "clientes" : "leads"}/${ownerId}` as never}
+                  className="inline-block font-bold text-amber-900 underline"
+                >
+                  → Añadir dirección y volver
+                </Link>
               </div>
             ) : (
-              <select
-                value={addressId}
-                onChange={(e) => setAddressId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
-              >
-                {addresses.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={addressId}
+                  onChange={(e) => setAddressId(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                >
+                  {addresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                    </option>
+                  ))}
+                </select>
+                {/* La prueba puede instalarse en una dirección distinta a
+                    la principal del cliente (oficina, segunda residencia,
+                    casa de un familiar). Si no está en la lista, se añade
+                    desde la ficha y al volver aparecerá aquí. */}
+                <Link
+                  href={`/${ownerKind === "customer" ? "clientes" : "leads"}/${ownerId}` as never}
+                  className="text-[11px] text-primary hover:underline"
+                >
+                  + Añadir otra dirección
+                </Link>
+              </>
             )}
           </div>
           <div className="space-y-1">

@@ -30,6 +30,7 @@ import { InstallPreference } from "@/modules/contracts/install-preference";
 import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
+import { CleanupDuplicatePaymentsButton } from "@/modules/contracts/cleanup-duplicates-button";
 import { BackButton } from "@/shared/components/back-button";
 import { SubjectNotificationToast } from "@/modules/notifications/subject-toast";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -559,7 +560,15 @@ export default async function ContractDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Pagos</CardTitle>
+          <CardTitle className="flex items-center justify-between gap-2 flex-wrap">
+            <span>Pagos</span>
+            {(session.is_superadmin ||
+              session.roles.includes("company_admin") ||
+              session.roles.includes("commercial_director")) &&
+              payments.length > 1 && (
+                <CleanupDuplicatePaymentsButton contractId={contract.id} />
+              )}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {payments.length === 0 ? (

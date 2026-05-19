@@ -257,47 +257,61 @@ export async function approveAbsenceAction(id: string, approve: boolean): Promis
   const admin = createAdminClient() as any;
   const { data: ab } = await admin
     .from("time_absences")
-    .select("user_id, kind, starts_on, ends_on")
+    .select("user_id, kind, starts_on, ends_on, status")
     .eq("id", id)
     .maybeSingle();
+  if (!ab) throw new Error("Ausencia no encontrada");
+  const previousStatus = (ab as { status: string }).status;
+  const newStatus = approve ? "approved" : "rejected";
+
   await admin
     .from("time_absences")
     .update({
-      status: approve ? "approved" : "rejected",
+      status: newStatus,
       approved_by: session.user_id,
       approved_at: new Date().toISOString(),
     })
     .eq("id", id);
 
-  // Si es vacaciones aprobadas, descontar saldo
-  if (approve && ab && (ab as { kind: string }).kind === "vacation") {
-    const a = ab as { user_id: string; starts_on: string; ends_on: string };
-    const days = Math.max(
-      1,
-      Math.round(
-        (new Date(a.ends_on).getTime() - new Date(a.starts_on).getTime()) / 86400000,
-      ) + 1,
-    );
-    const year = new Date(a.starts_on).getFullYear();
-    const { data: bal } = await admin
-      .from("user_vacation_balances")
-      .select("days_taken, days_total")
-      .eq("user_id", a.user_id)
-      .eq("year", year)
-      .maybeSingle();
-    const cur = bal as { days_taken: number; days_total: number } | null;
-    await admin
-      .from("user_vacation_balances")
-      .upsert(
-        {
-          user_id: a.user_id,
-          company_id: session.company_id,
-          year,
-          days_total: cur?.days_total ?? 22,
-          days_taken: (cur?.days_taken ?? 0) + days,
-        },
-        { onConflict: "user_id,year" },
+  // Saldo de vacaciones: idempotente (decisión 2026-05-19).
+  //   - Si pasa de NO-approved a approved Y es vacation → sumar días.
+  //   - Si pasa de approved a NO-approved → restar días.
+  //   - Si no cambia el "es approved", no tocar saldo.
+  if ((ab as { kind: string }).kind === "vacation") {
+    const wasApproved = previousStatus === "approved";
+    const isApproved = newStatus === "approved";
+    let delta = 0;
+    if (!wasApproved && isApproved) delta = +1;
+    else if (wasApproved && !isApproved) delta = -1;
+    if (delta !== 0) {
+      const a = ab as { user_id: string; starts_on: string; ends_on: string };
+      const days = Math.max(
+        1,
+        Math.round(
+          (new Date(a.ends_on).getTime() - new Date(a.starts_on).getTime()) / 86400000,
+        ) + 1,
       );
+      const year = new Date(a.starts_on).getFullYear();
+      const { data: bal } = await admin
+        .from("user_vacation_balances")
+        .select("days_taken, days_total")
+        .eq("user_id", a.user_id)
+        .eq("year", year)
+        .maybeSingle();
+      const cur = bal as { days_taken: number; days_total: number } | null;
+      await admin
+        .from("user_vacation_balances")
+        .upsert(
+          {
+            user_id: a.user_id,
+            company_id: session.company_id,
+            year,
+            days_total: cur?.days_total ?? 22,
+            days_taken: Math.max(0, (cur?.days_taken ?? 0) + delta * days),
+          },
+          { onConflict: "user_id,year" },
+        );
+    }
   }
 
   // Notificar al solicitante
@@ -312,4 +326,67 @@ export async function approveAbsenceAction(id: string, approve: boolean): Promis
     });
   }
   revalidatePath("/fichajes");
+}
+
+/**
+ * Recalcula el saldo de vacaciones de un usuario en un año a partir de
+ * todas las ausencias kind=vacation status=approved que tiene en BD.
+ * Útil cuando saldos antiguos quedaron desincronizados (p. ej. ausencias
+ * aprobadas antes de que existiera la lógica de descuento, o doble
+ * aprobación legacy).
+ */
+export async function recalculateVacationBalanceAction(
+  userId: string,
+  year: number,
+): Promise<{ ok: true; days_taken: number } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const yearStart = `${year}-01-01`;
+    const yearEnd = `${year}-12-31`;
+    const { data: abs } = await admin
+      .from("time_absences")
+      .select("starts_on, ends_on")
+      .eq("user_id", userId)
+      .eq("kind", "vacation")
+      .eq("status", "approved")
+      .gte("starts_on", yearStart)
+      .lte("starts_on", yearEnd);
+    type A = { starts_on: string; ends_on: string };
+    let total = 0;
+    for (const a of (abs ?? []) as A[]) {
+      const d = Math.max(
+        1,
+        Math.round(
+          (new Date(a.ends_on).getTime() - new Date(a.starts_on).getTime()) / 86400000,
+        ) + 1,
+      );
+      total += d;
+    }
+    const { data: bal } = await admin
+      .from("user_vacation_balances")
+      .select("days_total")
+      .eq("user_id", userId)
+      .eq("year", year)
+      .maybeSingle();
+    const days_total = (bal as { days_total: number } | null)?.days_total ?? 22;
+    await admin
+      .from("user_vacation_balances")
+      .upsert(
+        {
+          user_id: userId,
+          company_id: session.company_id,
+          year,
+          days_total,
+          days_taken: total,
+        },
+        { onConflict: "user_id,year" },
+      );
+    revalidatePath("/fichajes");
+    return { ok: true, days_taken: total };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }

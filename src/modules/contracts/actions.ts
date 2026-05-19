@@ -606,17 +606,31 @@ export async function createContractFromProposal(proposalId: string) {
   }
 
   if (payments.length > 0) {
-    await supabase.from("contract_payments").insert(
-      payments.map((pay) => ({
-        contract_id: contractId,
-        company_id: session.company_id,
-        concept: pay.concept,
-        amount_cents: pay.amount_cents,
-        method: pay.method,
-        moment: pay.moment,
-        status: "pending",
-      })) as never,
-    );
+    // Idempotencia (decisión 2026-05-19): si esta action se ejecuta dos
+    // veces para el mismo contract_id (race condition, doble click en
+    // "Convertir propuesta a contrato"), no debe duplicar contract_payments.
+    // Comprobamos si ya existen pagos antes de insertar.
+    const { count: existingPayments } = await supabase
+      .from("contract_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("contract_id", contractId);
+    if ((existingPayments ?? 0) === 0) {
+      await supabase.from("contract_payments").insert(
+        payments.map((pay) => ({
+          contract_id: contractId,
+          company_id: session.company_id,
+          concept: pay.concept,
+          amount_cents: pay.amount_cents,
+          method: pay.method,
+          moment: pay.moment,
+          status: "pending",
+        })) as never,
+      );
+    } else {
+      console.warn(
+        `[createContractFromProposal] contract ${contractId} ya tiene ${existingPayments} contract_payments — skip insert para evitar duplicados.`,
+      );
+    }
   }
 
   await supabase.from("events").insert({
@@ -630,6 +644,80 @@ export async function createContractFromProposal(proposalId: string) {
 
   revalidatePath("/contratos");
   redirect(`/contratos/${contractId}` as never);
+}
+
+/**
+ * Limpia contract_payments duplicados de un contrato. Mismo concept +
+ * mismo amount_cents + status=pending → deja solo el más antiguo.
+ * Solo admin / director comercial.
+ */
+export async function cleanupDuplicateContractPaymentsAction(
+  contractId: string,
+): Promise<
+  | { ok: true; removed: number }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const allowed =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("commercial_director");
+    if (!allowed) {
+      return {
+        ok: false,
+        error: "Solo admin / dirección comercial puede limpiar duplicados.",
+      };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: pays } = await admin
+      .from("contract_payments")
+      .select("id, concept, amount_cents, status, created_at")
+      .eq("contract_id", contractId)
+      .order("created_at", { ascending: true });
+    type P = {
+      id: string;
+      concept: string;
+      amount_cents: number;
+      status: string;
+      created_at: string;
+    };
+    const list = (pays ?? []) as P[];
+    // Agrupar por (concept normalizado + amount). Mantenemos solo el
+    // primero pending; si hay algún status distinto a pending, NO
+    // borramos nada de ese grupo (porque ya hay actividad real).
+    const groups = new Map<string, P[]>();
+    for (const p of list) {
+      const key = `${p.concept.trim().toLowerCase()}::${p.amount_cents}`;
+      const arr = groups.get(key) ?? [];
+      arr.push(p);
+      groups.set(key, arr);
+    }
+    const toDelete: string[] = [];
+    for (const arr of groups.values()) {
+      if (arr.length <= 1) continue;
+      // Si alguno NO es pending → no tocar el grupo (riesgo de borrar
+      // pagos ya cobrados/validados).
+      if (arr.some((p) => p.status !== "pending")) continue;
+      // Borrar todos menos el primero
+      for (let i = 1; i < arr.length; i++) toDelete.push(arr[i]!.id);
+    }
+    if (toDelete.length === 0) {
+      return { ok: true, removed: 0 };
+    }
+    const { error } = await admin
+      .from("contract_payments")
+      .delete()
+      .in("id", toDelete);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath(`/contratos/${contractId}`);
+    revalidatePath("/wallet");
+    return { ok: true, removed: toDelete.length };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 export async function markContractSigned(id: string) {
