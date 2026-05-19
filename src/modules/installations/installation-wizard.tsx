@@ -97,6 +97,9 @@ interface Props {
   installationAddress?: string | null;
   /** Fecha y hora programada — para bloquear el inicio si no es el día actual. */
   scheduledAt?: string | null;
+  /** true si la instalación tiene una incidencia abierta sin resolver
+   *  (p. ej. stock_shortage). Bloquea iniciar parte (decisión 2026-05-19). */
+  hasOpenIncident?: boolean;
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -170,6 +173,7 @@ export function InstallationWizard(props: Props) {
     customerEmail,
     installationAddress,
     scheduledAt,
+    hasOpenIncident,
   } = props;
   void representativeName;
 
@@ -798,43 +802,55 @@ export function InstallationWizard(props: Props) {
                     )}
                   </div>
 
-                  {/* Validación de fecha (decisión usuario 2026-05-11):
-                      NO se puede iniciar antes del día programado. Para
-                      adelantarlo hay que avisar a nivel 2 (admin / director)
-                      que modifique la fecha. */}
+                  {/* Bloqueo por incidencia abierta (decisión 2026-05-19):
+                      si hay una incidencia abierta (típico: stock insuficiente)
+                      NO se puede iniciar parte hasta resolverla. */}
+                  {hasOpenIncident && status !== "in_progress" && status !== "paused" && (
+                    <div className="rounded-xl border-2 border-rose-400 bg-rose-50 p-3 text-sm text-rose-900">
+                      <p className="font-bold">⛔ Incidencia abierta sin resolver</p>
+                      <p className="mt-1 text-xs">
+                        No puedes iniciar este parte hasta que la incidencia
+                        esté resuelta. Cierra la incidencia desde el bloque
+                        superior (admin / director técnico) y vuelve a abrir
+                        el parte.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Ventana 24h (decisión usuario 2026-05-19):
+                      solo se puede iniciar dentro de las 24h previas y las
+                      24h posteriores al scheduled_at. Antes hay que pedir
+                      al director que adelante la fecha. */}
                   {(() => {
                     if (!scheduledAt || status === "in_progress" || status === "paused") return null;
-                    const today = new Date();
-                    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-                    const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-                    const sched = new Date(scheduledAt);
-                    if (sched < todayStart) {
+                    const now = Date.now();
+                    const sched = new Date(scheduledAt).getTime();
+                    const HOUR = 3600 * 1000;
+                    if (sched > now + 24 * HOUR) {
+                      const hoursLeft = Math.round((sched - now) / HOUR);
                       return (
-                        <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
-                          <p className="font-bold">⚠ Fecha pasada</p>
+                        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                          <p className="font-bold">⚠ Aún faltan más de 24h</p>
                           <p className="mt-1 text-xs">
-                            La instalación estaba programada para{" "}
-                            <strong>
-                              {sched.toLocaleDateString("es-ES")}
-                            </strong>
-                            . Habla con un director para reprogramarla antes de
-                            iniciarla.
+                            La instalación está programada para{" "}
+                            <strong>{new Date(scheduledAt).toLocaleString("es-ES")}</strong>
+                            {" "}(faltan ~{hoursLeft}h). Solo se puede iniciar el
+                            parte dentro de las 24 horas previas. Si necesitas
+                            adelantarla, pide al director (nivel 2) que cambie
+                            la fecha.
                           </p>
                         </div>
                       );
                     }
-                    if (sched > todayEnd) {
+                    if (sched < now - 24 * HOUR) {
                       return (
-                        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                          <p className="font-bold">⚠ Aún no es el día programado</p>
+                        <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">
+                          <p className="font-bold">⚠ Fecha pasada hace más de 24h</p>
                           <p className="mt-1 text-xs">
-                            Esta instalación está programada para{" "}
-                            <strong>
-                              {sched.toLocaleDateString("es-ES")}
-                            </strong>
-                            . No se puede iniciar antes de esa fecha. Si quieres
-                            hacerla antes, avisa a un director (nivel 2) para que
-                            adelante la fecha en la ficha de la instalación.
+                            La instalación estaba programada para{" "}
+                            <strong>{new Date(scheduledAt).toLocaleString("es-ES")}</strong>
+                            . Habla con un director para reprogramarla antes
+                            de iniciarla.
                           </p>
                         </div>
                       );
@@ -856,21 +872,27 @@ export function InstallationWizard(props: Props) {
                     </div>
                   ) : (() => {
                     // Bloquear si:
+                    //  · Hay incidencia abierta sin resolver
                     //  · NO está agendado (scheduledAt null)
-                    //  · O la fecha programada no es hoy
+                    //  · O el scheduled_at está fuera de la ventana ±24h
                     let blocked = false;
                     let blockedMsg = "Iniciar parte (capturar GPS)";
-                    if (!scheduledAt) {
+                    if (hasOpenIncident) {
+                      blocked = true;
+                      blockedMsg = "Bloqueado — incidencia abierta";
+                    } else if (!scheduledAt) {
                       blocked = true;
                       blockedMsg = "Agenda primero la instalación";
                     } else {
-                      const today = new Date();
-                      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-                      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-                      const sched = new Date(scheduledAt);
-                      if (sched < todayStart || sched > todayEnd) {
+                      const now = Date.now();
+                      const sched = new Date(scheduledAt).getTime();
+                      const HOUR = 3600 * 1000;
+                      if (sched > now + 24 * HOUR) {
                         blocked = true;
-                        blockedMsg = "Bloqueado — no es el día programado";
+                        blockedMsg = "Aún faltan más de 24h";
+                      } else if (sched < now - 24 * HOUR) {
+                        blocked = true;
+                        blockedMsg = "Fecha pasada — reprogramar";
                       }
                     }
                     return (

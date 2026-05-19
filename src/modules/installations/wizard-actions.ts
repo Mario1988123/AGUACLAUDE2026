@@ -86,12 +86,10 @@ export async function startInstallationAction(input: {
       };
     }
 
-    // Bloqueo de fecha (decisión usuario 2026-05-11): el técnico solo puede
-    // iniciar el parte si scheduled_at cae HOY. Si está en el futuro o en
-    // el pasado, bloquear. Para adelantarlo / atrasarlo, nivel 2 (admin /
-    // directores) tiene que modificar la fecha en la ficha de la instalación.
-    // Nivel 1 y nivel 2 PUEDEN saltar el bloqueo (cuando algo va mal en
-    // campo, el director puede iniciar el parte fuera de día).
+    // Bloqueo de fecha (decisión usuario 2026-05-19, actualizada):
+    // ventana ±24h desde scheduled_at. Antes de eso → bloqueado. Si no
+    // hay scheduled_at → bloqueado (regla nueva: solo agendadas se pueden
+    // iniciar). Nivel 1/2 puede saltar este bloqueo en campo.
     const isUpperLevel =
       session.is_superadmin ||
       session.roles.includes("company_admin") ||
@@ -99,21 +97,50 @@ export async function startInstallationAction(input: {
       session.roles.includes("commercial_director") ||
       session.roles.includes("telemarketing_director");
     const autoRescheduledFromFuture = false;
-    if (i.scheduled_at && !isUpperLevel) {
-      const sched = new Date(i.scheduled_at);
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
-      if (sched < todayStart) {
+
+    // Bloqueo por incidencia abierta: si la instalación tiene una
+    // incidencia abierta sin resolver, no se puede iniciar parte.
+    try {
+      const { data: openInc } = await admin
+        .from("installation_incidents")
+        .select("id")
+        .eq("installation_id", input.installation_id)
+        .is("resolved_at", null)
+        .limit(1)
+        .maybeSingle();
+      if (openInc && !isUpperLevel) {
         return {
           ok: false,
-          error: `La instalación estaba programada para el ${sched.toLocaleDateString("es-ES")}. Habla con un director para reprogramarla antes de iniciarla.`,
+          error:
+            "Esta instalación tiene una incidencia abierta sin resolver. Resuélvela antes de iniciar el parte.",
         };
       }
-      if (sched > todayEnd) {
+    } catch {
+      /* fail-soft: si la tabla de incidencias no responde, no bloquear */
+    }
+
+    if (!i.scheduled_at && !isUpperLevel) {
+      return {
+        ok: false,
+        error:
+          "Esta instalación no está agendada. Pide a un director que le ponga fecha antes de iniciar el parte.",
+      };
+    }
+    if (i.scheduled_at && !isUpperLevel) {
+      const now = Date.now();
+      const sched = new Date(i.scheduled_at).getTime();
+      const HOUR = 3600 * 1000;
+      if (sched > now + 24 * HOUR) {
+        const hoursLeft = Math.round((sched - now) / HOUR);
         return {
           ok: false,
-          error: `Esta instalación está programada para el ${sched.toLocaleDateString("es-ES")}. No se puede iniciar antes de esa fecha. Si quieres adelantarla, avisa a un director (nivel 2) para que modifique la fecha.`,
+          error: `Aún faltan ~${hoursLeft}h para la instalación (programada el ${new Date(i.scheduled_at).toLocaleString("es-ES")}). Solo se puede iniciar el parte dentro de las 24 horas previas.`,
+        };
+      }
+      if (sched < now - 24 * HOUR) {
+        return {
+          ok: false,
+          error: `La instalación estaba programada para el ${new Date(i.scheduled_at).toLocaleString("es-ES")} (hace más de 24h). Pide a un director que la reprograme antes de iniciarla.`,
         };
       }
     }

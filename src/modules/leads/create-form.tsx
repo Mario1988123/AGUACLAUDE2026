@@ -277,6 +277,18 @@ export function LeadCreateForm() {
     fd.set("address_postal_code", postal);
     fd.set("address_city", city);
     fd.set("address_province", province);
+    // Coordenadas obligatorias si se ha rellenado dirección (decisión
+    // 2026-05-19): el técnico necesita lat/lng para validar GPS al instalar.
+    const hasAddressData = Boolean(
+      street.trim() || postal.trim() || city.trim(),
+    );
+    if (hasAddressData && (latitude == null || longitude == null)) {
+      notify.error(
+        "Faltan coordenadas",
+        "Pulsa «Buscar en mapa» o usa tu ubicación actual para fijar la chincheta. Sin lat/lng el técnico no puede validar GPS al instalar.",
+      );
+      return;
+    }
     if (latitude != null) fd.set("address_latitude", String(latitude));
     if (longitude != null) fd.set("address_longitude", String(longitude));
     startTransition(async () => {

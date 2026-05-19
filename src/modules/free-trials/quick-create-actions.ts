@@ -120,7 +120,7 @@ export async function createMinimalLeadAction(input: {
       company_id: session.company_id,
       party_kind: input.party_kind,
       origin: "other",
-      potential: "medium",
+      potential: "unknown",
       assigned_user_id: isLevel3 ? session.user_id : null,
       assigned_at: isLevel3 ? new Date().toISOString() : null,
       created_by: session.user_id,

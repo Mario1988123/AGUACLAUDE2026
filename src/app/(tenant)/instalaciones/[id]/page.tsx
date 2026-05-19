@@ -16,6 +16,7 @@ import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
 import { InstallationWizard } from "@/modules/installations/installation-wizard";
 import { PhotoGallery } from "@/modules/installations/photo-gallery";
+import { InstallationPrioritySelector } from "@/modules/installations/priority-selector";
 import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/modules/installations/client-actions";
 import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -306,6 +307,17 @@ export default async function InstallationDetailPage({
               {STATUS_LABEL[i.status] ?? i.status}
             </Badge>
             <Badge variant="outline">{KIND_LABEL[i.kind] ?? i.kind}</Badge>
+            <InstallationPrioritySelector
+              installationId={i.id}
+              current={
+                ((i as unknown as { priority?: "low" | "normal" | "high" | "urgent" }).priority) ?? "normal"
+              }
+              canEdit={
+                session.is_superadmin ||
+                session.roles.includes("company_admin") ||
+                session.roles.includes("technical_director")
+              }
+            />
             {openIncidents.length > 0 && (
               <span className="inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                 <AlertTriangle className="h-3 w-3" />
@@ -362,6 +374,7 @@ export default async function InstallationDetailPage({
               customerEmail={customerEmail}
               installationAddress={installationAddress}
               scheduledAt={i.scheduled_at}
+              hasOpenIncident={openIncidents.length > 0}
             />
           )}
           <a
@@ -613,14 +626,21 @@ export default async function InstallationDetailPage({
                   {new Date(i.scheduled_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
                 </div>
               )}
-              <div>
-                <strong>Daños previos:</strong>{" "}
-                {i.has_previous_damage ? "Sí" : "No"}
-              </div>
-              <div>
-                <strong>Agujero encimera:</strong>{" "}
-                {i.needs_countertop_drilling ? "Sí" : "No"}
-              </div>
+              {/* Estado inicial: SOLO se conoce tras iniciar el parte
+                  (decisión 2026-05-19). Antes de iniciar no tiene sentido
+                  mostrarlo — el técnico aún no ha visto el sitio. */}
+              {i.started_at && (
+                <>
+                  <div>
+                    <strong>Daños previos:</strong>{" "}
+                    {i.has_previous_damage ? "Sí" : "No"}
+                  </div>
+                  <div>
+                    <strong>Agujero encimera:</strong>{" "}
+                    {i.needs_countertop_drilling ? "Sí" : "No"}
+                  </div>
+                </>
+              )}
               {i.geo_distance_to_address_m != null && (
                 <div>
                   <strong>Distancia GPS:</strong>{" "}

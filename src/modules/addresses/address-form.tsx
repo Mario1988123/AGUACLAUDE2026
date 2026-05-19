@@ -202,6 +202,17 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       notify.error("Dirección incoherente", geoErr);
       return;
     }
+    // Coordenadas SIEMPRE obligatorias (decisión 2026-05-19): el técnico
+    // no puede iniciar parte ni validar GPS si faltan. Si no se han
+    // podido geocodificar, el usuario debe colocar chincheta manual en
+    // el mapa.
+    if (form.latitude == null || form.longitude == null) {
+      notify.error(
+        "Faltan coordenadas",
+        "Pulsa «Buscar en mapa» o coloca la chincheta manualmente — sin lat/lng el técnico no puede validar el GPS al instalar.",
+      );
+      return;
+    }
     startTransition(async () => {
       try {
         await upsertAddressAction({

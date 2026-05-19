@@ -706,6 +706,53 @@ export async function getInstallerAvailabilityAction(
 }
 
 /**
+ * Cambia la prioridad de una instalación. Solo admin / director técnico.
+ * Defensivo: si la columna no existe todavía (migración pendiente),
+ * devuelve un error claro en vez de romper.
+ */
+export async function setInstallationPriorityAction(
+  installationId: string,
+  priority: "low" | "normal" | "high" | "urgent",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const allowed =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director");
+    if (!allowed) {
+      return {
+        ok: false,
+        error: "Solo admin o director técnico puede cambiar la prioridad.",
+      };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { error } = await admin
+      .from("installations")
+      .update({ priority })
+      .eq("id", installationId)
+      .eq("company_id", session.company_id);
+    if (error) {
+      if (/column .* does not exist|schema cache/i.test(error.message ?? "")) {
+        return {
+          ok: false,
+          error:
+            "La columna priority aún no se ha aplicado. Migra 20260619200000_installation_priority.sql.",
+        };
+      }
+      return { ok: false, error: error.message };
+    }
+    revalidatePath(`/instalaciones/${installationId}`);
+    revalidatePath("/instalaciones");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
  * Versión "result pattern" — no lanza error, devuelve {ok, error} con
  * mensaje real (Next.js redacta thrown Error.message en producción).
  */
