@@ -467,9 +467,19 @@ function drawCallout(
 
 /**
  * Sección con título grande + línea decorativa.
+ *
+ * Decisión usuario 2026-05-19: cada sección empieza en página nueva
+ * (excepto la primera). Así el documento es más legible: no quedan
+ * encabezados a mitad de página y los términos siempre arrancan en una
+ * página propia.
  */
 function drawSection(d: Doc, label: string): void {
-  ensure(d, 30);
+  // Si NO es la primera sección del documento, salto de página.
+  // Detectamos "primera sección" porque cursorY ≈ top.
+  const isTop = d.cursorY > PAGE_H - MARGIN - 5;
+  if (!isTop) {
+    newPage(d);
+  }
   d.cursorY -= 14;
   d.page.drawText(label.toUpperCase(), {
     x: MARGIN,
