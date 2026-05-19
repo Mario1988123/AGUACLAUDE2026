@@ -633,10 +633,21 @@ function drawPaymentsTable(
     amountCents: number;
   }>,
 ): void {
-  const cols = [220, 110, 110, 75]; // concept | moment | method | amount
+  // Bug 2026-05-20: la suma anterior 220+110+110+75=515 excedía CONTENT_W
+  // (505) y la columna IMPORTE se cortaba. Rebalanceado y wrap en concepto.
+  const cols = [200, 100, 95, 110]; // concept | moment | method | amount = 505 = CONTENT_W
   const headerH = 22;
-  const rowH = 20;
-  ensure(d, headerH + rows.length * rowH + 10);
+  // Wrap del concepto si excede el ancho de su columna (10 padding por lado)
+  const conceptMaxW = cols[0]! - 16;
+  const wrappedRows = rows.map((r) => ({
+    ...r,
+    conceptLines: wrap(d.font, r.concept, 9.5, conceptMaxW),
+  }));
+  const totalRowsH = wrappedRows.reduce(
+    (acc, r) => acc + Math.max(20, r.conceptLines.length * 12 + 8),
+    0,
+  );
+  ensure(d, headerH + totalRowsH + 10);
 
   // Header
   d.cursorY -= headerH;
@@ -672,35 +683,49 @@ function drawPaymentsTable(
     x += cols[i]!;
   });
 
-  // Rows
-  rows.forEach((r, idx) => {
-    ensure(d, rowH);
-    d.cursorY -= rowH;
+  // Rows (con altura dinámica según líneas wrapeadas del concepto)
+  wrappedRows.forEach((r, idx) => {
+    const dynRowH = Math.max(20, r.conceptLines.length * 12 + 8);
+    ensure(d, dynRowH);
+    d.cursorY -= dynRowH;
     const y = d.cursorY;
     if (idx % 2 === 1) {
       d.page.drawRectangle({
         x: MARGIN,
         y: y - 2,
         width: CONTENT_W,
-        height: rowH,
+        height: dynRowH,
         color: BG_SOFT,
       });
     }
     let cx = MARGIN + 10;
-    const cells = [
-      r.concept,
+    // Concepto: render multi-línea
+    r.conceptLines.forEach((ln, li) => {
+      d.page.drawText(ln, {
+        x: cx,
+        y: y + dynRowH - 14 - li * 12,
+        size: 9.5,
+        font: d.font,
+        color: TEXT,
+      });
+    });
+    cx += cols[0]!;
+    // Momento + método + importe (en línea base)
+    const otherCells = [
       MOMENT_LABEL[r.moment] ?? r.moment,
       METHOD_LABEL[r.method] ?? r.method,
       fmtEur(r.amountCents),
     ];
-    cells.forEach((c, i) => {
+    otherCells.forEach((c, k) => {
+      const i = k + 1; // índice real de la columna (1, 2, 3)
       const align = i === 3 ? "right" : "left";
       const fontUse = i === 3 ? d.bold : d.font;
       const colorUse = i === 3 ? TEAL_DARK : TEXT;
+      const yBase = y + dynRowH - 14;
       if (align === "left") {
         d.page.drawText(c, {
           x: cx,
-          y: y + 6,
+          y: yBase,
           size: 9.5,
           font: fontUse,
           color: colorUse,
@@ -709,7 +734,7 @@ function drawPaymentsTable(
         const w = fontUse.widthOfTextAtSize(c, 9.5);
         d.page.drawText(c, {
           x: cx + cols[i]! - 10 - w,
-          y: y + 6,
+          y: yBase,
           size: 9.5,
           font: fontUse,
           color: colorUse,

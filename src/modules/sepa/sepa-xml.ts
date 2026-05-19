@@ -94,14 +94,48 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
       };
     }
 
-    // Cobros pendientes con método direct_debit
+    // Idempotencia (decisión 2026-05-20): si ya hay un batch SEPA abierto
+    // para esta empresa, devolvemos su XML existente en vez de regenerar
+    // con datos distintos. El admin tiene que marcarlo como enviado o
+    // cancelarlo antes de generar otro.
+    try {
+      const { data: openBatch } = await admin
+        .from("sepa_batches")
+        .select("id, msg_id, xml, total_cents, num_transactions")
+        .eq("company_id", session.company_id)
+        .eq("status", "open")
+        .order("generated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (openBatch) {
+        const b = openBatch as {
+          id: string;
+          msg_id: string;
+          xml: string;
+          total_cents: number;
+          num_transactions: number;
+        };
+        return {
+          ok: true,
+          xml: b.xml,
+          filename: `remesa-sepa-existente-${b.msg_id}.xml`,
+          transactions: b.num_transactions,
+          total_cents: b.total_cents,
+        };
+      }
+    } catch {
+      /* fail-soft: si la tabla no está migrada, sigue al flujo normal */
+    }
+
+    // Cobros pendientes con método direct_debit (NO ya lockeados en otro batch)
     const { data: paysRaw } = await admin
       .from("contract_payments")
       .select(
-        "id, contract_id, amount_cents, concept, status, method, contracts!inner(customer_id, company_id)",
+        "id, contract_id, amount_cents, concept, status, method, sepa_batch_id, contracts!inner(customer_id, company_id)",
       )
       .eq("method", "direct_debit")
       .eq("status", "pending")
+      .is("sepa_batch_id", null)
       .eq("contracts.company_id", session.company_id);
     type CP = {
       id: string;
@@ -301,8 +335,113 @@ ${txXml}
   </CstmrDrctDbtInitn>
 </Document>`;
 
+    // Persistimos el batch y lockeamos los pagos incluidos (idempotencia).
+    try {
+      const { data: created } = await admin
+        .from("sepa_batches")
+        .insert({
+          company_id: session.company_id,
+          msg_id: msgId,
+          status: "open",
+          total_cents: totalCents,
+          num_transactions: rows.length,
+          xml,
+          generated_by: session.user_id,
+        })
+        .select("id")
+        .single();
+      const batchId = (created as { id: string } | null)?.id ?? null;
+      if (batchId) {
+        const paymentIds = rows.map((r) => r.contract_payment_id);
+        await admin
+          .from("contract_payments")
+          .update({ sepa_batch_id: batchId })
+          .in("id", paymentIds);
+      }
+    } catch (e) {
+      console.error("[sepa-xml] batch persistence failed:", e);
+      // No-bloqueante: el XML se devuelve igual; el usuario sabe que
+      // tendrá que controlar manualmente los duplicados si genera otra
+      // vez antes de aplicar la migración.
+    }
+
     const filename = `remesa-sepa-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${rows.length}tx.xml`;
     return { ok: true, xml, filename, transactions: rows.length, total_cents: totalCents };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+
+/**
+ * Marca el batch SEPA como enviado al banco. Idealmente lo invoca un
+ * admin tras subir el XML al portal bancario. Hace dos cosas:
+ *   1. batch.status = "sent" + sent_at.
+ *   2. Los contract_payments asociados pasan a "collected_pending_validation"
+ *      (el banco aún tiene que procesar el cobro; cuando vuelva el extracto,
+ *      el admin valida).
+ */
+export async function markSepaBatchSentAction(
+  batchId: string,
+): Promise<{ ok: true; updated_payments: number } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo admin puede marcar la remesa como enviada" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { error: e1 } = await admin
+      .from("sepa_batches")
+      .update({ status: "sent", sent_at: new Date().toISOString() })
+      .eq("id", batchId)
+      .eq("company_id", session.company_id)
+      .eq("status", "open");
+    if (e1) return { ok: false, error: e1.message };
+    const { data: updRows } = await admin
+      .from("contract_payments")
+      .update({ status: "collected_pending_validation", collected_at: new Date().toISOString() })
+      .eq("sepa_batch_id", batchId)
+      .select("id");
+    const updated = ((updRows ?? []) as Array<{ id: string }>).length;
+    return { ok: true, updated_payments: updated };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Cancela un batch SEPA abierto (p. ej. el banco rechazó el XML).
+ * Libera los pagos lockeados para que se puedan incluir en otra remesa.
+ */
+export async function cancelSepaBatchAction(
+  batchId: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo admin puede cancelar la remesa" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    await admin
+      .from("sepa_batches")
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancelled_reason: reason,
+      })
+      .eq("id", batchId)
+      .eq("company_id", session.company_id)
+      .eq("status", "open");
+    await admin
+      .from("contract_payments")
+      .update({ sepa_batch_id: null })
+      .eq("sepa_batch_id", batchId);
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }

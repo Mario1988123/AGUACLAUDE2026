@@ -110,7 +110,11 @@ export async function mergeCustomersAction(
   if (list.some((r) => r.company_id !== session.company_id))
     throw new Error("Cliente de otra empresa");
 
-  // Mover relaciones (todas usan customer_id como FK)
+  // Mover relaciones (todas usan customer_id como FK).
+  // Defensa cross-tenant (decisión 2026-05-20): SIEMPRE añadimos
+  // .eq("company_id", session.company_id) — aunque la query de arriba
+  // ya garantizó que ambos clientes son de la misma empresa, esto
+  // previene que un row sin company_id correcto (corrupto) se mueva.
   const tables = [
     "addresses",
     "contracts",
@@ -128,20 +132,22 @@ export async function mergeCustomersAction(
       await supabase
         .from(t)
         .update({ customer_id: primaryId })
-        .eq("customer_id", secondaryId);
+        .eq("customer_id", secondaryId)
+        .eq("company_id", session.company_id);
     } catch {
-      /* algunas tablas pueden no tener customer_id como columna escribible; ignorar */
+      /* algunas tablas pueden no tener customer_id o company_id; ignorar */
     }
   }
 
-  // Soft-delete el secundario
+  // Soft-delete el secundario (sigue con scope company_id por defensa)
   await supabase
     .from("customers")
     .update({
       deleted_at: new Date().toISOString(),
       notes: `Fusionado en ${primaryId} por ${session.user_id}`,
     })
-    .eq("id", secondaryId);
+    .eq("id", secondaryId)
+    .eq("company_id", session.company_id);
 
   await supabase.from("events").insert({
     company_id: session.company_id,

@@ -10,6 +10,22 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const session = await requireSession();
+  // Gate de rol (decisión 2026-05-20): el PDF de factura es documento
+  // legal AEAT con QR Verifactu. Solo niveles que ven facturación pueden
+  // descargarlo: admin de empresa, director comercial, director técnico
+  // (que ve sus instalaciones facturadas) y superadmin. Comerciales y
+  // telemarketers NO descargan PDFs de factura.
+  const canDownload =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director") ||
+    session.roles.includes("technical_director");
+  if (!canDownload) {
+    return NextResponse.json(
+      { error: "forbidden", message: "Tu rol no permite descargar facturas." },
+      { status: 403 },
+    );
+  }
   const { id } = await params;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;

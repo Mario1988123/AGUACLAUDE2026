@@ -1289,8 +1289,14 @@ export async function GET(req: NextRequest) {
         // Skip pausados — no se factura mientras esté en pausa.
         if (c.paused_at) continue;
         monthlyInvoicing.contracts += 1;
+        // Rollback manual ante fallos en cadena (Supabase sin transacciones
+        // de cliente). Si fallamos a mitad, deshacemos lo creado para evitar
+        // estados inconsistentes (invoice sin payment, etc.).
+        let createdInvoiceId: string | null = null;
+        let createdPaymentId: string | null = null;
         try {
-          // ¿Existe ya una factura de este mes para este contrato?
+          const monthLabel = monthIso.slice(0, 7); // "2026-05"
+          // Idempotencia previa al insert (en cualquier paso podría haber)
           const { count: already } = await admin
             .from("invoices")
             .select("id", { count: "exact", head: true })
@@ -1298,8 +1304,15 @@ export async function GET(req: NextRequest) {
             .gte("issued_at", monthStart)
             .is("deleted_at", null);
           if ((already ?? 0) > 0) continue;
-          // Insertar factura mínima draft (admin la emite a mano si quiere)
-          const { error } = await admin.from("invoices").insert({
+          const { count: cpAlready } = await admin
+            .from("contract_payments")
+            .select("id", { count: "exact", head: true })
+            .eq("contract_id", c.id)
+            .ilike("concept", `Cuota mensual%${monthLabel}%`);
+          if ((cpAlready ?? 0) > 0) continue;
+
+          // 1) Insert invoice draft
+          const { data: invRow, error } = await admin.from("invoices").insert({
             company_id: c.company_id,
             customer_id: c.customer_id,
             contract_id: c.id,
@@ -1311,64 +1324,77 @@ export async function GET(req: NextRequest) {
             due_date: new Date(today.getFullYear(), today.getMonth() + 1, 0)
               .toISOString()
               .slice(0, 10),
-            notes: `Mensualidad ${monthIso.slice(0, 7)} contrato ${c.reference_code ?? c.id.slice(0, 8)}`,
-          });
+            notes: `Mensualidad ${monthLabel} contrato ${c.reference_code ?? c.id.slice(0, 8)}`,
+          }).select("id").single();
           if (error) {
             monthlyInvoicing.errors += 1;
             console.error("[phase2/monthly-invoice]", error.message);
             continue;
           }
+          createdInvoiceId = (invRow as { id: string }).id;
           monthlyInvoicing.generated += 1;
 
-          // contract_payment + wallet_entry para cuota mensual. Pendientes
-          // de cobro (el cliente paga vía domiciliación / transferencia /
-          // GoCardless; admin valida cuando llegue el ingreso).
-          try {
-            const monthLabel = monthIso.slice(0, 7); // "2026-05"
-            // Idempotencia: si ya existe contract_payment de cuota de
-            // este mes para este contrato, no duplicamos.
-            const { count: cpAlready } = await admin
-              .from("contract_payments")
-              .select("id", { count: "exact", head: true })
-              .eq("contract_id", c.id)
-              .ilike("concept", `Cuota mensual%${monthLabel}%`);
-            if ((cpAlready ?? 0) > 0) continue;
-            const { data: cpRow, error: cpErr } = await admin
-              .from("contract_payments")
-              .insert({
-                company_id: c.company_id,
-                contract_id: c.id,
-                concept: `Cuota mensual · ${monthLabel}`,
-                amount_cents: c.monthly_cents,
-                method: "direct_debit",
-                moment: "periodic",
-                status: "pending",
-              })
-              .select("id")
-              .single();
-            if (cpErr) {
-              console.error("[phase2/monthly-payment]", cpErr.message);
-              continue;
-            }
-            try {
-              await admin.from("wallet_entries").insert({
-                company_id: c.company_id,
-                contract_id: c.id,
-                contract_payment_id: (cpRow as { id: string }).id,
-                customer_id: c.customer_id,
-                concept: `Cuota mensual ${monthLabel}`,
-                amount_cents: c.monthly_cents,
-                method: "direct_debit",
-                status: "pending",
-              });
-            } catch (e) {
-              console.error("[phase2/monthly-wallet]", e);
-            }
-            monthlyInvoicing.payments_created += 1;
-          } catch (e) {
-            console.error("[phase2/monthly-payment exception]", e);
+          // 2) Insert contract_payment
+          const { data: cpRow, error: cpErr } = await admin
+            .from("contract_payments")
+            .insert({
+              company_id: c.company_id,
+              contract_id: c.id,
+              concept: `Cuota mensual · ${monthLabel}`,
+              amount_cents: c.monthly_cents,
+              method: "direct_debit",
+              moment: "periodic",
+              status: "pending",
+            })
+            .select("id")
+            .single();
+          if (cpErr) {
+            // Rollback invoice
+            await admin.from("invoices").delete().eq("id", createdInvoiceId);
+            monthlyInvoicing.errors += 1;
+            monthlyInvoicing.generated -= 1;
+            console.error("[phase2/monthly-payment]", cpErr.message);
+            continue;
           }
+          createdPaymentId = (cpRow as { id: string }).id;
+
+          // 3) Insert wallet_entry
+          const { error: weErr } = await admin.from("wallet_entries").insert({
+            company_id: c.company_id,
+            contract_id: c.id,
+            contract_payment_id: createdPaymentId,
+            customer_id: c.customer_id,
+            concept: `Cuota mensual ${monthLabel}`,
+            amount_cents: c.monthly_cents,
+            method: "direct_debit",
+            status: "pending",
+          });
+          if (weErr) {
+            // Rollback payment + invoice
+            await admin.from("contract_payments").delete().eq("id", createdPaymentId);
+            await admin.from("invoices").delete().eq("id", createdInvoiceId);
+            monthlyInvoicing.errors += 1;
+            monthlyInvoicing.generated -= 1;
+            console.error("[phase2/monthly-wallet]", weErr.message);
+            continue;
+          }
+          monthlyInvoicing.payments_created += 1;
         } catch (e) {
+          // Rollback completo si algo lanzó excepción
+          if (createdPaymentId) {
+            await admin
+              .from("contract_payments")
+              .delete()
+              .eq("id", createdPaymentId)
+              .then(() => {}, () => {});
+          }
+          if (createdInvoiceId) {
+            await admin
+              .from("invoices")
+              .delete()
+              .eq("id", createdInvoiceId)
+              .then(() => {}, () => {});
+          }
           monthlyInvoicing.errors += 1;
           console.error("[phase2/monthly-invoice exception]", e);
         }
