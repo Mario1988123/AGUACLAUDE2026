@@ -38,6 +38,7 @@ import { listFinanciers } from "@/modules/financiers/actions";
 import { FinalizeRentalButton } from "@/modules/contracts/finalize-rental-modal";
 import { SepaMandatePanel } from "@/modules/sepa/sepa-mandate-panel";
 import { getSepaMandateByContract } from "@/modules/sepa/mandate-actions";
+import { SendRemoteSignButton } from "@/modules/contracts/remote-sign-button";
 
 export const dynamic = "force-dynamic";
 
@@ -373,6 +374,18 @@ export default async function ContractDetailPage({
           />
           )}
           <ViewA4Button contractId={contract.id} />
+          {/* Enviar a firmar por email (DocuSign-like). Solo si NO está
+              firmado todavía (draft / pending_data / pending_signature). */}
+          {["draft", "pending_data", "pending_signature"].includes(contract.status) && (
+            <SendRemoteSignButton
+              contractId={contract.id}
+              defaultEmail={
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (customerSnap as any)?.email ?? null
+              }
+              defaultName={customerName ?? null}
+            />
+          )}
           {(contract.status === "signed" || contract.status === "active" || contract.status === "completed") && (
             <InvoiceFromContractButton contractId={contract.id} />
           )}

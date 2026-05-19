@@ -310,6 +310,36 @@ const TEMPLATES: SystemTemplate[] = [
     `,
     variables: ["customer_first_name", "months_since_install", "price"],
   },
+  {
+    key: "contract_send_remote_sign",
+    name: "Envío de contrato para firma remota",
+    description: "Link con token para que el cliente firme online sin cuenta.",
+    kind: "transactional",
+    subject: "Tu contrato con {{company_name}} está listo para firmar",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}}!</h2>
+      <p>Tu contrato con <strong>{{company_name}}</strong> está listo. Puedes
+      revisarlo y firmarlo online en menos de 2 minutos.</p>
+      <p style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 14px 16px; margin: 16px 0;">
+        Referencia: <strong>{{contract_ref}}</strong>
+      </p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="{{sign_url}}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+          Revisar y firmar contrato
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #666;">El enlace caduca en {{days_to_expire}} días.
+      Si tienes alguna duda antes de firmar, responde a este email y te
+      atenderemos personalmente.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "company_name",
+      "contract_ref",
+      "sign_url",
+      "days_to_expire",
+    ],
+  },
 ];
 
 export function getSystemTemplates(): SystemTemplate[] {
