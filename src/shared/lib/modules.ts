@@ -118,5 +118,9 @@ export const MODULES: ModuleEntry[] = [
   // Mailing: solo nivel 1/2 ve el módulo (gestiona campañas + plantillas).
   // Nivel 3 no necesita acceso.
   { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system", rolesAllowed: LEVEL_1_2 },
+  // RRSS: calendario editorial automático para Instagram, Facebook,
+  // LinkedIn, TikTok, Google Business, blog y newsletter. Centrado en
+  // contenido de tratamiento del agua, sostenibilidad y efemérides.
+  { key: "social_media", label: "RRSS", icon: "Megaphone", href: "/rrss", configHref: "/configuracion/rrss", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];
