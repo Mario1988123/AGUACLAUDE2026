@@ -84,6 +84,34 @@ export async function sendWhatsApp(
     };
   }
 
+  // RGPD — bloqueo si data_processing revocado.
+  if (input.customer_id) {
+    try {
+      const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const { data: dpRow } = await admin
+        .from("customer_consents")
+        .select("granted")
+        .eq("customer_id", input.customer_id)
+        .eq("kind", "data_processing")
+        .order("granted_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (dpRow && (dpRow as { granted: boolean }).granted === false) {
+        return {
+          ok: false,
+          message_sid: null,
+          error_code: "RGPD_REVOKED",
+          error_message:
+            "El cliente revocó el tratamiento de datos. No se le puede enviar WhatsApp.",
+        };
+      }
+    } catch {
+      /* fail-soft: si falla la query, no bloqueamos */
+    }
+  }
+
   const phone = normalizePhoneE164(input.to_phone);
   if (!phone) {
     return {

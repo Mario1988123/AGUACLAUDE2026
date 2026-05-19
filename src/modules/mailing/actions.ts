@@ -351,20 +351,38 @@ export async function sendTransactionalEmail(
     };
   }
 
-  // RGPD — si la plantilla es de marketing y el destinatario es un cliente
-  // identificado, comprobamos que tenga concedido el consentimiento
-  // 'commercial'. Si lo revocó, NO se manda — aunque el flujo lo pidiera.
-  if (
-    (tpl as { kind: string }).kind === "marketing" &&
-    input.customer_id
-  ) {
-    const { hasActiveConsent } = await import("@/modules/customers/consents-actions");
-    const allowed = await hasActiveConsent(input.customer_id, "commercial");
-    if (!allowed) {
+  // RGPD — dos niveles de bloqueo:
+  //   1. data_processing EXPLÍCITAMENTE revocado → bloqueo absoluto
+  //      (no se le puede enviar NADA, ni siquiera transaccional).
+  //   2. plantilla 'marketing' + commercial no concedido → bloqueo solo
+  //      del envío comercial.
+  if (input.customer_id) {
+    const { data: dpRow } = await admin
+      .from("customer_consents")
+      .select("granted")
+      .eq("customer_id", input.customer_id)
+      .eq("kind", "data_processing")
+      .order("granted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const dpRevoked =
+      dpRow && (dpRow as { granted: boolean }).granted === false;
+    if (dpRevoked) {
       return {
         ok: false,
-        error: "Cliente sin consentimiento para comunicaciones comerciales (RGPD)",
+        error:
+          "El cliente revocó el tratamiento de datos (RGPD). No se le pueden enviar comunicaciones.",
       };
+    }
+    if ((tpl as { kind: string }).kind === "marketing") {
+      const { hasActiveConsent } = await import("@/modules/customers/consents-actions");
+      const allowed = await hasActiveConsent(input.customer_id, "commercial");
+      if (!allowed) {
+        return {
+          ok: false,
+          error: "Cliente sin consentimiento para comunicaciones comerciales (RGPD)",
+        };
+      }
     }
   }
 
