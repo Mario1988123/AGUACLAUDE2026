@@ -29,6 +29,8 @@ export function ProductEditButton({
     stock_managed: boolean;
     stock_min: number | null;
     show_in_calculator: boolean;
+    installation_manual_url?: string | null;
+    installation_notes?: string | null;
   };
   categories: { id: string; name: string }[];
 }) {
@@ -49,6 +51,8 @@ export function ProductEditButton({
     stock_managed: initial.stock_managed,
     stock_min: initial.stock_min?.toString() ?? "0",
     show_in_calculator: initial.show_in_calculator,
+    installation_manual_url: initial.installation_manual_url ?? "",
+    installation_notes: initial.installation_notes ?? "",
   });
 
   function save() {
@@ -71,6 +75,8 @@ export function ProductEditButton({
         stock_managed: form.stock_managed,
         stock_min: form.stock_min ? Number(form.stock_min) : 0,
         show_in_calculator: form.show_in_calculator,
+        installation_manual_url: form.installation_manual_url.trim() || null,
+        installation_notes: form.installation_notes.trim() || null,
       });
       if (!r.ok) {
         notify.error("No se pudo guardar", r.error);
@@ -236,6 +242,44 @@ export function ProductEditButton({
                   </div>
                 </div>
               </label>
+
+              {/* Ayudas a la instalación: PDF manual + notas */}
+              <div className="space-y-3 rounded-xl border-2 border-amber-200 bg-amber-50/40 p-3">
+                <div className="text-sm font-bold text-amber-900">
+                  🔧 Ayuda a la instalación
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">URL del manual (PDF)</Label>
+                  <Input
+                    type="url"
+                    value={form.installation_manual_url}
+                    onChange={(e) =>
+                      setForm({ ...form, installation_manual_url: e.target.value })
+                    }
+                    placeholder="https://drive.google.com/.../manual.pdf"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    URL pública del PDF del manual. El instalador podrá abrirlo
+                    desde el wizard de instalación.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Notas / sugerencias para el instalador</Label>
+                  <textarea
+                    value={form.installation_notes}
+                    onChange={(e) =>
+                      setForm({ ...form, installation_notes: e.target.value })
+                    }
+                    rows={3}
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    placeholder="Ej: Cerrar llave general antes de purgar. Comprobar enchufe a tierra antes de conectar la bomba."
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Texto libre con avisos importantes. Aparecerá como modal
+                    al instalador al iniciar el parte.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end gap-2 border-t bg-muted/20 p-3 sticky bottom-0">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>

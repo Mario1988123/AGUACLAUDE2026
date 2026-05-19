@@ -409,6 +409,8 @@ export async function updateProductAction(
     lead_time_days?: number | null;
     default_supplier_name?: string | null;
     show_in_calculator?: boolean;
+    installation_manual_url?: string | null;
+    installation_notes?: string | null;
   },
 ): Promise<ProductActionResult> {
   try {

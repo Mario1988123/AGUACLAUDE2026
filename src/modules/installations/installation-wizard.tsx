@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { InstallationAidsPanel } from "./installation-aids-panel";
 import {
   ArrowLeft,
   ArrowRight,
@@ -679,6 +680,12 @@ export function InstallationWizard(props: Props) {
               {/* PASO 1 — Iniciar parte */}
               {step === 1 && (
                 <div className="space-y-4">
+                  {/* Manuales del equipo + avisos del admin. Visible siempre;
+                      modal automático con notas si el parte ya está iniciado. */}
+                  <InstallationAidsPanel
+                    installationId={installationId}
+                    showOnMount={status === "in_progress"}
+                  />
                   {/* Card destacada con datos del cliente (decisión usuario 2026-05-11):
                       al abrir el parte el técnico ve quién es el cliente sin tener
                       que volver a la ficha. */}
