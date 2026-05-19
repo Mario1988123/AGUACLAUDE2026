@@ -12,6 +12,7 @@ import {
   InstallationSmartAlerts,
   getInstallationAlerts,
 } from "@/modules/installations/smart-alerts";
+import { InstallationSatisfactionRanking } from "@/modules/installations/satisfaction-ranking";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +231,8 @@ export default async function InstalacionesPage({
       </form>
 
       {isUpper && alerts && <InstallationSmartAlerts alerts={alerts} />}
+
+      {isUpper && <InstallationSatisfactionRanking />}
 
       {withIncident.length > 0 && (
         <Card className="border-2 border-red-300 bg-red-50/50">
