@@ -143,11 +143,14 @@ export function ContractFinancierAssign({
       : 0;
   const capitalDispar = desviacionVsSugerido > 0.5;
 
-  if (planType !== "renting" && planType !== "rental") {
+  // Solo el renting usa financiera. Alquiler se cobra directamente al
+  // cliente vía remesa SEPA; contado se cobra al firmar.
+  if (planType !== "renting") {
     return (
       <p className="text-sm text-muted-foreground">
-        El contrato no es de tipo renting/financiación. No requiere asignar
-        financiera.
+        {planType === "rental"
+          ? "Alquiler: el cobro se hace directamente al cliente (remesa SEPA o transferencia). No requiere financiera."
+          : "Contrato al contado: no requiere financiera."}
       </p>
     );
   }

@@ -62,6 +62,17 @@ export async function listCustomerTags(customerId: string): Promise<CustomerTag[
   }
 }
 
+function friendlyTableMissing(rawMsg: string): string {
+  if (
+    /could not find the table|relation .* does not exist|schema cache/i.test(
+      rawMsg,
+    )
+  ) {
+    return "Falta aplicar la migración 20260527110000_customer_tags_churn.sql en Supabase. Pídeselo al administrador del sistema.";
+  }
+  return rawMsg;
+}
+
 export async function upsertTagAction(
   input: unknown,
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
@@ -81,7 +92,8 @@ export async function upsertTagAction(
         .from("customer_tag_catalog")
         .update({ label: parsed.label, color: parsed.color })
         .eq("id", parsed.id);
-      if (r.error) return { ok: false, error: r.error.message };
+      if (r.error)
+        return { ok: false, error: friendlyTableMissing(r.error.message) };
       revalidatePath("/configuracion/clientes");
       return { ok: true, id: parsed.id };
     } else {
@@ -94,14 +106,15 @@ export async function upsertTagAction(
         })
         .select("id")
         .single();
-      if (error) return { ok: false, error: error.message };
+      if (error)
+        return { ok: false, error: friendlyTableMissing(error.message) };
       revalidatePath("/configuracion/clientes");
       return { ok: true, id: (data as { id: string }).id };
     }
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Error desconocido",
+      error: err instanceof Error ? friendlyTableMissing(err.message) : "Error desconocido",
     };
   }
 }

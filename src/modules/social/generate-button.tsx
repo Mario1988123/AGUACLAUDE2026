@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
 import { generateMonthlyPostsAction } from "./generate-action";
 
 const MONTHS = [
@@ -33,14 +34,16 @@ export function GenerateMonthButton({ defaultYear, defaultMonth }: Props) {
   const [month, setMonth] = useState<number>(defaultMonth ?? now.getMonth() + 1);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const ask = useConfirm();
 
-  function run() {
-    if (
-      !confirm(
-        `Generar borradores RRSS para ${MONTHS[month - 1]} ${year}?\n\nIdempotente: si ya hay posts del mes, no se duplican.`,
-      )
-    )
-      return;
+  async function run() {
+    const ok = await ask({
+      title: `Generar RRSS · ${MONTHS[month - 1]} ${year}`,
+      message:
+        "Se crearán los borradores del mes según efemérides + plantillas. Es idempotente: si ya hay posts del mes, NO se duplican.",
+      confirmText: "Generar",
+    });
+    if (!ok) return;
     startTransition(async () => {
       const r = await generateMonthlyPostsAction({ year, month });
       if (!r.ok) {

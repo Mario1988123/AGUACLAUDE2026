@@ -72,7 +72,7 @@ export default async function ConfigClientesPage() {
           <p>
             Los campos no son configurables por empresa para garantizar
             compatibilidad con facturación, contratos y Verifactu. Si necesitas
-            datos extra puntuales, usa el campo <code>notes</code> de la ficha.
+            datos extra puntuales, usa el campo <strong>Notas</strong> de la ficha.
           </p>
         </CardContent>
       </Card>

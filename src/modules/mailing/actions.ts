@@ -320,16 +320,35 @@ export async function sendTransactionalEmail(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // Plantilla
-  const { data: tpl } = await admin
+  // Plantilla: primero BD (personalizadas por empresa). Si no, fallback al
+  // catálogo del sistema (system-templates.ts) — así nunca falla por no
+  // haber seedeado las plantillas iniciales.
+  const { data: tplRow } = await admin
     .from("email_templates")
     .select("id, subject, body_html, kind")
     .eq("company_id", session.company_id)
     .eq("key", input.template_key)
     .eq("is_active", true)
     .maybeSingle();
+  let tpl: { id: string | null; subject: string; body_html: string; kind: "transactional" | "marketing" } | null =
+    (tplRow as { id: string; subject: string; body_html: string; kind: "transactional" | "marketing" } | null) ?? null;
   if (!tpl) {
-    return { ok: false, error: `Plantilla "${input.template_key}" no encontrada` };
+    const { getSystemTemplateByKey } = await import("./system-templates");
+    const sys = getSystemTemplateByKey(input.template_key);
+    if (sys) {
+      tpl = {
+        id: null,
+        subject: sys.subject,
+        body_html: sys.body_html,
+        kind: sys.kind,
+      };
+    }
+  }
+  if (!tpl) {
+    return {
+      ok: false,
+      error: `Plantilla "${input.template_key}" no encontrada. Ve a /configuracion/mailing y cárgala desde el catálogo del sistema.`,
+    };
   }
 
   // RGPD — si la plantilla es de marketing y el destinatario es un cliente
