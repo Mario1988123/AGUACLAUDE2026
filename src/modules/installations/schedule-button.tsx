@@ -358,6 +358,8 @@ function AvailabilityCalendar({
   const prefDates = new Set(
     (ctx.preferences.dates ?? []).map((d) => d.slice(0, 10)),
   );
+  const suggestedDays = ctx.suggested_route_days ?? {};
+  const hasSuggestions = Object.keys(suggestedDays).length > 0;
 
   return (
     <div className="space-y-2 rounded-xl border bg-card p-3">
@@ -373,6 +375,10 @@ function AvailabilityCalendar({
             Media jornada
           </span>
           <span className="flex items-center gap-1">
+            <span className="h-3 w-3 rounded bg-emerald-100 border border-emerald-400" />
+            Ruta cercana
+          </span>
+          <span className="flex items-center gap-1">
             <span className="h-3 w-3 rounded bg-card border" />
             Libre
           </span>
@@ -382,6 +388,13 @@ function AvailabilityCalendar({
           </span>
         </div>
       </div>
+      {hasSuggestions && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2 text-[11px] text-emerald-900">
+          💡 <strong>Sugerencia de ruta:</strong> el cliente está a ≤{" "}
+          {ctx.max_route_radius_km} km de instalaciones que el técnico ya
+          tiene esos días. Marca en verde claro los días con ruta optimizada.
+        </div>
+      )}
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-muted-foreground">
         {DAY_LABEL_SHORT_LMX.map((l, i) => (
           <div key={i}>{l}</div>
@@ -396,17 +409,28 @@ function AvailabilityCalendar({
               const slots = ctx.installer_free_slots[k];
               const past = d < today;
               const isPref = prefDates.has(k);
+              const isSuggested = suggestedDays[k];
               const isSelected = k === selectedDate;
               const fullyBusy = slots && !slots.morning && !slots.afternoon;
               const partialBusy = slots && slots.morning !== slots.afternoon;
               let bg = "bg-card border";
               if (fullyBusy) bg = "bg-red-200 border-red-300";
               else if (partialBusy) bg = "bg-amber-100 border-amber-300";
+              // Sugerencia ruta tiene preferencia sobre busy parcial pero NO sobre fullyBusy.
+              if (isSuggested && !fullyBusy && !past)
+                bg = "bg-emerald-100 border-emerald-400";
               if (isPref && !past)
                 bg = "bg-amber-100 border-amber-400 ring-1 ring-amber-300";
               if (past)
                 bg = "bg-muted text-muted-foreground opacity-50 border";
               if (isSelected) bg += " ring-2 ring-primary";
+              const titleText = fullyBusy
+                ? `Día completo (${busy} instalación${busy > 1 ? "es" : ""})`
+                : partialBusy
+                  ? `Solo libre ${slots?.morning ? "mañana" : "tarde"}`
+                  : isSuggested
+                    ? `Cliente a ${isSuggested.km} km de otra instalación del técnico — ruta optimizada`
+                    : "Libre";
               return (
                 <button
                   key={k}
@@ -414,17 +438,16 @@ function AvailabilityCalendar({
                   onClick={() => !past && onPick(k)}
                   disabled={past}
                   className={`relative h-10 rounded-md text-xs font-bold transition ${bg} hover:opacity-80 disabled:cursor-not-allowed`}
-                  title={
-                    fullyBusy
-                      ? `Día completo (${busy} instalación${busy > 1 ? "es" : ""})`
-                      : partialBusy
-                        ? `Solo libre ${slots?.morning ? "mañana" : "tarde"}`
-                        : "Libre"
-                  }
+                  title={titleText}
                 >
                   {d.getDate()}
                   {isPref && (
                     <Star className="absolute right-0.5 top-0.5 h-2.5 w-2.5 fill-amber-500 text-amber-600" />
+                  )}
+                  {isSuggested && !isPref && (
+                    <span className="absolute right-0.5 top-0.5 text-[8px] font-bold text-emerald-700">
+                      {isSuggested.km}km
+                    </span>
                   )}
                 </button>
               );
