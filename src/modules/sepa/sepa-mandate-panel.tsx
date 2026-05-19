@@ -90,8 +90,9 @@ export function SepaMandatePanel({
           Forma de cobro de cuotas mensuales
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
-          Aplica a partir de la 2ª cuota (la 1ª y la fianza siguen su propio
-          flujo de cobro). Por defecto domiciliación SEPA.
+          Define cómo se cobran las cuotas recurrentes del contrato. La
+          fianza se cobra siempre por transferencia o efectivo (nunca
+          domiciliada). Por defecto domiciliación SEPA.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           <button

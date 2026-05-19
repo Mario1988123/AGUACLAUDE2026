@@ -13,7 +13,10 @@ export type ContractStatus = (typeof CONTRACT_STATUS)[number];
 
 export const STATUS_LABEL: Record<ContractStatus, string> = {
   draft: "Borrador",
-  pending_data: "Pendiente datos",
+  // Aclaración explícita: el contrato está firmado pero le faltan datos
+  // críticos (típicamente IBAN real — se firmó con ES00 placeholder).
+  // Hasta validar el IBAN no se considera definitivo legalmente.
+  pending_data: "Firmado · faltan datos",
   pending_signature: "Pendiente firma",
   signed: "Firmado",
   active: "Activo",

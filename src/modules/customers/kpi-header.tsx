@@ -269,12 +269,13 @@ export async function getCustomerKPIs(customerId: string): Promise<CustomerKPIs>
       const start = new Date(r.service_start_date ?? r.signed_at ?? new Date());
       const end = new Date(start);
       end.setMonth(end.getMonth() + r.duration_months);
-      const monthsLeft = Math.max(
-        0,
-        Math.round(
-          (end.getTime() - now.getTime()) / (30 * 86400000),
-        ),
-      );
+      // Diferencia en meses reales (no dividir por 30d — da off-by-one
+      // porque el mes medio es 30.44d y un contrato de 36 meses cuenta 37).
+      const monthsDiff =
+        (end.getFullYear() - now.getFullYear()) * 12 +
+        (end.getMonth() - now.getMonth()) +
+        (end.getDate() >= now.getDate() ? 0 : -1);
+      const monthsLeft = Math.max(0, monthsDiff);
       if (minLeft == null || monthsLeft < minLeft) minLeft = monthsLeft;
     }
     out.rental_months_left = minLeft;

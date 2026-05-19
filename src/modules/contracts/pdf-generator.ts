@@ -6,6 +6,7 @@ import {
   type PDFPage,
   type PDFImage,
   StandardFonts,
+  degrees,
   rgb,
 } from "pdf-lib";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -900,6 +901,44 @@ function drawSignatures(
 }
 
 /**
+ * Marca "NO VÁLIDO" diagonal en cada página. Se aplica sobre cualquier
+ * contrato que no esté legalmente firmado y completo:
+ *   - status = draft, pending_data, pending_signature
+ *   - sin signed_at
+ *   - falta IBAN real (has_provisional_data)
+ *
+ * Color rojo muy translúcido para no estorbar lectura pero dejar claro
+ * que el documento no es definitivo.
+ */
+function drawWatermark(d: Doc, label: string): void {
+  const pages = d.pdf.getPages();
+  pages.forEach((p) => {
+    const size = 80;
+    const text = label.toUpperCase();
+    const w = d.bold.widthOfTextAtSize(text, size);
+    p.drawText(text, {
+      x: PAGE_W / 2 - w / 2,
+      y: PAGE_H / 2 - size / 2 + 200,
+      size,
+      font: d.bold,
+      color: rgb(0.9, 0.2, 0.2),
+      opacity: 0.18,
+      rotate: degrees(35),
+    });
+    // Segunda copia más abajo para mayor visibilidad
+    p.drawText(text, {
+      x: PAGE_W / 2 - w / 2,
+      y: PAGE_H / 2 - size / 2 - 200,
+      size,
+      font: d.bold,
+      color: rgb(0.9, 0.2, 0.2),
+      opacity: 0.18,
+      rotate: degrees(35),
+    });
+  });
+}
+
+/**
  * Footer común a todas las páginas.
  */
 function drawFooters(
@@ -1383,6 +1422,28 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
     generatedAt: fmtDateShort(today),
     signedAt: contract.signed_at ? fmtDateShort(contract.signed_at) : null,
   });
+
+  // ---------- WATERMARK NO VÁLIDO ----------
+  // Cualquier contrato que no esté firmado y completo recibe marca de
+  // agua para evitar que se confunda un borrador o un firmado sin IBAN
+  // con un contrato definitivo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ctrFull = contract as any;
+  const isProvisional = ctrFull?.has_provisional_data === true;
+  const notFinalStatuses = ["draft", "pending_data", "pending_signature"];
+  const isNotFinal =
+    !contract.signed_at ||
+    notFinalStatuses.includes(contract.status) ||
+    isProvisional;
+  if (isNotFinal) {
+    let label = "BORRADOR · NO VÁLIDO";
+    if (contract.status === "pending_data" || isProvisional) {
+      label = "FALTAN DATOS · NO VÁLIDO";
+    } else if (contract.status === "pending_signature") {
+      label = "PENDIENTE FIRMA · NO VÁLIDO";
+    }
+    drawWatermark(doc, label);
+  }
 
   return await doc.pdf.save();
 }
