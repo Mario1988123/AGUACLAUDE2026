@@ -790,14 +790,23 @@ export function InstallationWizard(props: Props) {
                       ✓ Parte ya iniciado. Continúa al paso 2.
                     </div>
                   ) : (() => {
-                    // Calcula si la fecha bloquea el inicio
+                    // Bloquear si:
+                    //  · NO está agendado (scheduledAt null)
+                    //  · O la fecha programada no es hoy
                     let blocked = false;
-                    if (scheduledAt) {
+                    let blockedMsg = "Iniciar parte (capturar GPS)";
+                    if (!scheduledAt) {
+                      blocked = true;
+                      blockedMsg = "Agenda primero la instalación";
+                    } else {
                       const today = new Date();
                       const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
                       const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
                       const sched = new Date(scheduledAt);
-                      blocked = sched < todayStart || sched > todayEnd;
+                      if (sched < todayStart || sched > todayEnd) {
+                        blocked = true;
+                        blockedMsg = "Bloqueado — no es el día programado";
+                      }
                     }
                     return (
                       <Button
@@ -808,9 +817,7 @@ export function InstallationWizard(props: Props) {
                         size="lg"
                       >
                         <Crosshair className="h-4 w-4" />
-                        {blocked
-                          ? "Bloqueado — no es el día programado"
-                          : "Iniciar parte (capturar GPS)"}
+                        {blockedMsg}
                       </Button>
                     );
                   })()}
@@ -818,7 +825,17 @@ export function InstallationWizard(props: Props) {
               )}
 
               {/* PASO 2 — Estado inicial */}
-              {step === 2 && (
+              {step === 2 && status === "scheduled" && (
+                <div className="space-y-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="font-bold">⚠ Inicia primero el parte</p>
+                  <p className="text-xs">
+                    El estado inicial (desperfectos previos, necesidad de
+                    agujerear encimera…) solo se rellena cuando estás en el
+                    lugar. Vuelve al paso 1 y pulsa &laquo;Iniciar parte&raquo;.
+                  </p>
+                </div>
+              )}
+              {step === 2 && status !== "scheduled" && (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     Marca el estado del lugar antes de empezar a instalar.

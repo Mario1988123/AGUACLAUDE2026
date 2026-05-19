@@ -94,6 +94,14 @@ export interface InstallationRow {
    *  (de installation_incidents o de incidents). Se usa en /instalaciones
    *  y /agenda para marcar la fila aunque el status no sea incident_pending. */
   has_open_incident?: boolean;
+  /** Datos enriquecidos del contrato (decisión 2026-05-19). */
+  plan_type?: "cash" | "rental" | "renting" | null;
+  /** Dirección breve para mostrar en listado ("Calle Mayor 12, Sevilla"). */
+  address_short?: string | null;
+  /** Preferencia horaria del cliente (slot). */
+  preferred_slot?: string | null;
+  /** Fechas concretas preferidas por el cliente (ISO date strings). */
+  preferred_dates?: string[] | null;
 }
 
 export async function listInstallations(filters?: {
@@ -140,7 +148,80 @@ export async function listInstallations(filters?: {
   const withNames = await resolvePartyNames(supabase, (data ?? []) as Array<
     Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
   >);
-  return attachOpenIncidents(supabase, withNames);
+  const enriched = await attachContractAndAddress(supabase, withNames);
+  return attachOpenIncidents(supabase, enriched);
+}
+
+/**
+ * Enriquece cada fila con plan_type del contrato + dirección breve +
+ * preferencias horarias del cliente. Para mostrar en /instalaciones.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function attachContractAndAddress(supabase: any, rows: InstallationRow[]): Promise<InstallationRow[]> {
+  if (rows.length === 0) return rows;
+  const contractIds = Array.from(
+    new Set(rows.map((r) => r.contract_id).filter((v): v is string => !!v)),
+  );
+  const planByContract = new Map<string, "cash" | "rental" | "renting" | null>();
+  const prefBySlot = new Map<string, string | null>();
+  const prefByDates = new Map<string, string[] | null>();
+  if (contractIds.length > 0) {
+    try {
+      const { data } = await supabase
+        .from("contracts")
+        .select(
+          "id, plan_type, preferred_install_time_slot, preferred_install_dates",
+        )
+        .in("id", contractIds);
+      type C = {
+        id: string;
+        plan_type: "cash" | "rental" | "renting";
+        preferred_install_time_slot: string | null;
+        preferred_install_dates: string[] | null;
+      };
+      for (const c of ((data ?? []) as C[])) {
+        planByContract.set(c.id, c.plan_type);
+        prefBySlot.set(c.id, c.preferred_install_time_slot);
+        prefByDates.set(c.id, c.preferred_install_dates);
+      }
+    } catch {
+      /* fail-soft */
+    }
+  }
+  const addressIds = Array.from(
+    new Set(rows.map((r) => r.address_id).filter((v): v is string => !!v)),
+  );
+  const addrShortById = new Map<string, string>();
+  if (addressIds.length > 0) {
+    try {
+      const { data } = await supabase
+        .from("addresses")
+        .select("id, street_type, street, street_number, city")
+        .in("id", addressIds);
+      type A = {
+        id: string;
+        street_type: string | null;
+        street: string | null;
+        street_number: string | null;
+        city: string | null;
+      };
+      for (const a of ((data ?? []) as A[])) {
+        const street = `${a.street_type ?? ""} ${a.street ?? ""}`.trim();
+        const num = a.street_number ? ` ${a.street_number}` : "";
+        const city = a.city ? `, ${a.city}` : "";
+        addrShortById.set(a.id, `${street}${num}${city}`.trim());
+      }
+    } catch {
+      /* fail-soft */
+    }
+  }
+  return rows.map((r) => ({
+    ...r,
+    plan_type: r.contract_id ? (planByContract.get(r.contract_id) ?? null) : null,
+    address_short: r.address_id ? (addrShortById.get(r.address_id) ?? null) : null,
+    preferred_slot: r.contract_id ? (prefBySlot.get(r.contract_id) ?? null) : null,
+    preferred_dates: r.contract_id ? (prefByDates.get(r.contract_id) ?? null) : null,
+  }));
 }
 
 /**

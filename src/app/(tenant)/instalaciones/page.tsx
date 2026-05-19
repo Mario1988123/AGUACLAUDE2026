@@ -4,7 +4,8 @@ import { listInstallers } from "@/modules/agenda/actions";
 import { STATUS_LABEL, KIND_LABEL } from "@/modules/installations/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
-import { Calendar, Eye, Phone, MessageSquare, MapPin, AlertTriangle } from "lucide-react";
+import { Calendar, Eye, Phone, MessageSquare, MapPin, AlertTriangle, Home } from "lucide-react";
+import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
 import {
@@ -324,14 +325,35 @@ export default async function InstalacionesPage({
                               {time}
                             </div>
                             <div className="min-w-0 flex-1">
-                              <Link
-                                href={`/instalaciones/${i.id}` as never}
-                                className="font-medium hover:underline"
-                              >
-                                {i.customer_name ?? "—"}
-                              </Link>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Link
+                                  href={`/instalaciones/${i.id}` as never}
+                                  className="font-medium hover:underline"
+                                >
+                                  {i.customer_name ?? "—"}
+                                </Link>
+                                {i.plan_type === "rental" && (
+                                  <Badge variant="secondary" className="gap-1 text-[10px]">
+                                    <Home className="h-3 w-3" /> Alquiler
+                                  </Badge>
+                                )}
+                                {i.plan_type === "renting" && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    Renting
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-xs text-muted-foreground">
                                 {i.reference_code ?? `#${i.id.slice(0, 8)}`} · {KIND_LABEL[i.kind] ?? i.kind}
+                                {i.address_short && (
+                                  <>
+                                    {" · "}
+                                    <span className="inline-flex items-center gap-1">
+                                      <MapPin className="h-3 w-3" />
+                                      {i.address_short}
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </div>
                             <StatusPill
@@ -357,20 +379,55 @@ export default async function InstalacionesPage({
           </CardHeader>
           <CardContent>
             <ul className="space-y-1.5">
-              {unscheduled.map((i) => (
+              {unscheduled.map((i) => {
+                const nextPrefDate = (i.preferred_dates ?? []).find((d) => {
+                  const dt = new Date(d);
+                  return !isNaN(dt.getTime()) && dt > new Date();
+                });
+                return (
                 <li
                   key={i.id}
                   className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border p-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/instalaciones/${i.id}` as never}
-                      className="font-medium hover:underline"
-                    >
-                      {i.customer_name ?? "—"}
-                    </Link>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/instalaciones/${i.id}` as never}
+                        className="font-medium hover:underline"
+                      >
+                        {i.customer_name ?? "—"}
+                      </Link>
+                      {i.plan_type === "rental" && (
+                        <Badge variant="secondary" className="gap-1 text-[10px]">
+                          <Home className="h-3 w-3" /> Alquiler
+                        </Badge>
+                      )}
+                      {i.plan_type === "renting" && (
+                        <Badge variant="outline" className="text-[10px]">
+                          Renting
+                        </Badge>
+                      )}
+                      {nextPrefDate && (
+                        <Badge variant="warning" className="text-[10px]">
+                          📅 Cliente prefiere{" "}
+                          {new Date(nextPrefDate).toLocaleDateString("es-ES", {
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {i.reference_code ?? `#${i.id.slice(0, 8)}`} · {KIND_LABEL[i.kind] ?? i.kind}
+                      {i.address_short && (
+                        <>
+                          {" · "}
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {i.address_short}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <StatusPill
@@ -379,7 +436,8 @@ export default async function InstalacionesPage({
                   />
                   <InstallationRowActions inst={i} />
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </CardContent>
         </Card>
