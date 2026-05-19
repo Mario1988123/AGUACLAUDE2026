@@ -99,25 +99,43 @@ export function MaintenanceRemesaButton() {
   const ask = useConfirm();
   const router = useRouter();
 
-  function run() {
+  async function run() {
+    // El confirm dialog NO va dentro de startTransition para que el
+    // botón no muestre spinner mientras el modal está abierto. El
+    // spinner aparece sólo durante la action de servidor.
+    const ok = await ask({
+      title: "Lanzar remesa mensual",
+      message:
+        "Se generará una factura del mes en curso por cada contrato de mantenimiento activo. Si la factura del mes ya existe, se omite.",
+      confirmText: "Generar facturas",
+      variant: "success",
+    });
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await ask({
-        title: "Lanzar remesa mensual",
-        message:
-          "Se generará una factura del mes en curso por cada contrato de mantenimiento activo. Si la factura del mes ya existe, se omite.",
-        confirmText: "Generar facturas",
-        variant: "success",
-      });
-      if (!ok) return;
       try {
         const r = await generateMonthlyMaintenanceInvoicesAction();
-        notify.success(
-          `${r.created} facturas creadas`,
-          r.skipped > 0 ? `${r.skipped} omitidas (ya existían)` : undefined,
-        );
+        if (r.created === 0 && r.skipped === 0) {
+          notify.info(
+            "Nada que remesar",
+            "No hay contratos de mantenimiento activos pendientes de facturar este mes.",
+          );
+        } else if (r.created === 0) {
+          notify.info(
+            "Sin facturas nuevas",
+            `${r.skipped} ya existían — no se ha creado ninguna.`,
+          );
+        } else {
+          notify.success(
+            `${r.created} factura${r.created === 1 ? "" : "s"} creada${r.created === 1 ? "" : "s"}`,
+            r.skipped > 0 ? `${r.skipped} omitida${r.skipped === 1 ? "" : "s"} (ya existían)` : undefined,
+          );
+        }
         router.refresh();
       } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+        notify.error(
+          "No se pudo generar la remesa",
+          err instanceof Error ? err.message : String(err),
+        );
       }
     });
   }

@@ -23,10 +23,22 @@ export function GenerateMonthlyButton() {
     startTransition(async () => {
       try {
         const r = await generateMonthlyRecurringInvoicesAction();
-        notify.success(`${r.created} factura(s) generada(s)`);
+        if (r.created === 0) {
+          notify.info(
+            "Nada que remesar",
+            "No hay contratos pendientes de facturar este mes (o las facturas ya existen).",
+          );
+        } else {
+          notify.success(
+            `${r.created} factura${r.created === 1 ? "" : "s"} generada${r.created === 1 ? "" : "s"}`,
+          );
+        }
         router.refresh();
       } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+        notify.error(
+          "No se pudo generar la remesa",
+          err instanceof Error ? err.message : String(err),
+        );
       }
     });
   }

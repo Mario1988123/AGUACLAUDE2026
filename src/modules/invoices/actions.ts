@@ -1029,5 +1029,6 @@ export async function generateMonthlyRecurringInvoicesAction(): Promise<{ create
     });
     created++;
   }
+  if (created > 0) revalidatePath("/facturas");
   return { created };
 }
