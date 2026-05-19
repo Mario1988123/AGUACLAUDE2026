@@ -358,18 +358,23 @@ export default async function CustomerDetailPage({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Domiciliación GoCardless ({mandates.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CustomerMandatesPanel
-              customerId={id}
-              mandates={mandates}
-              configured={gcSettings.configured && gcSettings.enabled}
-            />
-          </CardContent>
-        </Card>
+        {/* Domiciliación GoCardless: sólo se muestra si la empresa lo
+            tiene configurado y habilitado. Si no lo usa, se oculta para
+            no confundir al usuario (regla 2026-05-19). */}
+        {gcSettings.configured && gcSettings.enabled && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Domiciliación GoCardless ({mandates.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CustomerMandatesPanel
+                customerId={id}
+                mandates={mandates}
+                configured
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="lg:col-span-2">
           <CardHeader>

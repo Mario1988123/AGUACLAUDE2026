@@ -128,6 +128,16 @@ export default async function WalletPage({
           >
             ⬇ CSV
           </Link>
+          {(session.is_superadmin ||
+            session.roles.includes("company_admin")) && (
+            <a
+              href="/api/sepa/remesa-xml"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+              title="Genera un archivo XML SEPA pain.008 con los cobros pendientes por domiciliación, listo para subir al banco"
+            >
+              🏛 Remesa SEPA
+            </a>
+          )}
           <RegisterPaymentButton />
         </div>
       </div>

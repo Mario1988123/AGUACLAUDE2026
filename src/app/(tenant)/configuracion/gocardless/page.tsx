@@ -3,14 +3,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { GoCardlessSettingsForm } from "@/modules/gocardless/settings-form";
 import { Badge } from "@/shared/ui/badge";
 import { BackButton } from "@/shared/components/back-button";
+import { requireSession } from "@/shared/lib/auth/session";
+import { AlertTriangle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function GoCardlessConfigPage() {
+  const session = await requireSession();
   const settings = await getGoCardlessSettings();
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  // Detectar si el dominio actual tiene protección de Vercel (preview).
+  // Las URLs *-vercom.vercel.app o *-username.vercel.app suelen llevar SSO
+  // y devolverían 401 al webhook de GoCardless.
+  const isVercelPreview = /\.vercel\.app$/i.test(baseUrl);
+  const webhookUrl = `${baseUrl}/api/gocardless/webhook?company_id=${session.company_id ?? "<tu_company_id>"}`;
 
   return (
     <div className="space-y-6">
@@ -50,9 +58,29 @@ export default async function GoCardlessConfigPage() {
           <p>
             Para que el CRM se entere automáticamente cuando un mandato se activa o un pago se confirma, debes configurar un webhook en tu panel de GoCardless apuntando aquí:
           </p>
-          <code className="block rounded-lg bg-muted px-3 py-2 text-xs">
-            {baseUrl}/api/gocardless/webhook?company_id=&lt;tu_company_id&gt;
+          <code className="block rounded-lg bg-muted px-3 py-2 text-xs break-all">
+            {webhookUrl}
           </code>
+          {isVercelPreview && (
+            <div className="flex gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-amber-900">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div className="space-y-1">
+                <p className="font-bold">Este dominio es una preview de Vercel</p>
+                <p className="text-xs">
+                  Las URLs <code>*.vercel.app</code> tienen protección de
+                  acceso (SSO) y devuelven <strong>401 Authentication Required</strong>
+                  a los webhooks de GoCardless. Debes apuntar el webhook a tu
+                  dominio de producción (sin protección), por ejemplo{" "}
+                  <code>https://crm.tuempresa.com</code>.
+                </p>
+                <p className="text-xs">
+                  Configura la variable de entorno{" "}
+                  <code>NEXT_PUBLIC_SITE_URL</code> en Vercel con tu dominio
+                  definitivo y vuelve a copiar la URL desde aquí.
+                </p>
+              </div>
+            </div>
+          )}
           <ol className="list-decimal space-y-1 pl-5">
             <li>Entra a <a className="text-primary underline" href="https://manage.gocardless.com/developers/webhook-endpoints" target="_blank" rel="noopener">GoCardless → Developers → Webhook endpoints</a>.</li>
             <li>Crea un nuevo endpoint con la URL de arriba.</li>
