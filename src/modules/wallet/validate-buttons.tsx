@@ -31,6 +31,9 @@ interface Props {
   canValidate: boolean;
   needsInvoice?: boolean;
   canInvoice?: boolean;
+  /** Si el wallet_entry ya tiene una factura emitida, su id. Si está
+   *  informado, el botón "Facturar" pasa a "Ver factura". */
+  invoiceId?: string | null;
 }
 
 const METHOD_OPTIONS: Array<{ value: string; label: string }> = [
@@ -49,6 +52,7 @@ export function ValidateWalletButtons({
   canValidate,
   needsInvoice = false,
   canInvoice = false,
+  invoiceId = null,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -172,6 +176,16 @@ export function ValidateWalletButtons({
       icon: Check,
       color: "success",
       onClick: validate,
+    };
+  } else if (invoiceId && (status === "validated" || status === "settled")) {
+    // Si el wallet_entry YA está facturado, el botón principal lleva a la
+    // factura en vez de ofrecer "Facturar" otra vez (era confuso — el
+    // usuario pulsaba "Facturar" otra vez y se duplicaba el flujo).
+    primary = {
+      label: "Ver factura",
+      icon: Receipt,
+      color: "outline",
+      onClick: () => router.push(`/facturas/${invoiceId}` as never),
     };
   } else if (needsInvoice && canInvoice && (status === "validated" || status === "settled")) {
     primary = {

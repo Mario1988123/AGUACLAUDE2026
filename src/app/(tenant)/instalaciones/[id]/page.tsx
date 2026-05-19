@@ -375,6 +375,7 @@ export default async function InstallationDetailPage({
               installationAddress={installationAddress}
               scheduledAt={i.scheduled_at}
               hasOpenIncident={openIncidents.length > 0}
+              kind={i.kind === "uninstall" ? "uninstall" : "install"}
             />
           )}
           <a

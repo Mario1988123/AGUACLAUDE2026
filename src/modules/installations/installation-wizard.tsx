@@ -100,6 +100,10 @@ interface Props {
   /** true si la instalación tiene una incidencia abierta sin resolver
    *  (p. ej. stock_shortage). Bloquea iniciar parte (decisión 2026-05-19). */
   hasOpenIncident?: boolean;
+  /** Tipo de la orden: 'install' (default) o 'uninstall' (retirada de
+   *  prueba gratuita o equipo alquilado). Si es uninstall, el wizard
+   *  oculta cobros y encuesta de satisfacción y cambia textos a "retirada". */
+  kind?: "install" | "uninstall";
 }
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -174,7 +178,9 @@ export function InstallationWizard(props: Props) {
     installationAddress,
     scheduledAt,
     hasOpenIncident,
+    kind = "install",
   } = props;
+  const isUninstall = kind === "uninstall";
   void representativeName;
 
   const [open, setOpen] = useState(false);
@@ -284,12 +290,18 @@ export function InstallationWizard(props: Props) {
   //   - status != "pending" (cobrado / validado / pago "ahora")
   //   - O moment === "on_installation" (diferido a este momento o
   //     marcado como "en oficina" — vía at_office reusa este moment).
-  const step3Done = payments.every(
-    (p) => p.status !== "pending" || p.moment === "on_installation",
-  );
-  const step4Done =
-    photos.some((p) => p.category === "equipment") &&
-    photos.some((p) => p.category === "connection");
+  // En retiradas (uninstall) no hay cobros que gestionar — saltamos paso 3.
+  const step3Done = isUninstall
+    ? true
+    : payments.every(
+        (p) => p.status !== "pending" || p.moment === "on_installation",
+      );
+  // En retiradas exigimos al menos 1 foto (cómo queda el sitio tras
+  // retirar el equipo). En instalaciones, 1 equipo + 1 conexión.
+  const step4Done = isUninstall
+    ? photos.length > 0
+    : photos.some((p) => p.category === "equipment") &&
+      photos.some((p) => p.category === "connection");
   // Paso 5 done si la firma final está guardada en BD (vía estado local
   // que se sincroniza al guardar). Al cargar el componente ya viene
   // marcada en true si la firma existía en `signatures` props.
@@ -468,7 +480,7 @@ export function InstallationWizard(props: Props) {
       notify.warning("Falta firma del cliente");
       return;
     }
-    if (!satisfaction) {
+    if (!isUninstall && !satisfaction) {
       notify.warning("El cliente debe marcar la encuesta de satisfacción");
       return;
     }
@@ -519,7 +531,7 @@ export function InstallationWizard(props: Props) {
       notify.warning("Guarda la firma del cliente antes de cerrar");
       return;
     }
-    if (!satisfaction) {
+    if (!isUninstall && !satisfaction) {
       notify.warning("El cliente debe marcar la encuesta de satisfacción");
       return;
     }
@@ -527,7 +539,8 @@ export function InstallationWizard(props: Props) {
     // técnico que confirme la periodicidad y meses cubiertos con el
     // cliente. Lo que confirme se guarda en el contrato y se usa
     // para auto-agendar los jobs de mantenimiento.
-    if (contractIncludesMaintenance) {
+    // No aplica en retiradas.
+    if (!isUninstall && contractIncludesMaintenance) {
       setMantPeriodicityOpen(true);
       return;
     }
@@ -642,7 +655,8 @@ export function InstallationWizard(props: Props) {
         </div>
       ) : (
         <Button onClick={() => setOpen(true)} variant="success" className="gap-2">
-          <Sparkles className="h-4 w-4" /> Abrir parte de instalación
+          <Sparkles className="h-4 w-4" />
+          {isUninstall ? "Abrir parte de retirada" : "Abrir parte de instalación"}
         </Button>
       )}
 
@@ -652,7 +666,9 @@ export function InstallationWizard(props: Props) {
             {/* Header */}
             <div className="flex items-center justify-between gap-2 border-b p-4">
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-bold">Parte de instalación</h2>
+                <h2 className="text-base font-bold">
+                  {isUninstall ? "Parte de retirada" : "Parte de instalación"}
+                </h2>
                 <p className="truncate text-xs text-muted-foreground">{customerName}</p>
               </div>
               <div className="flex items-center gap-2">

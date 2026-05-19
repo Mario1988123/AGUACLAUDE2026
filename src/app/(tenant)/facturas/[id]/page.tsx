@@ -205,17 +205,25 @@ export default async function InvoiceDetailPage({
               kind={inv.kind}
               pendingCents={inv.pending_cents}
             />
-            {inv.pending_cents > 0 && inv.status !== "draft" && inv.status !== "cancelled" && (
-              <div className="mt-3 border-t pt-3">
-                <ChargeWithGoCardlessButton
-                  mandates={gcMandates}
-                  defaultAmountCents={inv.pending_cents}
-                  description={`Factura ${inv.full_reference}`}
-                  invoiceId={inv.id}
-                  size="sm"
-                />
-              </div>
-            )}
+            {/* Cobro por GoCardless: solo si la factura NO está pagada
+                (status !== paid) y hay importe pendiente. Antes salía si
+                pending_cents > 0 — pero con redondeos de IVA podía dar
+                1 céntimo pendiente en facturas ya cobradas (creadas
+                desde un wallet validated). */}
+            {inv.status !== "paid" &&
+              inv.status !== "draft" &&
+              inv.status !== "cancelled" &&
+              inv.pending_cents > 5 && (
+                <div className="mt-3 border-t pt-3">
+                  <ChargeWithGoCardlessButton
+                    mandates={gcMandates}
+                    defaultAmountCents={inv.pending_cents}
+                    description={`Factura ${inv.full_reference}`}
+                    invoiceId={inv.id}
+                    size="sm"
+                  />
+                </div>
+              )}
             {inv.pending_cents > 0 &&
               inv.status !== "draft" &&
               inv.status !== "cancelled" &&

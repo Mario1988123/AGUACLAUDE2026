@@ -482,6 +482,7 @@ export default async function WalletPage({
                         canValidate={canValidate}
                         needsInvoice={!e.invoice_id && !!e.customer_id}
                         canInvoice={canInvoice}
+                        invoiceId={e.invoice_id}
                       />
                     </div>
                   </div>
