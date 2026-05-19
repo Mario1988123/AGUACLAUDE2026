@@ -242,9 +242,62 @@ export default async function ContractDetailPage({
     }
   }
 
+  const isFullySigned =
+    (contract.status === "signed" ||
+      contract.status === "active" ||
+      contract.status === "completed") &&
+    !contract.has_provisional_data;
+
   return (
     <div className="space-y-6">
       <SubjectNotificationToast subjectType="contract" subjectId={id} />
+
+      {/* Banner de estado FIRMADO (solo si está completo, no si hay
+          datos provisionales). Decisión 2026-05-19: una vez firmado y
+          completo, la información del wizard ya está congelada en el PDF
+          — no hace falta verlo desplegado aquí. */}
+      {isFullySigned && (
+        <div className="rounded-2xl border-2 border-emerald-300 bg-gradient-to-r from-emerald-50 to-emerald-100/50 p-5">
+          <div className="flex items-start gap-4 flex-wrap">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-2xl text-white">
+              ✓
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-extrabold text-emerald-900">
+                Contrato firmado
+              </h2>
+              <p className="mt-1 text-sm text-emerald-800">
+                {contract.signed_at && (
+                  <>
+                    Firmado el{" "}
+                    <strong>
+                      {new Date(contract.signed_at).toLocaleDateString("es-ES", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </strong>
+                    .{" "}
+                  </>
+                )}
+                Toda la información (cláusulas, firmas, plan de pagos) queda
+                congelada en el PDF. Aquí abajo solo se muestran las
+                acciones operativas.
+              </p>
+            </div>
+            <a
+              href={`/api/pdf/contract/${contract.id}`}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700"
+            >
+              ⬇ Descargar PDF
+            </a>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
