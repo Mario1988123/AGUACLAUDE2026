@@ -749,6 +749,78 @@ export async function finishInstallationAction(input: {
 }
 
 /**
+ * Antes de cerrar la instalación, el técnico confirma con el cliente
+ * la periodicidad real de los mantenimientos y los meses cubiertos.
+ * Esta action permite ajustar esos dos campos en el contrato vinculado,
+ * justo antes de auto-agendar los jobs.
+ */
+export async function updateContractMaintenanceScheduleAction(input: {
+  installation_id: string;
+  periodicity_months: number;
+  months_included: number;
+}): Promise<SimpleResult> {
+  try {
+    await requireSession();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    if (
+      !Number.isFinite(input.periodicity_months) ||
+      input.periodicity_months < 1 ||
+      input.periodicity_months > 60
+    ) {
+      return { ok: false, error: "Periodicidad debe estar entre 1 y 60 meses." };
+    }
+    if (
+      !Number.isFinite(input.months_included) ||
+      input.months_included < 1 ||
+      input.months_included > 240
+    ) {
+      return {
+        ok: false,
+        error: "Meses cubiertos debe estar entre 1 y 240.",
+      };
+    }
+    if (input.months_included < input.periodicity_months) {
+      return {
+        ok: false,
+        error:
+          "Los meses cubiertos no pueden ser menores que la periodicidad.",
+      };
+    }
+
+    const { data: inst } = await admin
+      .from("installations")
+      .select("contract_id")
+      .eq("id", input.installation_id)
+      .maybeSingle();
+    const contractId = (inst as { contract_id: string | null } | null)
+      ?.contract_id ?? null;
+    if (!contractId) {
+      return { ok: false, error: "Esta instalación no tiene contrato asociado." };
+    }
+
+    const { error } = await admin
+      .from("contracts")
+      .update({
+        maintenance_periodicity_months: input.periodicity_months,
+        maintenance_months_included: input.months_included,
+      })
+      .eq("id", contractId);
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
+  }
+}
+
+/**
  * Devuelve las pausas registradas de una instalación.
  */
 export async function listInstallationPauses(installationId: string) {

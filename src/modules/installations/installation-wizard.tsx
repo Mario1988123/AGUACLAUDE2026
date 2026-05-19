@@ -35,6 +35,7 @@ import {
   setInstallationItemSerialAction,
   setInstallationInitialStateAction,
   finishInstallationAction,
+  updateContractMaintenanceScheduleAction,
 } from "./wizard-actions";
 import {
   uploadInstallationPhotoAction,
@@ -77,6 +78,12 @@ interface Props {
   maintenancePlans: MaintenancePlan[];
   /** true si el contrato principal YA incluye mantenimiento */
   contractIncludesMaintenance: boolean;
+  /** Periodicidad (en meses) configurada en el contrato. Default 6. */
+  contractMaintenancePeriodicityMonths?: number | null;
+  /** Meses totales cubiertos por el mantenimiento. Default duration_months. */
+  contractMaintenanceMonthsIncluded?: number | null;
+  /** Duración total del contrato en meses (fallback para meses cubiertos). */
+  contractDurationMonths?: number | null;
   /** Solo admin/director puede editar cobros ya validados/cobrados. */
   canEditCollectedPayments?: boolean;
   /** Estado del contrato — usado para bloquear el wizard si no está firmado. */
@@ -153,6 +160,9 @@ export function InstallationWizard(props: Props) {
     contractId,
     maintenancePlans,
     contractIncludesMaintenance,
+    contractMaintenancePeriodicityMonths,
+    contractMaintenanceMonthsIncluded,
+    contractDurationMonths,
     canEditCollectedPayments = false,
     contractStatus,
     contractPlanType,
@@ -229,6 +239,20 @@ export function InstallationWizard(props: Props) {
 
   // Lightbox foto ampliada
   const [lightboxPhoto, setLightboxPhoto] = useState<InstallationPhoto | null>(null);
+
+  // Modal confirmar periodicidad de mantenimientos (se abre antes de cerrar
+  // la instalación si el contrato incluye mantenimiento — para que el
+  // técnico confirme con el cliente cada cuánto vendrá la próxima visita
+  // y ajustar si se ha pactado distinto en obra).
+  const [mantPeriodicityOpen, setMantPeriodicityOpen] = useState(false);
+  const [mantPeriodicity, setMantPeriodicity] = useState<number>(
+    contractMaintenancePeriodicityMonths ?? 6,
+  );
+  const [mantMonthsIncluded, setMantMonthsIncluded] = useState<number>(
+    contractMaintenanceMonthsIncluded ??
+      contractDurationMonths ??
+      12,
+  );
 
   function reset() {
     setOpen(false);
@@ -465,15 +489,8 @@ export function InstallationWizard(props: Props) {
     });
   }
 
-  function finish() {
-    if (!finalSignatureSaved) {
-      notify.warning("Guarda la firma del cliente antes de cerrar");
-      return;
-    }
-    if (!satisfaction) {
-      notify.warning("El cliente debe marcar la encuesta de satisfacción");
-      return;
-    }
+  /** Cierre real (después de confirmar la periodicidad si aplica). */
+  function doFinish() {
     startTransition(async () => {
       const r = await finishInstallationAction({
         installation_id: installationId,
@@ -487,7 +504,45 @@ export function InstallationWizard(props: Props) {
       }
       notify.success("Instalación completada");
       reset();
-      router.refresh();
+      // Vuelta al listado tras cerrar (el técnico ya no tiene nada que
+      // hacer en esta página). Mejor UX que quedarse en el detalle.
+      router.push("/instalaciones");
+    });
+  }
+
+  function finish() {
+    if (!finalSignatureSaved) {
+      notify.warning("Guarda la firma del cliente antes de cerrar");
+      return;
+    }
+    if (!satisfaction) {
+      notify.warning("El cliente debe marcar la encuesta de satisfacción");
+      return;
+    }
+    // Si el contrato incluye mantenimiento, antes de cerrar pedimos al
+    // técnico que confirme la periodicidad y meses cubiertos con el
+    // cliente. Lo que confirme se guarda en el contrato y se usa
+    // para auto-agendar los jobs de mantenimiento.
+    if (contractIncludesMaintenance) {
+      setMantPeriodicityOpen(true);
+      return;
+    }
+    doFinish();
+  }
+
+  function confirmMaintenanceAndFinish() {
+    startTransition(async () => {
+      const r = await updateContractMaintenanceScheduleAction({
+        installation_id: installationId,
+        periodicity_months: mantPeriodicity,
+        months_included: mantMonthsIncluded,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar la periodicidad", r.error);
+        return;
+      }
+      setMantPeriodicityOpen(false);
+      doFinish();
     });
   }
 
@@ -1408,6 +1463,93 @@ export function InstallationWizard(props: Props) {
                   </Button>
                   <Button onClick={confirmIncident} disabled={pending} variant="warning">
                     Notificar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal confirmar periodicidad de mantenimientos */}
+          {mantPeriodicityOpen && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4"
+              onClick={() => setMantPeriodicityOpen(false)}
+            >
+              <div
+                className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="shrink-0 border-b p-3 font-bold">
+                  Confirmar mantenimientos
+                </div>
+                <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Confirma con el cliente cada cuánto vendrá la próxima
+                    revisión y durante cuántos meses está cubierto. Al cerrar
+                    la instalación se programará el siguiente mantenimiento
+                    automáticamente.
+                  </p>
+                  <div className="space-y-1">
+                    <Label>Periodicidad (meses entre revisiones)</Label>
+                    <select
+                      value={mantPeriodicity}
+                      onChange={(e) =>
+                        setMantPeriodicity(Number(e.target.value))
+                      }
+                      className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                    >
+                      {[3, 4, 6, 8, 12, 18, 24].map((m) => (
+                        <option key={m} value={m}>
+                          Cada {m} {m === 1 ? "mes" : "meses"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Meses cubiertos en total</Label>
+                    <Input
+                      type="number"
+                      min={mantPeriodicity}
+                      max={240}
+                      value={mantMonthsIncluded}
+                      onChange={(e) =>
+                        setMantMonthsIncluded(
+                          Math.max(
+                            mantPeriodicity,
+                            parseInt(e.target.value || "0", 10) || 0,
+                          ),
+                        )
+                      }
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Se generarán{" "}
+                      <strong>
+                        {Math.floor(mantMonthsIncluded / mantPeriodicity)}
+                      </strong>{" "}
+                      mantenimientos programados.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    El primer mantenimiento se agendará dentro de{" "}
+                    <strong>{mantPeriodicity} meses</strong> desde hoy. El
+                    cliente recibirá un aviso unos días antes de cada visita.
+                  </div>
+                </div>
+                <div className="flex shrink-0 justify-end gap-2 border-t p-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setMantPeriodicityOpen(false)}
+                    disabled={pending}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={confirmMaintenanceAndFinish}
+                    disabled={pending}
+                    variant="success"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {pending ? "Cerrando…" : "Confirmar y cerrar"}
                   </Button>
                 </div>
               </div>

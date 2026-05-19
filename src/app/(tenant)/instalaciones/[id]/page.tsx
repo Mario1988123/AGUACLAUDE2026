@@ -173,6 +173,9 @@ export default async function InstallationDetailPage({
   let contractIncludesMaintenance = false;
   let contractStatus: string | null = null;
   let contractPlanType: "cash" | "rental" | "renting" | null = null;
+  let contractMaintenancePeriodicityMonths: number | null = null;
+  let contractMaintenanceMonthsIncluded: number | null = null;
+  let contractDurationMonths: number | null = null;
   if (i.contract_id) {
     try {
       const { data: ps } = await sb
@@ -187,7 +190,9 @@ export default async function InstallationDetailPage({
     try {
       const { data: ct } = await sb
         .from("contracts")
-        .select("customer_id, customer_snapshot, maintenance_included, status, plan_type")
+        .select(
+          "customer_id, customer_snapshot, maintenance_included, status, plan_type, maintenance_periodicity_months, maintenance_months_included, duration_months",
+        )
         .eq("id", i.contract_id)
         .single();
       if (ct) {
@@ -197,11 +202,17 @@ export default async function InstallationDetailPage({
           maintenance_included: boolean | null;
           status: string | null;
           plan_type: "cash" | "rental" | "renting" | null;
+          maintenance_periodicity_months: number | null;
+          maintenance_months_included: number | null;
+          duration_months: number | null;
         };
         customerId = ctRow.customer_id;
         contractIncludesMaintenance = Boolean(ctRow.maintenance_included);
         contractStatus = ctRow.status ?? null;
         contractPlanType = ctRow.plan_type ?? null;
+        contractMaintenancePeriodicityMonths = ctRow.maintenance_periodicity_months;
+        contractMaintenanceMonthsIncluded = ctRow.maintenance_months_included;
+        contractDurationMonths = ctRow.duration_months;
         const cust = ctRow.customer_snapshot;
         if (cust) {
           const c = cust as {
@@ -337,6 +348,9 @@ export default async function InstallationDetailPage({
               contractId={i.contract_id}
               maintenancePlans={maintenancePlans}
               contractIncludesMaintenance={contractIncludesMaintenance}
+              contractMaintenancePeriodicityMonths={contractMaintenancePeriodicityMonths}
+              contractMaintenanceMonthsIncluded={contractMaintenanceMonthsIncluded}
+              contractDurationMonths={contractDurationMonths}
               canEditCollectedPayments={
                 session.is_superadmin ||
                 session.roles.includes("company_admin") ||
