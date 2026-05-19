@@ -1,9 +1,5 @@
 import { z } from "zod";
-import {
-  validateCIF,
-  validateDNIorNIE,
-  validateSpanishPhone,
-} from "@/shared/lib/validations/spanish";
+import { validateSpanishPhone } from "@/shared/lib/validations/spanish";
 
 export const customerCreateSchema = z
   .object({
@@ -35,22 +31,11 @@ export const customerCreateSchema = z
     },
     { message: "Razón social o nombre obligatorio", path: ["legal_name"] },
   )
-  // Tax ID válido según tipo de cliente (si está informado). Autónomo
-  // usa DNI/NIE, no CIF — fiscalmente es persona física.
-  .refine(
-    (v) => {
-      const t = v.tax_id?.trim();
-      if (!t) return true;
-      const acceptsDniOrNie = v.party_kind === "individual" || v.is_autonomo;
-      return acceptsDniOrNie ? validateDNIorNIE(t).valid : validateCIF(t);
-    },
-    {
-      message:
-        "Documento (DNI/NIE/CIF) con formato inválido. Revisa que las letras y dígitos sean correctos.",
-      path: ["tax_id"],
-    },
-  )
-  // Teléfonos con formato español si están informados.
+  // Tax ID: NO bloqueamos por formato. Hay múltiples variantes legales
+  // (S.L., S.L.U., S.A., S.A.U., S. Coop., Comunidad de Bienes, OE, UTE,
+  // entidades extranjeras…) y la validación estricta rechazaba muchas
+  // empresas reales. El TaxIdInput avisa visualmente, pero el envío
+  // sólo limpia. Admin es responsable.
   .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
     message: "Teléfono principal con formato inválido (móvil/fijo español, 9 dígitos)",
     path: ["phone_primary"],
@@ -78,23 +63,7 @@ export const customerUpdateSchema = z
     is_autonomo: z.coerce.boolean().optional(),
     notes: z.string().optional(),
   })
-  .refine(
-    (v) => {
-      const t = v.tax_id?.trim();
-      if (!t) return true;
-      const kind = v.party_kind;
-      // Autónomo = persona física, valida como DNI/NIE.
-      if (kind === "company" && v.is_autonomo) return validateDNIorNIE(t).valid;
-      if (kind === "company") return validateCIF(t);
-      if (kind === "individual") return validateDNIorNIE(t).valid;
-      // Sin pista, aceptamos si cumple cualquiera
-      return validateCIF(t) || validateDNIorNIE(t).valid;
-    },
-    {
-      message: "Documento (DNI/NIE/CIF) con formato inválido",
-      path: ["tax_id"],
-    },
-  )
+  // Tax ID: NO bloqueamos por formato — TaxIdInput avisa, admin responsable.
   .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
     message: "Teléfono principal con formato inválido",
     path: ["phone_primary"],

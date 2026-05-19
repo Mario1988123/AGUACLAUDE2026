@@ -787,42 +787,55 @@ function CustomerEditForm({
 
   // Validación cliente ANTES de mandar al server. Bloquea el guardado
   // si el DNI/CIF tiene formato/letra inválido, o si el teléfono no es
-  // válido. El server además valida (defensa en profundidad), pero el
-  // toast cliente es más claro y evita un round-trip.
-  function validateLocal(): string | null {
+  // Devuelve avisos NO bloqueantes (toast informativo) y errores que SÍ
+  // deben bloquear el guardado. Por regla de negocio, el CIF/DNI con
+  // formato no estándar SOLO avisa (hay muchas variantes legales). Sólo
+  // se bloquea por DNI con letra de control incorrecta (claramente mal
+  // escrito) y email inválido.
+  function validateLocal(): { block: string | null; warn: string | null } {
     const t = form.tax_id?.trim().toUpperCase() ?? "";
+    let warn: string | null = null;
     if (t) {
-      // Autónomo = persona física: DNI/NIE. Empresa pura: CIF. Particular: DNI/NIE.
       const acceptsDniOrNie =
         customer.party_kind === "individual" || customer.is_autonomo === true;
       if (!acceptsDniOrNie) {
-        if (!validateCIF(t)) return "CIF con formato inválido";
+        if (!validateCIF(t))
+          warn = "CIF con formato no estándar — verifica que sea correcto.";
       } else {
         const r = validateDNIorNIE(t);
+        if (!r.valid && r.expectedLetter) {
+          // Letra de control mal: bloquea (es claramente un error de tipeo)
+          return {
+            block: `Letra del DNI/NIE incorrecta. Debería ser: ${r.expectedLetter}`,
+            warn: null,
+          };
+        }
         if (!r.valid) {
-          return r.expectedLetter
-            ? `Letra del DNI/NIE incorrecta. Debería ser: ${r.expectedLetter}`
-            : "DNI/NIE con formato inválido";
+          warn = "DNI/NIE con formato no estándar — verifica.";
         }
       }
     }
     if (form.phone_primary?.trim() && !validateSpanishPhone(form.phone_primary)) {
-      return "Teléfono con formato inválido (móvil o fijo de 9 dígitos)";
+      warn = (warn ? warn + " · " : "") + "Teléfono con formato no estándar.";
     }
     if (
       form.email?.trim() &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
     ) {
-      return "Email con formato inválido";
+      return { block: "Email con formato inválido", warn: null };
     }
-    return null;
+    return { block: null, warn };
   }
 
   function save() {
-    const err = validateLocal();
-    if (err) {
-      notify.warning("Revisa los datos", err);
+    const r = validateLocal();
+    if (r.block) {
+      notify.warning("Revisa los datos", r.block);
       return;
+    }
+    if (r.warn) {
+      notify.warning("Aviso", r.warn);
+      // No bloquea — continúa al guardado.
     }
     startTransition(async () => {
       try {

@@ -34,28 +34,21 @@ export function validateDNIorNIE(value: string): { valid: boolean; expectedLette
 }
 
 /**
- * Valida CIF/NIF de empresa de forma LAXA: comprueba sólo formato
- * (letra inicial válida según tipo de entidad + 7 dígitos + carácter
- * final dígito o letra). NO valida el dígito de control porque hay
- * empresas reales (SL, SA, CB, OE, etc.) que el algoritmo flagea
- * como inválidas y bloquean innecesariamente al comercial.
+ * Valida CIF/NIF de empresa de forma LAXA (sólo formato, no dígito de
+ * control). Letras válidas según AEAT:
+ *   A: SA           B: SL           C: Soc. colectiva
+ *   D: Soc. comand. E: Com. bienes  F: Cooperativa
+ *   G: Asociación   H: Com. propos. J: Soc. civil
+ *   N: extranjera   P: corp. local  Q: organismo público
+ *   R: religiosa    S: órgano admón. U: UTE
+ *   V: otras        W: estab. permanente extranjero
  *
- * Letras válidas iniciales:
- *   A: SA · B: SL · C: SCol · D: SCom · E: CB · F: SCoop
- *   G: Asociación · H: Comuni. propietarios · J: SC
- *   N: extranjera · P: corp. local · Q: organismo público
- *   R: religiosa · S: órgano admón. · U: UTE · V: otras
- *   W: estab. permanente extranjero
+ * NOTA: el envío al servidor ya no rechaza por formato (admin responsable).
+ * Esta función se usa para el indicador visual del input.
  */
 export function validateCIF(value: string): boolean {
-  // Limpieza laxa: trim + upper + quita espacios, guiones, puntos, barras,
-  // paréntesis. Antes solo limpiaba \s y -, lo que rechazaba CIFs pegados
-  // con formato "B-97.123.456" o similar.
   const v = value?.trim().toUpperCase().replace(/[\s\-./()]/g, "");
-  // Último carácter: cualquier letra A-Z o dígito 0-9. Técnicamente solo
-  // A-J pero hay CIFs reales con letras fuera de ese rango y el control
-  // se verifica con dígito en otro paso si hace falta.
-  return /^[ABCDEFGHJKLMNPQRSUVW]\d{7}[A-Z0-9]$/.test(v);
+  return /^[ABCDEFGHJNPQRSUVW]\d{7}[A-Z0-9]$/.test(v);
 }
 
 /** Valida IBAN español (ES + 22 dígitos) y otros IBAN europeos. */

@@ -1,7 +1,5 @@
 import { z } from "zod";
 import {
-  validateCIF,
-  validateDNIorNIE,
   validateSpanishPhone,
   validateSpanishPostalCode,
 } from "@/shared/lib/validations/spanish";
@@ -108,20 +106,10 @@ export const leadCreateSchema = z
       path: ["legal_name"],
     },
   )
-  // Tax ID válido según tipo (si está informado). Autónomo usa DNI/NIE,
-  // no CIF — fiscalmente es persona física.
-  .refine(
-    (v) => {
-      const t = v.tax_id?.trim();
-      if (!t) return true;
-      const acceptsDniOrNie = v.party_kind === "individual" || v.is_autonomo;
-      return acceptsDniOrNie ? validateDNIorNIE(t).valid : validateCIF(t);
-    },
-    {
-      message: "Documento (DNI/NIE/CIF) con formato inválido",
-      path: ["tax_id"],
-    },
-  )
+  // Tax ID: NO bloqueamos por formato (regla de negocio — admin
+  // responsable). El usuario reportó CIFs reales rechazados (hay muchas
+  // variantes y casos límite). El TaxIdInput sí muestra aviso visual si
+  // el formato no es estándar, pero el envío al servidor sólo limpia.
   .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
     message: "Teléfono principal con formato inválido (móvil/fijo, 9 dígitos)",
     path: ["phone_primary"],
