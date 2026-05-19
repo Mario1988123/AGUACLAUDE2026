@@ -10,6 +10,7 @@ import { MaintenanceCompleteForm } from "@/modules/maintenance/complete-form";
 import { StartMaintenanceButton } from "@/modules/maintenance/start-button";
 import { ReassignMaintenanceButton } from "@/modules/maintenance/reassign-button";
 import { listInstallers } from "@/modules/agenda/actions";
+import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
 import { BackButton } from "@/shared/components/back-button";
@@ -58,6 +59,10 @@ export default async function MaintenanceDetailPage({
   const technicians = canReassign
     ? await listInstallers().catch(() => [])
     : [];
+
+  // Planes de mantenimiento disponibles — usados por complete-form
+  // para ofrecer renovación al cliente tras la última visita del contrato.
+  const maintenancePlans = await listMaintenancePlans().catch(() => []);
 
   // Items reemplazados ya registrados (si completado)
   const { data: replaced } = await supabase
@@ -171,6 +176,12 @@ export default async function MaintenanceDetailPage({
               <MaintenanceCompleteForm
                 maintenanceId={job.id}
                 products={products.map((p) => ({ id: p.id, name: p.name }))}
+                maintenancePlans={maintenancePlans.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  tier: p.tier,
+                  monthly_cents: p.monthly_cents,
+                }))}
               />
             )}
             {job.status === "completed" && (

@@ -128,6 +128,95 @@ export async function reassignMaintenanceAction(
   }
 }
 
+/**
+ * Pasa un mantenimiento de 'preprogrammed' a 'scheduled', confirmando
+ * que la visita es real y se mostrará en la agenda. Admin/TMK/dir
+ * técnico pueden ejecutarla.
+ *
+ * Opcionalmente permite ajustar scheduled_at y asignar técnico.
+ */
+export async function validateMaintenanceJobAction(input: {
+  id: string;
+  scheduled_at?: string | null;
+  technician_user_id?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const allowed =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director") ||
+      session.roles.includes("telemarketing_director");
+    if (!allowed) {
+      return {
+        ok: false,
+        error: "Solo admin / dirección técnica / TMK puede validar visitas.",
+      };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: job } = await admin
+      .from("maintenance_jobs")
+      .select("id, status, company_id, customer_id, scheduled_at")
+      .eq("id", input.id)
+      .maybeSingle();
+    if (!job) return { ok: false, error: "Visita no encontrada" };
+    const j = job as {
+      id: string;
+      status: string;
+      company_id: string;
+      customer_id: string;
+      scheduled_at: string | null;
+    };
+    if (j.company_id !== session.company_id) {
+      return { ok: false, error: "Esta visita pertenece a otra empresa" };
+    }
+    if (j.status !== "preprogrammed") {
+      return { ok: false, error: `La visita ya está en estado ${j.status}` };
+    }
+
+    const updates: Record<string, unknown> = { status: "scheduled" };
+    if (input.scheduled_at) {
+      const dt = new Date(input.scheduled_at);
+      if (!isNaN(dt.getTime()) && dt.getTime() < Date.now() - 60 * 1000) {
+        return {
+          ok: false,
+          error: "No puedes agendar una visita en el pasado",
+        };
+      }
+      updates.scheduled_at = dt.toISOString();
+    }
+    if (input.technician_user_id !== undefined) {
+      updates.technician_user_id = input.technician_user_id;
+    }
+
+    const { error } = await admin
+      .from("maintenance_jobs")
+      .update(updates)
+      .eq("id", input.id);
+    if (error) return { ok: false, error: error.message };
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "maintenance",
+      subject_id: input.id,
+      kind: "maintenance.validated",
+      payload: {
+        previous_scheduled_at: j.scheduled_at,
+        new_scheduled_at: updates.scheduled_at ?? null,
+      },
+      actor_user_id: session.user_id,
+    });
+    revalidatePath(`/mantenimientos/${input.id}`);
+    revalidatePath("/mantenimientos");
+    revalidatePath("/agenda");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export async function startMaintenanceAction(id: string) {
   const session = await requireSession();
   // Admin client: si el técnico_user_id de este job no coincide con el
@@ -427,4 +516,206 @@ export async function completeMaintenanceAction(input: unknown) {
 
   revalidatePath(`/mantenimientos/${parsed.id}`);
   revalidatePath("/mantenimientos");
+}
+
+/**
+ * Devuelve true si la visita pasada es la ÚLTIMA visita "contracted"
+ * del contrato vinculado (todas las demás están completed o cancelled).
+ * Se usa al cerrar mantenimiento para ofrecer renovación al cliente.
+ */
+export async function isLastContractedMaintenance(
+  jobId: string,
+): Promise<{ isLast: boolean; contract_id: string | null }> {
+  try {
+    await requireSession();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: job } = await admin
+      .from("maintenance_jobs")
+      .select("id, contract_id, kind, customer_id")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (!job) return { isLast: false, contract_id: null };
+    const j = job as {
+      id: string;
+      contract_id: string | null;
+      kind: string;
+      customer_id: string;
+    };
+    if (j.kind !== "contracted" || !j.contract_id) {
+      return { isLast: false, contract_id: null };
+    }
+    // ¿Quedan otras visitas contracted del mismo contrato que NO estén
+    // completed/cancelled (incluyendo la propia)?
+    const { count } = await admin
+      .from("maintenance_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("contract_id", j.contract_id)
+      .eq("kind", "contracted")
+      .not("id", "eq", j.id)
+      .in("status", ["preprogrammed", "scheduled", "in_progress"]);
+    return { isLast: (count ?? 0) === 0, contract_id: j.contract_id };
+  } catch {
+    return { isLast: false, contract_id: null };
+  }
+}
+
+/**
+ * Registra que el cliente RECHAZÓ renovar el contrato de mantenimiento
+ * al terminar la última visita. Crea una tarea de seguimiento en la
+ * agenda para que TMK lo llame en N días (default 30).
+ */
+export async function declineRenewalAction(input: {
+  contract_id: string;
+  call_in_days?: number;
+  notes?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const days = input.call_in_days ?? 30;
+    const callAt = new Date(Date.now() + days * 86400000);
+
+    const { data: ct } = await admin
+      .from("contracts")
+      .select("id, customer_id, reference_code")
+      .eq("id", input.contract_id)
+      .maybeSingle();
+    if (!ct) return { ok: false, error: "Contrato no encontrado" };
+    const c = ct as { id: string; customer_id: string; reference_code: string | null };
+
+    // Marcar el contrato como rechazó renovación
+    await admin
+      .from("contracts")
+      .update({
+        renewal_offered_at: new Date().toISOString(),
+        renewal_declined_at: new Date().toISOString(),
+        renewal_call_scheduled_at: callAt.toISOString(),
+        renewal_offered_by_user_id: session.user_id,
+      })
+      .eq("id", input.contract_id);
+
+    // Crear evento de agenda tipo task para TMK
+    try {
+      await admin.from("agenda_events").insert({
+        company_id: session.company_id,
+        kind: "task",
+        title: `Llamar para reactivar mantenimiento · ${c.reference_code ?? "Contrato"}`,
+        description:
+          input.notes ??
+          "Cliente no aceptó la renovación tras la última visita. Llamar para ofrecer un nuevo contrato de mantenimiento.",
+        starts_at: callAt.toISOString(),
+        subject_type: "customer",
+        subject_id: c.customer_id,
+      });
+    } catch {
+      /* fail-soft: agenda_events puede no existir aún */
+    }
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "contract",
+      subject_id: input.contract_id,
+      kind: "contract.renewal_declined",
+      payload: { call_scheduled_at: callAt.toISOString() },
+      actor_user_id: session.user_id,
+    });
+
+    revalidatePath(`/contratos/${input.contract_id}`);
+    revalidatePath(`/clientes/${c.customer_id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * El cliente acepta la renovación. Crea un nuevo contrato de
+ * mantenimiento (kind=maintenance_contract) basado en un plan elegido
+ * y genera los siguientes jobs preprogrammed.
+ */
+export async function acceptRenewalAction(input: {
+  contract_id: string;
+  maintenance_plan_id: string;
+}): Promise<
+  | { ok: true; new_maintenance_contract_id: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: ct } = await admin
+      .from("contracts")
+      .select("id, customer_id, reference_code")
+      .eq("id", input.contract_id)
+      .maybeSingle();
+    if (!ct) return { ok: false, error: "Contrato origen no encontrado" };
+    const c = ct as { id: string; customer_id: string; reference_code: string | null };
+
+    const { data: plan } = await admin
+      .from("maintenance_plans")
+      .select("id, tier, monthly_cents, name")
+      .eq("id", input.maintenance_plan_id)
+      .maybeSingle();
+    if (!plan) return { ok: false, error: "Plan de mantenimiento no encontrado" };
+    const p = plan as {
+      id: string;
+      tier: string;
+      monthly_cents: number;
+      name: string;
+    };
+
+    // Crear maintenance_contract activo
+    const { data: created, error } = await admin
+      .from("maintenance_contracts")
+      .insert({
+        company_id: session.company_id,
+        customer_id: c.customer_id,
+        plan_id: p.id,
+        tier_snapshot: p.tier,
+        monthly_cents_snapshot: p.monthly_cents,
+        status: "active",
+        source_contract_id: c.id,
+        created_by: session.user_id,
+      })
+      .select("id")
+      .single();
+    if (error) return { ok: false, error: error.message };
+    const newId = (created as { id: string }).id;
+
+    // Marcar contrato origen como renovado
+    await admin
+      .from("contracts")
+      .update({
+        renewal_offered_at: new Date().toISOString(),
+        renewal_accepted_at: new Date().toISOString(),
+        renewal_new_contract_id: newId,
+        renewal_offered_by_user_id: session.user_id,
+      })
+      .eq("id", input.contract_id);
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "contract",
+      subject_id: input.contract_id,
+      kind: "contract.renewal_accepted",
+      payload: {
+        new_maintenance_contract_id: newId,
+        plan_id: p.id,
+        plan_name: p.name,
+      },
+      actor_user_id: session.user_id,
+    });
+
+    revalidatePath(`/contratos/${input.contract_id}`);
+    revalidatePath(`/clientes/${c.customer_id}`);
+    revalidatePath("/mantenimientos");
+    return { ok: true, new_maintenance_contract_id: newId };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }

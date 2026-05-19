@@ -42,12 +42,22 @@ export async function autoScheduleMaintenanceForContract(contractId: string): Pr
     .select("id", { count: "exact", head: true })
     .eq("contract_id", contractId)
     .eq("kind", "contracted")
-    .in("status", ["scheduled", "in_progress"]);
+    .in("status", ["preprogrammed", "scheduled", "in_progress"]);
   if ((existing ?? 0) > 0) return 0;
 
   const totalMonths = c.maintenance_months_included ?? c.duration_months ?? 12;
   const periodicity = c.maintenance_periodicity_months;
-  const numJobs = Math.floor(totalMonths / periodicity);
+  // Regla de cobertura por filtros (decisión usuario 2026-05-19):
+  //   - Cada visita instala filtros que cubren `periodicity` meses.
+  //   - La última visita NO es necesaria si su cobertura llega al fin
+  //     del contrato. Ej.: 48 meses con periodicidad 12 → visitas en
+  //     mes 12, 24, 36 (la del mes 36 cubre 36→48). No mes 48.
+  //   - Si NO es múltiplo exacto, sí que necesita una visita final
+  //     adicional para no dejar meses descubiertos.
+  let numJobs = Math.floor(totalMonths / periodicity);
+  if (totalMonths % periodicity === 0 && numJobs > 0) {
+    numJobs -= 1;
+  }
   if (numJobs <= 0) return 0;
 
   const { data: equipment } = await a
@@ -71,12 +81,26 @@ export async function autoScheduleMaintenanceForContract(contractId: string): Pr
       customer_equipment_id: equipmentId,
       contract_id: c.id,
       kind: "contracted",
-      status: "scheduled",
+      // Estado preliminar (decisión 2026-05-19): la visita se crea como
+      // "preprogrammed" y un admin/TMK debe confirmarla con el cliente
+      // antes de pasarla a "scheduled" (ya en la agenda real).
+      status: "preprogrammed",
       scheduled_at: scheduled.toISOString(),
       is_charged: false,
     });
   }
   const { error } = await a.from("maintenance_jobs").insert(jobs);
-  if (error) return 0;
+  if (error) {
+    // Fallback: si el enum aún no tiene 'preprogrammed' (migración no
+    // aplicada todavía), creamos como 'scheduled' para no romper el
+    // flujo en producción durante el despliegue.
+    if (/invalid input value for enum|preprogrammed/i.test(error.message)) {
+      const jobsLegacy = jobs.map((j) => ({ ...j, status: "scheduled" }));
+      const { error: err2 } = await a.from("maintenance_jobs").insert(jobsLegacy);
+      if (err2) return 0;
+      return jobsLegacy.length;
+    }
+    return 0;
+  }
   return jobs.length;
 }

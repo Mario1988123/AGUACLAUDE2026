@@ -99,8 +99,11 @@ export const EVENT_LABEL: Record<string, string> = {
   "maintenance.scheduled": "Mantenimiento programado",
   "maintenance.in_progress": "Mantenimiento en curso",
   "maintenance.cancelled": "Mantenimiento cancelado",
+  "maintenance.validated": "Visita validada (preprogramada → agendada)",
   "maintenance_contract.created": "Contrato de mantenimiento creado",
   "maintenance_contract.cancelled": "Contrato de mantenimiento cancelado",
+  "contract.renewal_accepted": "Cliente aceptó renovar mantenimiento",
+  "contract.renewal_declined": "Cliente rechazó renovar mantenimiento",
   // === Agenda ===
   "agenda.created": "Tarea creada",
   "agenda.rescheduled": "Tarea reagendada",

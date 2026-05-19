@@ -116,9 +116,9 @@ export function CreateMaintenanceButton({
                     }
                     className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
                   >
-                    <option value="one_off">Puntual (cobrable)</option>
+                    <option value="one_off">Correctivo (entre revisiones)</option>
                     <option value="contracted">Incluido en contrato</option>
-                    <option value="warranty">Garantía</option>
+                    <option value="warranty">Garantía del fabricante</option>
                   </select>
                 </div>
                 <div className="space-y-1">

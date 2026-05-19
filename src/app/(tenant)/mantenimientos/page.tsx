@@ -9,6 +9,7 @@ import {
   MaintenanceContractsTable,
   MaintenanceRemesaButton,
 } from "@/modules/maintenance-plans/contracts-table";
+import { PreprogrammedPanel } from "@/modules/maintenance/preprogrammed-panel";
 import { requireSession } from "@/shared/lib/auth/session";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
 import {
@@ -29,7 +30,7 @@ const MAINT_TONE: Record<
   cancelled: "rejected",
 };
 
-const STATUS_OPTIONS = ["scheduled", "in_progress", "completed", "cancelled"] as const;
+const STATUS_OPTIONS = ["preprogrammed", "scheduled", "in_progress", "completed", "cancelled"] as const;
 const PERIOD_OPTIONS = {
   "": "Todas las fechas",
   upcoming: "Próximas",
@@ -142,6 +143,22 @@ export default async function MantenimientosPage({
       </div>
 
       {isUpper && alerts && <MaintenanceSmartAlerts alerts={alerts} />}
+
+      {/* Visitas preprogramadas pendientes de validar (decisión 2026-05-19) */}
+      {isUpper && (
+        <PreprogrammedPanel
+          jobs={allJobs
+            .filter((j) => j.status === "preprogrammed")
+            .map((j) => ({
+              id: j.id,
+              scheduled_at: j.scheduled_at,
+              customer_id: j.customer_id,
+              customer_name: j.customer_name,
+              technician_user_id: j.technician_user_id,
+            }))}
+          installers={technicians}
+        />
+      )}
 
       {/* KPIs */}
       <div className="grid gap-3 sm:grid-cols-3">
