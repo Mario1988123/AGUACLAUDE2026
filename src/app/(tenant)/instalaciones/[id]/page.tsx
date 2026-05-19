@@ -15,6 +15,7 @@ import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installation
 import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
 import { InstallationWizard } from "@/modules/installations/installation-wizard";
+import { PhotoGallery } from "@/modules/installations/photo-gallery";
 import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/modules/installations/client-actions";
 import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -515,26 +516,7 @@ export default async function InstallationDetailPage({
                 <CardTitle>Fotos ({photos.length})</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {photosFull.map((p) => (
-                    <div
-                      key={p.id}
-                      className="relative aspect-square overflow-hidden rounded-lg border"
-                    >
-                      {p.signed_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.signed_url}
-                          alt={p.category}
-                          className="h-full w-full object-cover"
-                        />
-                      )}
-                      <span className="absolute top-1 left-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">
-                        {p.category}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <PhotoGallery photos={photosFull} />
               </CardContent>
             </Card>
           )}
@@ -558,7 +540,15 @@ export default async function InstallationDetailPage({
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {new Date(s.signed_at).toLocaleString("es-ES", { timeZone: "Europe/Madrid" })}
-                          {s.context ? ` · ${s.context}` : ""}
+                          {s.context
+                            ? ` · ${
+                                s.context === "final"
+                                  ? "Firma final"
+                                  : s.context === "initial_state"
+                                    ? "Estado inicial"
+                                    : s.context
+                              }`
+                            : ""}
                         </div>
                       </div>
                     </li>

@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { GripVertical } from "lucide-react";
+import { GripVertical, CheckCircle2 } from "lucide-react";
+import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { rescheduleAgendaEventAction } from "./actions";
+import { rescheduleAgendaEventAction, markAgendaEventDoneAction } from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
 import { MoveEventDialog } from "./move-event-dialog";
@@ -195,6 +196,31 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                           </p>
                         )}
                       </div>
+                      {/* Botón "Marcar hecha" para eventos manuales/visit/call,
+                          no virtuales (esos se cierran desde su wizard). */}
+                      {ev.status !== "completed" &&
+                        ev.status !== "cancelled" &&
+                        !ev.id.startsWith("virtual-") && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="gap-1 text-xs text-emerald-700 hover:bg-emerald-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startTransition(async () => {
+                                const r = await markAgendaEventDoneAction(ev.id);
+                                if (!r.ok) {
+                                  notify.error("No se pudo marcar", r.error);
+                                  return;
+                                }
+                                notify.success("Tarea marcada como hecha");
+                                router.refresh();
+                              });
+                            }}
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Hecha
+                          </Button>
+                        )}
                     </li>
                     );
                   })}

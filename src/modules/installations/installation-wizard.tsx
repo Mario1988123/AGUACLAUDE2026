@@ -227,6 +227,9 @@ export function InstallationWizard(props: Props) {
     Object.fromEntries(items.map((i) => [i.id, i.serial_number ?? ""])),
   );
 
+  // Lightbox foto ampliada
+  const [lightboxPhoto, setLightboxPhoto] = useState<InstallationPhoto | null>(null);
+
   function reset() {
     setOpen(false);
     setStep(initialStatus === "scheduled" ? 1 : 2);
@@ -1011,9 +1014,12 @@ export function InstallationWizard(props: Props) {
                     {photos.length > 0 && (
                       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                         {photos.map((p) => (
-                          <div
+                          <button
+                            type="button"
                             key={p.id}
-                            className="relative aspect-square overflow-hidden rounded-lg border"
+                            onClick={() => p.signed_url && setLightboxPhoto(p)}
+                            className="relative aspect-square overflow-hidden rounded-lg border transition hover:ring-2 hover:ring-primary"
+                            aria-label="Ampliar foto"
                           >
                             {p.signed_url && (
                               // eslint-disable-next-line @next/next/no-img-element
@@ -1032,7 +1038,7 @@ export function InstallationWizard(props: Props) {
                                     ? "Daño"
                                     : "Otra"}
                             </span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -1405,6 +1411,44 @@ export function InstallationWizard(props: Props) {
                   </Button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* === Lightbox foto ampliada === */}
+          {lightboxPhoto && lightboxPhoto.signed_url && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+              onClick={() => setLightboxPhoto(null)}
+              role="dialog"
+              aria-label="Foto ampliada"
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLightboxPhoto(null);
+                }}
+                className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-black hover:bg-white"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div className="absolute left-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-sm font-bold text-black">
+                {lightboxPhoto.category === "equipment"
+                  ? "Equipo"
+                  : lightboxPhoto.category === "connection"
+                    ? "Conexión"
+                    : lightboxPhoto.category === "damage"
+                      ? "Daño"
+                      : "Otra"}
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={lightboxPhoto.signed_url}
+                alt={lightboxPhoto.category}
+                className="max-h-full max-w-full object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           )}
         </div>

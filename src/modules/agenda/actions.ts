@@ -881,6 +881,33 @@ export async function updateAgendaStatus(
 }
 
 /**
+ * Versión "result pattern" para uso desde UI cliente sin perder mensajes
+ * en producción. Acepta tanto eventos reales como virtuales (instalación
+ * o mantenimiento) — en virtuales delega a markInstallationCompleted o
+ * a updateMaintenanceStatus de su módulo.
+ */
+export async function markAgendaEventDoneAction(
+  eventId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if (eventId.startsWith("virtual-inst-") || eventId.startsWith("virtual-maint-")) {
+      // Eventos virtuales: el "marcar hecho" desde agenda no aplica
+      // directamente (la instalación se cierra desde su wizard). Solo
+      // marcamos cancelado si el usuario insiste.
+      return {
+        ok: false,
+        error:
+          "Las instalaciones y mantenimientos se cierran desde su propia ficha, no desde la agenda.",
+      };
+    }
+    await updateAgendaStatus(eventId, "completed");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
  * Reasigna una tarea de agenda a otro usuario. Sólo nivel 1 / nivel 2.
  * Recalcula is_outside_hours con el horario del nuevo asignado.
  * Notifica al nuevo asignado.

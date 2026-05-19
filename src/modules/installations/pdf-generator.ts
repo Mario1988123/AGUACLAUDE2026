@@ -800,8 +800,14 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
 
+  // Admin client: el PDF lo puede pedir el instalador (nivel 3) y la
+  // policy installations_select por scope solo deja las suyas. El admin
+  // del módulo de instalaciones puede querer regenerar PDFs de cualquier
+  // instalación de su empresa. Usamos admin para bypass RLS y luego
+  // validamos company_id manualmente.
+  const { createAdminClient } = await import("@/shared/lib/supabase/admin");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const supabase = createAdminClient() as any;
   const [
     { data: inst },
     { data: items },
@@ -813,10 +819,10 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
     supabase
       .from("installations")
       .select(
-        "id, reference_code, status, kind, scheduled_at, started_at, completed_at, duration_seconds, notes, customer_id, contract_id, address_id, installer_user_id, has_previous_damage, needs_countertop_drilling, started_geo_lat, started_geo_lng, geo_distance_to_address_m",
+        "id, reference_code, status, kind, company_id, scheduled_at, started_at, completed_at, duration_seconds, notes, customer_id, contract_id, address_id, installer_user_id, has_previous_damage, needs_countertop_drilling, started_geo_lat, started_geo_lng, geo_distance_to_address_m",
       )
       .eq("id", installationId)
-      .single(),
+      .maybeSingle(),
     supabase
       .from("installation_items")
       .select("product_id, serial_number, quantity, notes")
@@ -843,12 +849,23 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
       .maybeSingle(),
   ]);
 
-  if (!inst) throw new Error("Instalación no encontrada");
+  if (!inst) {
+    throw new Error(
+      `Instalación no encontrada (id: ${installationId}). Comprueba que existe y no se ha borrado.`,
+    );
+  }
+  // Validación de scope multi-tenant: la instalación debe ser de la
+  // empresa del usuario actual.
+  const _instAny = inst as { company_id: string | null };
+  if (_instAny.company_id && _instAny.company_id !== session.company_id) {
+    throw new Error("Esta instalación pertenece a otra empresa.");
+  }
   const i = inst as {
     id: string;
     reference_code: string | null;
     status: string;
     kind: string;
+    company_id: string | null;
     scheduled_at: string | null;
     started_at: string | null;
     completed_at: string | null;
