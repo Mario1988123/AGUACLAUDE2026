@@ -1251,3 +1251,55 @@ export async function rejectProposalFromListAction(
     return { ok: false, error: msg };
   }
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — añadidos 2026-05-20
+// ============================================================================
+
+export async function updateProposalSafeAction(
+  proposalId: string,
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateProposalAction(proposalId, input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function approveProposalSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await approveProposalAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function markProposalAcceptedSafeAction(
+  id: string,
+): Promise<
+  | { ok: true; customer_id: string | null }
+  | { ok: false; error: string }
+> {
+  try {
+    const r = await markProposalAccepted(id);
+    return { ok: true, customer_id: r.customer_id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function markProposalSentSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markProposalSent(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

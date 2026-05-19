@@ -68,9 +68,38 @@ export async function notifyByRoles(
   );
   if (recipients.length === 0) return;
 
+  // Dedupe (decisión 2026-05-20): si existe ya una notificación con
+  // mismo (company_id, recipient, kind, subject_id) creada en las
+  // últimas 2 horas, no insertamos duplicado. Evita spam por crons
+  // que reprocesan el mismo evento.
+  let recipientsToNotify = recipients;
+  if (payload.subject_id) {
+    try {
+      const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing } = await (admin as any)
+        .from("notifications")
+        .select("recipient_user_id")
+        .eq("company_id", companyId)
+        .eq("kind", payload.kind)
+        .eq("subject_id", payload.subject_id)
+        .in("recipient_user_id", recipients)
+        .gte("created_at", twoHoursAgo);
+      const alreadyNotified = new Set(
+        ((existing ?? []) as Array<{ recipient_user_id: string }>).map(
+          (r) => r.recipient_user_id,
+        ),
+      );
+      recipientsToNotify = recipients.filter((uid) => !alreadyNotified.has(uid));
+      if (recipientsToNotify.length === 0) return;
+    } catch {
+      /* fail-soft: si SELECT falla, insertamos todos */
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from("notifications").insert(
-    recipients.map((uid) => ({
+    recipientsToNotify.map((uid) => ({
       company_id: companyId,
       recipient_user_id: uid,
       kind: payload.kind,

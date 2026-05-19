@@ -292,6 +292,34 @@ export async function createWalletEntryAction(input: unknown) {
   if (parsed.method === "cash") status = "pending_settlement";
   else status = "collected";
 
+  // Idempotencia (decisión 2026-05-20): si en los últimos 60 segundos
+  // se creó un wallet_entry con mismo customer_id + concept +
+  // amount_cents + method, asumimos doble click / replay y NO duplicamos.
+  // Ventana corta para no bloquear cobros legítimos repetidos.
+  try {
+    const recentThreshold = new Date(Date.now() - 60 * 1000).toISOString();
+    const { data: dup } = await supabase
+      .from("wallet_entries")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("customer_id", parsed.customer_id || null)
+      .eq("concept", parsed.concept)
+      .eq("amount_cents", parsed.amount_cents)
+      .eq("method", parsed.method)
+      .gte("created_at", recentThreshold)
+      .limit(1)
+      .maybeSingle();
+    if (dup) {
+      console.warn(
+        `[wallet/create] duplicate detected within 60s, skip insert (id=${(dup as { id: string }).id})`,
+      );
+      revalidatePath("/wallet");
+      return;
+    }
+  } catch {
+    /* fail-soft: si SELECT falla, intentamos insertar igual */
+  }
+
   const { data: created, error } = await supabase
     .from("wallet_entries")
     .insert({

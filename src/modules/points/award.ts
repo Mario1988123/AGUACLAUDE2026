@@ -49,6 +49,35 @@ export async function awardPoints(args: AwardArgs): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const now = new Date();
+
+  // Idempotencia (decisión 2026-05-20): si ya existe una entrada con
+  // mismo user_id + reason + subject_type + subject_id, no insertamos
+  // otra. Caso típico: webhook que reintenta o cron que reprocesa.
+  // Sólo aplica si subject_id/subject_type informados (sin ellos no
+  // hay unicidad lógica).
+  if (args.subject_type && args.subject_id) {
+    try {
+      const { count } = await admin
+        .from("points_ledger")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", args.company_id)
+        .eq("user_id", args.user_id)
+        .eq("reason", args.reason)
+        .eq("subject_type", args.subject_type)
+        .eq("subject_id", args.subject_id)
+        .gt("points", 0);
+      if ((count ?? 0) > 0) {
+        // Ya otorgado — log y salir sin insertar.
+        console.log(
+          `[awardPoints] skip duplicate ${args.reason} ${args.subject_type}=${args.subject_id} user=${args.user_id}`,
+        );
+        return;
+      }
+    } catch {
+      /* fail-soft: si el SELECT falla, intentamos insertar igual */
+    }
+  }
+
   await admin.from("points_ledger").insert({
     company_id: args.company_id,
     user_id: args.user_id,

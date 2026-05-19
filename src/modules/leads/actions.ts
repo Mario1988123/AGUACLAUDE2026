@@ -889,3 +889,60 @@ export async function updateLeadStatus(id: string, status: LeadStatus, lostReaso
   revalidatePath("/leads");
   revalidatePath("/ventas-perdidas");
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — añadidos 2026-05-20
+// Next.js redacta thrown Error.message en producción → la UI muestra mensajes
+// genéricos confusos. Estos wrappers devuelven { ok, error } con el mensaje
+// real. Recomendado para nuevos callers; los actions throw siguen disponibles
+// para compatibilidad.
+// ============================================================================
+
+export async function updateLeadSafeAction(
+  leadId: string,
+  patch: Record<string, unknown>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateLeadAction(leadId, patch);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteLeadSafeAction(
+  leadId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteLeadAction(leadId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function markLeadAsLostSafeAction(
+  leadId: string,
+  reason: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markLeadAsLostAction(leadId, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function convertLeadToCustomerSafeAction(
+  leadId: string,
+): Promise<
+  | { ok: true; customer_id: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const customer_id = await convertLeadToCustomerAction(leadId);
+    return { ok: true, customer_id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
