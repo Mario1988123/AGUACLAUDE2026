@@ -43,6 +43,8 @@ import {
 } from "@/modules/dashboard/pending-cards";
 import { getMonthlyEvolution } from "@/modules/dashboard/evolution-actions";
 import { EvolutionChart } from "@/modules/dashboard/evolution-chart";
+import { ConfigProgressCard } from "@/modules/onboarding/config-progress-card";
+import { getOnboardingSummary } from "@/modules/onboarding/state-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -319,6 +321,23 @@ async function renderDashboard({
           />
         )}
       </div>
+
+      {/* Guía de configuración inicial. Solo nivel 1 (admin) — los pasos
+          son configuración de empresa, no operativa. */}
+      {isLevel1 && (
+        <ConfigProgressCard
+          summary={await getOnboardingSummary().catch(() => ({
+            steps: [],
+            totals: {
+              required_pending: 0,
+              recommended_pending: 0,
+              optional_pending: 0,
+              completed: 0,
+              total: 0,
+            },
+          }))}
+        />
+      )}
 
       {consolidatedAlerts && (
         <ConsolidatedAlertsCard data={consolidatedAlerts} />
