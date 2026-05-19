@@ -36,6 +36,8 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { ContractFinancierAssign } from "@/modules/contracts/financier-assign";
 import { listFinanciers } from "@/modules/financiers/actions";
 import { FinalizeRentalButton } from "@/modules/contracts/finalize-rental-modal";
+import { SepaMandatePanel } from "@/modules/sepa/sepa-mandate-panel";
+import { getSepaMandateByContract } from "@/modules/sepa/mandate-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -209,9 +211,13 @@ export default async function ContractDetailPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director") ||
     session.roles.includes("technical_director");
+  // Financiera: SOLO renting (alquiler usa SEPA directo al cliente).
   const showFinancierAssign =
+    canAssignFinancier && contract.plan_type === "renting";
+  // SEPA: rental y renting (cuando se cobran cuotas mensuales).
+  const showSepaPanel =
     canAssignFinancier &&
-    (contract.plan_type === "renting" || contract.plan_type === "rental");
+    (contract.plan_type === "rental" || contract.plan_type === "renting");
   let financiersForAssign: Awaited<ReturnType<typeof listFinanciers>> = [];
   let customerPartyKind: "individual" | "company" | null = null;
   let customerIsAutonomo = false;
@@ -636,6 +642,27 @@ export default async function ContractDetailPage({
       </Card>
 
       <ContractPhotosCard contractId={id} />
+
+      {showSepaPanel && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Forma de pago de cuotas + Mandato SEPA</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SepaMandatePanel
+              contractId={contract.id}
+              contractStatus={contract.status}
+              paymentMethodRecurring={
+                ((contract as unknown as { payment_method_recurring?: string | null })
+                  .payment_method_recurring as "direct_debit" | "transfer" | null) ?? null
+              }
+              mandate={await getSepaMandateByContract(contract.id).catch(() => null)}
+              companyIban={fiscal?.fiscal_iban ?? null}
+              canEdit={canAssignFinancier}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {showFinancierAssign && (
         <Card>
