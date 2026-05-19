@@ -469,17 +469,32 @@ function drawCallout(
 /**
  * Sección con título grande + línea decorativa.
  *
- * Decisión usuario 2026-05-19: cada sección empieza en página nueva
- * (excepto la primera). Así el documento es más legible: no quedan
- * encabezados a mitad de página y los términos siempre arrancan en una
- * página propia.
+ * Decisión usuario 2026-05-19 (refinada): NO forzar página nueva por
+ * sección si el contenido cabe; sólo saltar cuando no cabe título +
+ * mínimo de contenido en la página actual (evita viuda: título solo
+ * al final con el contenido en la siguiente página).
+ *
+ * Parámetro opcional `minRoomNeeded`: estimación pt necesarios para
+ * el título + las primeras líneas. Si no caben, salto a página nueva.
+ * Si la sección es muy corta (1-2 líneas) ⇒ no salta y se junta con
+ * la anterior.
  */
-function drawSection(d: Doc, label: string): void {
-  // Si NO es la primera sección del documento, salto de página.
-  // Detectamos "primera sección" porque cursorY ≈ top.
+function drawSection(
+  d: Doc,
+  label: string,
+  opts?: { minRoomNeeded?: number },
+): void {
+  // Si NO es la primera sección del documento, decidir si saltar.
   const isTop = d.cursorY > PAGE_H - MARGIN - 5;
-  if (!isTop) {
+  // Espacio mínimo necesario para título + 4 líneas (evita viuda).
+  // Si la sección es muy corta, el caller puede pasar uno más pequeño.
+  const minRoom = opts?.minRoomNeeded ?? 120;
+  const remaining = d.cursorY - 60; // 60 = zona footer reservada
+  if (!isTop && remaining < minRoom) {
     newPage(d);
+  } else if (!isTop) {
+    // Separador suave si seguimos en la misma página
+    d.cursorY -= 18;
   }
   d.cursorY -= 14;
   d.page.drawText(label.toUpperCase(), {
@@ -1368,7 +1383,10 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
   }
 
   // ---------- EQUIPOS ----------
-  drawSection(doc, "EQUIPOS CONTRATADOS");
+  // Cada equipo ocupa ~80pt. Estimamos: título + 1 card + margen.
+  drawSection(doc, "EQUIPOS CONTRATADOS", {
+    minRoomNeeded: 60 + Math.min(items.length, 2) * 80,
+  });
   drawEquipmentCards(
     doc,
     items.map((it) => ({
@@ -1381,7 +1399,10 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
 
   // ---------- PLAN DE PAGOS ----------
   if (payments.length > 0) {
-    drawSection(doc, "PLAN DE PAGOS");
+    // Header tabla + ~22pt por fila.
+    drawSection(doc, "PLAN DE PAGOS", {
+      minRoomNeeded: 80 + Math.min(payments.length, 3) * 22,
+    });
     drawPaymentsTable(
       doc,
       payments.map((p) => ({
@@ -1395,12 +1416,15 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
 
   // ---------- CLÁUSULAS ----------
   if (clauses.length > 0) {
-    drawSection(doc, "TÉRMINOS Y CONDICIONES");
+    // Las cláusulas son largas — exigimos espacio para título + 6 líneas.
+    drawSection(doc, "TÉRMINOS Y CONDICIONES", { minRoomNeeded: 150 });
     drawClauses(doc, clauses);
   }
 
   // ---------- FIRMAS ----------
-  drawSection(doc, "FIRMAS");
+  // Cuadros de firma ~120pt. Exigimos página propia (firmas no deben
+  // quedar partidas entre dos páginas).
+  drawSection(doc, "FIRMAS", { minRoomNeeded: 220 });
   drawSignatures(doc, {
     company: {
       name: repSig?.signer_name ?? companyDisplay,
