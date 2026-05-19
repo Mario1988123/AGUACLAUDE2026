@@ -705,6 +705,24 @@ export async function getInstallerAvailabilityAction(
   return map;
 }
 
+/**
+ * Versión "result pattern" — no lanza error, devuelve {ok, error} con
+ * mensaje real (Next.js redacta thrown Error.message en producción).
+ */
+export async function updateInstallationSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateInstallationAction(input);
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Error al actualizar la instalación",
+    };
+  }
+}
+
 export async function updateInstallationAction(input: unknown) {
   const session = await requireSession();
 
