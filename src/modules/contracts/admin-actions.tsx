@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Pencil } from "lucide-react";
+import { Ban, Pencil, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { cancelContractAction } from "./actions";
+import { cancelContractAction, promoteContractToSignedAction } from "./actions";
 
 /**
  * Botones admin/director en el detalle de contrato:
@@ -61,6 +61,18 @@ export function ContractAdminActions({
     });
   }
 
+  function promote() {
+    startTransition(async () => {
+      const r = await promoteContractToSignedAction(contractId);
+      if (!r.ok) {
+        notify.error("No se pudo promover", r.error);
+        return;
+      }
+      notify.success("Contrato firmado · datos completados");
+      router.refresh();
+    });
+  }
+
   if (isCancelled) {
     return (
       <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">
@@ -71,8 +83,30 @@ export function ContractAdminActions({
 
   return (
     <div className="space-y-2">
-      {/* IBAN pendiente: aviso visible hasta que se complete */}
-      {ibanIsPending && hasIban && (
+      {/* Pendiente de datos: aviso visible y botón "Promover a firmado" */}
+      {status === "pending_data" && (
+        <div className="space-y-2 rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="font-bold">
+            ⚠ Contrato pendiente de datos
+          </div>
+          <p className="text-xs">
+            {ibanIsPending && hasIban
+              ? "El IBAN del cliente es ES00 (placeholder). Cambia el IBAN por el real antes de promover el contrato a firmado."
+              : "Faltan datos del cliente. Completa los datos antes de promover el contrato."}
+          </p>
+          <Button
+            onClick={promote}
+            disabled={pending || (ibanIsPending && hasIban)}
+            variant="success"
+            size="sm"
+            className="gap-2"
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            Promover a firmado
+          </Button>
+        </div>
+      )}
+      {ibanIsPending && hasIban && status !== "pending_data" && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           ⚠ Contrato firmado · pendiente de IBAN (actual: ES00)
         </div>

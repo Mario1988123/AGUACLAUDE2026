@@ -741,6 +741,24 @@ export async function createCreditNoteAction(originalId: string): Promise<string
 /**
  * Crea una factura a partir de un contrato firmado: una línea por contract_item.
  */
+/**
+ * Versión "result pattern" para usarse desde UI cliente sin perder el
+ * mensaje de error en producción (Next.js redacta thrown errors).
+ */
+export async function createInvoiceFromContractSafeAction(
+  contractId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createInvoiceFromContractAction(contractId);
+    return { ok: true, id };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "No se pudo crear la factura",
+    };
+  }
+}
+
 export async function createInvoiceFromContractAction(contractId: string): Promise<string> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");

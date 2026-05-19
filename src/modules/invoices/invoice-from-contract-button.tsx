@@ -6,7 +6,7 @@ import { Receipt } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { createInvoiceFromContractAction } from "./actions";
+import { createInvoiceFromContractSafeAction } from "./actions";
 
 export function InvoiceFromContractButton({ contractId }: { contractId: string }) {
   const [pending, startTransition] = useTransition();
@@ -20,13 +20,13 @@ export function InvoiceFromContractButton({ contractId }: { contractId: string }
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const id = await createInvoiceFromContractAction(contractId);
-        notify.success("Factura creada en borrador");
-        router.push(`/facturas/${id}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createInvoiceFromContractSafeAction(contractId);
+      if (!r.ok) {
+        notify.error("No se pudo facturar", r.error);
+        return;
       }
+      notify.success("Factura creada en borrador");
+      router.push(`/facturas/${r.id}` as never);
     });
   }
   return (

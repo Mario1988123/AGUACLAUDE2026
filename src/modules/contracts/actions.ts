@@ -726,16 +726,20 @@ export async function markContractSigned(id: string) {
     }
   }
 
+  // Decisión usuario 2026-05-19: si falta IBAN real (ES00 o no validado),
+  // el contrato NO se firma "limpio" — pasa a 'pending_data'. Legalmente
+  // un contrato firmado debe estar completo. Una vez el admin valide el
+  // IBAN real, se promueve a 'signed' (ver validateContractIbanAction).
   const updates: Record<string, unknown> = {
-    status: "signed",
     signed_at: new Date().toISOString(),
     signed_by_user_id: session.user_id,
   };
   if (provisionalIban) {
+    updates.status = "pending_data";
     updates.has_provisional_data = true;
     updates.pending_fields = ["iban"];
   } else {
-    // Limpiar flags previos si ahora está completo
+    updates.status = "signed";
     updates.has_provisional_data = false;
     updates.pending_fields = [];
   }
@@ -1199,6 +1203,117 @@ export type ContractActionResult = { ok: true } | { ok: false; error: string };
  * todo está en regla). A partir de aquí el comercial cuenta la venta.
  * Solo admin / director comercial.
  */
+/**
+ * Promueve un contrato de 'pending_data' a 'signed' cuando se ha resuelto
+ * el dato pendiente (típicamente IBAN ES00 → IBAN real). Re-comprueba que
+ * el IBAN actual del cliente es válido y no ES00.
+ */
+export async function promoteContractToSignedAction(
+  id: string,
+): Promise<ContractActionResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (
+      !session.is_superadmin &&
+      !session.roles.includes("company_admin") &&
+      !session.roles.includes("commercial_director")
+    ) {
+      return { ok: false, error: "Solo admin o director comercial" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: row } = await admin
+      .from("contracts")
+      .select("id, status, company_id, customer_id, plan_type")
+      .eq("id", id)
+      .maybeSingle();
+    const c = row as
+      | {
+          id: string;
+          status: string;
+          company_id: string;
+          customer_id: string | null;
+          plan_type: string;
+        }
+      | null;
+    if (!c) return { ok: false, error: "Contrato no encontrado" };
+    if (c.company_id !== session.company_id)
+      return { ok: false, error: "Otra empresa" };
+    if (c.status !== "pending_data") {
+      return {
+        ok: false,
+        error: `El contrato no está pendiente de datos (estado actual: ${c.status})`,
+      };
+    }
+
+    // Re-comprobar IBAN si aplica (rental/renting)
+    if (
+      c.customer_id &&
+      (c.plan_type === "rental" || c.plan_type === "renting")
+    ) {
+      const { data: bk } = await admin
+        .from("customer_bank_accounts")
+        .select("id, iban")
+        .eq("customer_id", c.customer_id)
+        .order("is_primary", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const iban = (bk as { id: string; iban: string | null } | null)?.iban ?? null;
+      if (!iban) {
+        return {
+          ok: false,
+          error: "El cliente sigue sin IBAN. Añade uno antes de promover.",
+        };
+      }
+      const clean = iban.replace(/\s+/g, "").toUpperCase();
+      if (/^ES00/.test(clean)) {
+        return {
+          ok: false,
+          error: "El IBAN sigue siendo ES00 (placeholder). Cámbialo por el real.",
+        };
+      }
+      if (!/^ES\d{2}[\dA-Z]{20}$/.test(clean)) {
+        return { ok: false, error: "Formato IBAN inválido (ES + 22 caracteres)." };
+      }
+      // Marcar IBAN como validado
+      try {
+        await admin
+          .from("customer_bank_accounts")
+          .update({ is_validated: true, validated_at: new Date().toISOString() })
+          .eq("id", (bk as { id: string }).id);
+      } catch (e) {
+        console.error("[promoteContract] mark IBAN validated failed:", e);
+      }
+    }
+
+    const r = await admin
+      .from("contracts")
+      .update({
+        status: "signed",
+        has_provisional_data: false,
+        pending_fields: [],
+      })
+      .eq("id", id);
+    if (r.error) return { ok: false, error: r.error.message };
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "contract",
+      subject_id: id,
+      kind: "contract.promoted_to_signed",
+      payload: { from: "pending_data" },
+      actor_user_id: session.user_id,
+    });
+
+    revalidatePath(`/contratos/${id}`);
+    revalidatePath("/contratos");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export async function validateContractAction(id: string): Promise<ContractActionResult> {
   try {
     const session = await requireSession();
