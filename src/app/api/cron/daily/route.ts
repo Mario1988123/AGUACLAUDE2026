@@ -1379,6 +1379,47 @@ export async function GET(req: NextRequest) {
   }
 
   // ============================================================================
+  // RRSS — generación automática del siguiente mes (día 25)
+  // ----------------------------------------------------------------------------
+  // Para empresas con social_settings.autonomous_mode = true, el día 25
+  // de cada mes generamos los borradores del MES SIGUIENTE. Da margen al
+  // admin para revisar/aprobar antes del día 1.
+  // ============================================================================
+  const rrssAuto = { companies: 0, posts_created: 0, errors: 0 };
+  if (today.getDate() === 25) {
+    try {
+      const { data: autoCompanies } = await admin
+        .from("social_settings")
+        .select("company_id")
+        .eq("autonomous_mode", true);
+      const { generateMonthlyPosts } = await import(
+        "@/modules/social/generator"
+      );
+      const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      const targetYear = next.getFullYear();
+      const targetMonth = next.getMonth() + 1;
+      for (const ss of ((autoCompanies ?? []) as Array<{ company_id: string }>)) {
+        rrssAuto.companies += 1;
+        try {
+          const r = await generateMonthlyPosts(
+            admin,
+            ss.company_id,
+            targetYear,
+            targetMonth,
+          );
+          rrssAuto.posts_created += r.posts_created;
+          if (!r.ok) rrssAuto.errors += 1;
+        } catch (e) {
+          rrssAuto.errors += 1;
+          console.error("[cron/daily] rrss auto-generate failed for", ss.company_id, e);
+        }
+      }
+    } catch (e) {
+      console.error("[cron/daily] rrss outer failed:", e);
+    }
+  }
+
+  // ============================================================================
   // RECONCILE wallet_entries ↔ contract_payments (red de seguridad)
   // ----------------------------------------------------------------------------
   // Si un cobro avanzó por un lado y el otro lado no, el cron arregla los
@@ -1567,6 +1608,7 @@ export async function GET(req: NextRequest) {
       sales_reconcile: salesReconcile,
       paused_maintenance: pausedMaintenance,
       wallet_reconcile: walletReconcile,
+      rrss_auto_generate: rrssAuto,
     },
     ranAt: new Date().toISOString(),
   });

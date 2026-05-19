@@ -10,6 +10,7 @@ import {
   type Ephemeris,
   type SocialPost,
 } from "@/modules/social/actions";
+import { GenerateMonthButton } from "@/modules/social/generate-button";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,15 @@ export default async function SocialDashboardPage() {
             <ListTodo className="h-4 w-4" /> Todos los posts
           </Link>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-primary/30 bg-primary/5 p-3">
+        <div className="text-sm">
+          <strong>Generador automático.</strong> Crea los borradores del mes
+          basándose en efemérides + plantillas educativas/comerciales/
+          técnicas. Idempotente: si el día/canal ya tiene post, no duplica.
+        </div>
+        <GenerateMonthButton defaultMonth={month} defaultYear={year} />
       </div>
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
