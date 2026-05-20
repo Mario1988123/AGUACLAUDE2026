@@ -34,11 +34,9 @@ export async function sendPushToUser(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let webpush: any;
   try {
-    // @ts-expect-error — librería opcional. Si no está instalada,
-    // devolvemos { sent:0, failed:0 } sin romper el sistema.
     webpush = await import("web-push");
   } catch {
-    // Librería no instalada (npm install web-push). No bloquea.
+    // Librería no presente (no debería pasar — está en package.json).
     return { sent: 0, failed: 0 };
   }
   webpush.setVapidDetails(subject, publicKey, privateKey);
