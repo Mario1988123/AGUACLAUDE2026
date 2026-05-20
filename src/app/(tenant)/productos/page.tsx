@@ -78,6 +78,38 @@ export default async function ProductsPage({
 
       {alerts && <ProductSmartAlerts alerts={alerts} />}
 
+      {/* KPIs cabecera productos (decisión 2026-05-20) */}
+      {isUpper && (() => {
+        const total = products.length;
+        const active = products.filter((p) => p.is_active).length;
+        const inCalc = products.filter((p) => p.show_in_calculator).length;
+        const noPrice = products.filter(
+          (p) => !p.cash_price_cents || p.cash_price_cents <= 0,
+        ).length;
+        return (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Total productos</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{total}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">Activos</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{active}</div>
+            </div>
+            <div className="rounded-xl border bg-card p-4">
+              <div className="text-xs uppercase text-muted-foreground">En calculadora</div>
+              <div className="mt-1 text-3xl font-extrabold tabular-nums">{inCalc}</div>
+            </div>
+            <div className={`rounded-xl border p-4 ${noPrice > 0 ? "border-amber-300 bg-amber-50" : "bg-card"}`}>
+              <div className="text-xs uppercase text-muted-foreground">Sin precio</div>
+              <div className={`mt-1 text-3xl font-extrabold tabular-nums ${noPrice > 0 ? "text-amber-700" : ""}`}>
+                {noPrice}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         <div className="space-y-1 flex-1 min-w-48">
           <label className="text-xs uppercase text-muted-foreground">Buscar</label>
