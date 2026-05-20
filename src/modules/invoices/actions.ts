@@ -1032,3 +1032,78 @@ export async function generateMonthlyRecurringInvoicesAction(): Promise<{ create
   if (created > 0) revalidatePath("/facturas");
   return { created };
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// ============================================================================
+
+export async function markInvoiceIssuedSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markInvoiceIssuedAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function markInvoicePaidSafeAction(
+  id: string,
+  amount?: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markInvoicePaidAction(id, amount);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function cancelInvoiceSafeAction(
+  id: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await cancelInvoiceAction(id, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createCreditNoteSafeAction(
+  invoiceId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createCreditNoteAction(invoiceId);
+    return { ok: true, id: id as unknown as string };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createInvoiceSafeAction(
+  input: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createInvoiceAction(input as never);
+    return { ok: true, id: id as unknown as string };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteOrRectifyInvoiceSafeAction(
+  invoiceId: string,
+): Promise<
+  | { ok: true; deleted: boolean; credit_note_id?: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const r = await deleteOrRectifyInvoiceAction(invoiceId);
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

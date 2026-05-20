@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  completeMaintenanceAction,
+  completeMaintenanceSafeAction,
   isLastContractedMaintenance,
   acceptRenewalAction,
   declineRenewalAction,
@@ -65,25 +65,23 @@ export function MaintenanceCompleteForm({
 
   function submit() {
     startTransition(async () => {
-      try {
-        await completeMaintenanceAction({
-          id: maintenanceId,
-          notes: notes || undefined,
-          replaced_items: items,
-        });
-        notify.success("Mantenimiento completado");
-        // Tras cerrar: verificar si era la última visita del contrato.
-        // Si sí, abrir modal para ofrecer renovación al cliente.
-        const r = await isLastContractedMaintenance(maintenanceId);
-        if (r.isLast && r.contract_id && plans.length > 0) {
-          setRenewalContractId(r.contract_id);
-          setRenewalOpen(true);
-          return;
-        }
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const res = await completeMaintenanceSafeAction({
+        id: maintenanceId,
+        notes: notes || undefined,
+        replaced_items: items,
+      });
+      if (!res.ok) {
+        notify.error("No se pudo completar", res.error);
+        return;
       }
+      notify.success("Mantenimiento completado");
+      const r = await isLastContractedMaintenance(maintenanceId);
+      if (r.isLast && r.contract_id && plans.length > 0) {
+        setRenewalContractId(r.contract_id);
+        setRenewalOpen(true);
+        return;
+      }
+      location.reload();
     });
   }
 

@@ -5,7 +5,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createWalletEntryAction } from "./actions";
+import { createWalletEntrySafeAction } from "./actions";
 import { PAYMENT_METHOD, type PaymentMethod } from "./schemas";
 import { METHOD_LABEL } from "./constants";
 
@@ -42,22 +42,22 @@ export function RegisterPaymentForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await createWalletEntryAction({
-          contract_id: contractId,
-          customer_id: customerId,
-          installation_id: installationId,
-          concept: form.concept,
-          amount_cents,
-          method: form.method,
-          notes: form.notes,
-        });
-        notify.success("Cobro registrado");
-        setForm({ concept: "", amount_euros: "", method: "cash", notes: "" });
-        onDone?.();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createWalletEntrySafeAction({
+        contract_id: contractId,
+        customer_id: customerId,
+        installation_id: installationId,
+        concept: form.concept,
+        amount_cents,
+        method: form.method,
+        notes: form.notes,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo registrar", r.error);
+        return;
       }
+      notify.success("Cobro registrado");
+      setForm({ concept: "", amount_euros: "", method: "cash", notes: "" });
+      onDone?.();
     });
   }
 

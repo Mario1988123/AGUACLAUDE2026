@@ -7,8 +7,8 @@ import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  markInvoicePaidAction,
-  deleteOrRectifyInvoiceAction,
+  markInvoicePaidSafeAction,
+  deleteOrRectifyInvoiceSafeAction,
 } from "./actions";
 
 interface Props {
@@ -38,8 +38,6 @@ export function InvoiceRowActions({
     status !== "paid" &&
     !isCreditNote;
 
-  // Una credit_note no se puede anular ni rectificar otra vez; las
-  // canceladas/void tampoco.
   const canDelete =
     !isCreditNote &&
     !hasCreditNote &&
@@ -54,13 +52,13 @@ export function InvoiceRowActions({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await markInvoicePaidAction(invoiceId);
-        notify.success("Factura cobrada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markInvoicePaidSafeAction(invoiceId);
+      if (!r.ok) {
+        notify.error("No se pudo cobrar", r.error);
+        return;
       }
+      notify.success("Factura cobrada");
+      router.refresh();
     });
   }
 
@@ -73,18 +71,19 @@ export function InvoiceRowActions({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const r = await deleteOrRectifyInvoiceAction(invoiceId);
-        if (r.deleted) {
-          notify.success("Factura borrada (era la última en borrador)");
-        } else {
-          notify.success("Rectificativa creada");
-          if (r.credit_note_id) router.push(`/facturas/${r.credit_note_id}` as never);
-        }
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteOrRectifyInvoiceSafeAction(invoiceId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      if (r.deleted) {
+        notify.success("Factura borrada (era la última en borrador)");
+      } else {
+        notify.success("Rectificativa creada");
+        if (r.credit_note_id)
+          router.push(`/facturas/${r.credit_note_id}` as never);
+      }
+      router.refresh();
     });
   }
 

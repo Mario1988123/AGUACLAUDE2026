@@ -14,7 +14,7 @@ import {
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { rejectFreeTrialAction, acceptFreeTrialAction } from "./actions";
+import { rejectFreeTrialSafeAction, acceptFreeTrialAction } from "./actions";
 import { SignAndInstallButton } from "./sign-install-modal";
 import {
   ScheduleUninstallButton,
@@ -58,16 +58,16 @@ export function FreeTrialActionsPanel({
       return;
     }
     startTransition(async () => {
-      try {
-        await rejectFreeTrialAction(trialId, reason);
-        notify.success(
-          "Marcada como rechazada",
-          "Agenda la desinstalación para retirar el equipo.",
-        );
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await rejectFreeTrialSafeAction(trialId, reason);
+      if (!r.ok) {
+        notify.error("No se pudo rechazar", r.error);
+        return;
       }
+      notify.success(
+        "Marcada como rechazada",
+        "Agenda la desinstalación para retirar el equipo.",
+      );
+      router.refresh();
     });
   }
 

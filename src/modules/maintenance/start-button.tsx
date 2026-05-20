@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { Play } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { startMaintenanceAction } from "./actions";
+import { startMaintenanceSafeAction } from "./actions";
 
 export function StartMaintenanceButton({ id }: { id: string }) {
   const [pending, startTransition] = useTransition();
@@ -15,13 +15,13 @@ export function StartMaintenanceButton({ id }: { id: string }) {
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          try {
-            await startMaintenanceAction(id);
-            notify.success("Mantenimiento iniciado");
-            location.reload();
-          } catch (err) {
-            notify.error("Error", err instanceof Error ? err.message : String(err));
+          const r = await startMaintenanceSafeAction(id);
+          if (!r.ok) {
+            notify.error("No se pudo iniciar", r.error);
+            return;
           }
+          notify.success("Mantenimiento iniciado");
+          location.reload();
         })
       }
     >

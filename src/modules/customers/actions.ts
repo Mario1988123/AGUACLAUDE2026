@@ -558,3 +558,31 @@ export async function listContractsByCustomer(customerId: string): Promise<
     .order("created_at", { ascending: false });
   return (data ?? []) as never;
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// ============================================================================
+
+export async function updateCustomerSafeAction(
+  customerId: string,
+  patch: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateCustomerAction(customerId, patch as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function logCustomerContactSafeAction(
+  customerId: string,
+  channel: "call" | "whatsapp" | "email",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await logCustomerContactAction(customerId, channel);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -719,3 +719,29 @@ export async function acceptRenewalAction(input: {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// ============================================================================
+
+export async function completeMaintenanceSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await completeMaintenanceAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function startMaintenanceSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await startMaintenanceAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

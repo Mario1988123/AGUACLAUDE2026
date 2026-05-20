@@ -1040,3 +1040,30 @@ export async function markReturnedAction(id: string) {
   revalidatePath(`/pruebas-gratuitas/${id}`);
   revalidatePath("/pruebas-gratuitas");
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// ============================================================================
+
+export async function createFreeTrialSafeAction(
+  input: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createFreeTrialAction(input as never);
+    return { ok: true, id: id as unknown as string };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function rejectFreeTrialSafeAction(
+  trialId: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rejectFreeTrialAction(trialId, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

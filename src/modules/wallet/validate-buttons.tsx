@@ -16,11 +16,11 @@ import {
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  rejectWalletEntryAction,
-  validateWalletEntryAction,
-  markWalletAsCollectedAction,
-  cancelWalletEntryAction,
-  changeWalletMethodAction,
+  rejectWalletEntrySafeAction,
+  validateWalletEntrySafeAction,
+  markWalletAsCollectedSafeAction,
+  cancelWalletEntrySafeAction,
+  changeWalletMethodSafeAction,
   createInvoiceFromWalletAction,
 } from "./actions";
 
@@ -82,24 +82,24 @@ export function ValidateWalletButtons({
   function validate() {
     setMenuOpen(false);
     startTransition(async () => {
-      try {
-        await validateWalletEntryAction(id);
-        notify.success(method === "cash" ? "Efectivo recibido" : "Confirmado en banco");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await validateWalletEntrySafeAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo validar", r.error);
+        return;
       }
+      notify.success(method === "cash" ? "Efectivo recibido" : "Confirmado en banco");
     });
   }
 
   function markCollected() {
     setMenuOpen(false);
     startTransition(async () => {
-      try {
-        await markWalletAsCollectedAction(id);
-        notify.success("Marcado como cobrado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markWalletAsCollectedSafeAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo marcar", r.error);
+        return;
       }
+      notify.success("Marcado como cobrado");
     });
   }
 
@@ -122,36 +122,36 @@ export function ValidateWalletButtons({
       return;
     }
     startTransition(async () => {
-      try {
-        await changeWalletMethodAction(id, newMethod);
-        notify.success("Método actualizado");
-        setMethodOpen(false);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await changeWalletMethodSafeAction(id, newMethod);
+      if (!r.ok) {
+        notify.error("No se pudo cambiar el método", r.error);
+        return;
       }
+      notify.success("Método actualizado");
+      setMethodOpen(false);
     });
   }
 
   function confirmReason() {
-    const r = reason.trim();
-    if (!r) {
+    const txt = reason.trim();
+    if (!txt) {
       notify.warning("Indica el motivo");
       return;
     }
     startTransition(async () => {
-      try {
-        if (reasonOpen === "reject") {
-          await rejectWalletEntryAction(id, r);
-          notify.success("Cobro rechazado");
-        } else {
-          await cancelWalletEntryAction(id, r);
-          notify.success("Cobro cancelado");
-        }
-        setReasonOpen(null);
-        setReason("");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const res =
+        reasonOpen === "reject"
+          ? await rejectWalletEntrySafeAction(id, txt)
+          : await cancelWalletEntrySafeAction(id, txt);
+      if (!res.ok) {
+        notify.error("No se pudo procesar", res.error);
+        return;
       }
+      notify.success(
+        reasonOpen === "reject" ? "Cobro rechazado" : "Cobro cancelado",
+      );
+      setReasonOpen(null);
+      setReason("");
     });
   }
 

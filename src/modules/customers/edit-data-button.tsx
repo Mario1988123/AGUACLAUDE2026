@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateCustomerAction } from "./actions";
+import { updateCustomerSafeAction } from "./actions";
 
 export interface EditCustomerInitial {
   party_kind: "individual" | "company";
@@ -50,24 +50,24 @@ export function EditCustomerDataButton({
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateCustomerAction(customerId, {
-          legal_name: v.legal_name,
-          trade_name: v.trade_name,
-          first_name: v.first_name,
-          last_name: v.last_name,
-          email: v.email,
-          phone_primary: v.phone_primary,
-          phone_secondary: v.phone_secondary,
-          tax_id: v.tax_id,
-          notes: v.notes,
-        });
-        notify.success("Datos actualizados");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateCustomerSafeAction(customerId, {
+        legal_name: v.legal_name,
+        trade_name: v.trade_name,
+        first_name: v.first_name,
+        last_name: v.last_name,
+        email: v.email,
+        phone_primary: v.phone_primary,
+        phone_secondary: v.phone_secondary,
+        tax_id: v.tax_id,
+        notes: v.notes,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Datos actualizados");
+      setOpen(false);
+      router.refresh();
     });
   }
 

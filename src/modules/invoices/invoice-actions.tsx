@@ -9,10 +9,10 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  markInvoiceIssuedAction,
-  markInvoicePaidAction,
-  cancelInvoiceAction,
-  createCreditNoteAction,
+  markInvoiceIssuedSafeAction,
+  markInvoicePaidSafeAction,
+  cancelInvoiceSafeAction,
+  createCreditNoteSafeAction,
   type InvoiceStatus,
   type InvoiceKind,
 } from "./actions";
@@ -42,13 +42,13 @@ export function InvoiceActions({
 
   function issue() {
     startTransition(async () => {
-      try {
-        await markInvoiceIssuedAction(invoiceId);
-        notify.success("Factura emitida");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markInvoiceIssuedSafeAction(invoiceId);
+      if (!r.ok) {
+        notify.error("No se pudo emitir", r.error);
+        return;
       }
+      notify.success("Factura emitida");
+      router.refresh();
     });
   }
 
@@ -59,29 +59,29 @@ export function InvoiceActions({
       return;
     }
     startTransition(async () => {
-      try {
-        await markInvoicePaidAction(invoiceId, amt);
-        notify.success("Cobro registrado");
-        setPaying(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markInvoicePaidSafeAction(invoiceId, amt);
+      if (!r.ok) {
+        notify.error("No se pudo cobrar", r.error);
+        return;
       }
+      notify.success("Cobro registrado");
+      setPaying(false);
+      router.refresh();
     });
   }
 
   function confirmCancel() {
     const reason = cancelReason.trim();
     startTransition(async () => {
-      try {
-        await cancelInvoiceAction(invoiceId, reason);
-        notify.success("Factura cancelada");
-        setCancelOpen(false);
-        setCancelReason("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await cancelInvoiceSafeAction(invoiceId, reason);
+      if (!r.ok) {
+        notify.error("No se pudo cancelar", r.error);
+        return;
       }
+      notify.success("Factura cancelada");
+      setCancelOpen(false);
+      setCancelReason("");
+      router.refresh();
     });
   }
 
@@ -94,13 +94,13 @@ export function InvoiceActions({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const newId = await createCreditNoteAction(invoiceId);
-        notify.success("Rectificativa creada");
-        router.push(`/facturas/${newId}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createCreditNoteSafeAction(invoiceId);
+      if (!r.ok) {
+        notify.error("No se pudo crear rectificativa", r.error);
+        return;
       }
+      notify.success("Rectificativa creada");
+      router.push(`/facturas/${r.id}` as never);
     });
   }
 

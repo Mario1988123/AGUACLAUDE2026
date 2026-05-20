@@ -1024,3 +1024,76 @@ export async function listPendingInvoiceWalletEntries(): Promise<PendingInvoiceR
       : null,
   }));
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// ============================================================================
+
+export async function validateWalletEntrySafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await validateWalletEntryAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function markWalletAsCollectedSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markWalletAsCollectedAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function rejectWalletEntrySafeAction(
+  id: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rejectWalletEntryAction(id, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function cancelWalletEntrySafeAction(
+  id: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await cancelWalletEntryAction(id, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function changeWalletMethodSafeAction(
+  id: string,
+  newMethod: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await changeWalletMethodAction(id, newMethod as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createWalletEntrySafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createWalletEntryAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

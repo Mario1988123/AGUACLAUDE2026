@@ -8,7 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createFreeTrialAction } from "./actions";
+import { createFreeTrialSafeAction } from "./actions";
 
 interface ProductOption {
   id: string;
@@ -94,26 +94,23 @@ export function FreeTrialCreateForm({
       return;
     }
     startTransition(async () => {
-      try {
-        const newId = await createFreeTrialAction({
-          customer_id: ownerKind === "customer" ? ownerId : undefined,
-          lead_id: ownerKind === "lead" ? ownerId : undefined,
-          installation_address_id: addressId,
-          duration_days: durationDays,
-          conditions_text: conditions,
-          scheduled_at: scheduledAt || undefined,
-          assigned_installer_user_id: installerId || undefined,
-          notes: notes || undefined,
-          items: validItems,
-        });
-        notify.success("Prueba creada");
-        router.push(`/pruebas-gratuitas/${newId}` as never);
-      } catch (err) {
-        notify.error(
-          "No se pudo crear",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await createFreeTrialSafeAction({
+        customer_id: ownerKind === "customer" ? ownerId : undefined,
+        lead_id: ownerKind === "lead" ? ownerId : undefined,
+        installation_address_id: addressId,
+        duration_days: durationDays,
+        conditions_text: conditions,
+        scheduled_at: scheduledAt || undefined,
+        assigned_installer_user_id: installerId || undefined,
+        notes: notes || undefined,
+        items: validItems,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo crear", r.error);
+        return;
       }
+      notify.success("Prueba creada");
+      router.push(`/pruebas-gratuitas/${r.id}` as never);
     });
   }
 

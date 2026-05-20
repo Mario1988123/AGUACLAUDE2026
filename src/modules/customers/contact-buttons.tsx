@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { Phone, MessageCircle, Mail } from "lucide-react";
-import { logCustomerContactAction } from "./actions";
+import { logCustomerContactSafeAction } from "./actions";
 import { notify } from "@/shared/hooks/use-toast";
 import { MessageTemplateButton } from "@/modules/messaging/template-button";
 
@@ -23,10 +23,9 @@ export function CustomerContactButtons({
 
   function handle(channel: "call" | "whatsapp" | "email", url: string) {
     startTransition(async () => {
-      try {
-        await logCustomerContactAction(customerId, channel);
-      } catch (err) {
-        notify.error("No se pudo registrar el contacto", err instanceof Error ? err.message : String(err));
+      const r = await logCustomerContactSafeAction(customerId, channel);
+      if (!r.ok) {
+        notify.error("No se pudo registrar el contacto", r.error);
       }
     });
     window.location.href = url;
