@@ -10,6 +10,7 @@ import {
   ContractSmartAlerts,
   getContractAlerts,
 } from "@/modules/contracts/smart-alerts";
+import { ContractBulkSelectAllButton } from "@/modules/contracts/selectable-list";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +122,16 @@ export default async function ContratosPage({
       </div>
 
       {isUpper && alerts && <ContractSmartAlerts alerts={alerts} />}
+
+      {/* Bulk actions (decisión 2026-05-20) — solo admin/dir comercial */}
+      {(session.is_superadmin ||
+        session.roles.includes("company_admin") ||
+        session.roles.includes("commercial_director")) &&
+        contracts.length > 0 && (
+          <ContractBulkSelectAllButton
+            allIds={contracts.filter((c) => c.status === "signed").map((c) => c.id)}
+          />
+        )}
 
       {/* KPIs cabecera contratos (decisión 2026-05-20) */}
       {(() => {

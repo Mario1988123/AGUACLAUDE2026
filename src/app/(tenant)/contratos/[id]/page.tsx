@@ -31,6 +31,7 @@ import { ViewA4Button } from "@/modules/contracts/view-a4-button";
 import { ContractCompleteWizard } from "@/modules/contracts/complete-wizard";
 import { ChargeWithGoCardlessButton } from "@/modules/gocardless/charge-button";
 import { CleanupDuplicatePaymentsButton } from "@/modules/contracts/cleanup-duplicates-button";
+import { ContractAuditLogCard } from "@/modules/contracts/audit-log-card";
 import { BackButton } from "@/shared/components/back-button";
 import { SubjectNotificationToast } from "@/modules/notifications/subject-toast";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -699,6 +700,13 @@ export default async function ContractDetailPage({
           />
         </CardContent>
       </Card>
+
+      {/* Histórico de cambios — solo nivel 1/2 */}
+      {(session.is_superadmin ||
+        session.roles.includes("company_admin") ||
+        session.roles.includes("commercial_director")) && (
+        <ContractAuditLogCard contractId={id} />
+      )}
 
       <Card>
         <CardHeader>

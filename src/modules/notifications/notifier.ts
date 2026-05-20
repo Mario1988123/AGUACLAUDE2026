@@ -12,7 +12,11 @@ export type NotificationSubjectType =
   | "maintenance"
   | "incident"
   | "wallet_entry"
-  | "product";
+  | "product"
+  | "invoice"
+  | "free_trial"
+  | "agenda"
+  | "user";
 
 export interface NotifyInput {
   company_id: string;

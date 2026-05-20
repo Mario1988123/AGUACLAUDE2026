@@ -1616,6 +1616,169 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] sales reconcile outer failed:", e);
   }
 
+  // ===== Recordatorios de impago automáticos (decisión 2026-05-20) =====
+  // Para cada factura vencida con saldo pendiente, mandar el recordatorio
+  // correspondiente al nivel de retraso:
+  //  · 7d  → recordatorio suave (template payment_reminder_1)
+  //  · 14d → recordatorio formal (template payment_reminder_2)
+  //  · 30d → requerimiento (template payment_reminder_3)
+  //  · 45d → alerta admin "considera vía legal" (no envío al cliente)
+  // Idempotencia vía invoice_reminders_sent.
+  const remindersStats = {
+    level1: 0,
+    level2: 0,
+    level3: 0,
+    legal_alerts: 0,
+    errors: 0,
+    skipped_no_consent: 0,
+  };
+  try {
+    const now = Date.now();
+    const { data: overdue } = await admin
+      .from("invoices")
+      .select(
+        "id, company_id, customer_id, customer_fiscal_snapshot, full_reference, total_cents, pending_cents, due_date, status",
+      )
+      .in("status", ["issued", "overdue"])
+      .lt("due_date", new Date(now).toISOString().slice(0, 10))
+      .gt("pending_cents", 0)
+      .is("deleted_at", null);
+    type Inv = {
+      id: string;
+      company_id: string;
+      customer_id: string | null;
+      customer_fiscal_snapshot: Record<string, unknown> | null;
+      full_reference: string;
+      total_cents: number;
+      pending_cents: number;
+      due_date: string;
+      status: string;
+    };
+    for (const inv of ((overdue ?? []) as Inv[])) {
+      try {
+        const daysOverdue = Math.floor(
+          (now - new Date(inv.due_date).getTime()) / 86400000,
+        );
+        let level: 1 | 2 | 3 | null = null;
+        if (daysOverdue >= 45) {
+          // No envío al cliente — solo notif admin
+          if (daysOverdue === 45 || daysOverdue === 46) {
+            await notifyByRoles(
+              inv.company_id,
+              ["company_admin", "commercial_director"],
+              {
+                kind: "invoice.legal_action_suggested",
+                severity: "warning",
+                title: `Factura ${inv.full_reference} +45d vencida`,
+                body: `Considera vía legal. Cliente impagado más de 45 días por ${(inv.pending_cents / 100).toFixed(2)}€.`,
+                subject_type: "invoice",
+                subject_id: inv.id,
+                action_url: `/facturas/${inv.id}`,
+              },
+            );
+            remindersStats.legal_alerts += 1;
+          }
+          continue;
+        } else if (daysOverdue >= 30) level = 3;
+        else if (daysOverdue >= 14) level = 2;
+        else if (daysOverdue >= 7) level = 1;
+        if (!level) continue;
+
+        // ¿Ya enviamos este nivel?
+        const { count: already } = await admin
+          .from("invoice_reminders_sent")
+          .select("id", { count: "exact", head: true })
+          .eq("invoice_id", inv.id)
+          .eq("level", level);
+        if ((already ?? 0) > 0) continue;
+
+        // Consentimiento + email cliente
+        const snap = inv.customer_fiscal_snapshot ?? {};
+        const recipientEmail = (snap as { email?: string }).email ?? null;
+        if (!recipientEmail) {
+          remindersStats.skipped_no_consent += 1;
+          continue;
+        }
+
+        // Consentimiento comercial (si el cliente revocó, no enviamos).
+        let hasConsent = true;
+        if (inv.customer_id) {
+          try {
+            const { data: cust } = await admin
+              .from("customers")
+              .select("commercial_consent")
+              .eq("id", inv.customer_id)
+              .maybeSingle();
+            hasConsent =
+              (cust as { commercial_consent?: boolean } | null)
+                ?.commercial_consent !== false;
+          } catch {
+            /* */
+          }
+        }
+        if (!hasConsent) {
+          remindersStats.skipped_no_consent += 1;
+          // Crear tarea agenda al admin: llamar al cliente
+          try {
+            await admin.from("agenda_events").insert({
+              company_id: inv.company_id,
+              kind: "task",
+              title: `Llamar — factura ${inv.full_reference} impagada ${daysOverdue}d`,
+              description: `El cliente no acepta comunicaciones comerciales. Pendiente: ${(inv.pending_cents / 100).toFixed(2)}€.`,
+              starts_at: new Date(now + 24 * 3600000).toISOString(),
+              subject_type: "invoice",
+              subject_id: inv.id,
+            });
+          } catch {
+            /* */
+          }
+          continue;
+        }
+
+        // Registrar recordatorio (idempotencia primero)
+        await admin.from("invoice_reminders_sent").insert({
+          invoice_id: inv.id,
+          level,
+          channel: "email",
+          recipient_email: recipientEmail,
+          template_key: `payment_reminder_${level}`,
+        });
+
+        // TODO: invocar sendEmail real con plantilla (cuando estén creadas
+        // en /configuracion/mailing). Por ahora notif admin con resumen.
+        await notifyByRoles(
+          inv.company_id,
+          ["company_admin", "commercial_director"],
+          {
+            kind: `invoice.reminder_${level}_sent`,
+            severity: level === 3 ? "warning" : "info",
+            title: `Recordatorio nivel ${level}: ${inv.full_reference}`,
+            body: `Factura impagada ${daysOverdue} días. ${(inv.pending_cents / 100).toFixed(2)}€.`,
+            subject_type: "invoice",
+            subject_id: inv.id,
+            action_url: `/facturas/${inv.id}`,
+          },
+        );
+        if (level === 1) remindersStats.level1 += 1;
+        if (level === 2) remindersStats.level2 += 1;
+        if (level === 3) remindersStats.level3 += 1;
+
+        // Marcar factura como overdue si no lo está aún
+        if (inv.status === "issued") {
+          await admin
+            .from("invoices")
+            .update({ status: "overdue" })
+            .eq("id", inv.id);
+        }
+      } catch (e) {
+        remindersStats.errors += 1;
+        tracker.error("invoice-reminder", e);
+      }
+    }
+  } catch (e) {
+    tracker.error("invoice-reminders-outer", e);
+  }
+
   const summary = {
     ...stats,
     verifactu,
@@ -1637,6 +1800,7 @@ export async function GET(req: NextRequest) {
     paused_maintenance: pausedMaintenance,
     wallet_reconcile: walletReconcile,
     rrss_auto_generate: rrssAuto,
+    invoice_reminders: remindersStats,
   };
   await tracker.finish({ summary });
   return NextResponse.json({
