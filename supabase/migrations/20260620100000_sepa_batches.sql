@@ -53,3 +53,7 @@ create policy sepa_batches_company on public.sepa_batches
     company_id = ((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'company_id'))::uuid
     or coalesce(((current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'is_superadmin')::boolean), false)
   );
+
+-- Refresca el schema cache de PostgREST para que las nuevas columnas
+-- estén disponibles sin reinicio (decisión 2026-05-20)
+notify pgrst, 'reload schema';

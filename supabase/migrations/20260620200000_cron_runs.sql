@@ -25,3 +25,7 @@ create index if not exists idx_cron_runs_ok
 
 comment on table public.cron_runs is
   'Telemetría de cada ejecución de cron. ok=true → todo bien. ok=false → revisar errors_count/summary. ok=null → en curso o muerto.';
+
+
+-- Refresca el schema cache de PostgREST
+notify pgrst, 'reload schema';

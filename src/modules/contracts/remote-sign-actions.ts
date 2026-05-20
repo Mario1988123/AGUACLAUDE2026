@@ -329,6 +329,16 @@ export async function submitRemoteSignatureAction(input: {
   client_ua?: string | null;
 }): Promise<{ ok: true; contract_id: string } | { ok: false; error: string }> {
   try {
+    // Rate limit (decisión 2026-05-20): endpoint público sin auth.
+    // Max 5 intentos por (token + IP) en 60s para evitar brute-force.
+    const { checkRate } = await import("@/shared/lib/rate-limit");
+    const rlKey = `remote-sign:${input.token}:${input.client_ip ?? "noip"}`;
+    if (!checkRate(rlKey, 5, 60_000)) {
+      return {
+        ok: false,
+        error: "Demasiados intentos. Espera un minuto.",
+      };
+    }
     const parsed = parseOrFriendly(submitSchema, input, "Firma remota");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;

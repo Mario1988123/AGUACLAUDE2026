@@ -19,3 +19,7 @@ create unique index if not exists uniq_invoice_reminders_level
 
 create index if not exists idx_invoice_reminders_sent_at
   on public.invoice_reminders_sent(sent_at desc);
+
+
+-- Refresca el schema cache de PostgREST
+notify pgrst, 'reload schema';

@@ -844,6 +844,28 @@ export async function rescheduleAgendaEventAction(
     newEndsAt = new Date(newStart.getTime() + durationMs).toISOString();
   }
 
+  // Conflict check: lo guardamos para registrarlo después de declarar admin.
+  let overlappingEventId: string | null = null;
+  if (assignedUserId) {
+    try {
+      const newEndIso = newEndsAt ?? new Date(newStart.getTime() + 3600000).toISOString();
+      const { data: overlap } = await supabase
+        .from("agenda_events")
+        .select("id, title, starts_at")
+        .eq("assigned_user_id", assignedUserId)
+        .neq("id", eventId)
+        .lt("starts_at", newEndIso)
+        .gt("ends_at", newStart.toISOString())
+        .not("status", "in", "(cancelled,completed)")
+        .limit(1);
+      if (overlap && (overlap as Array<{ id: string }>).length > 0) {
+        overlappingEventId = (overlap as Array<{ id: string }>)[0]!.id;
+      }
+    } catch {
+      /* fail-soft */
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   await admin
@@ -864,6 +886,26 @@ export async function rescheduleAgendaEventAction(
     payload: { event_id: eventId, from: p?.starts_at, to: newStart.toISOString() },
     actor_user_id: session.user_id,
   });
+
+  // Si detectamos solape, registramos warning para que el admin lo vea
+  if (overlappingEventId) {
+    try {
+      await admin.from("events").insert({
+        company_id: session.company_id,
+        subject_type: "agenda",
+        subject_id: eventId,
+        kind: "agenda.conflict_warning",
+        payload: {
+          assigned_user_id: assignedUserId,
+          overlapping_event_id: overlappingEventId,
+          new_starts_at: newStart.toISOString(),
+        },
+        actor_user_id: session.user_id,
+      });
+    } catch {
+      /* */
+    }
+  }
 
   revalidatePath("/agenda");
 }
