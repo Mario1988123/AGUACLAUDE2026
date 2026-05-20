@@ -1616,6 +1616,142 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] sales reconcile outer failed:", e);
   }
 
+  // ===== Score CHURN automático (decisión 2026-05-20) =====
+  // Recalcula customers.churn_score (0-100) cada noche.
+  // Heurística simple:
+  //   · Días desde último mantenimiento > 365  → +30
+  //   · Días desde último mantenimiento 180-365 → +15
+  //   · Pagos fallados últimos 6m              → +25
+  //   · NPS ≤ 2 último mantenimiento           → +15
+  //   · Incidencias abiertas                   → +15
+  //   · Contratos cancelados anteriores        → +15
+  // Resultado clampeado 0-100.
+  const churnStats = { recalculated: 0, errors: 0 };
+  try {
+    const { data: custs } = await admin
+      .from("customers")
+      .select("id, company_id, created_at")
+      .is("deleted_at", null)
+      .limit(5000);
+    type C = { id: string; company_id: string; created_at: string };
+    for (const c of ((custs ?? []) as C[])) {
+      try {
+        let score = 0;
+        // Último mantenimiento
+        const { data: lastM } = await admin
+          .from("maintenance_jobs")
+          .select("completed_at")
+          .eq("customer_id", c.id)
+          .eq("status", "completed")
+          .not("completed_at", "is", null)
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const lastMaint = (lastM as { completed_at: string | null } | null)
+          ?.completed_at;
+        if (lastMaint) {
+          const days = Math.floor(
+            (Date.now() - new Date(lastMaint).getTime()) / 86400000,
+          );
+          if (days > 365) score += 30;
+          else if (days > 180) score += 15;
+        }
+        // Pagos fallados 6m
+        const sixMonthsAgo = new Date(Date.now() - 180 * 86400000).toISOString();
+        const { count: failed } = await admin
+          .from("wallet_entries")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_id", c.id)
+          .eq("status", "rejected")
+          .gte("created_at", sixMonthsAgo);
+        if ((failed ?? 0) > 0) score += 25;
+        // Incidencias abiertas
+        const { count: openInc } = await admin
+          .from("incidents")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_id", c.id)
+          .in("status", ["open", "assigned", "in_progress"]);
+        if ((openInc ?? 0) > 0) score += 15;
+        // Contratos cancelados previos
+        const { count: cancelledContracts } = await admin
+          .from("contracts")
+          .select("id", { count: "exact", head: true })
+          .eq("customer_id", c.id)
+          .eq("status", "cancelled");
+        if ((cancelledContracts ?? 0) > 0) score += 15;
+
+        score = Math.max(0, Math.min(100, score));
+        await admin
+          .from("customers")
+          .update({
+            churn_score: score,
+            churn_score_at: new Date().toISOString(),
+          })
+          .eq("id", c.id);
+        churnStats.recalculated += 1;
+      } catch {
+        churnStats.errors += 1;
+      }
+    }
+  } catch (e) {
+    tracker.error("churn-score-outer", e);
+  }
+
+  // ===== Auto-cron leads stale (decisión 2026-05-20) =====
+  // Leads status=new asignados hace > 14 días sin events lead.contacted
+  // → desasignar + volver al pool.
+  const staleStats = { unassigned: 0, errors: 0 };
+  try {
+    const fortnight = new Date(Date.now() - 14 * 86400000).toISOString();
+    const { data: candidates } = await admin
+      .from("leads")
+      .select("id, company_id, assigned_user_id, assigned_at")
+      .eq("status", "new")
+      .not("assigned_user_id", "is", null)
+      .lt("assigned_at", fortnight)
+      .is("deleted_at", null)
+      .limit(500);
+    type L = {
+      id: string;
+      company_id: string;
+      assigned_user_id: string | null;
+      assigned_at: string | null;
+    };
+    for (const l of ((candidates ?? []) as L[])) {
+      try {
+        // Verificar que NO haya contacto reciente
+        const { count: contacts } = await admin
+          .from("events")
+          .select("id", { count: "exact", head: true })
+          .eq("subject_type", "lead")
+          .eq("subject_id", l.id)
+          .eq("kind", "lead.contacted")
+          .gte("occurred_at", fortnight);
+        if ((contacts ?? 0) > 0) continue;
+        // Desasignar
+        await admin
+          .from("leads")
+          .update({ assigned_user_id: null, assigned_at: null })
+          .eq("id", l.id);
+        await admin.from("events").insert({
+          company_id: l.company_id,
+          subject_type: "lead",
+          subject_id: l.id,
+          kind: "lead.unassigned_by_expiry",
+          payload: {
+            previous_assigned_user_id: l.assigned_user_id,
+            reason: "stale_14d_no_contact",
+          },
+        });
+        staleStats.unassigned += 1;
+      } catch {
+        staleStats.errors += 1;
+      }
+    }
+  } catch (e) {
+    tracker.error("stale-leads-outer", e);
+  }
+
   // ===== Recordatorios de impago automáticos (decisión 2026-05-20) =====
   // Para cada factura vencida con saldo pendiente, mandar el recordatorio
   // correspondiente al nivel de retraso:
@@ -1801,6 +1937,8 @@ export async function GET(req: NextRequest) {
     wallet_reconcile: walletReconcile,
     rrss_auto_generate: rrssAuto,
     invoice_reminders: remindersStats,
+    churn_score: churnStats,
+    stale_leads: staleStats,
   };
   await tracker.finish({ summary });
   return NextResponse.json({
