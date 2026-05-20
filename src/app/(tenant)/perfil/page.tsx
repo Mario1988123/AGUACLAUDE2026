@@ -5,6 +5,7 @@ import { Badge } from "@/shared/ui/badge";
 import { getMyEmailSettings } from "@/modules/mailing/actions";
 import { EmailSettingsForm } from "@/modules/mailing/email-settings-form";
 import { HomeLocationEditor } from "@/modules/users/home-location-editor";
+import { PushSubscribeButton } from "@/modules/notifications/push-subscribe-button";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +88,19 @@ export default async function PerfilPage() {
         initialLng={profile?.home_longitude ?? null}
         initialLabel={profile?.home_address_label ?? null}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Notificaciones push</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
+            Recibe avisos del CRM directamente en este dispositivo (aunque
+            no tengas el CRM abierto). Necesitas dar permiso al navegador.
+          </p>
+          <PushSubscribeButton />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

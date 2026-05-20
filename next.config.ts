@@ -6,9 +6,9 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
-  // Desactivado: el SW interceptaba navegaciones que fallaban en server y
-  // empeoraba la UX (no-response). Volverá cuando endurecemos el offline.
-  disable: true,
+  // Re-activado 2026-05-20: SW reescrito sin interceptar /api/* ni RSC,
+  // push notifications operativas. En dev seguimos deshabilitado.
+  disable: process.env.NODE_ENV === "development",
 });
 
 const nextConfig: NextConfig = {

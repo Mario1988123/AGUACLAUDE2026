@@ -3,29 +3,23 @@
 import { useEffect } from "react";
 
 /**
- * Limpia cualquier Service Worker previamente registrado por la app.
- * Mientras la PWA está desactivada (Serwist disable=true) este componente
- * desregistra los SW antiguos y borra sus cachés para que los clientes
- * que ya los tenían instalados dejen de interceptar las navegaciones.
+ * Registra el Service Worker generado por Serwist (`/sw.js`).
+ *
+ * Decisión 2026-05-20: tras endurecer el SW (no intercepta /api/* ni
+ * RSC, fallback solo en navegaciones HTML que fallan por red) volvemos
+ * a habilitarlo. En desarrollo se mantiene desactivado vía next.config.
+ *
+ * Serwist también puede registrar el SW automáticamente, pero hacemos
+ * un fallback manual para asegurarnos.
  */
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker
-      .getRegistrations()
-      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
-      .catch(() => {
-        /* no-op */
-      });
-    if ("caches" in window) {
-      caches
-        .keys()
-        .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-        .catch(() => {
-          /* no-op */
-        });
-    }
+    if (process.env.NODE_ENV !== "production") return;
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* no-op: si Serwist ya lo registró, devolverá la misma reg */
+    });
   }, []);
   return null;
 }
