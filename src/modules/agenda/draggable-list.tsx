@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { rescheduleAgendaEventAction, markAgendaEventDoneAction } from "./actions";
+import { rescheduleAgendaEventSafeAction, markAgendaEventDoneAction } from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
 import { MoveEventDialog } from "./move-event-dialog";
@@ -99,15 +99,14 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
     setOverDay(null);
 
     startTransition(async () => {
-      try {
-        await rescheduleAgendaEventAction(id, newIso);
-        notify.success("Evento reagendado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
-        // Revertir si falla
+      const r = await rescheduleAgendaEventSafeAction(id, newIso);
+      if (!r.ok) {
+        notify.error("No se pudo reagendar", r.error);
         setEvents(initial);
+        return;
       }
+      notify.success("Evento reagendado");
+      router.refresh();
     });
   }
 

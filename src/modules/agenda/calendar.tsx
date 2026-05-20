@@ -9,7 +9,7 @@ import { cn } from "@/shared/lib/utils";
 import { notify } from "@/shared/hooks/use-toast";
 import { KIND_LABEL } from "./constants";
 import type { AgendaItem } from "./actions";
-import { rescheduleAgendaEventAction } from "./actions";
+import { rescheduleAgendaEventSafeAction } from "./actions";
 import { MoveEventDialog } from "./move-event-dialog";
 
 interface Props {
@@ -100,15 +100,15 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
     const orig = new Date(ev.starts_at);
     const newDate = new Date(yy!, (mm ?? 1) - 1, dd!, orig.getHours(), orig.getMinutes(), 0);
     startTransition(async () => {
-      try {
-        await rescheduleAgendaEventAction(ev.id, newDate.toISOString());
-        notify.success(
-          `Movido a ${newDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}`,
-        );
-        router.refresh();
-      } catch (err) {
-        notify.error("No se pudo mover", err instanceof Error ? err.message : String(err));
+      const r = await rescheduleAgendaEventSafeAction(ev.id, newDate.toISOString());
+      if (!r.ok) {
+        notify.error("No se pudo mover", r.error);
+        return;
       }
+      notify.success(
+        `Movido a ${newDate.toLocaleDateString("es-ES", { day: "numeric", month: "short" })}`,
+      );
+      router.refresh();
     });
   }
 

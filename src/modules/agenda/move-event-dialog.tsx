@@ -18,7 +18,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/di
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { rescheduleAgendaEventAction, reassignAgendaEventAction } from "./actions";
+import {
+  rescheduleAgendaEventSafeAction,
+  reassignAgendaEventAction,
+} from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
 
@@ -112,14 +115,17 @@ export function MoveEventDialog({
     const [hh, mm] = time.split(":").map(Number);
     const newDate = new Date(y!, (m ?? 1) - 1, d!, hh ?? 0, mm ?? 0, 0);
     startTransition(async () => {
-      try {
-        await rescheduleAgendaEventAction(ev.id, newDate.toISOString());
-        notify.success("Evento reagendado");
-        onOpenChange(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await rescheduleAgendaEventSafeAction(
+        ev.id,
+        newDate.toISOString(),
+      );
+      if (!r.ok) {
+        notify.error("No se pudo reagendar", r.error);
+        return;
       }
+      notify.success("Evento reagendado");
+      onOpenChange(false);
+      router.refresh();
     });
   }
 

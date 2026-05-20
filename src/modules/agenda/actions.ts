@@ -781,7 +781,36 @@ export async function createAgendaEventAction(input: unknown) {
  * con nueva hora). Ajusta is_outside_hours según horario comercial. Marca
  * status='rescheduled' si pasa de scheduled a otra fecha.
  */
+/**
+ * Versión result pattern (decisión 2026-05-20): los errores se devuelven
+ * como { ok:false, error } en lugar de throw para que Next.js NO los
+ * redacte con digest en producción. Los callers cliente leen result.error
+ * y lo muestran al usuario tal cual.
+ *
+ * Mantenemos la versión `rescheduleAgendaEventAction` (sin Safe) como
+ * wrapper que sigue lanzando — para compatibilidad con cualquier caller
+ * que aún no se haya migrado.
+ */
+export async function rescheduleAgendaEventSafeAction(
+  eventId: string,
+  newStartsAtIso: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rescheduleAgendaEventInternal(eventId, newStartsAtIso);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export async function rescheduleAgendaEventAction(
+  eventId: string,
+  newStartsAtIso: string,
+): Promise<void> {
+  await rescheduleAgendaEventInternal(eventId, newStartsAtIso);
+}
+
+async function rescheduleAgendaEventInternal(
   eventId: string,
   newStartsAtIso: string,
 ): Promise<void> {
