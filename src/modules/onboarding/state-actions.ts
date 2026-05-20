@@ -8,6 +8,7 @@ import {
   type OnboardingStep,
   type StepImportance,
 } from "./steps-config";
+import { AUTO_CHECK_FUNCTIONS } from "./auto-checks";
 
 export interface OnboardingStepState extends OnboardingStep {
   status: "pending" | "completed" | "postponed";
@@ -63,8 +64,37 @@ export async function getOnboardingSummary(): Promise<OnboardingSummary> {
   }
 
   // 2) Auto-check para steps que lo soporten
+  // Estrategia (decisión 2026-05-20):
+  //   a) Si hay función custom en AUTO_CHECK_FUNCTIONS, la usamos. Es la
+  //      más fiable porque puede consultar varias tablas/columnas con
+  //      lógica de negocio real.
+  //   b) Si no, caemos al sistema declarativo `auto_check` en steps-config.
+  //   c) Si nada, requiere marcado manual.
   const autoCompleted = new Set<string>();
+
+  // a) Funciones custom (en paralelo)
+  const customResults = await Promise.all(
+    ONBOARDING_STEPS.map(async (step) => {
+      const fn = AUTO_CHECK_FUNCTIONS[step.key];
+      if (!fn) return { key: step.key, done: null as boolean | null };
+      try {
+        const done = await fn(session.company_id!);
+        return { key: step.key, done };
+      } catch {
+        return { key: step.key, done: null as boolean | null };
+      }
+    }),
+  );
+  for (const r of customResults) {
+    if (r.done === true) autoCompleted.add(r.key);
+  }
+  const handledByCustom = new Set(
+    customResults.filter((r) => r.done !== null).map((r) => r.key),
+  );
+
+  // b) Sistema declarativo para los que no tienen función custom
   for (const step of ONBOARDING_STEPS) {
+    if (handledByCustom.has(step.key)) continue;
     if (!step.auto_check) continue;
     try {
       let q = admin
