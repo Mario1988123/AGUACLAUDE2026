@@ -20,7 +20,7 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   rescheduleAgendaEventSafeAction,
-  reassignAgendaEventAction,
+  reassignAgendaEventSafeAction,
 } from "./actions";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
@@ -136,14 +136,14 @@ export function MoveEventDialog({
       return;
     }
     startTransition(async () => {
-      try {
-        await reassignAgendaEventAction(ev.id, newAssigned);
-        notify.success("Tarea reasignada");
-        onOpenChange(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reassignAgendaEventSafeAction(ev.id, newAssigned);
+      if (!r.ok) {
+        notify.error("No se pudo reasignar", r.error);
+        return;
       }
+      notify.success("Tarea reasignada");
+      onOpenChange(false);
+      router.refresh();
     });
   }
 

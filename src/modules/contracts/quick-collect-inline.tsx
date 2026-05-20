@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { collectContractPaymentAction } from "./actions";
+import { collectContractPaymentSafeAction } from "./actions";
 
 // "now" = se cobra ahora (firma o instalación).
 // "at_office" = se pospone (puede ser en la instalación posterior, en
@@ -70,25 +70,26 @@ export function CollectInline({
 
   function confirm() {
     startTransition(async () => {
-      try {
-        if (when === "at_office") {
-          // "Posponer": flujo diferido — no materializa wallet entry
-          // hasta que el comercial lo confirme cuando reciba el dinero.
-          await collectContractPaymentAction(paymentId, {
-            when: "on_installation",
-            method,
-            notes: "Cobro pospuesto · pendiente de validación",
-          });
-          notify.success("Cobro pospuesto registrado");
-        } else {
-          await collectContractPaymentAction(paymentId, { when: "now", method });
-          notify.success("Cobrado · pendiente de validar");
-        }
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const input =
+        when === "at_office"
+          ? {
+              when: "on_installation" as const,
+              method,
+              notes: "Cobro pospuesto · pendiente de validación",
+            }
+          : { when: "now" as const, method };
+      const r = await collectContractPaymentSafeAction(paymentId, input);
+      if (!r.ok) {
+        notify.error("No se pudo cobrar", r.error);
+        return;
       }
+      notify.success(
+        when === "at_office"
+          ? "Cobro pospuesto registrado"
+          : "Cobrado · pendiente de validar",
+      );
+      setOpen(false);
+      router.refresh();
     });
   }
 

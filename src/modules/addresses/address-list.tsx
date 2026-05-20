@@ -8,7 +8,7 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { AddressForm } from "./address-form";
-import { deleteAddressAction, type AddressRow } from "./actions";
+import { deleteAddressSafeAction, type AddressRow } from "./actions";
 import { KIND_LABEL, STREET_TYPE_LABEL } from "./schemas";
 
 interface Props {
@@ -38,14 +38,13 @@ export function AddressList({ customerId, leadId, addresses }: Props) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteAddressAction(id);
-        notify.success("Dirección eliminada");
-        // refresh forzado
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteAddressSafeAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo eliminar", r.error);
+        return;
       }
+      notify.success("Dirección eliminada");
+      location.reload();
     });
   }
 

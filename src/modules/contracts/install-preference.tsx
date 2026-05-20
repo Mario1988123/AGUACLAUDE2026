@@ -6,7 +6,7 @@ import { Sun, Moon, CalendarClock, Save, X, ChevronLeft, ChevronRight } from "lu
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { notify } from "@/shared/hooks/use-toast";
-import { saveInstallPreferenceAction } from "./actions";
+import { saveInstallPreferenceSafeAction } from "./actions";
 
 type Slot = "morning" | "afternoon" | "any" | "custom";
 
@@ -175,18 +175,18 @@ export function InstallPreference({
       return;
     }
     startTransition(async () => {
-      try {
-        await saveInstallPreferenceAction(contractId, {
-          slot,
-          notes: notes || null,
-          days_of_week: dows.length > 0 ? dows : null,
-          dates: dates.length > 0 ? dates : null,
-        });
-        notify.success("Preferencia guardada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await saveInstallPreferenceSafeAction(contractId, {
+        slot,
+        notes: notes || null,
+        days_of_week: dows.length > 0 ? dows : null,
+        dates: dates.length > 0 ? dates : null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Preferencia guardada");
+      router.refresh();
     });
   }
 

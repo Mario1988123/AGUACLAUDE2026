@@ -6,7 +6,7 @@ import { UserPlus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { reassignContractAction } from "./actions";
+import { reassignContractSafeAction } from "./actions";
 
 export function ReassignContractButton({
   contractId,
@@ -24,14 +24,14 @@ export function ReassignContractButton({
 
   function save() {
     startTransition(async () => {
-      try {
-        await reassignContractAction(contractId, target || null);
-        notify.success(target ? "Reasignado" : "Desasignado");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reassignContractSafeAction(contractId, target || null);
+      if (!r.ok) {
+        notify.error("No se pudo reasignar", r.error);
+        return;
       }
+      notify.success(target ? "Reasignado" : "Desasignado");
+      setOpen(false);
+      router.refresh();
     });
   }
 

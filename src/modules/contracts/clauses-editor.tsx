@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateContractClausesAction } from "./actions";
+import { updateContractClausesSafeAction } from "./actions";
 
 interface Clause {
   title: string;
@@ -53,17 +53,21 @@ export function ContractClausesEditor({
   }
   function save() {
     startTransition(async () => {
-      try {
-        const normalized = clauses
-          .sort((a, b) => a.display_order - b.display_order)
-          .map((c, i) => ({ title: c.title.trim(), body: c.body.trim(), display_order: (i + 1) * 10 }))
-          .filter((c) => c.title && c.body);
-        await updateContractClausesAction(contractId, normalized);
-        notify.success("Cláusulas guardadas");
-        setEditing(false);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const normalized = clauses
+        .sort((a, b) => a.display_order - b.display_order)
+        .map((c, i) => ({
+          title: c.title.trim(),
+          body: c.body.trim(),
+          display_order: (i + 1) * 10,
+        }))
+        .filter((c) => c.title && c.body);
+      const r = await updateContractClausesSafeAction(contractId, normalized);
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Cláusulas guardadas");
+      setEditing(false);
     });
   }
 

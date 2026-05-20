@@ -1983,3 +1983,73 @@ export async function markContractActive(id: string) {
   });
   revalidatePath(`/contratos/${id}`);
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// Devuelven { ok, error } para preservar mensaje real en producción.
+// Aplican a todas las actions del módulo que se invocan desde cliente.
+// ============================================================================
+
+export async function updateContractNotesSafeAction(
+  contractId: string,
+  notes: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateContractNotesAction(contractId, notes);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function updateContractClausesSafeAction(
+  contractId: string,
+  clauses: Array<{ title: string; body: string; display_order: number }>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateContractClausesAction(contractId, clauses);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function collectContractPaymentSafeAction(
+  paymentId: string,
+  input: {
+    when: "now" | "on_installation";
+    method?: "cash" | "card" | "bizum" | "transfer";
+    notes?: string;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await collectContractPaymentAction(paymentId, input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function reassignContractSafeAction(
+  contractId: string,
+  userId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reassignContractAction(contractId, userId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function saveInstallPreferenceSafeAction(
+  contractId: string,
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await saveInstallPreferenceAction(contractId, input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -15,7 +15,7 @@ import {
   type AddressKind,
   type StreetType,
 } from "./schemas";
-import { upsertAddressAction } from "./actions";
+import { upsertAddressSafeAction } from "./actions";
 import {
   provinceFromPostalCode,
   validateSpanishPostalCode,
@@ -214,18 +214,18 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertAddressAction({
-          ...form,
-          id: initial?.id,
-          customer_id: customerId,
-          lead_id: leadId,
-        });
-        notify.success(initial ? "Dirección actualizada" : "Dirección añadida");
-        onDone?.();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertAddressSafeAction({
+        ...form,
+        id: initial?.id,
+        customer_id: customerId,
+        lead_id: leadId,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success(initial ? "Dirección actualizada" : "Dirección añadida");
+      onDone?.();
     });
   }
 

@@ -1166,3 +1166,49 @@ async function rescheduleMaintenanceFromAgenda(
   revalidatePath("/mantenimientos");
   revalidatePath(`/mantenimientos/${maintenanceId}`);
 }
+
+// ============================================================================
+// Safe wrappers (result pattern) — 2026-05-20
+// Devuelven { ok, error } para no perder mensaje real en producción.
+// ============================================================================
+
+export async function createAgendaEventSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createAgendaEventAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function reassignAgendaEventSafeAction(
+  eventId: string,
+  newAssignedUserId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reassignAgendaEventAction(eventId, newAssignedUserId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function updateAgendaStatusSafeAction(
+  id: string,
+  status:
+    | "scheduled"
+    | "in_progress"
+    | "completed"
+    | "cancelled"
+    | "no_show"
+    | "rescheduled",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateAgendaStatus(id, status);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Coins, Banknote, CreditCard, Smartphone, Building2, Wrench, ArrowLeft, Pencil } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { collectContractPaymentAction } from "./actions";
+import { collectContractPaymentSafeAction } from "./actions";
 
 type When = "now" | "on_installation";
 type Method = "cash" | "card" | "bizum" | "transfer";
@@ -75,18 +75,22 @@ export function QuickCollectButton({
   function confirm() {
     if (!when || !method) return;
     startTransition(async () => {
-      try {
-        await collectContractPaymentAction(paymentId, { when, method, notes: notes || undefined });
-        notify.success(
-          when === "on_installation"
-            ? "Cobro aplazado a la instalación"
-            : "Cobrado · pendiente de validar",
-        );
-        reset();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await collectContractPaymentSafeAction(paymentId, {
+        when,
+        method,
+        notes: notes || undefined,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo cobrar", r.error);
+        return;
       }
+      notify.success(
+        when === "on_installation"
+          ? "Cobro aplazado a la instalación"
+          : "Cobrado · pendiente de validar",
+      );
+      reset();
+      router.refresh();
     });
   }
 

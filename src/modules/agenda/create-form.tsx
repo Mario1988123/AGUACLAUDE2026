@@ -6,7 +6,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
-import { createAgendaEventAction } from "./actions";
+import { createAgendaEventSafeAction } from "./actions";
 import { AGENDA_KIND } from "./schemas";
 import { KIND_LABEL } from "./constants";
 import { Plus } from "lucide-react";
@@ -32,32 +32,32 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await createAgendaEventAction({
-          kind: form.kind,
-          title: form.title,
-          description: form.description,
-          starts_at: form.starts_at,
-          ends_at: form.ends_at,
-          assigned_user_id: form.assigned_user_id || undefined,
-          recurrence_freq: form.recurrence_freq,
-          recurrence_count: form.recurrence_count,
-        });
-        notify.success("Evento agendado");
-        setForm({
-          kind: "manual",
-          title: "",
-          description: "",
-          starts_at: "",
-          ends_at: "",
-          assigned_user_id: "",
-          recurrence_freq: "none",
-          recurrence_count: 1,
-        });
-        setOpen(false);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createAgendaEventSafeAction({
+        kind: form.kind,
+        title: form.title,
+        description: form.description,
+        starts_at: form.starts_at,
+        ends_at: form.ends_at,
+        assigned_user_id: form.assigned_user_id || undefined,
+        recurrence_freq: form.recurrence_freq,
+        recurrence_count: form.recurrence_count,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo agendar", r.error);
+        return;
       }
+      notify.success("Evento agendado");
+      setForm({
+        kind: "manual",
+        title: "",
+        description: "",
+        starts_at: "",
+        ends_at: "",
+        assigned_user_id: "",
+        recurrence_freq: "none",
+        recurrence_count: 1,
+      });
+      setOpen(false);
     });
   }
 

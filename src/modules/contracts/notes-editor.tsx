@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Save, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateContractNotesAction } from "./actions";
+import { updateContractNotesSafeAction } from "./actions";
 
 export function ContractNotesEditor({
   contractId,
@@ -23,14 +23,14 @@ export function ContractNotesEditor({
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateContractNotesAction(contractId, value);
-        notify.success("Notas guardadas");
-        setEditing(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateContractNotesSafeAction(contractId, value);
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Notas guardadas");
+      setEditing(false);
+      router.refresh();
     });
   }
 
