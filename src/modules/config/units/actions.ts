@@ -79,3 +79,25 @@ export async function deleteUnitAction(id: string): Promise<void> {
     .eq("company_id", session.company_id);
   revalidatePath("/configuracion/productos");
 }
+
+export async function addUnitSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await addUnitAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteUnitSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteUnitAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

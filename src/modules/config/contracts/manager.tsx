@@ -10,8 +10,8 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  upsertClauseTemplateAction,
-  deleteClauseTemplateAction,
+  upsertClauseTemplateSafeAction,
+  deleteClauseTemplateSafeAction,
   reorderClausesAction,
   type ClauseTemplate,
   type ClausePlanType,
@@ -132,13 +132,13 @@ function ClauseRow({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteClauseTemplateAction(clause.id);
-        notify.success("Eliminada");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteClauseTemplateSafeAction(clause.id);
+      if (!r.ok) {
+        notify.error("No se pudo eliminar", r.error);
+        return;
       }
+      notify.success("Eliminada");
+      location.reload();
     });
   }
   return (
@@ -209,13 +209,16 @@ function ClauseForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await upsertClauseTemplateAction({ id: initial?.id, ...form });
-        notify.success("Guardada");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertClauseTemplateSafeAction({
+        id: initial?.id,
+        ...form,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Guardada");
+      onDone();
     });
   }
 

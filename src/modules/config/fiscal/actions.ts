@@ -268,3 +268,14 @@ export async function uploadCompanyLogoAction(input: {
   revalidatePath("/configuracion/fiscal");
   return { url: publicUrl };
 }
+
+export async function updateFiscalSettingsSafeAction(
+  v: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateFiscalSettingsAction(v as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

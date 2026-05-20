@@ -11,7 +11,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { IbanInput } from "@/shared/components/iban-input";
 import { PhoneInput } from "@/shared/components/phone-input";
-import { updateFiscalSettingsAction, type FiscalSettings } from "./actions";
+import { updateFiscalSettingsSafeAction, type FiscalSettings } from "./actions";
 import { LogoUploader } from "./logo-uploader";
 
 export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
@@ -25,18 +25,14 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateFiscalSettingsAction(v);
-        notify.success("Datos fiscales guardados");
-        // Una vez guardado, el admin no necesita seguir aquí — vuelve al
-        // hub de configuración para acceder al resto de secciones.
-        router.push("/configuracion" as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
-        // Aún así refrescamos para que el usuario vea qué se guardó
-        // realmente vs lo que se quedó vacío.
+      const r = await updateFiscalSettingsSafeAction(v);
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
         router.refresh();
+        return;
       }
+      notify.success("Datos fiscales guardados");
+      router.push("/configuracion" as never);
     });
   }
 

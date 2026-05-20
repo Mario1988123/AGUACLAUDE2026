@@ -113,3 +113,25 @@ export async function updateBusinessHoursAction(
   }
   revalidatePath("/configuracion/horarios");
 }
+
+export async function updateBusinessHoursSafeAction(
+  hours: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateBusinessHoursAction(hours as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function updateCompanySettingsSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateCompanySettingsAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

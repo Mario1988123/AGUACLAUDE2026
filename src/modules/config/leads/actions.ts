@@ -105,3 +105,14 @@ export async function updateLeadsConfigAction(input: {
   }
   revalidatePath("/configuracion/leads");
 }
+
+export async function updateLeadsConfigSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateLeadsConfigAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

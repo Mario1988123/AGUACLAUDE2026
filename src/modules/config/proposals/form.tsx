@@ -6,7 +6,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  updateProposalsConfigAction,
+  updateProposalsConfigSafeAction,
   type ProposalsConfig,
 } from "./actions";
 
@@ -17,12 +17,14 @@ export function ProposalsConfigForm({ initial }: { initial: ProposalsConfig }) {
   function save(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await updateProposalsConfigAction({ default_validity_days: days });
-        notify.success("Guardado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateProposalsConfigSafeAction({
+        default_validity_days: days,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Guardado");
     });
   }
 

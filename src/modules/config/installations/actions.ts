@@ -40,3 +40,14 @@ export async function saveInstallationsConfigAction(input: {
   }
   revalidatePath("/configuracion/instalaciones");
 }
+
+export async function saveInstallationsConfigSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await saveInstallationsConfigAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

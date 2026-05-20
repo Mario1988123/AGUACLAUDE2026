@@ -85,3 +85,14 @@ export async function getDefaultProposalValidityDays(): Promise<number> {
   }
   return 30;
 }
+
+export async function updateProposalsConfigSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateProposalsConfigAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateCompanySettingsAction, type CompanySettings } from "./actions";
+import { updateCompanySettingsSafeAction, type CompanySettings } from "./actions";
 
 export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
   const [pdfColor, setPdfColor] = useState(initial.pdf_brand_color);
@@ -15,14 +15,14 @@ export function CompanySettingsForm({ initial }: { initial: CompanySettings }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await updateCompanySettingsAction({
-          pdf_brand_color: pdfColor,
-        });
-        notify.success("Configuración guardada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateCompanySettingsSafeAction({
+        pdf_brand_color: pdfColor,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Configuración guardada");
     });
   }
 

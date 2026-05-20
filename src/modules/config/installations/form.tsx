@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { saveInstallationsConfigAction } from "./actions";
+import { saveInstallationsConfigSafeAction } from "./actions";
 
 export function InstallationsConfigForm({
   initial,
@@ -19,15 +19,15 @@ export function InstallationsConfigForm({
 
   function save() {
     startTransition(async () => {
-      try {
-        await saveInstallationsConfigAction({
-          installation_geo_tolerance_m: geo,
-          installation_time_tolerance_min: time,
-        });
-        notify.success("Configuración guardada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await saveInstallationsConfigSafeAction({
+        installation_geo_tolerance_m: geo,
+        installation_time_tolerance_min: time,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Configuración guardada");
     });
   }
 

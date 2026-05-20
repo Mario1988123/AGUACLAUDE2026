@@ -9,7 +9,7 @@ import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { addUnitAction, deleteUnitAction, type UnitRow } from "./actions";
+import { addUnitSafeAction, deleteUnitSafeAction, type UnitRow } from "./actions";
 
 export function UnitsManager({ units }: { units: UnitRow[] }) {
   const [code, setCode] = useState("");
@@ -24,15 +24,15 @@ export function UnitsManager({ units }: { units: UnitRow[] }) {
       return;
     }
     startTransition(async () => {
-      try {
-        await addUnitAction({ code, label });
-        notify.success("Unidad añadida");
-        setCode("");
-        setLabel("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await addUnitSafeAction({ code, label });
+      if (!r.ok) {
+        notify.error("No se pudo añadir", r.error);
+        return;
       }
+      notify.success("Unidad añadida");
+      setCode("");
+      setLabel("");
+      router.refresh();
     });
   }
 
@@ -44,13 +44,13 @@ export function UnitsManager({ units }: { units: UnitRow[] }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteUnitAction(id);
-        notify.success("Eliminada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteUnitSafeAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo eliminar", r.error);
+        return;
       }
+      notify.success("Eliminada");
+      router.refresh();
     });
   }
 

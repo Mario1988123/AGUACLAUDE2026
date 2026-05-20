@@ -5,7 +5,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateLeadsConfigAction, type LeadsConfig } from "./actions";
+import { updateLeadsConfigSafeAction, type LeadsConfig } from "./actions";
 
 export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
   const [tmkDays, setTmkDays] = useState(initial.expiry_days_tmk);
@@ -15,16 +15,16 @@ export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
   function save(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await updateLeadsConfigAction({
-          expiry_days_tmk: tmkDays,
-          expiry_days_commercial: commercialDays,
-          expiry_days: commercialDays, // legacy fallback
-        });
-        notify.success("Configuración guardada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateLeadsConfigSafeAction({
+        expiry_days_tmk: tmkDays,
+        expiry_days_commercial: commercialDays,
+        expiry_days: commercialDays, // legacy fallback
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Configuración guardada");
     });
   }
 

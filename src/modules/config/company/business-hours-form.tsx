@@ -5,7 +5,7 @@ import { Save } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateBusinessHoursAction } from "./actions";
+import { updateBusinessHoursSafeAction } from "./actions";
 
 const DAYS: { key: string; label: string }[] = [
   { key: "mon", label: "Lunes" },
@@ -46,12 +46,12 @@ export function BusinessHoursForm({ initial }: { initial: BusinessHours }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateBusinessHoursAction(hours);
-        notify.success("Horario guardado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateBusinessHoursSafeAction(hours);
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Horario guardado");
     });
   }
 
