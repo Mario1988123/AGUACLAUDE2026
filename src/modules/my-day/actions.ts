@@ -216,3 +216,90 @@ export async function getMyDayItems(): Promise<DayItem[]> {
 
   return items.sort((x, y) => x.scheduled_at.localeCompare(y.scheduled_at));
 }
+
+/**
+ * Distancia Haversine en km entre dos puntos.
+ */
+function haversineKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * Devuelve los items de mi-día ordenados por ruta óptima desde el
+ * punto de partida (casa del usuario). TSP greedy: arrancando en home,
+ * siguiente parada = la más cercana no visitada.
+ *
+ * Si el usuario no tiene home_latitude/longitude, devuelve null y el
+ * caller cae a orden cronológico.
+ */
+export async function getMyDayItemsOptimized(): Promise<{
+  items: DayItem[];
+  total_km: number;
+  ordered: boolean;
+} | null> {
+  const session = await requireSession();
+  if (!session.company_id) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: prof } = await supabase
+    .from("user_profiles")
+    .select("home_latitude, home_longitude")
+    .eq("user_id", session.user_id)
+    .maybeSingle();
+  const home = prof as
+    | { home_latitude: number | null; home_longitude: number | null }
+    | null;
+  if (!home?.home_latitude || !home?.home_longitude) {
+    // Sin home configurada, devolvemos sin orden geográfico
+    const items = await getMyDayItems();
+    return { items, total_km: 0, ordered: false };
+  }
+
+  const all = await getMyDayItems();
+  // Separar items CON coords vs SIN coords
+  const withCoords = all.filter(
+    (i) => i.geo_latitude != null && i.geo_longitude != null,
+  );
+  const without = all.filter(
+    (i) => i.geo_latitude == null || i.geo_longitude == null,
+  );
+
+  // TSP greedy: empezar en home, ir a la más cercana cada vez
+  const ordered: DayItem[] = [];
+  let curLat = home.home_latitude;
+  let curLng = home.home_longitude;
+  const remaining = [...withCoords];
+  let totalKm = 0;
+  while (remaining.length > 0) {
+    let bestIdx = 0;
+    let bestKm = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const it = remaining[i]!;
+      const km = haversineKm(curLat, curLng, it.geo_latitude!, it.geo_longitude!);
+      if (km < bestKm) {
+        bestKm = km;
+        bestIdx = i;
+      }
+    }
+    const next = remaining.splice(bestIdx, 1)[0]!;
+    totalKm += bestKm;
+    curLat = next.geo_latitude!;
+    curLng = next.geo_longitude!;
+    ordered.push(next);
+  }
+  // Los sin coords van al final, en orden cronológico
+  const result = [...ordered, ...without];
+  return { items: result, total_km: Math.round(totalKm * 10) / 10, ordered: true };
+}

@@ -15,6 +15,7 @@ import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installation
 import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
 import { InstallationWizard } from "@/modules/installations/installation-wizard";
+import { UninstallWizard } from "@/modules/installations/uninstall-wizard";
 import { PhotoGallery } from "@/modules/installations/photo-gallery";
 import { InstallationPrioritySelector } from "@/modules/installations/priority-selector";
 import { listInstallationPhotosFull, listInstallationSignaturesFull } from "@/modules/installations/client-actions";
@@ -294,6 +295,30 @@ export default async function InstallationDetailPage({
     }
   }
 
+  // Warehouses para wizard de retirada (solo si kind=uninstall)
+  let uninstallWarehouses: Array<{
+    id: string;
+    name: string;
+    is_used_default: boolean;
+  }> = [];
+  if (i.kind === "uninstall") {
+    try {
+      const { data: wh } = await sb
+        .from("warehouses")
+        .select("id, name, is_used_equipment_default")
+        .is("deleted_at", null)
+        .order("name");
+      type WH = { id: string; name: string; is_used_equipment_default: boolean | null };
+      uninstallWarehouses = ((wh ?? []) as WH[]).map((w) => ({
+        id: w.id,
+        name: w.name,
+        is_used_default: w.is_used_equipment_default === true,
+      }));
+    } catch {
+      /* */
+    }
+  }
+
   return (
     <div className="space-y-6">
       <SubjectNotificationToast subjectType="installation" subjectId={id} />
@@ -342,7 +367,18 @@ export default async function InstallationDetailPage({
               installers={installers}
             />
           )}
-          {i.status !== "completed" && i.status !== "cancelled" && (
+          {/* Wizard de RETIRADA dedicado si kind=uninstall (decisión 2026-05-20) */}
+          {i.status !== "completed" && i.status !== "cancelled" && i.kind === "uninstall" && (
+            <UninstallWizard
+              installationId={i.id}
+              status={i.status}
+              photos={photosFull}
+              customerName={customerName}
+              scheduledAt={i.scheduled_at}
+              warehouses={uninstallWarehouses}
+            />
+          )}
+          {i.status !== "completed" && i.status !== "cancelled" && i.kind !== "uninstall" && (
             <InstallationWizard
               installationId={i.id}
               status={i.status}

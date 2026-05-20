@@ -10,7 +10,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
-import { getMyDayItems } from "@/modules/my-day/actions";
+import { getMyDayItems, getMyDayItemsOptimized } from "@/modules/my-day/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { RoutePlannerButton } from "@/modules/routes/route-planner-button";
@@ -53,9 +53,23 @@ const STATUS_LABEL: Record<string, string> = {
   closed: "Cerrada",
 };
 
-export default async function MiDiaPage() {
+export default async function MiDiaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ orden?: string }>;
+}) {
   const session = await requireSession();
-  const items = await getMyDayItems().catch(() => []);
+  const sp = await searchParams;
+  // Ordenamiento óptimo (decisión 2026-05-20): por defecto orden cronológico;
+  // ?orden=ruta calcula TSP greedy desde la casa del usuario.
+  const optimized =
+    sp.orden === "ruta"
+      ? await getMyDayItemsOptimized().catch(() => null)
+      : null;
+  const items =
+    optimized?.items ?? (await getMyDayItems().catch(() => []));
+  const totalKm = optimized?.total_km ?? null;
+  const isOptimized = optimized?.ordered ?? false;
 
   const today = new Date();
   const dateLabel = today.toLocaleDateString("es-ES", {
@@ -73,7 +87,29 @@ export default async function MiDiaPage() {
             {dateLabel} · Hola {session.full_name ?? session.email}
           </p>
         </div>
-        {items.length > 1 && <RoutePlannerButton />}
+        <div className="flex flex-wrap items-center gap-2">
+          {items.length > 1 && (
+            <>
+              <Link
+                href={sp.orden === "ruta" ? "/mi-dia" : "/mi-dia?orden=ruta"}
+                className={`inline-flex h-10 items-center gap-2 rounded-xl border-2 px-3 text-sm font-bold ${
+                  isOptimized
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:bg-muted"
+                }`}
+              >
+                <MapPin className="h-4 w-4" />
+                {isOptimized ? "Orden por ruta" : "Ordenar por ruta"}
+              </Link>
+              {isOptimized && totalKm != null && totalKm > 0 && (
+                <span className="rounded-xl bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                  {totalKm} km totales
+                </span>
+              )}
+            </>
+          )}
+          {items.length > 1 && <RoutePlannerButton />}
+        </div>
       </div>
 
       {items.length === 0 ? (

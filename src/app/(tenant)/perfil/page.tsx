@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { getMyEmailSettings } from "@/modules/mailing/actions";
 import { EmailSettingsForm } from "@/modules/mailing/email-settings-form";
+import { HomeLocationEditor } from "@/modules/users/home-location-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +13,35 @@ export default async function PerfilPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data: profile } = await admin
-    .from("user_profiles")
-    .select("full_name, phone, job_title, avatar_url")
-    .eq("user_id", session.user_id)
-    .maybeSingle();
+  // Defensivo: home_latitude/home_longitude pueden no estar en schema
+  type ProfileRow = {
+    full_name: string | null;
+    phone: string | null;
+    job_title: string | null;
+    avatar_url: string | null;
+    home_latitude?: number | null;
+    home_longitude?: number | null;
+    home_address_label?: string | null;
+  };
+  let profile: ProfileRow | null = null;
+  try {
+    const { data, error } = await admin
+      .from("user_profiles")
+      .select(
+        "full_name, phone, job_title, avatar_url, home_latitude, home_longitude, home_address_label",
+      )
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    if (error) throw error;
+    profile = (data as ProfileRow | null) ?? null;
+  } catch {
+    const { data } = await admin
+      .from("user_profiles")
+      .select("full_name, phone, job_title, avatar_url")
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    profile = (data as ProfileRow | null) ?? null;
+  }
 
   const emailSettings = await getMyEmailSettings();
 
@@ -55,6 +80,13 @@ export default async function PerfilPage() {
           </p>
         </CardContent>
       </Card>
+
+      <HomeLocationEditor
+        isOwn
+        initialLat={profile?.home_latitude ?? null}
+        initialLng={profile?.home_longitude ?? null}
+        initialLabel={profile?.home_address_label ?? null}
+      />
 
       <Card>
         <CardHeader>

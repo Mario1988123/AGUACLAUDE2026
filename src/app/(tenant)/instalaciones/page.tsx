@@ -13,6 +13,7 @@ import {
   getInstallationAlerts,
 } from "@/modules/installations/smart-alerts";
 import { InstallationSatisfactionRanking } from "@/modules/installations/satisfaction-ranking";
+import { InstallationsCalendar } from "@/modules/installations/calendar-view";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +114,13 @@ function fmtDayHeader(iso: string): string {
 export default async function InstalacionesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ installer?: string; status?: string }>;
+  searchParams: Promise<{
+    installer?: string;
+    status?: string;
+    view?: string;
+    y?: string;
+    m?: string;
+  }>;
 }) {
   // Comerciales/telemarketers no acceden a instalaciones — redirigimos
   // al dashboard si llegan por URL directa.
@@ -132,6 +139,10 @@ export default async function InstalacionesPage({
     session.roles.includes("telemarketing_director");
 
   const sp = await searchParams;
+  const view = sp.view === "cal" ? "cal" : "list";
+  const todayCal = new Date();
+  const calYear = sp.y ? parseInt(sp.y, 10) : todayCal.getFullYear();
+  const calMonth = sp.m ? parseInt(sp.m, 10) : todayCal.getMonth();
   const installerFilter = sp.installer || undefined;
   const statusFilter = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
   const [installations, team, alerts] = await Promise.all([
@@ -177,16 +188,59 @@ export default async function InstalacionesPage({
             {installations.length} totales · {scheduled.length} agendadas · {unscheduled.length} sin programar
           </p>
         </div>
-        <Link
-          href={"/api/export/installations" as never}
-          prefetch={false}
-          className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-        >
-          ⬇ Exportar CSV
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Toggle Lista / Calendario (decisión 2026-05-20) */}
+          <div className="inline-flex rounded-xl border-2 border-border bg-card p-0.5">
+            <Link
+              href={"/instalaciones" as never}
+              className={`inline-flex h-9 items-center rounded-lg px-3 text-sm font-bold ${
+                view === "list"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-foreground hover:bg-muted"
+              }`}
+            >
+              Lista
+            </Link>
+            <Link
+              href={"/instalaciones?view=cal" as never}
+              className={`inline-flex h-9 items-center rounded-lg px-3 text-sm font-bold ${
+                view === "cal"
+                  ? "bg-primary text-primary-foreground"
+                  : "text-foreground hover:bg-muted"
+              }`}
+            >
+              Calendario
+            </Link>
+          </div>
+          <Link
+            href={"/api/export/installations" as never}
+            prefetch={false}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          >
+            ⬇ Exportar CSV
+          </Link>
+        </div>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      {/* Vista CALENDARIO mensual (decisión 2026-05-20) */}
+      {view === "cal" && (
+        <InstallationsCalendar
+          year={calYear}
+          month={calMonth}
+          installations={installations.map((i) => ({
+            id: i.id,
+            reference_code: i.reference_code,
+            status: i.status,
+            scheduled_at: i.scheduled_at,
+            installer_user_id: i.installer_user_id,
+            installer_name:
+              team.find((t) => t.user_id === i.installer_user_id)?.full_name ?? null,
+            customer_name: i.customer_name,
+          }))}
+        />
+      )}
+
+      <form className={`flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 ${view === "cal" ? "hidden" : ""}`}>
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Instalador</label>
           <select
@@ -284,7 +338,7 @@ export default async function InstalacionesPage({
         );
       })()}
 
-      {withIncident.length > 0 && (
+      {view === "list" && withIncident.length > 0 && (
         <Card className="border-2 border-red-300 bg-red-50/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-red-900">
@@ -337,6 +391,7 @@ export default async function InstalacionesPage({
         </Card>
       )}
 
+      {view === "list" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -424,8 +479,9 @@ export default async function InstalacionesPage({
           )}
         </CardContent>
       </Card>
+      )}
 
-      {unscheduled.length > 0 && (
+      {view === "list" && unscheduled.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Sin programar ({unscheduled.length})</CardTitle>
