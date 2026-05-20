@@ -10,6 +10,7 @@ import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/proposals/schemas";
 import { ProposalActions } from "@/modules/proposals/actions-panel";
 import { requireSession } from "@/shared/lib/auth/session";
 import { SendByEmailButton } from "@/modules/mailing/send-by-email-button";
+import { DuplicateProposalButton } from "@/modules/proposals/duplicate-button";
 import { BackButton } from "@/shared/components/back-button";
 import { formatDateES } from "@/shared/lib/format-date";
 import {
@@ -108,6 +109,7 @@ export default async function ProposalDetailPage({
             <Download className="h-4 w-4" /> PDF
           </a>
           <SendByEmailButton documentId={proposal.id} kind="proposal" short />
+          <DuplicateProposalButton proposalId={proposal.id} />
           <BackButton href="/propuestas" />
         </div>
       </div>

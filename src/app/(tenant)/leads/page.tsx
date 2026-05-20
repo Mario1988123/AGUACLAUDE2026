@@ -22,9 +22,13 @@ export default async function LeadsPage({
     q?: string;
     scope?: string;
     assigned?: string;
+    temp?: string;
   }>;
 }) {
   const sp = await searchParams;
+  const tempFilter = (["hot", "warm", "cold", "lost"].includes(sp.temp ?? "")
+    ? sp.temp
+    : undefined) as "hot" | "warm" | "cold" | "lost" | undefined;
   const session = await requireSession();
   const status = LEAD_STATUS.includes(sp.status as never) ? (sp.status as never) : undefined;
   const isUpperLevel =
@@ -35,7 +39,7 @@ export default async function LeadsPage({
     session.roles.includes("technical_director");
   const scope = isUpperLevel ? (sp.scope === "mine" ? "mine" : "all") : "mine";
   const assignedFilter = isUpperLevel && sp.assigned ? sp.assigned : undefined;
-  const [leads, team, alerts] = await Promise.all([
+  const [leadsAll, team, alerts] = await Promise.all([
     listLeads({
       status,
       q: sp.q,
@@ -47,6 +51,33 @@ export default async function LeadsPage({
       ? getLeadAlerts(scope === "mine" ? session.user_id : null).catch(() => null)
       : Promise.resolve(null),
   ]);
+
+  // Filtro temperatura client-side (los datos ya están cargados)
+  function classify(l: { status: string; created_at: string }): "hot" | "warm" | "cold" | "lost" | null {
+    if (l.status === "converted") return null;
+    if (l.status === "lost" || l.status === "expired") return "lost";
+    if (
+      l.status === "proposal_created" ||
+      l.status === "proposal_sent" ||
+      l.status === "free_trial_proposed"
+    ) {
+      return "hot";
+    }
+    if (l.status === "contacted") return "warm";
+    const ageH = (Date.now() - new Date(l.created_at).getTime()) / 3600000;
+    return ageH < 24 ? "warm" : "cold";
+  }
+  const leads = tempFilter
+    ? leadsAll.filter((l) => classify(l) === tempFilter)
+    : leadsAll;
+
+  // baseQuery sin el param "temp" (para construir URLs del panel)
+  const baseParams = new URLSearchParams();
+  if (scope === "mine") baseParams.set("scope", "mine");
+  if (status) baseParams.set("status", status);
+  if (sp.q) baseParams.set("q", sp.q);
+  if (assignedFilter) baseParams.set("assigned", assignedFilter);
+  const baseQuery = baseParams.toString();
 
   return (
     <div className="space-y-6">
@@ -99,7 +130,11 @@ export default async function LeadsPage({
 
       {isUpperLevel && alerts && <LeadSmartAlerts alerts={alerts} />}
 
-      <LeadsTemperaturePanel leads={leads.map((l) => ({ status: l.status as never, created_at: l.created_at }))} />
+      <LeadsTemperaturePanel
+        leads={leadsAll.map((l) => ({ status: l.status as never, created_at: l.created_at }))}
+        activeTemp={tempFilter}
+        baseQuery={baseQuery}
+      />
 
       <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}

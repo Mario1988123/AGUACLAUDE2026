@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Flame, ThermometerSun, Snowflake, XCircle } from "lucide-react";
 
 type Status =
@@ -40,7 +41,18 @@ function classify(l: Lead): "hot" | "warm" | "cold" | "lost" | null {
   return ageH < 24 ? "warm" : "cold";
 }
 
-export function LeadsTemperaturePanel({ leads }: { leads: Lead[] }) {
+export function LeadsTemperaturePanel({
+  leads,
+  activeTemp,
+  baseQuery,
+}: {
+  leads: Lead[];
+  /** Temperatura activa para resaltar el card seleccionado. */
+  activeTemp?: "hot" | "warm" | "cold" | "lost";
+  /** Otros query params actuales (scope, q, kind…) para mantener al
+   *  navegar entre temperaturas. Sin temp seleccionada → quitar el param. */
+  baseQuery?: string;
+}) {
   const counts = { hot: 0, warm: 0, cold: 0, lost: 0 };
   for (const l of leads) {
     const t = classify(l);
@@ -86,14 +98,23 @@ export function LeadsTemperaturePanel({ leads }: { leads: Lead[] }) {
     },
   ];
 
+  const base = baseQuery ? `${baseQuery}&` : "";
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {cards.map((c) => {
         const Icon = c.icon;
+        const active = activeTemp === c.key;
+        const href =
+          activeTemp === c.key
+            ? `/leads${baseQuery ? `?${baseQuery}` : ""}`
+            : `/leads?${base}temp=${c.key}`;
         return (
-          <div
+          <Link
             key={c.key}
-            className={`rounded-xl border-2 p-3 ${c.cls}`}
+            href={href as never}
+            className={`rounded-xl border-2 p-3 transition ${c.cls} ${
+              active ? "ring-2 ring-primary ring-offset-2" : "hover:opacity-90"
+            }`}
           >
             <div className="flex items-center justify-between">
               <Icon className={`h-5 w-5 ${c.iconCls}`} />
@@ -103,7 +124,7 @@ export function LeadsTemperaturePanel({ leads }: { leads: Lead[] }) {
             </div>
             <div className="mt-1 text-sm font-bold">{c.label}</div>
             <div className="text-[11px] opacity-80">{c.hint}</div>
-          </div>
+          </Link>
         );
       })}
     </div>

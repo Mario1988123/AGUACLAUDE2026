@@ -1303,3 +1303,91 @@ export async function markProposalSentSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+/**
+ * Duplica una propuesta existente — clona todos sus items y nace en
+ * estado "draft". Útil para reutilizar trabajo con un cliente similar.
+ */
+export async function duplicateProposalAction(
+  proposalId: string,
+): Promise<
+  | { ok: true; new_proposal_id: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: src } = await admin
+      .from("proposals")
+      .select("*")
+      .eq("id", proposalId)
+      .maybeSingle();
+    if (!src) return { ok: false, error: "Propuesta no encontrada" };
+    const s = src as Record<string, unknown>;
+    if (s.company_id !== session.company_id) {
+      return { ok: false, error: "Propuesta de otra empresa" };
+    }
+
+    // Insertar copia con status draft + sin firma/aceptación
+    const copy: Record<string, unknown> = { ...s };
+    delete copy.id;
+    delete copy.created_at;
+    delete copy.updated_at;
+    delete copy.reference_code;
+    delete copy.sent_at;
+    delete copy.accepted_at;
+    delete copy.rejected_at;
+    delete copy.contract_id;
+    delete copy.deleted_at;
+    delete copy.deleted_reason;
+    delete copy.deleted_by_user_id;
+    copy.status = "draft";
+    copy.created_by = session.user_id;
+    copy.notes = `Duplicada de #${(s.reference_code as string) ?? proposalId.slice(0, 8)}`;
+
+    const { data: newRow, error: insErr } = await admin
+      .from("proposals")
+      .insert(copy)
+      .select("id")
+      .single();
+    if (insErr) return { ok: false, error: insErr.message };
+    const newId = (newRow as { id: string }).id;
+
+    // Clonar items
+    const { data: items } = await admin
+      .from("proposal_items")
+      .select("*")
+      .eq("proposal_id", proposalId);
+    type IT = Record<string, unknown>;
+    const itemsCopy = ((items ?? []) as IT[]).map((it) => {
+      const c = { ...it };
+      delete c.id;
+      delete c.created_at;
+      c.proposal_id = newId;
+      return c;
+    });
+    if (itemsCopy.length > 0) {
+      await admin.from("proposal_items").insert(itemsCopy);
+    }
+
+    // Evento
+    try {
+      await admin.from("events").insert({
+        company_id: session.company_id,
+        subject_type: "proposal",
+        subject_id: newId,
+        kind: "proposal.created",
+        payload: { duplicated_from: proposalId },
+        actor_user_id: session.user_id,
+      });
+    } catch {
+      /* */
+    }
+    revalidatePath("/propuestas");
+    return { ok: true, new_proposal_id: newId };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

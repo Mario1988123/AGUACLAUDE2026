@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
@@ -83,5 +84,67 @@ export async function bulkReassignLeadsAction(
       ok: false,
       error: err instanceof Error ? err.message : "Error desconocido",
     };
+  }
+}
+
+/**
+ * Cambia status masivo de leads. Nivel 1/2 sólo (decisión 2026-05-20).
+ * Útil para director que quiere marcar lote como "lost" / "expired".
+ */
+import type { LeadStatus } from "./types";
+
+export async function bulkUpdateLeadsStatusAction(input: {
+  lead_ids: string[];
+  status: LeadStatus;
+  reason?: string;
+}): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (
+      !session.is_superadmin &&
+      !session.roles.includes("company_admin") &&
+      !session.roles.includes("commercial_director") &&
+      !session.roles.includes("telemarketing_director")
+    ) {
+      return { ok: false, error: "Permisos insuficientes" };
+    }
+    if (input.lead_ids.length === 0)
+      return { ok: false, error: "Sin leads seleccionados" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const update: Record<string, unknown> = { status: input.status };
+    if (input.status === "lost" && input.reason) {
+      update.lost_reason = input.reason;
+    }
+    const { data: updated, error } = await admin
+      .from("leads")
+      .update(update)
+      .in("id", input.lead_ids)
+      .eq("company_id", session.company_id)
+      .select("id");
+    if (error) return { ok: false, error: error.message };
+    const count = ((updated ?? []) as Array<{ id: string }>).length;
+
+    // Eventos
+    for (const r of (updated ?? []) as Array<{ id: string }>) {
+      try {
+        await admin.from("events").insert({
+          company_id: session.company_id,
+          subject_type: "lead",
+          subject_id: r.id,
+          kind: "lead.status_changed",
+          payload: { status: input.status, bulk: true },
+          actor_user_id: session.user_id,
+        });
+      } catch {
+        /* */
+      }
+    }
+    revalidatePath("/leads");
+    return { ok: true, count };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }

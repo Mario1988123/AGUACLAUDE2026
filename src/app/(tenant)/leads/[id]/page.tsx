@@ -13,6 +13,7 @@ import { LeadStatusActions } from "@/modules/leads/status-actions";
 import { ConvertLeadButton } from "@/modules/leads/convert-button";
 import { EditLeadButton } from "@/modules/leads/edit-lead-button";
 import { LeadContactButtons } from "@/modules/leads/contact-buttons";
+import { LeadFollowupCard } from "@/modules/leads/followup-card";
 import { ReassignLeadButton } from "@/modules/leads/reassign-button";
 import { Plus, MapPin } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -65,16 +66,35 @@ export default async function LeadDetailPage({
   const isConverted = lead.status === "converted";
 
   let assignedName: string | null = null;
-  if (lead.assigned_user_id) {
+  let lastContactAt: string | null = null;
+  {
     const { createClient } = await import("@/shared/lib/supabase/server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = (await createClient()) as any;
-    const { data: prof } = await supabase
-      .from("user_profiles")
-      .select("full_name")
-      .eq("user_id", lead.assigned_user_id)
-      .maybeSingle();
-    assignedName = (prof as { full_name: string | null } | null)?.full_name ?? null;
+    if (lead.assigned_user_id) {
+      const { data: prof } = await supabase
+        .from("user_profiles")
+        .select("full_name")
+        .eq("user_id", lead.assigned_user_id)
+        .maybeSingle();
+      assignedName = (prof as { full_name: string | null } | null)?.full_name ?? null;
+    }
+    // Último contacto registrado para el FollowupCard
+    try {
+      const { data: lastEv } = await supabase
+        .from("events")
+        .select("occurred_at")
+        .eq("subject_type", "lead")
+        .eq("subject_id", lead.id)
+        .eq("kind", "lead.contacted")
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastContactAt =
+        (lastEv as { occurred_at: string | null } | null)?.occurred_at ?? null;
+    } catch {
+      /* */
+    }
   }
 
   return (
@@ -102,6 +122,11 @@ export default async function LeadDetailPage({
         </div>
         <BackButton href="/leads" />
       </div>
+
+      {/* Seguimiento (decisión 2026-05-20) — solo si el lead NO está convertido */}
+      {!isConverted && (
+        <LeadFollowupCard leadId={lead.id} lastContactAt={lastContactAt} />
+      )}
 
       {/* Toolbar de acciones agrupada arriba */}
       <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card/50 p-3">
