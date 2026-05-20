@@ -14,6 +14,7 @@ import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
 import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-button";
 import { listInstallers } from "@/modules/agenda/actions";
 import { CustomerConsentsCard } from "@/modules/customers/consents-card";
+import { CustomerRgpdCard } from "@/modules/customers/rgpd-card";
 import { getCustomerConsents } from "@/modules/customers/consents-actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
@@ -482,6 +483,13 @@ export default async function CustomerDetailPage({
       </div>
 
       <CustomerConsentsCard customerId={id} consents={customerConsents} />
+
+      {(session.is_superadmin || session.roles.includes("company_admin")) && (
+        <CustomerRgpdCard
+          customerId={id}
+          customerName={displayName}
+        />
+      )}
 
       <MaintenanceHistoryCard rows={maintenanceHistory} />
 

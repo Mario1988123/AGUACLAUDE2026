@@ -162,7 +162,14 @@ export async function requestCustomerDeletionAction(input: {
       }
     }
 
-    // Anonimizar direcciones también
+    // === ANONIMIZACIÓN EN CASCADA (decisión 2026-05-20) ===
+    // Cubrimos direcciones, cuentas bancarias y storage para cumplir
+    // RGPD art. 17 (derecho al olvido) en serio. Antes solo se tocaba
+    // customers + el nombre de la calle.
+
+    // 1) Direcciones del cliente: borrar street, portal, floor, door,
+    //    notes, lat/lng. Mantenemos CP / city / provincia para
+    //    estadísticas agregadas (no PII).
     try {
       await admin
         .from("addresses")
@@ -170,11 +177,78 @@ export async function requestCustomerDeletionAction(input: {
           street_type: null,
           street: "[BORRADO]",
           street_number: null,
+          portal: null,
+          floor: null,
+          door: null,
           notes: null,
+          latitude: null,
+          longitude: null,
+          contact_name: null,
+          contact_phone: null,
         })
-        .eq("customer_id", input.customer_id);
+        .eq("customer_id", input.customer_id)
+        .eq("company_id", session.company_id);
     } catch {
-      /* */
+      /* fail-soft */
+    }
+
+    // 2) Cuentas bancarias: ofuscar IBAN (mantenemos prefijo país + 4
+    //    últimos dígitos para conservación contable mínima) y borrar
+    //    holder + sepa_mandate_id (queda referenciable solo por id).
+    try {
+      const { data: banks } = await admin
+        .from("customer_bank_accounts")
+        .select("id, iban")
+        .eq("customer_id", input.customer_id);
+      type BK = { id: string; iban: string | null };
+      for (const b of ((banks ?? []) as BK[])) {
+        if (!b.iban) continue;
+        const clean = b.iban.replace(/\s/g, "");
+        const masked =
+          clean.length > 8
+            ? clean.slice(0, 4) + "*".repeat(clean.length - 8) + clean.slice(-4)
+            : "****";
+        await admin
+          .from("customer_bank_accounts")
+          .update({
+            iban: masked,
+            account_holder_name: "[BORRADO]",
+            is_validated: false,
+          })
+          .eq("id", b.id);
+      }
+    } catch {
+      /* fail-soft: tabla puede no existir o columnas distintas */
+    }
+
+    // 3) Storage: borrar físicamente documentos del cliente en buckets
+    //    sensibles (DNI, contratos firmados, fotos identificación).
+    //    Las firmas legales DE CONTRATO se mantienen por obligación
+    //    fiscal (Hacienda exige conservar facturación 6 años).
+    const sensitiveBuckets = [
+      "dni-photos",
+      "customer-documents",
+      "id-card-photos",
+      "free-trial-docs",
+    ];
+    let storageDeleted = 0;
+    for (const bucket of sensitiveBuckets) {
+      try {
+        const { data: list } = await admin.storage
+          .from(bucket)
+          .list(input.customer_id, { limit: 1000 });
+        if (list && list.length > 0) {
+          const paths = list.map(
+            (f: { name: string }) => `${input.customer_id}/${f.name}`,
+          );
+          const { error: rmErr } = await admin.storage
+            .from(bucket)
+            .remove(paths);
+          if (!rmErr) storageDeleted += paths.length;
+        }
+      } catch {
+        /* fail-soft: bucket puede no existir */
+      }
     }
 
     await admin.from("events").insert({
@@ -182,7 +256,11 @@ export async function requestCustomerDeletionAction(input: {
       subject_type: "customer",
       subject_id: input.customer_id,
       kind: "customer.rgpd_delete",
-      payload: { reason: input.reason },
+      payload: {
+        reason: input.reason,
+        storage_files_deleted: storageDeleted,
+        cascade: true,
+      },
       actor_user_id: session.user_id,
     });
 

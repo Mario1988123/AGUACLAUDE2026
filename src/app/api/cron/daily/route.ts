@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { notifyByRoles } from "@/modules/notifications/notifier";
+import { startCronRun } from "@/shared/lib/cron/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
     const ok = auth === `Bearer ${secret}` || xCron === secret;
     if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Telemetría (decisión 2026-05-20)
+  const tracker = await startCronRun("daily");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -1612,30 +1616,32 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] sales reconcile outer failed:", e);
   }
 
+  const summary = {
+    ...stats,
+    verifactu,
+    savings_scraper: scraperStats,
+    stock_alerts: stockAlertsStats,
+    auto_loading: loadingStats,
+    incident_sla_breaches: slaBreaches,
+    gocardless_retry: gcRetry,
+    cycles_pending_review: cyclesPending,
+    sla: {
+      breaches: slaBreaches,
+      warnings: slaWarnings,
+      critical: slaCritical,
+    },
+    mailing_purged: mailingPurged,
+    phase2,
+    monthly_invoicing: monthlyInvoicing,
+    sales_reconcile: salesReconcile,
+    paused_maintenance: pausedMaintenance,
+    wallet_reconcile: walletReconcile,
+    rrss_auto_generate: rrssAuto,
+  };
+  await tracker.finish({ summary });
   return NextResponse.json({
     ok: true,
-    stats: {
-      ...stats,
-      verifactu,
-      savings_scraper: scraperStats,
-      stock_alerts: stockAlertsStats,
-      auto_loading: loadingStats,
-      incident_sla_breaches: slaBreaches,
-      gocardless_retry: gcRetry,
-      cycles_pending_review: cyclesPending,
-      sla: {
-        breaches: slaBreaches,
-        warnings: slaWarnings,
-        critical: slaCritical,
-      },
-      mailing_purged: mailingPurged,
-      phase2,
-      monthly_invoicing: monthlyInvoicing,
-      sales_reconcile: salesReconcile,
-      paused_maintenance: pausedMaintenance,
-      wallet_reconcile: walletReconcile,
-      rrss_auto_generate: rrssAuto,
-    },
+    stats: summary,
     ranAt: new Date().toISOString(),
   });
 }
