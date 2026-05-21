@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { addCustomerEquipmentAction } from "./equipment-actions";
+import { addCustomerEquipmentSafeAction } from "./equipment-actions";
 
 interface ProductOption {
   id: string;
@@ -54,22 +54,22 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
       return;
     }
     startTransition(async () => {
-      try {
-        await addCustomerEquipmentAction({
-          customer_id: customerId,
-          product_id: source === "own" ? productId : null,
-          external_brand: source === "external" ? brand : undefined,
-          external_model: source === "external" ? model : undefined,
-          serial_number: serial || null,
-          installed_at: installedAt || null,
-          notes: notes || null,
-        });
-        notify.success("Equipo añadido al cliente");
-        close();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await addCustomerEquipmentSafeAction({
+        customer_id: customerId,
+        product_id: source === "own" ? productId : null,
+        external_brand: source === "external" ? brand : undefined,
+        external_model: source === "external" ? model : undefined,
+        serial_number: serial || null,
+        installed_at: installedAt || null,
+        notes: notes || null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo añadir el equipo", r.error);
+        return;
       }
+      notify.success("Equipo añadido al cliente");
+      close();
+      router.refresh();
     });
   }
 

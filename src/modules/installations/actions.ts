@@ -1486,3 +1486,14 @@ export async function completeInstallation(input: unknown) {
   revalidatePath(`/instalaciones/${parsed.id}`);
   revalidatePath("/instalaciones");
 }
+
+export async function createInstallationFromContractSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createInstallationFromContract(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

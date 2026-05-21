@@ -10,7 +10,7 @@ import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   uploadContractPhotoAction,
   listContractPhotos,
-  deleteContractPhotoAction,
+  deleteContractPhotoSafeAction,
   type ContractPhoto,
   type ContractPhotoKind,
 } from "./photo-actions";
@@ -65,12 +65,12 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteContractPhotoAction(id);
-        setPhotos((cur) => cur.filter((p) => p.id !== id));
-      } catch (err) {
-        notify.error("No se pudo borrar", err instanceof Error ? err.message : String(err));
+      const r = await deleteContractPhotoSafeAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo borrar", r.error);
+        return;
       }
+      setPhotos((cur) => cur.filter((p) => p.id !== id));
     });
   }
 

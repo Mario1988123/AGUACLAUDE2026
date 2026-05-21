@@ -196,3 +196,14 @@ export async function deleteContractPhotoAction(photoId: string): Promise<void> 
     .eq("id", photoId);
   revalidatePath(`/contratos/${r.subject_id}`);
 }
+
+export async function deleteContractPhotoSafeAction(
+  photoId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteContractPhotoAction(photoId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

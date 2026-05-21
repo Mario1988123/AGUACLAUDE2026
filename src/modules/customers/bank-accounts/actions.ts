@@ -165,3 +165,26 @@ export async function deleteBankAccountAction(id: string, customerId: string) {
   if (error) throw new Error(error.message);
   revalidatePath(`/clientes/${customerId}`);
 }
+
+export async function createBankAccountSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createBankAccountAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteBankAccountSafeAction(
+  id: string,
+  customerId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteBankAccountAction(id, customerId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

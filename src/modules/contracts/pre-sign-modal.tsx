@@ -38,9 +38,9 @@ import {
   getContractPreSignReadiness,
   type PreSignReadiness,
 } from "./pre-sign-actions";
-import { updateCustomerAction } from "@/modules/customers/actions";
-import { upsertAddressAction } from "@/modules/addresses/actions";
-import { createBankAccountAction } from "@/modules/customers/bank-accounts/actions";
+import { updateCustomerSafeAction } from "@/modules/customers/actions";
+import { upsertAddressSafeAction } from "@/modules/addresses/actions";
+import { createBankAccountSafeAction } from "@/modules/customers/bank-accounts/actions";
 import { uploadContractPhotoAction } from "./photo-actions";
 import { markContractSigned } from "./actions";
 import { recordCustomerConsent } from "@/modules/customers/consents-actions";
@@ -838,13 +838,13 @@ function CustomerEditForm({
       // No bloquea — continúa al guardado.
     }
     startTransition(async () => {
-      try {
-        await updateCustomerAction(customer.id, form);
-        notify.success("Datos del cliente guardados");
-        onSaved();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateCustomerSafeAction(customer.id, form);
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Datos del cliente guardados");
+      onSaved();
     });
   }
 
@@ -978,29 +978,29 @@ function AddressEditForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertAddressAction({
-          id: initial?.id,
-          customer_id: customerId,
-          kind: "home",
-          is_primary: true,
-          street_type: form.street_type as "calle",
-          street: form.street,
-          street_number: form.street_number || null,
-          portal: form.portal || null,
-          floor: form.floor || null,
-          door: form.door || null,
-          postal_code: form.postal_code,
-          city: form.city,
-          province: form.province,
-          latitude: null,
-          longitude: null,
-        });
-        notify.success("Dirección guardada");
-        onSaved();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertAddressSafeAction({
+        id: initial?.id,
+        customer_id: customerId,
+        kind: "home",
+        is_primary: true,
+        street_type: form.street_type as "calle",
+        street: form.street,
+        street_number: form.street_number || null,
+        portal: form.portal || null,
+        floor: form.floor || null,
+        door: form.door || null,
+        postal_code: form.postal_code,
+        city: form.city,
+        province: form.province,
+        latitude: null,
+        longitude: null,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
       }
+      notify.success("Dirección guardada");
+      onSaved();
     });
   }
 
@@ -1100,21 +1100,21 @@ function IbanAddForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await createBankAccountAction({
-          customer_id: customerId,
-          iban,
-          account_holder_name: holder,
-          bank_name: bank,
-          is_primary: true,
-        });
-        notify.success(
-          isPendingIban(iban) ? "IBAN pendiente guardado" : "IBAN añadido",
-        );
-        onSaved();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createBankAccountSafeAction({
+        customer_id: customerId,
+        iban,
+        account_holder_name: holder,
+        bank_name: bank,
+        is_primary: true,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar el IBAN", r.error);
+        return;
       }
+      notify.success(
+        isPendingIban(iban) ? "IBAN pendiente guardado" : "IBAN añadido",
+      );
+      onSaved();
     });
   }
 
@@ -1159,13 +1159,13 @@ function PhotoUploadInline({
     fd.append("contract_id", contractId);
     fd.append("kind", "id_card");
     startTransition(async () => {
-      try {
-        await uploadContractPhotoAction(fd);
-        notify.success("Foto subida");
-        onUploaded();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await uploadContractPhotoAction(fd);
+      if (!r.ok) {
+        notify.error("No se pudo subir", r.error);
+        return;
       }
+      notify.success("Foto subida");
+      onUploaded();
     });
     e.target.value = "";
   }

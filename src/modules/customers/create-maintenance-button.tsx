@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createMaintenanceAction } from "@/modules/maintenance/actions";
+import { createMaintenanceSafeAction } from "@/modules/maintenance/actions";
 
 interface EquipmentLite {
   id: string;
@@ -47,29 +47,26 @@ export function CreateMaintenanceButton({
 
   function submit() {
     startTransition(async () => {
-      try {
-        await createMaintenanceAction({
-          customer_id: customerId,
-          customer_equipment_id: equipmentId || undefined,
-          kind,
-          scheduled_at: new Date(scheduledAt).toISOString(),
-          technician_user_id: technicianId || undefined,
-          is_charged: isCharged,
-          charge_cents:
-            isCharged && chargeEur
-              ? Math.round(Number(chargeEur.replace(",", ".")) * 100)
-              : null,
-          notes,
-        });
-        notify.success("Mantenimiento creado");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error(
-          "No se pudo crear",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await createMaintenanceSafeAction({
+        customer_id: customerId,
+        customer_equipment_id: equipmentId || undefined,
+        kind,
+        scheduled_at: new Date(scheduledAt).toISOString(),
+        technician_user_id: technicianId || undefined,
+        is_charged: isCharged,
+        charge_cents:
+          isCharged && chargeEur
+            ? Math.round(Number(chargeEur.replace(",", ".")) * 100)
+            : null,
+        notes,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo crear", r.error);
+        return;
       }
+      notify.success("Mantenimiento creado");
+      setOpen(false);
+      router.refresh();
     });
   }
 

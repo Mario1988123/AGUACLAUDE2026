@@ -8,7 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { mergeCustomersAction, type DuplicateCustomerGroup } from "./merge-actions";
+import { mergeCustomersSafeAction, type DuplicateCustomerGroup } from "./merge-actions";
 
 const FIELD_LABEL = {
   tax_id: "DNI/CIF",
@@ -54,13 +54,13 @@ function DuplicateGroupCard({ group }: { group: DuplicateCustomerGroup }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await mergeCustomersAction(primaryId, secondaryId);
-        notify.success("Fusionado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await mergeCustomersSafeAction(primaryId, secondaryId);
+      if (!r.ok) {
+        notify.error("No se pudo fusionar", r.error);
+        return;
       }
+      notify.success("Fusionado");
+      router.refresh();
     });
   }
 

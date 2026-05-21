@@ -161,3 +161,15 @@ export async function mergeCustomersAction(
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${primaryId}`);
 }
+
+export async function mergeCustomersSafeAction(
+  primaryId: string,
+  secondaryId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await mergeCustomersAction(primaryId, secondaryId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

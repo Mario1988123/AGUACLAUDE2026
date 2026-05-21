@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { saveContractSignatureAction, type ContractSignature } from "./signatures-actions";
+import { saveContractSignatureSafeAction, type ContractSignature } from "./signatures-actions";
 
 type Role = "representative" | "customer";
 
@@ -131,20 +131,24 @@ function SignatureBlock({
       return;
     }
     startTransition(async () => {
-      try {
-        await saveContractSignatureAction({
-          contract_id: contractId,
-          signer_role: role,
-          signer_name: name.trim(),
-          signer_tax_id: showTaxId ? taxId.trim() : null,
-          signature_data_url: data,
-        });
-        notify.success(role === "representative" ? "Firma de empresa validada" : "Firma del cliente validada");
-        setEditing(false);
-        onSaved();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await saveContractSignatureSafeAction({
+        contract_id: contractId,
+        signer_role: role,
+        signer_name: name.trim(),
+        signer_tax_id: showTaxId ? taxId.trim() : null,
+        signature_data_url: data,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar la firma", r.error);
+        return;
       }
+      notify.success(
+        role === "representative"
+          ? "Firma de empresa validada"
+          : "Firma del cliente validada",
+      );
+      setEditing(false);
+      onSaved();
     });
   }
 

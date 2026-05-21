@@ -98,3 +98,14 @@ export async function saveContractSignatureAction(input: {
 
   revalidatePath(`/contratos/${input.contract_id}`);
 }
+
+export async function saveContractSignatureSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await saveContractSignatureAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

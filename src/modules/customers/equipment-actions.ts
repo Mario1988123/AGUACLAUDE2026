@@ -208,3 +208,26 @@ export async function removeCustomerEquipmentAction(
   if (r.error) throw new Error(r.error.message);
   revalidatePath(`/clientes/${customerId}`);
 }
+
+export async function addCustomerEquipmentSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await addCustomerEquipmentAction(input as never);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function removeCustomerEquipmentSafeAction(
+  equipmentId: string,
+  customerId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await removeCustomerEquipmentAction(equipmentId, customerId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

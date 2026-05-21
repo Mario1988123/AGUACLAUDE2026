@@ -17,7 +17,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
-import { createInstallationFromContract } from "@/modules/installations/actions";
+import { createInstallationFromContractSafeAction } from "@/modules/installations/actions";
 import { getInstallerAvailabilityAction } from "@/modules/installations/actions";
 
 type WarehouseLite = {
@@ -142,19 +142,14 @@ export function CreateInstallationButton({
     }
     const iso = `${form.selectedDate}T${form.selectedTime}:00`;
     startTransition(async () => {
-      try {
-        await createInstallationFromContract({
-          contract_id: contractId,
-          scheduled_at: iso,
-          installer_user_id: form.installer_user_id || undefined,
-          source_warehouse_id: form.source_warehouse_id || undefined,
-        });
-      } catch (err) {
-        if (err && typeof err === "object" && "digest" in err) {
-          const d = String((err as { digest?: unknown }).digest);
-          if (d.startsWith("NEXT_REDIRECT")) throw err;
-        }
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createInstallationFromContractSafeAction({
+        contract_id: contractId,
+        scheduled_at: iso,
+        installer_user_id: form.installer_user_id || undefined,
+        source_warehouse_id: form.source_warehouse_id || undefined,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo crear la instalación", r.error);
       }
     });
   }
