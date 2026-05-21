@@ -98,30 +98,26 @@ export function PunchPageClient({
       if (!ok) return;
     }
     startTransition(async () => {
-      try {
-        const result = await punchKindAction(kind, {
-          geo_latitude: lat,
-          geo_longitude: lng,
-          accuracy_meters: accuracy,
-        });
-        if (!result.ok) {
-          notify.error("No se pudo fichar", result.error);
-          return;
-        }
-        setState(result.state);
-        notify.success(
-          kind === "clock_in"
-            ? "Entrada registrada"
-            : kind === "clock_out"
-              ? "Salida registrada"
-              : kind === "break_start"
-                ? "Descanso iniciado"
-                : "Descanso terminado",
-        );
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const result = await punchKindAction(kind, {
+        geo_latitude: lat,
+        geo_longitude: lng,
+        accuracy_meters: accuracy,
+      });
+      if (!result.ok) {
+        notify.error("No se pudo fichar", result.error);
+        return;
       }
+      setState(result.state);
+      notify.success(
+        kind === "clock_in"
+          ? "Entrada registrada"
+          : kind === "clock_out"
+            ? "Salida registrada"
+            : kind === "break_start"
+              ? "Descanso iniciado"
+              : "Descanso terminado",
+      );
+      router.refresh();
     });
   }
 

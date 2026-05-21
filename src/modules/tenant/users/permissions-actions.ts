@@ -90,3 +90,18 @@ export async function getMyModuleOverrides(): Promise<Record<string, boolean>> {
     return {};
   }
 }
+
+// =================== Safe wrapper ===================
+
+export async function setUserModuleOverrideSafeAction(
+  userId: string,
+  moduleKey: string,
+  granted: boolean | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setUserModuleOverrideAction(userId, moduleKey, granted);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

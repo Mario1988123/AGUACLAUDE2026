@@ -430,3 +430,62 @@ export async function updateUserRoles(userId: string, roles: RoleKey[]) {
 
   revalidatePath("/configuracion/usuarios");
 }
+
+// =================== Safe wrappers ===================
+
+export async function inviteUserSafeAction(
+  formData: FormData,
+): Promise<{ ok: true; email: string; temp_password: string } | { ok: false; error: string }> {
+  try {
+    const r = await inviteUserAction(formData);
+    return { ok: true, email: r.email, temp_password: r.temp_password };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setUserStatusSafeAction(
+  userId: string,
+  status: "active" | "inactive" | "suspended",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setUserStatus(userId, status);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function resetUserPasswordSafeAction(
+  userId: string,
+): Promise<{ ok: true; email: string; temp_password: string } | { ok: false; error: string }> {
+  try {
+    const r = await resetUserPasswordAction(userId);
+    return { ok: true, email: r.email, temp_password: r.temp_password };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteUserPermanentlySafeAction(
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteUserPermanentlyAction(userId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function updateUserRolesSafeAction(
+  userId: string,
+  roles: RoleKey[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateUserRoles(userId, roles);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

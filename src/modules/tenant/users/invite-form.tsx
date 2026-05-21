@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { inviteUserAction } from "./actions";
+import { inviteUserSafeAction } from "./actions";
 
 interface Props {
   roleOptions: { value: string; label: string }[];
@@ -47,15 +47,15 @@ export function InviteUserForm({ roleOptions }: Props) {
     selectedRoles.forEach((r) => fd.append("roles", r));
     const formEl = e.currentTarget;
     startTransition(async () => {
-      try {
-        const result = await inviteUserAction(fd);
-        setCredentials({ email: result.email, password: result.temp_password });
-        notify.success("Usuario creado");
-        formEl.reset();
-        setSelectedRoles([]);
-      } catch (err) {
-        notify.error("No se pudo crear", err instanceof Error ? err.message : String(err));
+      const result = await inviteUserSafeAction(fd);
+      if (!result.ok) {
+        notify.error("No se pudo crear", result.error);
+        return;
       }
+      setCredentials({ email: result.email, password: result.temp_password });
+      notify.success("Usuario creado");
+      formEl.reset();
+      setSelectedRoles([]);
     });
   }
 

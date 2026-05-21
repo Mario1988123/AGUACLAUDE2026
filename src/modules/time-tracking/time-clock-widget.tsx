@@ -97,28 +97,24 @@ export function TimeClockWidget() {
       if (!ok) return;
     }
     startTransition(async () => {
-      try {
-        const result = await punchKindAction(kind, {
-          geo_latitude: geo.lat,
-          geo_longitude: geo.lng,
-          accuracy_meters: geo.acc,
-        });
-        if (!result.ok) {
-          notify.error("No se pudo fichar", result.error);
-          return;
-        }
-        const labels: Record<typeof kind, string> = {
-          clock_in: "Entrada registrada",
-          clock_out: "Salida registrada · jornada terminada",
-          break_start: "En pausa",
-          break_end: "Reanudado",
-        };
-        notify.success(labels[kind]);
-        setState(result.state);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const result = await punchKindAction(kind, {
+        geo_latitude: geo.lat,
+        geo_longitude: geo.lng,
+        accuracy_meters: geo.acc,
+      });
+      if (!result.ok) {
+        notify.error("No se pudo fichar", result.error);
+        return;
       }
+      const labels: Record<typeof kind, string> = {
+        clock_in: "Entrada registrada",
+        clock_out: "Salida registrada · jornada terminada",
+        break_start: "En pausa",
+        break_end: "Reanudado",
+      };
+      notify.success(labels[kind]);
+      setState(result.state);
+      router.refresh();
     });
   }
 

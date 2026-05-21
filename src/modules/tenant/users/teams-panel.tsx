@@ -8,8 +8,8 @@ import { Badge } from "@/shared/ui/badge";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  assignToTeamAction,
-  removeFromTeamAction,
+  assignToTeamSafeAction,
+  removeFromTeamSafeAction,
 } from "./team-actions";
 
 interface Team {
@@ -57,17 +57,14 @@ export function TeamsPanel({
 
   function assign(directorId: string, memberId: string) {
     startTransition(async () => {
-      try {
-        await assignToTeamAction(directorId, memberId);
-        notify.success("Asignado al equipo");
-        setPickerOpenForDirector(null);
-        location.reload();
-      } catch (err) {
-        notify.error(
-          "Error",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await assignToTeamSafeAction(directorId, memberId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Asignado al equipo");
+      setPickerOpenForDirector(null);
+      location.reload();
     });
   }
 
@@ -79,13 +76,13 @@ export function TeamsPanel({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await removeFromTeamAction(memberId);
-        notify.success("Eliminado del equipo");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await removeFromTeamSafeAction(memberId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminado del equipo");
+      location.reload();
     });
   }
 

@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { Truck } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { deliverLoadingRequestAction } from "./loading-request-actions";
+import { deliverLoadingRequestSafeAction } from "./loading-request-actions";
 
 export function DeliverLoadingRequestButton({ id }: { id: string }) {
   const [pending, startTransition] = useTransition();
@@ -15,13 +15,13 @@ export function DeliverLoadingRequestButton({ id }: { id: string }) {
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          try {
-            await deliverLoadingRequestAction(id);
-            notify.success("Carga entregada");
-            location.reload();
-          } catch (err) {
-            notify.error("Error", err instanceof Error ? err.message : String(err));
+          const r = await deliverLoadingRequestSafeAction(id);
+          if (!r.ok) {
+            notify.error("Error", r.error);
+            return;
           }
+          notify.success("Carga entregada");
+          location.reload();
         })
       }
     >

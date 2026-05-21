@@ -16,7 +16,7 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   recomputeStockAlertsAction,
-  dismissAlertAction,
+  dismissAlertSafeAction,
   type StockAlert,
 } from "./alert-actions";
 
@@ -61,13 +61,13 @@ export function StockAlertsPanel({ alerts }: { alerts: StockAlert[] }) {
 
   function dismiss(id: string) {
     startTransition(async () => {
-      try {
-        await dismissAlertAction(id);
-        notify.success("Descartada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await dismissAlertSafeAction(id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Descartada");
+      router.refresh();
     });
   }
 

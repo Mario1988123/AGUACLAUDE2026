@@ -171,3 +171,38 @@ export async function cancelLoadingRequestAction(requestId: string) {
     .neq("status", "delivered");
   revalidatePath("/almacenes");
 }
+
+// =================== Safe wrappers ===================
+
+export async function deliverLoadingRequestSafeAction(
+  requestId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deliverLoadingRequestAction(requestId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createLoadingRequestSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createLoadingRequestAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function cancelLoadingRequestSafeAction(
+  requestId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await cancelLoadingRequestAction(requestId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

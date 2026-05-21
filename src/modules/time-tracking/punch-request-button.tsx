@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createPunchRequestAction } from "./punch-requests-actions";
+import { createPunchRequestSafeAction } from "./punch-requests-actions";
 
 const KIND_OPTIONS = [
   { value: "clock_in", label: "Entrada" },
@@ -38,21 +38,18 @@ export function PunchRequestButton() {
     }
     const iso = new Date(`${date}T${time}:00`).toISOString();
     startTransition(async () => {
-      try {
-        await createPunchRequestAction({
-          requested_at: iso,
-          punch_kind: kind,
-          reason: reason.trim(),
-        });
-        notify.success("Solicitud enviada", "El admin la revisará");
-        setOpen(false);
-        setReason("");
-      } catch (err) {
-        notify.error(
-          "Error",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await createPunchRequestSafeAction({
+        requested_at: iso,
+        punch_kind: kind,
+        reason: reason.trim(),
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Solicitud enviada", "El admin la revisará");
+      setOpen(false);
+      setReason("");
     });
   }
 

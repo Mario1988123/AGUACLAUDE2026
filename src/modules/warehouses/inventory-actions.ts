@@ -345,3 +345,48 @@ export async function listStockMovements(
     purchase_id: m.purchase_id,
   }));
 }
+
+// =================== Safe wrappers ===================
+
+export async function addStockSafeAction(input: {
+  warehouse_id: string;
+  product_id: string;
+  quantity: number;
+  notes?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await addStockAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setStockQuantitySafeAction(input: {
+  warehouse_id: string;
+  product_id: string;
+  new_quantity: number;
+  notes?: string;
+  reason?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setStockQuantityAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function upsertStockThresholdSafeAction(input: {
+  warehouse_id: string;
+  product_id: string;
+  stock_min: number;
+  stock_max: number | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertStockThresholdAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createPunchRequestAction } from "./punch-requests-actions";
+import { createPunchRequestSafeAction } from "./punch-requests-actions";
 
 interface Props {
   items: Array<{
@@ -45,26 +45,23 @@ export function AutocloseCorrectionCard({ items }: Props) {
     const datePart = item.punched_at.slice(0, 10);
     const iso = new Date(`${datePart}T${time}:00`).toISOString();
     startTransition(async () => {
-      try {
-        await createPunchRequestAction({
-          requested_at: iso,
-          punch_kind: "clock_out",
-          reason: reason.trim(),
-        });
-        notify.success(
-          "Solicitud enviada",
-          "El admin validará la hora real propuesta.",
-        );
-        setOpen(null);
-        setTime("");
-        setReason("");
-        router.refresh();
-      } catch (err) {
-        notify.error(
-          "Error",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await createPunchRequestSafeAction({
+        requested_at: iso,
+        punch_kind: "clock_out",
+        reason: reason.trim(),
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        "Solicitud enviada",
+        "El admin validará la hora real propuesta.",
+      );
+      setOpen(null);
+      setTime("");
+      setReason("");
+      router.refresh();
     });
   }
 

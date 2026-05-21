@@ -229,3 +229,28 @@ export async function removeFromTeamAction(memberUserId: string): Promise<void> 
   }
   revalidatePath("/configuracion/usuarios");
 }
+
+// =================== Safe wrappers ===================
+
+export async function assignToTeamSafeAction(
+  managerUserId: string,
+  memberUserId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assignToTeamAction(managerUserId, memberUserId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function removeFromTeamSafeAction(
+  memberUserId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await removeFromTeamAction(memberUserId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

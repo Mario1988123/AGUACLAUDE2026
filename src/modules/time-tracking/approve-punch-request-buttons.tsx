@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  approvePunchRequestAction,
-  rejectPunchRequestAction,
+  approvePunchRequestSafeAction,
+  rejectPunchRequestSafeAction,
 } from "./punch-requests-actions";
 
 export function ApprovePunchRequestButtons({ requestId }: { requestId: string }) {
@@ -17,27 +17,27 @@ export function ApprovePunchRequestButtons({ requestId }: { requestId: string })
 
   function approve() {
     startTransition(async () => {
-      try {
-        await approvePunchRequestAction(requestId);
-        notify.success("Solicitud aprobada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await approvePunchRequestSafeAction(requestId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Solicitud aprobada");
+      router.refresh();
     });
   }
 
   function reject() {
     startTransition(async () => {
-      try {
-        await rejectPunchRequestAction(requestId, notes.trim() || undefined);
-        notify.success("Solicitud rechazada");
-        setRejectOpen(false);
-        setNotes("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await rejectPunchRequestSafeAction(requestId, notes.trim() || undefined);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Solicitud rechazada");
+      setRejectOpen(false);
+      setNotes("");
+      router.refresh();
     });
   }
 

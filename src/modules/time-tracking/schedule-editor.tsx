@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   getUserSchedule,
-  setUserScheduleAction,
+  setUserScheduleSafeAction,
   type WorkScheduleDay,
 } from "./schedule-actions";
 
@@ -56,12 +56,12 @@ export function ScheduleEditor({ users }: { users: Array<{ id: string; name: str
       return;
     }
     startTransition(async () => {
-      try {
-        await setUserScheduleAction(userId, days);
-        notify.success("Horario guardado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setUserScheduleSafeAction(userId, days);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Horario guardado");
     });
   }
 

@@ -53,3 +53,27 @@ export async function clearAvatarAction(): Promise<void> {
     .eq("user_id", session.user_id);
   revalidatePath("/", "layout");
 }
+
+// =================== Safe wrappers ===================
+
+export async function uploadAvatarSafeAction(
+  formData: FormData,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const url = await uploadAvatarAction(formData);
+    return { ok: true, url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function clearAvatarSafeAction(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  try {
+    await clearAvatarAction();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

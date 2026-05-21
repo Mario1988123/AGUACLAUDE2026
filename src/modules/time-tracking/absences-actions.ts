@@ -390,3 +390,17 @@ export async function recalculateVacationBalanceAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+// =================== Safe wrappers ===================
+
+export async function approveAbsenceSafeAction(
+  id: string,
+  approve: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await approveAbsenceAction(id, approve);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

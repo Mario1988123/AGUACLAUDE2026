@@ -631,3 +631,14 @@ export async function dismissAlertAction(id: string): Promise<void> {
     .eq("id", id);
   revalidatePath("/almacenes");
 }
+
+export async function dismissAlertSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await dismissAlertAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

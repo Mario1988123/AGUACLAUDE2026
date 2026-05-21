@@ -222,3 +222,46 @@ export async function listProductLocations(
   }
   return out;
 }
+
+// =================== Safe wrappers ===================
+
+export async function upsertLocationSafeAction(input: {
+  id?: string;
+  warehouse_id: string;
+  shelf?: string | null;
+  level?: string | null;
+  slot?: string | null;
+  description?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertLocationAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteLocationSafeAction(
+  locationId: string,
+  warehouseId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteLocationAction(locationId, warehouseId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function assignStockLocationSafeAction(input: {
+  warehouse_id: string;
+  product_id: string;
+  location_id: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assignStockLocationAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

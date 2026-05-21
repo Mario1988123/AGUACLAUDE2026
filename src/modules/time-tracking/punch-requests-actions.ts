@@ -290,3 +290,51 @@ export async function cancelPunchRequestAction(id: string): Promise<void> {
   if (r.error) throw new Error(r.error.message);
   revalidatePath("/fichajes");
 }
+
+// =================== Safe wrappers ===================
+
+export async function createPunchRequestSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createPunchRequestAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function approvePunchRequestSafeAction(
+  id: string,
+  notes?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await approvePunchRequestAction(id, notes);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function rejectPunchRequestSafeAction(
+  id: string,
+  notes?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rejectPunchRequestAction(id, notes);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function cancelPunchRequestSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await cancelPunchRequestAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

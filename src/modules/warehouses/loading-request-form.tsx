@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { createLoadingRequestAction } from "./loading-request-actions";
+import { createLoadingRequestSafeAction } from "./loading-request-actions";
 
 interface ProductOpt {
   id: string;
@@ -62,22 +62,22 @@ export function CreateLoadingRequestButton({
       return;
     }
     startTransition(async () => {
-      try {
-        await createLoadingRequestAction({
-          source_warehouse_id: sourceId,
-          destination_warehouse_id: destId,
-          needed_for: neededFor || undefined,
-          notes: notes || undefined,
-          items,
-        });
-        notify.success("Solicitud creada");
-        setOpen(false);
-        setItems([]);
-        setNotes("");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createLoadingRequestSafeAction({
+        source_warehouse_id: sourceId,
+        destination_warehouse_id: destId,
+        needed_for: neededFor || undefined,
+        notes: notes || undefined,
+        items,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Solicitud creada");
+      setOpen(false);
+      setItems([]);
+      setNotes("");
+      location.reload();
     });
   }
 

@@ -389,3 +389,20 @@ export async function returnToSupplierAction(input: {
 
   revalidatePath(`/almacenes/${input.warehouse_id}`);
 }
+
+// =================== Safe wrapper ===================
+
+export async function returnToSupplierSafeAction(input: {
+  purchase_id: string;
+  product_id: string;
+  warehouse_id: string;
+  quantity: number;
+  reason?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await returnToSupplierAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

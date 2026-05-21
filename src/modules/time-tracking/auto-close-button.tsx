@@ -5,20 +5,20 @@ import { useRouter } from "next/navigation";
 import { Power } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { autoCloseStalePunchesAction } from "./actions";
+import { autoCloseStalePunchesSafeAction } from "./actions";
 
 export function AutoCloseButton() {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   function go() {
     startTransition(async () => {
-      try {
-        const r = await autoCloseStalePunchesAction();
-        notify.success(`${r.closed} fichaje(s) cerrados automáticamente`);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await autoCloseStalePunchesSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(`${r.closed} fichaje(s) cerrados automáticamente`);
+      router.refresh();
     });
   }
   return (

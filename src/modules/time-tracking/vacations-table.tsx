@@ -6,7 +6,7 @@ import { Save } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { notify } from "@/shared/hooks/use-toast";
-import { setVacationDaysAction, type VacationBalance } from "./schedule-actions";
+import { setVacationDaysSafeAction, type VacationBalance } from "./schedule-actions";
 
 export function VacationsTable({ balances, year }: { balances: VacationBalance[]; year: number }) {
   const [edits, setEdits] = useState<Record<string, number>>({});
@@ -17,13 +17,13 @@ export function VacationsTable({ balances, year }: { balances: VacationBalance[]
     const days = edits[userId];
     if (days == null || days < 0) return;
     startTransition(async () => {
-      try {
-        await setVacationDaysAction(userId, year, days);
-        notify.success("Saldo guardado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setVacationDaysSafeAction(userId, year, days);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Saldo guardado");
+      router.refresh();
     });
   }
 

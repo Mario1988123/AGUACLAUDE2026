@@ -5,20 +5,20 @@ import { useRouter } from "next/navigation";
 import { Check, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { approveAbsenceAction } from "./absences-actions";
+import { approveAbsenceSafeAction } from "./absences-actions";
 
 export function ApproveAbsenceButtons({ absenceId }: { absenceId: string }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   function decide(approve: boolean) {
     startTransition(async () => {
-      try {
-        await approveAbsenceAction(absenceId, approve);
-        notify.success(approve ? "Aprobada" : "Rechazada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await approveAbsenceSafeAction(absenceId, approve);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(approve ? "Aprobada" : "Rechazada");
+      router.refresh();
     });
   }
   return (

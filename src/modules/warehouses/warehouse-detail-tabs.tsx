@@ -23,16 +23,16 @@ import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  addStockAction,
-  setStockQuantityAction,
-  upsertStockThresholdAction,
+  addStockSafeAction,
+  setStockQuantitySafeAction,
+  upsertStockThresholdSafeAction,
   type StockMovementRow,
 } from "./inventory-actions";
-import { transferStockAction } from "./transfer-actions";
+import { transferStockSafeAction } from "./transfer-actions";
 import {
-  upsertLocationAction,
-  deleteLocationAction,
-  assignStockLocationAction,
+  upsertLocationSafeAction,
+  deleteLocationSafeAction,
+  assignStockLocationSafeAction,
   type WarehouseLocation,
   type ProductLocation,
 } from "./location-actions";
@@ -256,22 +256,22 @@ function StockTab({
       return;
     }
     startTransition(async () => {
-      try {
-        await addStockAction({
-          warehouse_id: warehouseId,
-          product_id: productId,
-          quantity: q,
-          notes: notes || undefined,
-        });
-        notify.success(`+${q} añadidas`);
-        setShowAdd(false);
-        setProductId("");
-        setQty("1");
-        setNotes("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await addStockSafeAction({
+        warehouse_id: warehouseId,
+        product_id: productId,
+        quantity: q,
+        notes: notes || undefined,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(`+${q} añadidas`);
+      setShowAdd(false);
+      setProductId("");
+      setQty("1");
+      setNotes("");
+      router.refresh();
     });
   }
 
@@ -393,18 +393,18 @@ function StockRow({
 
   function saveLocation() {
     startTransition(async () => {
-      try {
-        await assignStockLocationAction({
-          warehouse_id: warehouseId,
-          product_id: row.product_id,
-          location_id: locId || null,
-        });
-        notify.success("Ubicación actualizada");
-        setEditingLoc(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await assignStockLocationSafeAction({
+        warehouse_id: warehouseId,
+        product_id: row.product_id,
+        location_id: locId || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Ubicación actualizada");
+      setEditingLoc(false);
+      router.refresh();
     });
   }
 
@@ -420,19 +420,19 @@ function StockRow({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertStockThresholdAction({
-          warehouse_id: warehouseId,
-          product_id: row.product_id,
-          stock_min: minN,
-          stock_max: maxN,
-        });
-        notify.success("Umbral guardado");
-        setEditing(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertStockThresholdSafeAction({
+        warehouse_id: warehouseId,
+        product_id: row.product_id,
+        stock_min: minN,
+        stock_max: maxN,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Umbral guardado");
+      setEditing(false);
+      router.refresh();
     });
   }
 
@@ -575,22 +575,22 @@ function TransferTab({
       return;
     }
     startTransition(async () => {
-      try {
-        await transferStockAction({
-          from_warehouse_id: warehouseId,
-          to_warehouse_id: destId,
-          product_id: productId,
-          quantity: q,
-          notes: notes || undefined,
-        });
-        notify.success("Traspaso registrado");
-        setProductId("");
-        setQty("1");
-        setNotes("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await transferStockSafeAction({
+        from_warehouse_id: warehouseId,
+        to_warehouse_id: destId,
+        product_id: productId,
+        quantity: q,
+        notes: notes || undefined,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Traspaso registrado");
+      setProductId("");
+      setQty("1");
+      setNotes("");
+      router.refresh();
     });
   }
 
@@ -706,19 +706,19 @@ function InventoryTab({
       return;
     }
     startTransition(async () => {
-      try {
-        for (const c of changes) {
-          await setStockQuantityAction({
-            warehouse_id: warehouseId,
-            product_id: c.product_id,
-            new_quantity: c.new_quantity,
-          });
+      for (const c of changes) {
+        const r = await setStockQuantitySafeAction({
+          warehouse_id: warehouseId,
+          product_id: c.product_id,
+          new_quantity: c.new_quantity,
+        });
+        if (!r.ok) {
+          notify.error("Error", r.error);
+          return;
         }
-        notify.success(`${changes.length} ajuste(s) guardados`);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
       }
+      notify.success(`${changes.length} ajuste(s) guardados`);
+      router.refresh();
     });
   }
 
@@ -803,13 +803,13 @@ function LocationsTab({
   function remove(id: string) {
     if (!confirm("¿Eliminar esta ubicación? El stock asignado pasa a «sin ubicación».")) return;
     startTransition(async () => {
-      try {
-        await deleteLocationAction(id, warehouseId);
-        notify.success("Eliminada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteLocationSafeAction(id, warehouseId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminada");
+      router.refresh();
     });
   }
 
@@ -913,20 +913,20 @@ function LocationForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertLocationAction({
-          id: initial?.id,
-          warehouse_id: warehouseId,
-          shelf,
-          level: lvl,
-          slot,
-          description: desc,
-        });
-        notify.success("Guardada");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertLocationSafeAction({
+        id: initial?.id,
+        warehouse_id: warehouseId,
+        shelf,
+        level: lvl,
+        slot,
+        description: desc,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardada");
+      onDone();
     });
   }
 

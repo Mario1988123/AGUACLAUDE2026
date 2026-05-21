@@ -129,3 +129,30 @@ export async function setVacationDaysAction(
     );
   revalidatePath("/configuracion/horarios");
 }
+
+// =================== Safe wrappers ===================
+
+export async function setUserScheduleSafeAction(
+  userId: string,
+  days: WorkScheduleDay[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setUserScheduleAction(userId, days);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setVacationDaysSafeAction(
+  userId: string,
+  year: number,
+  daysTotal: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setVacationDaysAction(userId, year, daysTotal);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

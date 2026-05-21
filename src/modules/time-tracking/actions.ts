@@ -886,3 +886,16 @@ export async function getUsersWithoutPunchTodayAction(): Promise<
     full_name: p.full_name ?? p.user_id.slice(0, 8),
   }));
 }
+
+// =================== Safe wrapper ===================
+
+export async function autoCloseStalePunchesSafeAction(): Promise<
+  { ok: true; closed: number } | { ok: false; error: string }
+> {
+  try {
+    const r = await autoCloseStalePunchesAction();
+    return { ok: true, closed: r.closed };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

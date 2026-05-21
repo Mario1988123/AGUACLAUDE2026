@@ -7,10 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/di
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  setUserStatus,
-  updateUserRoles,
-  resetUserPasswordAction,
-  deleteUserPermanentlyAction,
+  setUserStatusSafeAction,
+  updateUserRolesSafeAction,
+  resetUserPasswordSafeAction,
+  deleteUserPermanentlySafeAction,
 } from "./actions";
 import { ROLE_KEYS, type RoleKey } from "./schemas";
 import { UserPermissionsButton } from "./permissions-dialog";
@@ -64,13 +64,13 @@ export function UserRowActions({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const r = await resetUserPasswordAction(userId);
-        setResetCreds({ email: r.email, password: r.temp_password });
-        notify.success("Contraseña reseteada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await resetUserPasswordSafeAction(userId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setResetCreds({ email: r.email, password: r.temp_password });
+      notify.success("Contraseña reseteada");
     });
   }
 
@@ -89,13 +89,13 @@ export function UserRowActions({
     });
     if (!ok2) return;
     startTransition(async () => {
-      try {
-        await deleteUserPermanentlyAction(userId);
-        notify.success("Usuario eliminado permanentemente");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteUserPermanentlySafeAction(userId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Usuario eliminado permanentemente");
+      location.reload();
     });
   }
 
@@ -105,14 +105,14 @@ export function UserRowActions({
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateUserRoles(userId, roles as RoleKey[]);
-        notify.success("Roles actualizados");
-        setOpen(false);
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateUserRolesSafeAction(userId, roles as RoleKey[]);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Roles actualizados");
+      setOpen(false);
+      location.reload();
     });
   }
 
@@ -124,25 +124,25 @@ export function UserRowActions({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await setUserStatus(userId, "suspended");
-        notify.success("Usuario suspendido");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setUserStatusSafeAction(userId, "suspended");
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Usuario suspendido");
+      location.reload();
     });
   }
 
   function reactivate() {
     startTransition(async () => {
-      try {
-        await setUserStatus(userId, "active");
-        notify.success("Usuario reactivado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setUserStatusSafeAction(userId, "active");
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Usuario reactivado");
+      location.reload();
     });
   }
 

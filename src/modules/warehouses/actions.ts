@@ -172,3 +172,27 @@ export async function listLoadingRequests(): Promise<LoadingRequestRow[]> {
   if (error) throw error;
   return (data ?? []) as LoadingRequestRow[];
 }
+
+// =================== Safe wrappers ===================
+
+export async function upsertWarehouseSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertWarehouseAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteWarehouseSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteWarehouseAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

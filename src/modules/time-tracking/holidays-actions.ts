@@ -183,3 +183,49 @@ export async function getCompanyLocality(): Promise<{
     return { ccaa: null, city_code: null };
   }
 }
+
+// =================== Safe wrappers ===================
+
+export async function addHolidaySafeAction(
+  input: { date: string; name: string; region_code?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await addHolidayAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteHolidaySafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteHolidayAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setCompanyLocalitySafeAction(
+  input: { ccaa: string | null; city_code: string | null },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setCompanyLocalityAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setCompanyRegionSafeAction(
+  regionCode: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setCompanyRegionAction(regionCode);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

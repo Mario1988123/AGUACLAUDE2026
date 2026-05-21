@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Camera, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { uploadAvatarAction, clearAvatarAction } from "./avatar-actions";
+import { uploadAvatarSafeAction, clearAvatarSafeAction } from "./avatar-actions";
 
 export function AvatarUploader({
   currentUrl,
@@ -30,28 +30,28 @@ export function AvatarUploader({
     const fd = new FormData();
     fd.append("file", file);
     startTransition(async () => {
-      try {
-        const url = await uploadAvatarAction(fd);
-        setPreview(url);
-        notify.success("Avatar actualizado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await uploadAvatarSafeAction(fd);
+      if (!r.ok) {
+        notify.error("Error", r.error);
         setPreview(currentUrl);
+        return;
       }
+      setPreview(r.url);
+      notify.success("Avatar actualizado");
+      router.refresh();
     });
   }
 
   function clear() {
     startTransition(async () => {
-      try {
-        await clearAvatarAction();
-        setPreview(null);
-        notify.success("Avatar eliminado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await clearAvatarSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setPreview(null);
+      notify.success("Avatar eliminado");
+      router.refresh();
     });
   }
 

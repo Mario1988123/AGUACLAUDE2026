@@ -10,9 +10,9 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  addHolidayAction,
-  deleteHolidayAction,
-  setCompanyLocalityAction,
+  addHolidaySafeAction,
+  deleteHolidaySafeAction,
+  setCompanyLocalitySafeAction,
   type HolidayRow,
 } from "./holidays-actions";
 import type { Province } from "./localities";
@@ -57,34 +57,34 @@ export function HolidaysManager({
 
   function saveLocality() {
     startTransition(async () => {
-      try {
-        await setCompanyLocalityAction({
-          ccaa: ccaa || null,
-          city_code: city || null,
-        });
-        notify.success("Localidad guardada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setCompanyLocalitySafeAction({
+        ccaa: ccaa || null,
+        city_code: city || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Localidad guardada");
+      router.refresh();
     });
   }
 
   function add(date: string, name: string) {
     startTransition(async () => {
-      try {
-        await addHolidayAction({
-          date,
-          name,
-          region_code: ccaa || undefined,
-        });
-        notify.success("Festivo añadido");
-        setNewDate("");
-        setNewName("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await addHolidaySafeAction({
+        date,
+        name,
+        region_code: ccaa || undefined,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Festivo añadido");
+      setNewDate("");
+      setNewName("");
+      router.refresh();
     });
   }
 
@@ -96,13 +96,13 @@ export function HolidaysManager({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteHolidayAction(id);
-        notify.success("Eliminado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteHolidaySafeAction(id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminado");
+      router.refresh();
     });
   }
 

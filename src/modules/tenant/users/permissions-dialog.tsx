@@ -8,7 +8,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { MODULES } from "@/shared/lib/modules";
 import {
   getUserModuleOverrides,
-  setUserModuleOverrideAction,
+  setUserModuleOverrideSafeAction,
 } from "./permissions-actions";
 
 type State = "default" | "granted" | "denied";
@@ -39,18 +39,18 @@ export function UserPermissionsButton({ userId }: { userId: string }) {
 
   function setState(moduleKey: string, state: State) {
     startTransition(async () => {
-      try {
-        const granted = state === "default" ? null : state === "granted";
-        await setUserModuleOverrideAction(userId, moduleKey, granted);
-        setOverrides((cur) => {
-          const next = { ...cur };
-          if (state === "default") delete next[moduleKey];
-          else next[moduleKey] = granted!;
-          return next;
-        });
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const granted = state === "default" ? null : state === "granted";
+      const r = await setUserModuleOverrideSafeAction(userId, moduleKey, granted);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setOverrides((cur) => {
+        const next = { ...cur };
+        if (state === "default") delete next[moduleKey];
+        else next[moduleKey] = granted!;
+        return next;
+      });
     });
   }
 

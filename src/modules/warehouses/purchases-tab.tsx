@@ -10,7 +10,7 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   createPurchaseAction,
-  returnToSupplierAction,
+  returnToSupplierSafeAction,
   type PurchaseRow,
   type PurchaseDetail,
 } from "./purchase-actions";
@@ -176,22 +176,22 @@ function PurchaseItemRow({
       return;
     }
     startTransition(async () => {
-      try {
-        await returnToSupplierAction({
-          purchase_id: purchaseId,
-          warehouse_id: warehouseId,
-          product_id: item.product_id,
-          quantity: q,
-          reason: retReason || undefined,
-        });
-        notify.success(`${q} ud devueltas a proveedor`);
-        setShowReturn(false);
-        setRetQty("1");
-        setRetReason("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await returnToSupplierSafeAction({
+        purchase_id: purchaseId,
+        warehouse_id: warehouseId,
+        product_id: item.product_id,
+        quantity: q,
+        reason: retReason || undefined,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(`${q} ud devueltas a proveedor`);
+      setShowReturn(false);
+      setRetQty("1");
+      setRetReason("");
+      router.refresh();
     });
   }
 

@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { upsertWarehouseAction, deleteWarehouseAction, type WarehouseRow } from "./actions";
+import { upsertWarehouseSafeAction, deleteWarehouseSafeAction, type WarehouseRow } from "./actions";
 import { KIND_LABEL } from "./constants";
 
 interface Props {
@@ -31,13 +31,13 @@ export function WarehousesManager({ warehouses, teamMembers = [] }: Props) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteWarehouseAction(id);
-        notify.success("Eliminado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteWarehouseSafeAction(id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminado");
+      location.reload();
     });
   }
 
@@ -162,23 +162,23 @@ function WarehouseForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await upsertWarehouseAction({
-          id: initial?.id,
-          name: form.name,
-          kind: form.kind,
-          vehicle_plate: form.vehicle_plate,
-          assigned_user_id: form.assigned_user_id || null,
-          address_street: form.address_street,
-          address_postal_code: form.address_postal_code,
-          address_city: form.address_city,
-          address_province: form.address_province,
-        });
-        notify.success("Guardado");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertWarehouseSafeAction({
+        id: initial?.id,
+        name: form.name,
+        kind: form.kind,
+        vehicle_plate: form.vehicle_plate,
+        assigned_user_id: form.assigned_user_id || null,
+        address_street: form.address_street,
+        address_postal_code: form.address_postal_code,
+        address_city: form.address_city,
+        address_province: form.address_province,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
+      onDone();
     });
   }
 

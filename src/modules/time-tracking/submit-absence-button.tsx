@@ -64,29 +64,25 @@ export function SubmitAbsenceButton() {
       return;
     }
     startTransition(async () => {
-      try {
-        const result = await submitAbsenceAction({
-          starts_on: from,
-          ends_on: to,
-          kind,
-          notes,
-          child_id: requiresChild ? childId : null,
-        });
-        if (!result.ok) {
-          notify.error("No se pudo solicitar", result.error);
-          return;
-        }
-        notify.success("Solicitud enviada al admin");
-        setOpen(false);
-        setFrom("");
-        setTo("");
-        setKind("vacation");
-        setNotes("");
-        setChildId("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const result = await submitAbsenceAction({
+        starts_on: from,
+        ends_on: to,
+        kind,
+        notes,
+        child_id: requiresChild ? childId : null,
+      });
+      if (!result.ok) {
+        notify.error("No se pudo solicitar", result.error);
+        return;
       }
+      notify.success("Solicitud enviada al admin");
+      setOpen(false);
+      setFrom("");
+      setTo("");
+      setKind("vacation");
+      setNotes("");
+      setChildId("");
+      router.refresh();
     });
   }
 
