@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { Phone, MessageCircle, Mail } from "lucide-react";
-import { logLeadContactAction } from "./actions";
+import { logLeadContactSafeAction } from "./actions";
 import { notify } from "@/shared/hooks/use-toast";
 import { MessageTemplateButton } from "@/modules/messaging/template-button";
 
@@ -33,10 +33,9 @@ export function LeadContactButtons({
 
   function handle(channel: "call" | "whatsapp" | "email", url: string) {
     startTransition(async () => {
-      try {
-        await logLeadContactAction(leadId, channel);
-      } catch (err) {
-        notify.error("No se pudo registrar el contacto", err instanceof Error ? err.message : String(err));
+      const r = await logLeadContactSafeAction(leadId, channel);
+      if (!r.ok) {
+        notify.error("No se pudo registrar el contacto", r.error);
       }
     });
     // Abrir el enlace nativo en seguida (no bloqueamos por la action)

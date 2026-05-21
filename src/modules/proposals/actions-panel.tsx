@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  markProposalAccepted,
-  markProposalRejected,
-  markProposalSent,
-  approveProposalAction,
-  rejectApprovalAction,
-  convertAcceptedProposalToCustomerAction,
+  markProposalAcceptedSafeAction,
+  markProposalRejectedSafeAction,
+  markProposalSentSafeAction,
+  approveProposalSafeAction,
+  rejectApprovalSafeAction,
+  convertAcceptedProposalToCustomerSafeAction,
 } from "./actions";
 import { createContractFromProposal } from "@/modules/contracts/actions";
 import type { ProposalStatus } from "./schemas";
@@ -41,71 +41,69 @@ export function ProposalActions({
 
   function send() {
     startTransition(async () => {
-      try {
-        await markProposalSent(proposalId);
-        notify.success("Marcada como enviada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markProposalSentSafeAction(proposalId);
+      if (!r.ok) {
+        notify.error("No se pudo marcar como enviada", r.error);
+        return;
       }
+      notify.success("Marcada como enviada");
+      router.refresh();
     });
   }
 
   function accept() {
     startTransition(async () => {
-      try {
-        const res = await markProposalAccepted(proposalId);
-        notify.success("Propuesta aceptada");
-        // Flujo continuo: redirigimos al cliente con banner ?from_proposal=
-        // para completar datos y generar contrato en el mismo paso.
-        if (res.customer_id) {
-          router.push(`/clientes/${res.customer_id}?from_proposal=${proposalId}` as never);
-          return;
-        }
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markProposalAcceptedSafeAction(proposalId);
+      if (!r.ok) {
+        notify.error("No se pudo aceptar", r.error);
+        return;
       }
+      notify.success("Propuesta aceptada");
+      if (r.customer_id) {
+        router.push(`/clientes/${r.customer_id}?from_proposal=${proposalId}` as never);
+        return;
+      }
+      router.refresh();
     });
   }
 
   function reject() {
     startTransition(async () => {
-      try {
-        await markProposalRejected(proposalId, reason);
-        notify.success("Rechazada");
-        setRejecting(false);
-        setReason("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markProposalRejectedSafeAction(proposalId, reason);
+      if (!r.ok) {
+        notify.error("No se pudo rechazar", r.error);
+        return;
       }
+      notify.success("Rechazada");
+      setRejecting(false);
+      setReason("");
+      router.refresh();
     });
   }
 
   function approve() {
     startTransition(async () => {
-      try {
-        await approveProposalAction(proposalId);
-        notify.success("Propuesta validada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await approveProposalSafeAction(proposalId);
+      if (!r.ok) {
+        notify.error("No se pudo validar", r.error);
+        return;
       }
+      notify.success("Propuesta validada");
+      router.refresh();
     });
   }
 
   function rejectApproval() {
     startTransition(async () => {
-      try {
-        await rejectApprovalAction(proposalId, reason);
-        notify.success("Aprobación rechazada — vuelve a borrador");
-        setRejectingApproval(false);
-        setReason("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await rejectApprovalSafeAction(proposalId, reason);
+      if (!r.ok) {
+        notify.error("No se pudo rechazar la aprobación", r.error);
+        return;
       }
+      notify.success("Aprobación rechazada — vuelve a borrador");
+      setRejectingApproval(false);
+      setReason("");
+      router.refresh();
     });
   }
 
@@ -113,16 +111,15 @@ export function ProposalActions({
     startTransition(async () => {
       try {
         if (hasLead) {
-          // Si era para un lead, primero convertimos a cliente y enviamos
-          // al usuario a la ficha del cliente para que complete los datos
-          // pendientes (DNI, IBAN, dirección) ANTES de generar el contrato.
-          const r = await convertAcceptedProposalToCustomerAction(proposalId);
+          const r = await convertAcceptedProposalToCustomerSafeAction(proposalId);
+          if (!r.ok) {
+            notify.error("No se pudo convertir", r.error);
+            return;
+          }
           notify.success("Cliente creado. Completa sus datos y luego genera el contrato.");
-          router.push(
-            `/clientes/${r.customer_id}?from_proposal=${proposalId}` as never,
-          );
+          router.push(`/clientes/${r.customer_id}?from_proposal=${proposalId}` as never);
         } else {
-          // Cliente ya existe: generar el contrato directamente
+          // createContractFromProposal usa NEXT_REDIRECT internamente — debe re-lanzar.
           await createContractFromProposal(proposalId);
         }
       } catch (err) {
@@ -130,7 +127,7 @@ export function ProposalActions({
           const d = String((err as { digest?: unknown }).digest);
           if (d.startsWith("NEXT_REDIRECT")) throw err;
         }
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+        notify.error("No se pudo generar el contrato", err instanceof Error ? err.message : String(err));
       }
     });
   }

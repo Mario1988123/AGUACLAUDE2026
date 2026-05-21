@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { convertLeadToCustomerAction } from "./actions";
+import { convertLeadToCustomerSafeAction } from "./actions";
 
 export function ConvertLeadButton({ leadId, alreadyConverted }: { leadId: string; alreadyConverted: boolean }) {
   const [pending, startTransition] = useTransition();
@@ -23,13 +23,13 @@ export function ConvertLeadButton({ leadId, alreadyConverted }: { leadId: string
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const customerId = await convertLeadToCustomerAction(leadId);
-        notify.success("Convertido a cliente");
-        router.push(`/clientes/${customerId}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await convertLeadToCustomerSafeAction(leadId);
+      if (!r.ok) {
+        notify.error("No se pudo convertir", r.error);
+        return;
       }
+      notify.success("Convertido a cliente");
+      router.push(`/clientes/${r.customer_id}` as never);
     });
   }
 

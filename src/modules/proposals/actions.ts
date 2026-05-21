@@ -1391,3 +1391,41 @@ export async function duplicateProposalAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function markProposalRejectedSafeAction(
+  id: string,
+  reason?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markProposalRejected(id, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function rejectApprovalSafeAction(
+  id: string,
+  reason?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rejectApprovalAction(id, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function convertAcceptedProposalToCustomerSafeAction(
+  proposalId: string,
+): Promise<
+  | { ok: true; customer_id: string }
+  | { ok: false; error: string }
+> {
+  try {
+    const r = await convertAcceptedProposalToCustomerAction(proposalId);
+    return { ok: true, customer_id: r.customer_id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

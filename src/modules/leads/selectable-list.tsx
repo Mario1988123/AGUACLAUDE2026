@@ -22,7 +22,7 @@ import { StatusPill } from "@/shared/components/status-pill";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { deleteLeadAction, markLeadAsLostAction } from "./actions";
+import { deleteLeadSafeAction, markLeadAsLostSafeAction } from "./actions";
 import type { LeadListItem } from "./types";
 
 const LEAD_TONE: Record<
@@ -77,13 +77,13 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteLeadAction(id);
-        notify.success("Lead eliminado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteLeadSafeAction(id);
+      if (!r.ok) {
+        notify.error("No se pudo eliminar", r.error);
+        return;
       }
+      notify.success("Lead eliminado");
+      router.refresh();
     });
   }
 
@@ -96,14 +96,14 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
     if (!lostReasonOpen) return;
     const { id } = lostReasonOpen;
     startTransition(async () => {
-      try {
-        await markLeadAsLostAction(id, lostReason.trim() || null);
-        notify.success("Lead marcado como venta perdida — propuestas rechazadas");
-        setLostReasonOpen(null);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markLeadAsLostSafeAction(id, lostReason.trim() || null);
+      if (!r.ok) {
+        notify.error("No se pudo marcar", r.error);
+        return;
       }
+      notify.success("Lead marcado como venta perdida — propuestas rechazadas");
+      setLostReasonOpen(null);
+      router.refresh();
     });
   }
 

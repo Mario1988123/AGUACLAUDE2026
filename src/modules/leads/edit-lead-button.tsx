@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateLeadAction } from "./actions";
+import { updateLeadSafeAction } from "./actions";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { LEAD_POTENTIAL } from "./schemas";
 
@@ -41,14 +41,14 @@ export function EditLeadButton({ leadId, initial }: Props) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateLeadAction(leadId, form);
-        notify.success("Lead actualizado");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateLeadSafeAction(leadId, form);
+      if (!r.ok) {
+        notify.error("No se pudo actualizar", r.error);
+        return;
       }
+      notify.success("Lead actualizado");
+      setOpen(false);
+      router.refresh();
     });
   }
 

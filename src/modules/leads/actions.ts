@@ -946,3 +946,15 @@ export async function convertLeadToCustomerSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function logLeadContactSafeAction(
+  leadId: string,
+  channel: "call" | "whatsapp" | "email",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await logLeadContactAction(leadId, channel);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
