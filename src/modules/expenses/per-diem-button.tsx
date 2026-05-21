@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { createPerDiemAction } from "./actions";
+import { createPerDiemSafeAction } from "./actions";
 
 interface SettingsAmounts {
   national_overnight_cents: number;
@@ -59,29 +59,29 @@ export function PerDiemButton({ amounts }: { amounts: SettingsAmounts }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await createPerDiemAction({
-          date: form.date,
-          with_overnight: form.with_overnight,
-          scope: form.scope,
-          destination: form.destination || null,
-          trip_purpose: form.trip_purpose || null,
-          notes: form.notes || null,
-        });
-        notify.success("Dieta registrada");
-        setOpen(false);
-        setForm({
-          date: new Date().toISOString().slice(0, 10),
-          with_overnight: false,
-          scope: "national",
-          destination: "",
-          trip_purpose: "",
-          notes: "",
-        });
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createPerDiemSafeAction({
+        date: form.date,
+        with_overnight: form.with_overnight,
+        scope: form.scope,
+        destination: form.destination || null,
+        trip_purpose: form.trip_purpose || null,
+        notes: form.notes || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Dieta registrada");
+      setOpen(false);
+      setForm({
+        date: new Date().toISOString().slice(0, 10),
+        with_overnight: false,
+        scope: "national",
+        destination: "",
+        trip_purpose: "",
+        notes: "",
+      });
+      router.refresh();
     });
   }
 

@@ -8,9 +8,9 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  approveExpenseAction,
-  rejectExpenseAction,
-  reimburseExpenseAction,
+  approveExpenseSafeAction,
+  rejectExpenseSafeAction,
+  reimburseExpenseSafeAction,
 } from "./actions";
 
 export function ApprovalButtons({
@@ -45,17 +45,17 @@ export function ApprovalButtons({
 
   function approve() {
     startTransition(async () => {
-      try {
-        await approveExpenseAction(expenseId);
-        notify.success(
-          paymentMethod === "corp_card"
-            ? "Gasto validado"
-            : "Aprobado · pendiente de liquidar al comercial",
-        );
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await approveExpenseSafeAction(expenseId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        paymentMethod === "corp_card"
+          ? "Gasto validado"
+          : "Aprobado · pendiente de liquidar al comercial",
+      );
+      router.refresh();
     });
   }
 
@@ -65,14 +65,14 @@ export function ApprovalButtons({
       return;
     }
     startTransition(async () => {
-      try {
-        await rejectExpenseAction(expenseId, reason.trim());
-        notify.success("Gasto rechazado");
-        setRejectOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await rejectExpenseSafeAction(expenseId, reason.trim());
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Gasto rechazado");
+      setRejectOpen(false);
+      router.refresh();
     });
   }
 
@@ -83,18 +83,18 @@ export function ApprovalButtons({
       return;
     }
     startTransition(async () => {
-      try {
-        await reimburseExpenseAction(expenseId, {
-          amount_cents: amt,
-          bank_ref: bankRef || undefined,
-          notes: notes || undefined,
-        });
-        notify.success("Liquidación registrada");
-        setReimburseOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reimburseExpenseSafeAction(expenseId, {
+        amount_cents: amt,
+        bank_ref: bankRef || undefined,
+        notes: notes || undefined,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Liquidación registrada");
+      setReimburseOpen(false);
+      router.refresh();
     });
   }
 

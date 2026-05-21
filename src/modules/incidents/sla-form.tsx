@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateSlaSettingsAction } from "./sla-actions";
+import { updateSlaSettingsSafeAction } from "./sla-actions";
 import type { SlaSettings } from "./sla-types";
 
 const ROWS: Array<{
@@ -52,12 +52,12 @@ export function SlaSettingsForm({ initial }: { initial: SlaSettings }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateSlaSettingsAction(v);
-        notify.success("SLA guardado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateSlaSettingsSafeAction(v);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("SLA guardado");
     });
   }
 

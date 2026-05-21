@@ -21,17 +21,13 @@ export function ResendButton({ emailId }: { emailId: string }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const r = await resendEmailAction(emailId);
-        if (!r.ok) {
-          notify.error("No se pudo reenviar", r.error ?? "Error desconocido");
-          return;
-        }
-        notify.success("Email reenviado");
-        if (r.new_send_id) router.push(`/mailing/${r.new_send_id}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await resendEmailAction(emailId);
+      if (!r.ok) {
+        notify.error("No se pudo reenviar", r.error ?? "Error desconocido");
+        return;
       }
+      notify.success("Email reenviado");
+      if (r.new_send_id) router.push(`/mailing/${r.new_send_id}` as never);
     });
   }
 

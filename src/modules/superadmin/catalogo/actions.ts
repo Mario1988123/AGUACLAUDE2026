@@ -225,3 +225,96 @@ export async function deleteExternalModelAction(id: string): Promise<void> {
   await supabase.from("external_equipment_models").delete().eq("id", id);
   revalidatePath("/superadmin/catalogo");
 }
+
+// =================== Safe wrappers ===================
+
+export async function upsertGlobalCategorySafeAction(input: {
+  id?: string;
+  key: string;
+  name_es: string;
+  description_es?: string;
+  default_kind?: string;
+  sort_order?: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertGlobalCategoryAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteGlobalCategorySafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteGlobalCategoryAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function upsertGlobalAttributeSafeAction(input: {
+  id?: string;
+  key: string;
+  name_es: string;
+  data_type?: string;
+  unit?: string;
+  sort_order?: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertGlobalAttributeAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteGlobalAttributeSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteGlobalAttributeAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setAttributeCategoriesSafeAction(
+  attributeKey: string,
+  categoryKeys: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setAttributeCategoriesAction(attributeKey, categoryKeys);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function upsertExternalModelSafeAction(input: {
+  id?: string;
+  brand: string;
+  model: string;
+  notes?: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertExternalModelAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteExternalModelSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteExternalModelAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

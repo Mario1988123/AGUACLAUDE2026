@@ -42,25 +42,18 @@ export function SendByEmailButton({
 
   function send() {
     startTransition(async () => {
-      try {
-        let result: { ok: boolean; error?: string };
-        if (kind === "proposal") {
-          result = await sendProposalByEmailAction(documentId);
-        } else if (kind === "contract") {
-          result = await sendContractByEmailAction(documentId);
-        } else {
-          result = await sendInvoiceByEmailAction(documentId);
-        }
-        if (result.ok) {
-          notify.success(SUCCESS_MSG[kind]);
-        } else {
-          notify.error(
-            "No se pudo enviar",
-            result.error ?? "Error desconocido",
-          );
-        }
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      let result: { ok: boolean; error?: string };
+      if (kind === "proposal") {
+        result = await sendProposalByEmailAction(documentId);
+      } else if (kind === "contract") {
+        result = await sendContractByEmailAction(documentId);
+      } else {
+        result = await sendInvoiceByEmailAction(documentId);
+      }
+      if (result.ok) {
+        notify.success(SUCCESS_MSG[kind]);
+      } else {
+        notify.error("No se pudo enviar", result.error ?? "Error desconocido");
       }
     });
   }

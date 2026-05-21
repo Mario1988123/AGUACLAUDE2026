@@ -61,3 +61,27 @@ export async function clearProductPhotoAction(productId: string): Promise<void> 
     .eq("company_id", session.company_id);
   revalidatePath(`/productos/${productId}`);
 }
+
+// =================== Safe wrappers ===================
+
+export async function uploadProductPhotoSafeAction(
+  formData: FormData,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const url = await uploadProductPhotoAction(formData);
+    return { ok: true, url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function clearProductPhotoSafeAction(
+  productId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await clearProductPhotoAction(productId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

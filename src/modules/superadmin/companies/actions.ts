@@ -458,3 +458,52 @@ export async function resetCompanyAdminPassword(userId: string): Promise<{ temp_
   await admin.from("user_profiles").update({ must_change_password: true }).eq("user_id", userId);
   return { temp_password: tempPassword };
 }
+
+// =================== Safe wrappers ===================
+
+export async function updateCompanySafeAction(
+  id: string,
+  input: CompanyUpdateInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateCompanyAction(id, input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function toggleCompanyModuleSafeAction(
+  companyId: string,
+  moduleKey: string,
+  isActive: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await toggleCompanyModule(companyId, moduleKey, isActive);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createCompanyAdminSafeAction(
+  input: CreateCompanyAdminInput,
+): Promise<{ ok: true; result: CreateCompanyAdminResult } | { ok: false; error: string }> {
+  try {
+    const result = await createCompanyAdminAction(input);
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function resetCompanyAdminPasswordSafeAction(
+  userId: string,
+): Promise<{ ok: true; temp_password: string } | { ok: false; error: string }> {
+  try {
+    const r = await resetCompanyAdminPassword(userId);
+    return { ok: true, temp_password: r.temp_password };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

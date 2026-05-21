@@ -225,3 +225,28 @@ export async function deletePricingPlanAction(id: string, productId: string) {
   await admin.from("product_pricing_plans").update({ is_active: false }).eq("id", id);
   revalidatePath(`/productos/${productId}`);
 }
+
+// =================== Safe wrappers ===================
+
+export async function upsertPricingPlanSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertPricingPlanAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deletePricingPlanSafeAction(
+  id: string,
+  productId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deletePricingPlanAction(id, productId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

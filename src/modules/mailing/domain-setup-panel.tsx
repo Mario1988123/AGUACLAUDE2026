@@ -8,8 +8,8 @@ import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  addMailingDomainAction,
-  verifyMailingDomainAction,
+  addMailingDomainSafeAction,
+  verifyMailingDomainSafeAction,
   type DomainStatus,
 } from "./actions";
 
@@ -28,35 +28,35 @@ export function DomainSetupPanel({
       return;
     }
     startTransition(async () => {
-      try {
-        await addMailingDomainAction(domain);
-        notify.success(
-          "Dominio añadido",
-          "Pega los DNS records en tu proveedor y pulsa Verificar.",
-        );
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await addMailingDomainSafeAction(domain);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        "Dominio añadido",
+        "Pega los DNS records en tu proveedor y pulsa Verificar.",
+      );
+      location.reload();
     });
   }
 
   function recheck() {
     startTransition(async () => {
-      try {
-        const r = await verifyMailingDomainAction();
-        if (r.status === "verified") {
-          notify.success("✓ Dominio verificado");
-        } else {
-          notify.warning(
-            "Aún pendiente",
-            "Los DNS pueden tardar 24h en propagar. Vuelve a intentarlo en unas horas.",
-          );
-        }
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await verifyMailingDomainSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      if (r.status === "verified") {
+        notify.success("✓ Dominio verificado");
+      } else {
+        notify.warning(
+          "Aún pendiente",
+          "Los DNS pueden tardar 24h en propagar. Vuelve a intentarlo en unas horas.",
+        );
+      }
+      location.reload();
     });
   }
 

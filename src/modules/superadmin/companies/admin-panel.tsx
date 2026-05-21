@@ -9,8 +9,8 @@ import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { Copy, Check, KeyRound, UserPlus } from "lucide-react";
 import {
-  createCompanyAdminAction,
-  resetCompanyAdminPassword,
+  createCompanyAdminSafeAction,
+  resetCompanyAdminPasswordSafeAction,
   type CompanyAdminInfo,
 } from "./actions";
 
@@ -38,22 +38,19 @@ export function CompanyAdminPanel({ companyId, admin }: Props) {
   function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        const result = await createCompanyAdminAction({
-          company_id: companyId,
-          email: form.email,
-          full_name: form.full_name,
-        });
-        setCredentials({ email: result.email, password: result.temp_password });
-        setShowCreate(false);
-        setForm({ email: "", full_name: "" });
-        notify.success("Administrador creado");
-      } catch (err) {
-        notify.error(
-          "No se pudo crear",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await createCompanyAdminSafeAction({
+        company_id: companyId,
+        email: form.email,
+        full_name: form.full_name,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo crear", r.error);
+        return;
       }
+      setCredentials({ email: r.result.email, password: r.result.temp_password });
+      setShowCreate(false);
+      setForm({ email: "", full_name: "" });
+      notify.success("Administrador creado");
     });
   }
 
@@ -66,13 +63,13 @@ export function CompanyAdminPanel({ companyId, admin }: Props) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const r = await resetCompanyAdminPassword(admin.user_id);
-        setCredentials({ email: admin.email ?? "", password: r.temp_password });
-        notify.success("Contraseña reseteada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await resetCompanyAdminPasswordSafeAction(admin.user_id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setCredentials({ email: admin.email ?? "", password: r.temp_password });
+      notify.success("Contraseña reseteada");
     });
   }
 

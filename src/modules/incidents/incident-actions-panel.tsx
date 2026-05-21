@@ -5,7 +5,7 @@ import { UserPlus, CheckCircle2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { assignIncidentAction, resolveIncidentAction } from "./actions";
+import { assignIncidentSafeAction, resolveIncidentSafeAction } from "./actions";
 
 export function IncidentActionsPanel({
   incidentId,
@@ -25,13 +25,13 @@ export function IncidentActionsPanel({
 
   function doAssign() {
     startTransition(async () => {
-      try {
-        await assignIncidentAction(incidentId, assignTo);
-        notify.success(assignTo ? "Asignada" : "Desasignada");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await assignIncidentSafeAction(incidentId, assignTo);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(assignTo ? "Asignada" : "Desasignada");
+      location.reload();
     });
   }
 
@@ -41,13 +41,13 @@ export function IncidentActionsPanel({
       return;
     }
     startTransition(async () => {
-      try {
-        await resolveIncidentAction(incidentId, notes);
-        notify.success("Resuelta");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await resolveIncidentSafeAction(incidentId, notes);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Resuelta");
+      location.reload();
     });
   }
 

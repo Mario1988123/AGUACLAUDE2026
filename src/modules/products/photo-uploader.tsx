@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Camera, X, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { uploadProductPhotoAction, clearProductPhotoAction } from "./photo-actions";
+import { uploadProductPhotoSafeAction, clearProductPhotoSafeAction } from "./photo-actions";
 
 export function ProductPhotoUploader({
   productId,
@@ -32,26 +32,26 @@ export function ProductPhotoUploader({
     fd.append("file", file);
     fd.append("product_id", productId);
     startTransition(async () => {
-      try {
-        const url = await uploadProductPhotoAction(fd);
-        setPreview(url);
-        notify.success("Foto subida");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await uploadProductPhotoSafeAction(fd);
+      if (!r.ok) {
+        notify.error("Error", r.error);
         setPreview(currentUrl);
+        return;
       }
+      setPreview(r.url);
+      notify.success("Foto subida");
+      router.refresh();
     });
   }
   function clear() {
     startTransition(async () => {
-      try {
-        await clearProductPhotoAction(productId);
-        setPreview(null);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await clearProductPhotoSafeAction(productId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setPreview(null);
+      router.refresh();
     });
   }
   return (

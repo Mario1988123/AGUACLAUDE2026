@@ -479,3 +479,27 @@ export async function toggleShowInCalculatorAction(
 ): Promise<ProductActionResult> {
   return updateProductAction(productId, { show_in_calculator: value });
 }
+
+// =================== Safe wrappers ===================
+
+export async function cloneGlobalCategorySafeAction(
+  globalCategoryId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await cloneGlobalCategoryAction(globalCategoryId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createCategorySafeAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createCategoryAction(formData);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -620,3 +620,44 @@ export async function unsubscribeByTokenAction(
 }
 
 void buildSignatureHtml; // re-export para que el linter no se queje cuando se use en otros sitios
+
+// =================== Safe wrappers ===================
+
+export async function addMailingDomainSafeAction(
+  domain: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await addMailingDomainAction(domain);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function verifyMailingDomainSafeAction(): Promise<
+  { ok: true; status: string } | { ok: false; error: string }
+> {
+  try {
+    const r = await verifyMailingDomainAction();
+    return { ok: true, status: r.status };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function setMyEmailSettingsSafeAction(
+  input: {
+    from_email: string;
+    from_name?: string;
+    signature_html?: string;
+  },
+): Promise<{ ok: true } | { ok: false; error: string; partial?: boolean }> {
+  try {
+    await setMyEmailSettingsAction(input);
+    return { ok: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Error";
+    const partial = msg.includes("aún no está verificado");
+    return { ok: false, error: msg, partial };
+  }
+}

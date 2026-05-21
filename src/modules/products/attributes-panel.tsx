@@ -8,8 +8,8 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  setProductAttributeValue,
-  deleteProductAttributeValue,
+  setProductAttributeValueSafeAction,
+  deleteProductAttributeValueSafeAction,
   type ProductAttribute,
   type ProductAttrValue,
 } from "./attributes-actions";
@@ -94,19 +94,18 @@ function ValueRow({ value, productId }: { value: ProductAttrValue; productId: st
 
   function toggle(field: "is_visible" | "is_featured") {
     startTransition(async () => {
-      try {
-        await setProductAttributeValue({
-          product_id: productId,
-          attribute_id: value.attribute_id,
-          value_text: value.value_text,
-          value_number: value.value_number,
-          value_boolean: value.value_boolean,
-          is_visible: field === "is_visible" ? !value.is_visible : value.is_visible,
-          is_featured: field === "is_featured" ? !value.is_featured : value.is_featured,
-          display_order: value.display_order,
-        });
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setProductAttributeValueSafeAction({
+        product_id: productId,
+        attribute_id: value.attribute_id,
+        value_text: value.value_text,
+        value_number: value.value_number,
+        value_boolean: value.value_boolean,
+        is_visible: field === "is_visible" ? !value.is_visible : value.is_visible,
+        is_featured: field === "is_featured" ? !value.is_featured : value.is_featured,
+        display_order: value.display_order,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
       }
     });
   }
@@ -119,12 +118,12 @@ function ValueRow({ value, productId }: { value: ProductAttrValue; productId: st
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteProductAttributeValue(value.id, productId);
-        notify.success("Quitado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteProductAttributeValueSafeAction(value.id, productId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Quitado");
     });
   }
 
@@ -198,13 +197,13 @@ function AddValueForm({
       payload = { ...payload, value_text: value };
     }
     startTransition(async () => {
-      try {
-        await setProductAttributeValue(payload);
-        notify.success("Atributo añadido");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setProductAttributeValueSafeAction(payload);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Atributo añadido");
+      onDone();
     });
   }
 

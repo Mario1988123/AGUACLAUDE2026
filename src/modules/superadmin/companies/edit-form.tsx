@@ -5,7 +5,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateCompanyAction } from "./actions";
+import { updateCompanySafeAction } from "./actions";
 import type { CompanyStatus } from "./types";
 
 interface CompanyEditFormProps {
@@ -44,12 +44,12 @@ export function CompanyEditForm({ company }: CompanyEditFormProps) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await updateCompanyAction(company.id, form);
-        notify.success("Empresa actualizada");
-      } catch (err) {
-        notify.error("No se pudo actualizar", err instanceof Error ? err.message : String(err));
+      const r = await updateCompanySafeAction(company.id, form);
+      if (!r.ok) {
+        notify.error("No se pudo actualizar", r.error);
+        return;
       }
+      notify.success("Empresa actualizada");
     });
   }
 

@@ -11,14 +11,14 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  upsertGlobalCategoryAction,
-  deleteGlobalCategoryAction,
-  upsertGlobalAttributeAction,
-  deleteGlobalAttributeAction,
-  upsertExternalModelAction,
-  deleteExternalModelAction,
+  upsertGlobalCategorySafeAction,
+  deleteGlobalCategorySafeAction,
+  upsertGlobalAttributeSafeAction,
+  deleteGlobalAttributeSafeAction,
+  upsertExternalModelSafeAction,
+  deleteExternalModelSafeAction,
   getAttributeCategoryKeys,
-  setAttributeCategoriesAction,
+  setAttributeCategoriesSafeAction,
   type GlobalCategory,
   type GlobalAttribute,
   type GlobalExternalModel,
@@ -107,13 +107,13 @@ function CategoryRow({ item }: { item: GlobalCategory }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteGlobalCategoryAction(item.id);
-        notify.success("Desactivada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteGlobalCategorySafeAction(item.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Desactivada");
+      router.refresh();
     });
   }
   if (editing) return <CategoryForm initial={item} onDone={() => setEditing(false)} />;
@@ -161,14 +161,14 @@ function CategoryForm({ initial, onDone }: { initial?: GlobalCategory; onDone: (
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertGlobalCategoryAction({ id: initial?.id, ...form });
-        notify.success("Guardada");
-        onDone();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertGlobalCategorySafeAction({ id: initial?.id, ...form });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardada");
+      onDone();
+      router.refresh();
     });
   }
 
@@ -288,13 +288,13 @@ function AttributeRow({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteGlobalAttributeAction(item.id);
-        notify.success("Eliminado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteGlobalAttributeSafeAction(item.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminado");
+      router.refresh();
     });
   }
   if (editing) return <AttributeForm initial={item} onDone={() => setEditing(false)} />;
@@ -374,13 +374,13 @@ function AttributeCategoriesDialog({
 
   function save() {
     startTransition(async () => {
-      try {
-        await setAttributeCategoriesAction(attributeKey, Array.from(selected));
-        notify.success("Asignación guardada");
-        onOpenChange(false);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setAttributeCategoriesSafeAction(attributeKey, Array.from(selected));
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Asignación guardada");
+      onOpenChange(false);
     });
   }
 
@@ -457,14 +457,14 @@ function AttributeForm({ initial, onDone }: { initial?: GlobalAttribute; onDone:
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertGlobalAttributeAction({ id: initial?.id, ...form });
-        notify.success("Guardado");
-        onDone();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertGlobalAttributeSafeAction({ id: initial?.id, ...form });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
+      onDone();
+      router.refresh();
     });
   }
 
@@ -565,13 +565,13 @@ function ExternalModelRow({ item }: { item: GlobalExternalModel }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteExternalModelAction(item.id);
-        notify.success("Eliminado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteExternalModelSafeAction(item.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminado");
+      router.refresh();
     });
   }
   if (editing) return <ExternalModelForm initial={item} onDone={() => setEditing(false)} />;
@@ -616,14 +616,14 @@ function ExternalModelForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertExternalModelAction({ id: initial?.id, ...form });
-        notify.success("Guardado");
-        onDone();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertExternalModelSafeAction({ id: initial?.id, ...form });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
+      onDone();
+      router.refresh();
     });
   }
 

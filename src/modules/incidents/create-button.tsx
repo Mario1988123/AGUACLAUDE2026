@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
-import { createIncidentAction } from "./actions";
+import { createIncidentSafeAction } from "./actions";
 import { ORIGIN_LABEL, PRIORITY_LABEL } from "./constants";
 
 interface Props {
@@ -29,19 +29,19 @@ export function CreateIncidentButton({ customerId, installationId, maintenanceJo
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await createIncidentAction({
-          ...form,
-          customer_id: customerId,
-          installation_id: installationId,
-          maintenance_job_id: maintenanceJobId,
-        });
-        notify.success("Incidencia abierta");
-        setOpen(false);
-        setForm({ title: "", description: "", origin: "other", priority: "medium" });
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createIncidentSafeAction({
+        ...form,
+        customer_id: customerId,
+        installation_id: installationId,
+        maintenance_job_id: maintenanceJobId,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Incidencia abierta");
+      setOpen(false);
+      setForm({ title: "", description: "", origin: "other", priority: "medium" });
     });
   }
 

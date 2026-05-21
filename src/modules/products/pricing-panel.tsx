@@ -9,8 +9,8 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  upsertPricingPlanAction,
-  deletePricingPlanAction,
+  upsertPricingPlanSafeAction,
+  deletePricingPlanSafeAction,
   type PricingPlan,
 } from "./pricing-actions";
 
@@ -167,12 +167,12 @@ function PlanRow({ plan, productId }: { plan: PricingPlan; productId: string }) 
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deletePricingPlanAction(plan.id, productId);
-        notify.success("Plan eliminado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deletePricingPlanSafeAction(plan.id, productId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Plan eliminado");
     });
   }
   const indivMonthly =
@@ -379,36 +379,34 @@ function PlanForm({
         : bizFinancier;
 
     startTransition(async () => {
-      try {
-        await upsertPricingPlanAction({
-          product_id: productId,
-          plan_type: planType,
-          duration_months: planType === "cash" ? null : monthsVal,
-          // Legacy (rellenamos con individual para retro-compat)
-          monthly_price_cents: planType === "cash" ? null : indivMonthly,
-          total_price_cents: indivTotal ?? bizTotal,
-          financing_coefficient:
-            planType === "renting" && feePercent != null ? feePercent / 100 : null,
-          financier_payment_cents: planType === "renting" ? legacyFinancier : null,
-          // Duales
-          monthly_price_individual_cents:
-            planType === "cash" ? null : indivMonthly,
-          monthly_price_business_cents:
-            planType === "cash" ? null : bizMonthly,
-          total_price_individual_cents: indivTotal,
-          total_price_business_cents: bizTotal,
-          financier_payment_business_cents:
-            planType === "renting" ? bizFinancier : null,
-          permanence_months:
-            planType === "rental" ? Number(form.permanence_months) || null : null,
-          min_authorized_cents: minAuth,
-          absolute_min_cents: minAbs,
-        });
-        notify.success("Plan guardado");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertPricingPlanSafeAction({
+        product_id: productId,
+        plan_type: planType,
+        duration_months: planType === "cash" ? null : monthsVal,
+        monthly_price_cents: planType === "cash" ? null : indivMonthly,
+        total_price_cents: indivTotal ?? bizTotal,
+        financing_coefficient:
+          planType === "renting" && feePercent != null ? feePercent / 100 : null,
+        financier_payment_cents: planType === "renting" ? legacyFinancier : null,
+        monthly_price_individual_cents:
+          planType === "cash" ? null : indivMonthly,
+        monthly_price_business_cents:
+          planType === "cash" ? null : bizMonthly,
+        total_price_individual_cents: indivTotal,
+        total_price_business_cents: bizTotal,
+        financier_payment_business_cents:
+          planType === "renting" ? bizFinancier : null,
+        permanence_months:
+          planType === "rental" ? Number(form.permanence_months) || null : null,
+        min_authorized_cents: minAuth,
+        absolute_min_cents: minAbs,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Plan guardado");
+      onDone();
     });
   }
 

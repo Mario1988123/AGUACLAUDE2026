@@ -16,8 +16,8 @@ import {
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  upsertExpenseCategoryAction,
-  toggleExpenseCategoryActiveAction,
+  upsertExpenseCategorySafeAction,
+  toggleExpenseCategoryActiveSafeAction,
   type ExpenseCategoryAdmin,
 } from "./actions";
 
@@ -112,39 +112,39 @@ export function CategoriesManager({
       return;
     }
     startTransition(async () => {
-      try {
-        const eur = parseFloat(form.default_max_amount_eur.replace(",", "."));
-        await upsertExpenseCategoryAction({
-          id: form.id,
-          code: form.code.trim().toLowerCase().replace(/\s+/g, "_"),
-          name: form.name,
-          group_code: form.group_code,
-          vat_deductible: form.vat_deductible,
-          irpf_exempt_logic: form.irpf_exempt_logic || null,
-          default_max_amount_cents: Number.isFinite(eur) && eur > 0 ? Math.round(eur * 100) : null,
-          requires_client_link: form.requires_client_link,
-          display_order: form.display_order,
-          icon: form.icon || null,
-          is_active: form.is_active,
-        });
-        notify.success(form.id ? "Categoría actualizada" : "Categoría creada");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const eur = parseFloat(form.default_max_amount_eur.replace(",", "."));
+      const r = await upsertExpenseCategorySafeAction({
+        id: form.id,
+        code: form.code.trim().toLowerCase().replace(/\s+/g, "_"),
+        name: form.name,
+        group_code: form.group_code,
+        vat_deductible: form.vat_deductible,
+        irpf_exempt_logic: form.irpf_exempt_logic || null,
+        default_max_amount_cents: Number.isFinite(eur) && eur > 0 ? Math.round(eur * 100) : null,
+        requires_client_link: form.requires_client_link,
+        display_order: form.display_order,
+        icon: form.icon || null,
+        is_active: form.is_active,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(form.id ? "Categoría actualizada" : "Categoría creada");
+      setOpen(false);
+      router.refresh();
     });
   }
 
   function toggleActive(cat: ExpenseCategoryAdmin) {
     startTransition(async () => {
-      try {
-        await toggleExpenseCategoryActiveAction(cat.id, !cat.is_active);
-        notify.success(cat.is_active ? "Desactivada" : "Activada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await toggleExpenseCategoryActiveSafeAction(cat.id, !cat.is_active);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(cat.is_active ? "Desactivada" : "Activada");
+      router.refresh();
     });
   }
 

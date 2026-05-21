@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { createMileageAction } from "./actions";
+import { createMileageSafeAction } from "./actions";
 import { calculateRouteAction } from "./routing-actions";
 
 export function MileageButton() {
@@ -65,30 +65,30 @@ export function MileageButton() {
       return;
     }
     startTransition(async () => {
-      try {
-        await createMileageAction({
-          date: form.date,
-          origin: form.origin || null,
-          destination: form.destination || null,
-          km: form.km,
-          vehicle_plate: form.vehicle_plate || null,
-          notes: form.notes || null,
-        });
-        notify.success("Kilometraje registrado");
-        setOpen(false);
-        setForm({
-          date: new Date().toISOString().slice(0, 10),
-          origin: "",
-          destination: "",
-          km: 0,
-          duration_minutes: 0,
-          vehicle_plate: "",
-          notes: "",
-        });
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createMileageSafeAction({
+        date: form.date,
+        origin: form.origin || null,
+        destination: form.destination || null,
+        km: form.km,
+        vehicle_plate: form.vehicle_plate || null,
+        notes: form.notes || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Kilometraje registrado");
+      setOpen(false);
+      setForm({
+        date: new Date().toISOString().slice(0, 10),
+        origin: "",
+        destination: "",
+        km: 0,
+        duration_minutes: 0,
+        vehicle_plate: "",
+        notes: "",
+      });
+      router.refresh();
     });
   }
 

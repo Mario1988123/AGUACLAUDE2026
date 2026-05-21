@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { setMyEmailSettingsAction } from "./actions";
+import { setMyEmailSettingsSafeAction } from "./actions";
 
 export function EmailSettingsForm({
   initial,
@@ -46,21 +46,20 @@ export function EmailSettingsForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await setMyEmailSettingsAction({
-          from_email: fromEmail,
-          from_name: fromName || undefined,
-          signature_html: signature || undefined,
-        });
-        notify.success("Configuración guardada");
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("aún no está verificado")) {
-          notify.warning("Guardado parcial", msg);
+      const r = await setMyEmailSettingsSafeAction({
+        from_email: fromEmail,
+        from_name: fromName || undefined,
+        signature_html: signature || undefined,
+      });
+      if (!r.ok) {
+        if (r.partial) {
+          notify.warning("Guardado parcial", r.error);
         } else {
-          notify.error("Error", msg);
+          notify.error("Error", r.error);
         }
+        return;
       }
+      notify.success("Configuración guardada");
     });
   }
 

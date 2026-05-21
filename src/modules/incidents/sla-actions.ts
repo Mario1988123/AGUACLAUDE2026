@@ -67,3 +67,14 @@ export async function updateSlaSettingsAction(input: SlaSettings): Promise<void>
   }
   revalidatePath("/configuracion/incidencias");
 }
+
+export async function updateSlaSettingsSafeAction(
+  input: SlaSettings,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateSlaSettingsAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

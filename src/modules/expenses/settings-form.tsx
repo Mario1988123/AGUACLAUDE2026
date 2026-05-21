@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { saveExpenseSettingsAction, type ExpenseSettings } from "./actions";
+import { saveExpenseSettingsSafeAction, type ExpenseSettings } from "./actions";
 
 export function ExpenseSettingsForm({ initial }: { initial: ExpenseSettings }) {
   const router = useRouter();
@@ -29,21 +29,21 @@ export function ExpenseSettingsForm({ initial }: { initial: ExpenseSettings }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await saveExpenseSettingsAction({
-          per_diem_overnight_cents: toCents(form.per_diem_overnight_eur),
-          per_diem_no_overnight_cents: toCents(form.per_diem_no_overnight_eur),
-          per_diem_eu_overnight_cents: toCents(form.per_diem_eu_overnight_eur),
-          per_diem_eu_no_overnight_cents: toCents(form.per_diem_eu_no_overnight_eur),
-          km_rate_cents: toCents(form.km_rate_eur),
-          daily_meal_alert_cents: toCents(form.daily_meal_alert_eur),
-          require_client_link_above_cents: toCents(form.require_client_link_above_eur),
-        });
-        notify.success("Guardado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await saveExpenseSettingsSafeAction({
+        per_diem_overnight_cents: toCents(form.per_diem_overnight_eur),
+        per_diem_no_overnight_cents: toCents(form.per_diem_no_overnight_eur),
+        per_diem_eu_overnight_cents: toCents(form.per_diem_eu_overnight_eur),
+        per_diem_eu_no_overnight_cents: toCents(form.per_diem_eu_no_overnight_eur),
+        km_rate_cents: toCents(form.km_rate_eur),
+        daily_meal_alert_cents: toCents(form.daily_meal_alert_eur),
+        require_client_link_above_cents: toCents(form.require_client_link_above_eur),
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
+      router.refresh();
     });
   }
 

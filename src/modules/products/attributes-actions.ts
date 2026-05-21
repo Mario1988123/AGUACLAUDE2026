@@ -202,3 +202,28 @@ export async function deleteProductAttributeValue(id: string, productId: string)
   await admin.from("product_attribute_values").delete().eq("id", id);
   revalidatePath(`/productos/${productId}`);
 }
+
+// =================== Safe wrappers ===================
+
+export async function setProductAttributeValueSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setProductAttributeValue(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteProductAttributeValueSafeAction(
+  id: string,
+  productId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteProductAttributeValue(id, productId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -5,7 +5,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { cloneGlobalCategoryAction, createCategoryAction } from "./actions";
+import { cloneGlobalCategorySafeAction, createCategorySafeAction } from "./actions";
 import { KIND_LABEL, PRODUCT_KIND } from "./schemas";
 
 export function CloneCategoryButton({
@@ -18,12 +18,12 @@ export function CloneCategoryButton({
   const [pending, startTransition] = useTransition();
   function handle() {
     startTransition(async () => {
-      try {
-        await cloneGlobalCategoryAction(globalCategoryId);
-        notify.success("Categoría precargada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await cloneGlobalCategorySafeAction(globalCategoryId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Categoría precargada");
     });
   }
   if (alreadyCloned) {
@@ -45,13 +45,13 @@ export function CreateCategoryForm() {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
-      try {
-        await createCategoryAction(fd);
-        notify.success("Categoría creada");
-        (e.target as HTMLFormElement).reset();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createCategorySafeAction(fd);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Categoría creada");
+      (e.target as HTMLFormElement).reset();
     });
   }
 

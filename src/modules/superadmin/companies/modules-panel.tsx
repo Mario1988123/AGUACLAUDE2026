@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { toggleCompanyModule } from "./actions";
+import { toggleCompanyModuleSafeAction } from "./actions";
 
 interface ModuleEntry {
   key: string;
@@ -32,13 +32,13 @@ export function CompanyModulesPanel({ companyId, modules, activeMap }: Props) {
     const next = !active[key];
     setActive((prev) => ({ ...prev, [key]: next }));
     startTransition(async () => {
-      try {
-        await toggleCompanyModule(companyId, key, next);
-        notify.success(`Módulo ${next ? "activado" : "desactivado"}`);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await toggleCompanyModuleSafeAction(companyId, key, next);
+      if (!r.ok) {
+        notify.error("Error", r.error);
         setActive((prev) => ({ ...prev, [key]: !next }));
+        return;
       }
+      notify.success(`Módulo ${next ? "activado" : "desactivado"}`);
     });
   }
 

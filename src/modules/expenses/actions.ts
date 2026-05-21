@@ -755,3 +755,118 @@ export async function getExpenseSummary(): Promise<ExpenseSummary> {
       .reduce((s, r) => s + (r.reimbursed_amount_cents ?? 0), 0),
   };
 }
+
+// =================== Safe wrappers ===================
+
+export async function saveExpenseSettingsSafeAction(
+  input: Partial<ExpenseSettings>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await saveExpenseSettingsAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function upsertExpenseCategorySafeAction(
+  input: UpsertExpenseCategoryInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertExpenseCategoryAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function toggleExpenseCategoryActiveSafeAction(
+  categoryId: string,
+  isActive: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await toggleExpenseCategoryActiveAction(categoryId, isActive);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function uploadAndOcrReceiptSafeAction(
+  formData: FormData,
+): Promise<{ ok: true; result: OcrResultLite } | { ok: false; error: string }> {
+  try {
+    const result = await uploadAndOcrReceiptAction(formData);
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createExpenseSafeAction(
+  input: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const r = await createExpenseAction(input);
+    return { ok: true, id: r.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function approveExpenseSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await approveExpenseAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function rejectExpenseSafeAction(
+  id: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await rejectExpenseAction(id, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function reimburseExpenseSafeAction(
+  id: string,
+  input: { amount_cents: number; bank_ref?: string; notes?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reimburseExpenseAction(id, input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createPerDiemSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createPerDiemAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createMileageSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createMileageAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

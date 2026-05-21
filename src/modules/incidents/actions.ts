@@ -419,3 +419,40 @@ export async function listIncidents(): Promise<IncidentRow[]> {
     deadline_at: (r.deadline_at as string | null) ?? null,
   }));
 }
+
+// =================== Safe wrappers ===================
+
+export async function createIncidentSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createIncidentAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function assignIncidentSafeAction(
+  id: string,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assignIncidentAction(id, userId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function resolveIncidentSafeAction(
+  id: string,
+  notes: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await resolveIncidentAction(id, notes);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

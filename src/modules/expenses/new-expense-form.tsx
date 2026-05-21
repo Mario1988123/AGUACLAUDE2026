@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createExpenseAction, uploadAndOcrReceiptAction, type OcrResultLite } from "./actions";
+import { createExpenseSafeAction, uploadAndOcrReceiptSafeAction, type OcrResultLite } from "./actions";
 
 interface CategoryLite {
   id: string;
@@ -82,17 +82,17 @@ export function NewExpenseForm({
     fd.append("file", file);
     setUploading(true);
     (async () => {
-      try {
-        const result = await uploadAndOcrReceiptAction(fd);
-        applyOcrToForm(result);
-        notify.success(
-          ocrEnabled ? "Ticket leído por OCR · revisa los datos" : "Ticket subido",
-        );
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
-      } finally {
+      const r = await uploadAndOcrReceiptSafeAction(fd);
+      if (!r.ok) {
+        notify.error("Error", r.error);
         setUploading(false);
+        return;
       }
+      applyOcrToForm(r.result);
+      notify.success(
+        ocrEnabled ? "Ticket leído por OCR · revisa los datos" : "Ticket subido",
+      );
+      setUploading(false);
     })();
     e.target.value = "";
   }
@@ -126,40 +126,40 @@ export function NewExpenseForm({
       ? Math.round(Number(form.vat_eur.replace(",", ".")) * 100)
       : null;
     startTransition(async () => {
-      try {
-        const r = await createExpenseAction({
-          category_code: form.category_code,
-          payment_method: form.payment_method,
-          corp_card_last4:
-            form.payment_method === "corp_card" ? form.corp_card_last4 : null,
-          customer_id: form.customer_id || null,
-          merchant_name: form.merchant_name || null,
-          merchant_nif: form.merchant_nif || null,
-          issue_date: form.issue_date,
-          document_type: form.document_type,
-          document_number: form.document_number || null,
-          total_cents: totalCents,
-          base_cents: baseCents,
-          vat_cents: vatCents,
-          vat_breakdown: ocr?.taxes
-            ? ocr.taxes.map((t) => ({
-                rate: t.rate,
-                base: t.base ?? null,
-                amount: Math.round(t.amount * 100) / 100,
-              }))
-            : null,
-          notes: form.notes || null,
-          receipt_storage_path: ocr?.storage_path ?? null,
-          receipt_mime: ocr?.mime_type ?? null,
-          ocr_provider: ocr?.raw ? "mindee" : null,
-          ocr_raw: ocr?.raw ?? null,
-          ocr_confidence: ocr?.confidence ?? null,
-        });
-        notify.success("Gasto enviado para aprobación");
-        router.push(`/gastos/${r.id}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createExpenseSafeAction({
+        category_code: form.category_code,
+        payment_method: form.payment_method,
+        corp_card_last4:
+          form.payment_method === "corp_card" ? form.corp_card_last4 : null,
+        customer_id: form.customer_id || null,
+        merchant_name: form.merchant_name || null,
+        merchant_nif: form.merchant_nif || null,
+        issue_date: form.issue_date,
+        document_type: form.document_type,
+        document_number: form.document_number || null,
+        total_cents: totalCents,
+        base_cents: baseCents,
+        vat_cents: vatCents,
+        vat_breakdown: ocr?.taxes
+          ? ocr.taxes.map((t) => ({
+              rate: t.rate,
+              base: t.base ?? null,
+              amount: Math.round(t.amount * 100) / 100,
+            }))
+          : null,
+        notes: form.notes || null,
+        receipt_storage_path: ocr?.storage_path ?? null,
+        receipt_mime: ocr?.mime_type ?? null,
+        ocr_provider: ocr?.raw ? "mindee" : null,
+        ocr_raw: ocr?.raw ?? null,
+        ocr_confidence: ocr?.confidence ?? null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Gasto enviado para aprobación");
+      router.push(`/gastos/${r.id}` as never);
     });
   }
 
