@@ -386,3 +386,43 @@ export async function reopenCycle(cycleId: string, reason: string): Promise<void
   revalidatePath(`/comisiones/${cycleId}`);
   revalidatePath("/comisiones");
 }
+
+// =================== Safe wrappers ===================
+
+export async function adjustCycleLineSafeAction(args: {
+  cycle_id: string;
+  user_id: string;
+  ledger_entry_id?: string | null;
+  delta_points: number;
+  reason: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await adjustCycleLine(args);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function closeCycleSafeAction(
+  cycleId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await closeCycle(cycleId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function reopenCycleSafeAction(
+  cycleId: string,
+  reason: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reopenCycle(cycleId, reason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

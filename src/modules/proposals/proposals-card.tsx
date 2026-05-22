@@ -8,7 +8,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { markProposalAccepted, markProposalSent } from "./actions";
+import { markProposalAcceptedSafeAction, markProposalSentSafeAction } from "./actions";
 import { createContractFromProposal } from "@/modules/contracts/actions";
 import type { ProposalListItem } from "./types";
 import { STATUS_LABEL, STATUS_VARIANT } from "./schemas";
@@ -34,13 +34,13 @@ export function ProposalsCard({
 
   function send(id: string) {
     startTransition(async () => {
-      try {
-        await markProposalSent(id);
-        notify.success("Propuesta enviada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markProposalSentSafeAction(id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Propuesta enviada");
+      router.refresh();
     });
   }
 
@@ -53,20 +53,17 @@ export function ProposalsCard({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const res = await markProposalAccepted(id);
-        notify.success("Propuesta aceptada");
-        // Flujo continuo: si hay cliente (existente o recién creado desde lead),
-        // ir a su ficha con ?from_proposal para que el banner muestre "Generar
-        // contrato" y se completen los datos pendientes en el mismo paso.
-        if (res.customer_id) {
-          router.push(`/clientes/${res.customer_id}?from_proposal=${id}` as never);
-          return;
-        }
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const res = await markProposalAcceptedSafeAction(id);
+      if (!res.ok) {
+        notify.error("Error", res.error);
+        return;
       }
+      notify.success("Propuesta aceptada");
+      if (res.customer_id) {
+        router.push(`/clientes/${res.customer_id}?from_proposal=${id}` as never);
+        return;
+      }
+      router.refresh();
     });
   }
 

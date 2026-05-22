@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { updateLeadStatus } from "./actions";
+import { updateLeadStatusSafeAction } from "./actions";
 import type { LeadStatus } from "./types";
 
 interface Props {
@@ -34,12 +34,12 @@ export function LeadStatusActions({ leadId, currentStatus }: Props) {
 
   function markContacted() {
     startTransition(async () => {
-      try {
-        await updateLeadStatus(leadId, "contacted");
-        notify.success("Marcado contactado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateLeadStatusSafeAction(leadId, "contacted");
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Marcado contactado");
     });
   }
 
@@ -49,14 +49,14 @@ export function LeadStatusActions({ leadId, currentStatus }: Props) {
       return;
     }
     startTransition(async () => {
-      try {
-        await updateLeadStatus(leadId, "lost", lostReason);
-        notify.success("Marcado como venta perdida");
-        setShowLost(false);
-        setLostReason("");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateLeadStatusSafeAction(leadId, "lost", lostReason);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Marcado como venta perdida");
+      setShowLost(false);
+      setLostReason("");
     });
   }
 

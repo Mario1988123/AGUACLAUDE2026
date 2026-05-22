@@ -151,3 +151,15 @@ export async function deleteClauseTemplateSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function reorderClausesSafeAction(
+  planType: ClausePlanType,
+  orderedIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reorderClausesAction(planType, orderedIds);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

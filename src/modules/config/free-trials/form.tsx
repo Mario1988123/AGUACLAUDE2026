@@ -6,7 +6,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  updateFreeTrialsConfig,
+  updateFreeTrialsConfigSafeAction,
   type FreeTrialsConfig,
 } from "./actions";
 
@@ -37,16 +37,16 @@ export function FreeTrialsConfigForm({ initial }: { initial: FreeTrialsConfig })
   function save(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await updateFreeTrialsConfig({
-          duration_days: days,
-          conditions_text: text,
-          default_renting_quote_months: rentingMonths,
-        });
-        notify.success("Guardado");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateFreeTrialsConfigSafeAction({
+        duration_days: days,
+        conditions_text: text,
+        default_renting_quote_months: rentingMonths,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
     });
   }
 

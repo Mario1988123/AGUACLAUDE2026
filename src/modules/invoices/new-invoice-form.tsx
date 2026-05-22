@@ -8,7 +8,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
-import { createInvoiceAction, type InvoiceLine } from "./actions";
+import { createInvoiceSafeAction, type InvoiceLine } from "./actions";
 
 interface CustomerOpt {
   id: string;
@@ -82,17 +82,17 @@ export function NewInvoiceForm({
       return;
     }
     startTransition(async () => {
-      try {
-        const id = await createInvoiceAction({
-          customer_id: customerId,
-          lines,
-          notes: notes || null,
-        });
-        notify.success("Factura creada en borrador");
-        router.push(`/facturas/${id}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createInvoiceSafeAction({
+        customer_id: customerId,
+        lines,
+        notes: notes || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Factura creada en borrador");
+      router.push(`/facturas/${r.id}` as never);
     });
   }
 

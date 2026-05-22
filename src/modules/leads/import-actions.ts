@@ -167,3 +167,14 @@ export async function importLeadsAction(rows: ImportRow[]): Promise<ImportResult
   revalidatePath("/leads");
   return result;
 }
+
+export async function importLeadsSafeAction(
+  rows: ImportRow[],
+): Promise<{ ok: true; result: ImportResult } | { ok: false; error: string }> {
+  try {
+    const result = await importLeadsAction(rows);
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

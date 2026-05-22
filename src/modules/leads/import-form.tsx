@@ -5,7 +5,7 @@ import { Upload, FileText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { importLeadsAction, type ImportRow, type ImportResult } from "./import-actions";
+import { importLeadsSafeAction, type ImportRow, type ImportResult } from "./import-actions";
 
 const HEADER_MAP: Record<string, keyof ImportRow> = {
   tipo: "party_kind",
@@ -104,15 +104,15 @@ export function ImportLeadsButton() {
       return;
     }
     startTransition(async () => {
-      try {
-        const r = await importLeadsAction(preview);
-        setResult(r);
-        if (r.inserted > 0) notify.success(`Importados ${r.inserted} leads`);
-        if (r.duplicates > 0) notify.info(`${r.duplicates} duplicados ignorados`);
-        if (r.errors.length > 0) notify.warning(`${r.errors.length} errores`);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await importLeadsSafeAction(preview);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setResult(r.result);
+      if (r.result.inserted > 0) notify.success(`Importados ${r.result.inserted} leads`);
+      if (r.result.duplicates > 0) notify.info(`${r.result.duplicates} duplicados ignorados`);
+      if (r.result.errors.length > 0) notify.warning(`${r.result.errors.length} errores`);
     });
   }
 

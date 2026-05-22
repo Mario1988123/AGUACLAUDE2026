@@ -6,7 +6,7 @@ import { CheckCircle2, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { logLeadContactAction } from "./actions";
+import { logLeadContactSafeAction } from "./actions";
 
 interface Props {
   leadId: string;
@@ -29,17 +29,13 @@ export function LeadFollowupCard({ leadId, lastContactAt }: Props) {
 
   function logContact() {
     startTransition(async () => {
-      try {
-        // Registramos como "call" — channel "manual" no existe en el enum.
-        await logLeadContactAction(leadId, "call");
-        notify.success("Contacto registrado");
-        router.refresh();
-      } catch (err) {
-        notify.error(
-          "No se pudo registrar",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await logLeadContactSafeAction(leadId, "call");
+      if (!r.ok) {
+        notify.error("No se pudo registrar", r.error);
+        return;
       }
+      notify.success("Contacto registrado");
+      router.refresh();
     });
   }
 

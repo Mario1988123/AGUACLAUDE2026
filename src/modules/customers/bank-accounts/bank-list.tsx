@@ -8,7 +8,7 @@ import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { createBankAccountAction, deleteBankAccountAction, type BankAccountRow } from "./actions";
+import { createBankAccountSafeAction, deleteBankAccountSafeAction, type BankAccountRow } from "./actions";
 import { IbanInput } from "@/shared/components/iban-input";
 import { checkIbanLive, isPendingIban } from "@/shared/lib/validations/iban-partial";
 
@@ -45,25 +45,25 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
       return;
     }
     startTransition(async () => {
-      try {
-        await createBankAccountAction({ customer_id: customerId, ...form });
-        notify.success(
-          check.state === "pending"
-            ? "IBAN guardado como pendiente — recuerda completarlo antes de la firma"
-            : "IBAN añadido",
-        );
-        setForm({
-          iban: "",
-          account_holder_name: defaultHolderName ?? "",
-          bic: "",
-          bank_name: "",
-          is_primary: true,
-        });
-        setAdding(false);
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createBankAccountSafeAction({ customer_id: customerId, ...form });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        check.state === "pending"
+          ? "IBAN guardado como pendiente — recuerda completarlo antes de la firma"
+          : "IBAN añadido",
+      );
+      setForm({
+        iban: "",
+        account_holder_name: defaultHolderName ?? "",
+        bic: "",
+        bank_name: "",
+        is_primary: true,
+      });
+      setAdding(false);
+      location.reload();
     });
   }
 
@@ -75,13 +75,13 @@ export function BankAccountList({ customerId, accounts, defaultHolderName }: Pro
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteBankAccountAction(id, customerId);
-        notify.success("IBAN eliminado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteBankAccountSafeAction(id, customerId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("IBAN eliminado");
+      location.reload();
     });
   }
 

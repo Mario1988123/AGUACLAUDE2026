@@ -105,3 +105,34 @@ export async function reseedDefaultPlansAction(): Promise<void> {
   }
   revalidatePath("/configuracion/mantenimientos");
 }
+
+export async function reseedDefaultPlansSafeAction(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  try {
+    await reseedDefaultPlansAction();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function updateMaintenancePlanSafeAction(
+  id: string,
+  patch: Partial<{
+    name: string;
+    monthly_cents: number;
+    visits_per_year: number | null;
+    parts_discount_percent: number;
+    spare_equipment_included: boolean;
+    description: string | null;
+    is_active: boolean;
+  }>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateMaintenancePlanAction(id, patch);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -227,3 +227,14 @@ export async function deleteProductAttributeValueSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function upsertAttributeSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertAttributeAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

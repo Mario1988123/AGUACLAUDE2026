@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  recordCustomerConsent,
+  recordCustomerConsentSafe,
   type ConsentRow,
   type ConsentKind,
 } from "./consents-actions";
@@ -41,20 +41,20 @@ export function CustomerConsentsCard({
 
   function setConsent(kind: ConsentKind, granted: boolean) {
     startTransition(async () => {
-      try {
-        await recordCustomerConsent({
-          customer_id: customerId,
-          kind,
-          granted,
-          source: "manual",
-        });
-        notify.success(
-          granted ? "Consentimiento registrado" : "Consentimiento revocado",
-        );
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await recordCustomerConsentSafe({
+        customer_id: customerId,
+        kind,
+        granted,
+        source: "manual",
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        granted ? "Consentimiento registrado" : "Consentimiento revocado",
+      );
+      router.refresh();
     });
   }
 

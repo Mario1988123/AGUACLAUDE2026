@@ -8,7 +8,7 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { upsertAttributeAction, type ProductAttribute } from "@/modules/products/attributes-actions";
+import { upsertAttributeSafeAction, type ProductAttribute } from "@/modules/products/attributes-actions";
 import type { CategoryItem } from "@/modules/products/types";
 import { toSnakeCase } from "@/shared/lib/slug";
 
@@ -129,18 +129,18 @@ function AttrForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertAttributeAction({
-          id: initial?.id,
-          ...form,
-          key: finalKey,
-          category_id: form.category_id || null,
-        });
-        notify.success("Guardado");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertAttributeSafeAction({
+        id: initial?.id,
+        ...form,
+        key: finalKey,
+        category_id: form.category_id || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
+      onDone();
     });
   }
 

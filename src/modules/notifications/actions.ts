@@ -59,3 +59,14 @@ export async function markAllAsRead() {
     .is("read_at", null);
   revalidatePath("/notificaciones");
 }
+
+export async function markAllAsReadSafeAction(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  try {
+    await markAllAsRead();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

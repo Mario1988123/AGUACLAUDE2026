@@ -279,3 +279,15 @@ export async function updateFiscalSettingsSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function uploadCompanyLogoSafeAction(input: {
+  data_url: string;
+  original_filename?: string | null;
+}): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const r = await uploadCompanyLogoAction(input);
+    return { ok: true, url: r.url };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

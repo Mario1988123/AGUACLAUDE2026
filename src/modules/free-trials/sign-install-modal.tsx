@@ -22,7 +22,7 @@ import {
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import { SignaturePad } from "@/shared/components/signature-pad";
-import { signAndInstallFreeTrialAction } from "./actions";
+import { signAndInstallFreeTrialSafeAction } from "./actions";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -110,28 +110,28 @@ export function SignAndInstallButton({
       return;
     }
     startTransition(async () => {
-      try {
-        const r = await signAndInstallFreeTrialAction({
-          trial_id: trialId,
-          is_provisional: isProvisional,
-          scheduled_for:
-            when === "scheduled" ? new Date(`${scheduledDate}T09:00:00`).toISOString() : null,
-          customer_signer_name: signerName,
-          customer_signer_tax_id: signerTaxId || null,
-          customer_signature_data_url: customerSig,
-          representative_signature_data_url: repSig,
-        });
-        notify.success(
-          r.status === "installed"
-            ? "Prueba instalada y firmada"
-            : "Prueba programada y firmada",
-        );
-        setOpen(false);
-        reset();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await signAndInstallFreeTrialSafeAction({
+        trial_id: trialId,
+        is_provisional: isProvisional,
+        scheduled_for:
+          when === "scheduled" ? new Date(`${scheduledDate}T09:00:00`).toISOString() : null,
+        customer_signer_name: signerName,
+        customer_signer_tax_id: signerTaxId || null,
+        customer_signature_data_url: customerSig,
+        representative_signature_data_url: repSig,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        r.status === "installed"
+          ? "Prueba instalada y firmada"
+          : "Prueba programada y firmada",
+      );
+      setOpen(false);
+      reset();
+      router.refresh();
     });
   }
 

@@ -49,3 +49,14 @@ export async function updatePointsSettingsAction(input: PointsSettings): Promise
   }
   revalidatePath("/configuracion/puntos");
 }
+
+export async function updatePointsSettingsSafeAction(
+  input: PointsSettings,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updatePointsSettingsAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

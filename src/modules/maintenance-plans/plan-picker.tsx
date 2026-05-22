@@ -5,7 +5,7 @@ import { Sparkles, Wrench, Crown, Check, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { createMaintenanceContractAction, type MaintenancePlan } from "./actions";
+import { createMaintenanceContractSafeAction, type MaintenancePlan } from "./actions";
 
 const TIER_ICON = {
   lite: Wrench,
@@ -54,27 +54,22 @@ export function MaintenancePlanPicker({
       return;
     }
     startTransition(async () => {
-      try {
-        await createMaintenanceContractAction({
-          customer_id: customerId,
-          plan_id: selectedPlanId,
-          source_installation_id: sourceInstallationId ?? null,
-          source_contract_id: sourceContractId ?? null,
-        });
-        notify.success(
-          "Contrato de mantenimiento creado",
-          "Aparecerá en /mantenimientos. La remesa mensual se lanza desde ahí.",
-        );
-        // NO router.refresh() aquí: si este picker está embebido en otro
-        // modal (ej. wizard de instalación), refrescar el árbol de la
-        // página padre lo desmontaría y cerraría el modal contenedor.
-        // El revalidatePath del server action ya invalida el cache para
-        // la próxima navegación del usuario a /mantenimientos.
-        setOpen(false);
-        setSelectedPlanId(null);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createMaintenanceContractSafeAction({
+        customer_id: customerId,
+        plan_id: selectedPlanId,
+        source_installation_id: sourceInstallationId ?? null,
+        source_contract_id: sourceContractId ?? null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(
+        "Contrato de mantenimiento creado",
+        "Aparecerá en /mantenimientos. La remesa mensual se lanza desde ahí.",
+      );
+      setOpen(false);
+      setSelectedPlanId(null);
     });
   }
 

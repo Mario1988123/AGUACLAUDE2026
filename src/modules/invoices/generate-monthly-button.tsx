@@ -6,7 +6,7 @@ import { CalendarClock } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { generateMonthlyRecurringInvoicesAction } from "./actions";
+import { generateMonthlyRecurringInvoicesSafeAction } from "./actions";
 
 export function GenerateMonthlyButton() {
   const [pending, startTransition] = useTransition();
@@ -21,25 +21,22 @@ export function GenerateMonthlyButton() {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const r = await generateMonthlyRecurringInvoicesAction();
-        if (r.created === 0) {
-          notify.info(
-            "Nada que remesar",
-            "No hay contratos pendientes de facturar este mes (o las facturas ya existen).",
-          );
-        } else {
-          notify.success(
-            `${r.created} factura${r.created === 1 ? "" : "s"} generada${r.created === 1 ? "" : "s"}`,
-          );
-        }
-        router.refresh();
-      } catch (err) {
-        notify.error(
-          "No se pudo generar la remesa",
-          err instanceof Error ? err.message : String(err),
+      const r = await generateMonthlyRecurringInvoicesSafeAction();
+      if (!r.ok) {
+        notify.error("No se pudo generar la remesa", r.error);
+        return;
+      }
+      if (r.created === 0) {
+        notify.info(
+          "Nada que remesar",
+          "No hay contratos pendientes de facturar este mes (o las facturas ya existen).",
+        );
+      } else {
+        notify.success(
+          `${r.created} factura${r.created === 1 ? "" : "s"} generada${r.created === 1 ? "" : "s"}`,
         );
       }
+      router.refresh();
     });
   }
   return (

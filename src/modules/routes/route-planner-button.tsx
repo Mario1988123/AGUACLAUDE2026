@@ -12,7 +12,7 @@ import {
 } from "@/shared/ui/dialog";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { planMyDayRoute, applyMyDayRouteAction, type DayRoutePlan } from "./actions";
+import { planMyDayRouteSafeAction, applyMyDayRouteSafeAction, type DayRoutePlan } from "./actions";
 
 const KIND_LABEL: Record<string, string> = {
   installation: "Instalación",
@@ -40,29 +40,29 @@ export function RoutePlannerButton() {
   async function openAndPlan() {
     setOpen(true);
     setLoading(true);
-    try {
-      const p = await planMyDayRoute();
-      setPlan(p);
-    } catch (err) {
-      notify.error("Error", err instanceof Error ? err.message : String(err));
+    const r = await planMyDayRouteSafeAction();
+    if (!r.ok) {
+      notify.error("Error", r.error);
       setOpen(false);
-    } finally {
       setLoading(false);
+      return;
     }
+    setPlan(r.plan);
+    setLoading(false);
   }
 
   function apply() {
     if (!plan) return;
     const ids = plan.optimized.map((p) => p.id);
     startTransition(async () => {
-      try {
-        await applyMyDayRouteAction(ids, 60);
-        notify.success("Ruta aplicada", "Las paradas se han reordenado");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await applyMyDayRouteSafeAction(ids, 60);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Ruta aplicada", "Las paradas se han reordenado");
+      setOpen(false);
+      router.refresh();
     });
   }
 

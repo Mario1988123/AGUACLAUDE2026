@@ -147,3 +147,14 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
   revalidatePath("/clientes");
   return result;
 }
+
+export async function importCustomersSafeAction(
+  rows: ImportCustomerRow[],
+): Promise<{ ok: true; result: ImportResult } | { ok: false; error: string }> {
+  try {
+    const result = await importCustomersAction(rows);
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

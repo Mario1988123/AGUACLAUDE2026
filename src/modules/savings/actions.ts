@@ -759,3 +759,38 @@ export async function saveSavingsProposalAction(
     return { ok: false, error: msg };
   }
 }
+
+// =================== Safe wrappers ===================
+
+export async function saveSavingsConfigSafeAction(
+  input: Partial<CalcConfig>,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await saveSavingsConfigAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function upsertSavingsBrandSafeAction(
+  input: Partial<SavingsBrand> & { id?: string },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertSavingsBrandAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteSavingsBrandSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteSavingsBrandAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

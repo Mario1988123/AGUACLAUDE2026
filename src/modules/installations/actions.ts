@@ -1497,3 +1497,15 @@ export async function createInstallationFromContractSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function reassignInstallationSafeAction(
+  installationId: string,
+  installerUserId: string | null,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reassignInstallationAction(installationId, installerUserId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

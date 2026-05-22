@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { upsertObjectiveAction, deleteObjectiveAction } from "./objectives-actions";
+import { upsertObjectiveSafeAction, deleteObjectiveSafeAction } from "./objectives-actions";
 
 interface Objective {
   id: string;
@@ -71,13 +71,13 @@ export function ObjectivesManager({ objectives, team }: Props) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteObjectiveAction(id);
-        notify.success("Eliminado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteObjectiveSafeAction(id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminado");
+      location.reload();
     });
   }
 
@@ -179,25 +179,25 @@ function ObjForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      try {
-        await upsertObjectiveAction({
-          period_year: form.period_year,
-          period_month: form.period_month,
-          scope_type: form.scope_type,
-          scope_department: form.scope_type === "department" ? form.scope_department : null,
-          scope_user_id: form.scope_type === "user" ? form.scope_user_id : null,
-          metric_kind: form.metric_kind,
-          plan_type: form.plan_type || null,
-          target_amount_cents: form.target_euros
-            ? Math.round(Number(form.target_euros) * 100)
-            : null,
-          target_units: form.target_units ? Number(form.target_units) : null,
-        });
-        notify.success("Objetivo guardado");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertObjectiveSafeAction({
+        period_year: form.period_year,
+        period_month: form.period_month,
+        scope_type: form.scope_type,
+        scope_department: form.scope_type === "department" ? form.scope_department : null,
+        scope_user_id: form.scope_type === "user" ? form.scope_user_id : null,
+        metric_kind: form.metric_kind,
+        plan_type: form.plan_type || null,
+        target_amount_cents: form.target_euros
+          ? Math.round(Number(form.target_euros) * 100)
+          : null,
+        target_units: form.target_units ? Number(form.target_units) : null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Objetivo guardado");
+      onDone();
     });
   }
 

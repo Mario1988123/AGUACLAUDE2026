@@ -210,3 +210,27 @@ export async function deleteCertificateAction(): Promise<void> {
 
   revalidatePath("/configuracion/facturacion");
 }
+
+// =================== Safe wrappers ===================
+
+export async function uploadCertificateSafeAction(
+  formData: FormData,
+): Promise<{ ok: true; info: CertInfo } | { ok: false; error: string }> {
+  try {
+    const r = await uploadCertificateAction(formData);
+    return { ok: true, info: r.info };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteCertificateSafeAction(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  try {
+    await deleteCertificateAction();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

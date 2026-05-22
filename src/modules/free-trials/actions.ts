@@ -1067,3 +1067,22 @@ export async function rejectFreeTrialSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function signAndInstallFreeTrialSafeAction(input: {
+  trial_id: string;
+  is_provisional: boolean;
+  scheduled_for: string | null;
+  customer_signer_name: string;
+  customer_signer_tax_id?: string | null;
+  customer_signature_data_url: string;
+  representative_signature_data_url: string;
+}): Promise<
+  { ok: true; status: "scheduled" | "installed" } | { ok: false; error: string }
+> {
+  try {
+    const r = await signAndInstallFreeTrialAction(input);
+    return { ok: true, status: r.status };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

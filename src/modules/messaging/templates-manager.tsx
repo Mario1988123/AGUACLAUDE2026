@@ -11,8 +11,8 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  upsertMessageTemplateAction,
-  deleteMessageTemplateAction,
+  upsertMessageTemplateSafeAction,
+  deleteMessageTemplateSafeAction,
   type MessageTemplateRow,
 } from "./actions";
 
@@ -71,13 +71,13 @@ function TemplateRow({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteMessageTemplateAction(item.id);
-        notify.success("Eliminada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteMessageTemplateSafeAction(item.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Eliminada");
+      router.refresh();
     });
   }
 
@@ -135,22 +135,22 @@ function TemplateForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertMessageTemplateAction({
-          id: initial?.id,
-          key: form.key,
-          label: form.label,
-          channel: form.channel,
-          subject: form.subject || undefined,
-          body: form.body,
-          sort_order: form.sort_order,
-        });
-        notify.success("Guardada");
-        onDone();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertMessageTemplateSafeAction({
+        id: initial?.id,
+        key: form.key,
+        label: form.label,
+        channel: form.channel,
+        subject: form.subject || undefined,
+        body: form.body,
+        sort_order: form.sort_order,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardada");
+      onDone();
+      router.refresh();
     });
   }
 

@@ -6,7 +6,7 @@ import { UserPlus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { reassignInstallationAction } from "./actions";
+import { reassignInstallationSafeAction } from "./actions";
 
 export function ReassignInstallationButton({
   installationId,
@@ -24,14 +24,14 @@ export function ReassignInstallationButton({
 
   function save() {
     startTransition(async () => {
-      try {
-        await reassignInstallationAction(installationId, target || null);
-        notify.success(target ? "Instalador reasignado" : "Desasignado");
-        setOpen(false);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reassignInstallationSafeAction(installationId, target || null);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(target ? "Instalador reasignado" : "Desasignado");
+      setOpen(false);
+      router.refresh();
     });
   }
 

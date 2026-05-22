@@ -11,8 +11,8 @@ import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { MoneyInput } from "@/shared/components/money-input";
 import {
-  updateMaintenancePlanAction,
-  reseedDefaultPlansAction,
+  updateMaintenancePlanSafeAction,
+  reseedDefaultPlansSafeAction,
 } from "./config-actions";
 import type { MaintenancePlan } from "./actions";
 
@@ -47,13 +47,13 @@ export function MaintenancePlansEditor({
         variant: "warning",
       });
       if (!ok) return;
-      try {
-        await reseedDefaultPlansAction();
-        notify.success("Planes restaurados");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reseedDefaultPlansSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Planes restaurados");
+      router.refresh();
     });
   }
 
@@ -106,21 +106,21 @@ function PlanRow({ plan }: { plan: MaintenancePlan }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await updateMaintenancePlanAction(plan.id, {
-          name: form.name,
-          monthly_cents: form.monthly_cents,
-          visits_per_year: form.visits_unlimited ? null : form.visits_per_year ?? 0,
-          parts_discount_percent: form.parts_discount_percent,
-          spare_equipment_included: form.spare_equipment_included,
-          description: form.description || null,
-          is_active: form.is_active,
-        });
-        notify.success("Plan guardado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updateMaintenancePlanSafeAction(plan.id, {
+        name: form.name,
+        monthly_cents: form.monthly_cents,
+        visits_per_year: form.visits_unlimited ? null : form.visits_per_year ?? 0,
+        parts_discount_percent: form.parts_discount_percent,
+        spare_equipment_included: form.spare_equipment_included,
+        description: form.description || null,
+        is_active: form.is_active,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Plan guardado");
+      router.refresh();
     });
   }
 

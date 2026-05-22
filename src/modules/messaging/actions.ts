@@ -129,3 +129,31 @@ export async function deleteMessageTemplateAction(id: string): Promise<void> {
   await admin.from("message_templates").update({ is_active: false }).eq("id", id);
   revalidatePath("/configuracion/plantillas");
 }
+
+export async function upsertMessageTemplateSafeAction(input: {
+  id?: string;
+  key: string;
+  label: string;
+  channel: "whatsapp" | "email" | "any";
+  subject?: string;
+  body: string;
+  sort_order?: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertMessageTemplateAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteMessageTemplateSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteMessageTemplateAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

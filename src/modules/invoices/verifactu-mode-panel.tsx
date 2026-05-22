@@ -5,7 +5,7 @@ import { Save, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { setVerifactuModeAction } from "./verifactu-config-actions";
+import { setVerifactuModeSafeAction } from "./verifactu-config-actions";
 
 const MODES = [
   {
@@ -42,15 +42,15 @@ export function VerifactuModePanel({
 
   function save() {
     startTransition(async () => {
-      try {
-        await setVerifactuModeAction(
-          mode as "no_envio" | "verifactu" | "verifactu_test",
-        );
-        notify.success("Modo guardado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await setVerifactuModeSafeAction(
+        mode as "no_envio" | "verifactu" | "verifactu_test",
+      );
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Modo guardado");
+      location.reload();
     });
   }
 

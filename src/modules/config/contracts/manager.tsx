@@ -12,7 +12,7 @@ import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
   upsertClauseTemplateSafeAction,
   deleteClauseTemplateSafeAction,
-  reorderClausesAction,
+  reorderClausesSafeAction,
   type ClauseTemplate,
   type ClausePlanType,
 } from "./actions";
@@ -92,11 +92,13 @@ export function ClausesManager({ clauses }: { clauses: ClauseTemplate[] }) {
                       const ids = byPlan[plan].map((x) => x.id);
                       const target = dir === "up" ? idx - 1 : idx + 1;
                       [ids[idx], ids[target]] = [ids[target]!, ids[idx]!];
-                      reorderClausesAction(plan, ids)
-                        .then(() => location.reload())
-                        .catch((err) =>
-                          notify.error("Error", err instanceof Error ? err.message : String(err)),
-                        );
+                      reorderClausesSafeAction(plan, ids).then((r) => {
+                        if (!r.ok) {
+                          notify.error("Error", r.error);
+                          return;
+                        }
+                        location.reload();
+                      });
                     }}
                   />
                 ))}

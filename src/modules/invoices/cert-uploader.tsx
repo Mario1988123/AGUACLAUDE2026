@@ -8,8 +8,8 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  uploadCertificateAction,
-  deleteCertificateAction,
+  uploadCertificateSafeAction,
+  deleteCertificateSafeAction,
 } from "./cert-actions";
 
 export function CertUploader({
@@ -33,21 +33,18 @@ export function CertUploader({
     const fd = new FormData(e.currentTarget);
     fd.set("password", password);
     startTransition(async () => {
-      try {
-        const r = await uploadCertificateAction(fd);
-        notify.success(
-          "Certificado subido",
-          `Caduca ${new Date(r.info.valid_to).toLocaleDateString("es-ES")} (${r.info.expires_in_days} días)`,
-        );
-        setPassword("");
-        setOpen(false);
-        location.reload();
-      } catch (err) {
-        notify.error(
-          "No se pudo subir",
-          err instanceof Error ? err.message : String(err),
-        );
+      const r = await uploadCertificateSafeAction(fd);
+      if (!r.ok) {
+        notify.error("No se pudo subir", r.error);
+        return;
       }
+      notify.success(
+        "Certificado subido",
+        `Caduca ${new Date(r.info.valid_to).toLocaleDateString("es-ES")} (${r.info.expires_in_days} días)`,
+      );
+      setPassword("");
+      setOpen(false);
+      location.reload();
     });
   }
 
@@ -60,13 +57,13 @@ export function CertUploader({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteCertificateAction();
-        notify.success("Certificado eliminado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteCertificateSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Certificado eliminado");
+      location.reload();
     });
   }
 

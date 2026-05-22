@@ -10,10 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import {
-  upsertFinancierAction,
-  deleteFinancierAction,
-  upsertFinancierCoefficientAction,
-  deleteFinancierCoefficientAction,
+  upsertFinancierSafeAction,
+  deleteFinancierSafeAction,
+  upsertFinancierCoefficientSafeAction,
+  deleteFinancierCoefficientSafeAction,
   type Financier,
 } from "./actions";
 
@@ -45,13 +45,13 @@ export function FinanciersManager({ initial }: { initial: Financier[] }) {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteFinancierAction(f.id);
-        setItems((arr) => arr.filter((x) => x.id !== f.id));
-        notify.success("Financiera eliminada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteFinancierSafeAction(f.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setItems((arr) => arr.filter((x) => x.id !== f.id));
+      notify.success("Financiera eliminada");
     });
   }
 
@@ -195,25 +195,25 @@ function FinancierForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertFinancierAction({
-          id: initial?.id,
-          name: form.name.trim(),
-          short_name: form.short_name.trim() || null,
-          kind: form.kind,
-          residual_pct: form.residual_pct ? Number(form.residual_pct) : null,
-          reserve_pct: form.reserve_pct ? Number(form.reserve_pct) : null,
-          accepts_individual: form.accepts_individual,
-          accepts_autonomo: form.accepts_autonomo,
-          accepts_company: form.accepts_company,
-          is_active: form.is_active,
-          notes: form.notes.trim() || null,
-        });
-        notify.success(initial ? "Financiera actualizada" : "Financiera creada");
-        onDone();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertFinancierSafeAction({
+        id: initial?.id,
+        name: form.name.trim(),
+        short_name: form.short_name.trim() || null,
+        kind: form.kind,
+        residual_pct: form.residual_pct ? Number(form.residual_pct) : null,
+        reserve_pct: form.reserve_pct ? Number(form.reserve_pct) : null,
+        accepts_individual: form.accepts_individual,
+        accepts_autonomo: form.accepts_autonomo,
+        accepts_company: form.accepts_company,
+        is_active: form.is_active,
+        notes: form.notes.trim() || null,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(initial ? "Financiera actualizada" : "Financiera creada");
+      onDone();
     });
   }
 
@@ -432,29 +432,29 @@ function CoefficientsTable({
       return;
     }
     startTransition(async () => {
-      try {
-        await upsertFinancierCoefficientAction({
-          financier_id: financierId,
-          term_months,
-          coefficient,
-        });
-        notify.success("Coeficiente guardado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await upsertFinancierCoefficientSafeAction({
+        financier_id: financierId,
+        term_months,
+        coefficient,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Coeficiente guardado");
+      location.reload();
     });
   }
 
   function remove(id: string) {
     startTransition(async () => {
-      try {
-        await deleteFinancierCoefficientAction(id);
-        notify.success("Coeficiente eliminado");
-        location.reload();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteFinancierCoefficientSafeAction(id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Coeficiente eliminado");
+      location.reload();
     });
   }
 

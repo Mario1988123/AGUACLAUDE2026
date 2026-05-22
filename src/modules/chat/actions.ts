@@ -644,3 +644,74 @@ export async function listCompanyDirectory(): Promise<DirectoryUser[]> {
     })
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
 }
+
+// =================== Safe wrappers ===================
+
+export async function sendChatMessageSafeAction(
+  threadId: string,
+  body: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sendChatMessageAction(threadId, body);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function editChatMessageSafeAction(
+  messageId: string,
+  newBody: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await editChatMessageAction(messageId, newBody);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteChatMessageSafeAction(
+  messageId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteChatMessageAction(messageId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function getOrCreateDirectThreadSafeAction(
+  otherUserId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await getOrCreateDirectThreadAction(otherUserId);
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createTeamThreadSafeAction(
+  name: string,
+  memberUserIds: string[],
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createTeamThreadAction(name, memberUserIds);
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createBroadcastThreadSafeAction(
+  name: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createBroadcastThreadAction(name);
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

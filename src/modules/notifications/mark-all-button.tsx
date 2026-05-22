@@ -3,18 +3,18 @@
 import { useTransition } from "react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { markAllAsRead } from "./actions";
+import { markAllAsReadSafeAction } from "./actions";
 
 export function MarkAllReadButton() {
   const [pending, startTransition] = useTransition();
   function handle() {
     startTransition(async () => {
-      try {
-        await markAllAsRead();
-        notify.success("Todas marcadas como leídas");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await markAllAsReadSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Todas marcadas como leídas");
     });
   }
   return (

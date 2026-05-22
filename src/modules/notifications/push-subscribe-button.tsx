@@ -96,14 +96,18 @@ export function PushSubscribeButton() {
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
-          await unregisterPushSubscriptionAction(sub.endpoint);
+          const r = await unregisterPushSubscriptionAction(sub.endpoint);
+          if (!r.ok) {
+            notify.error("Error", r.error);
+            return;
+          }
           await sub.unsubscribe();
         }
         setSubscribed(false);
         notify.success("Notificaciones desactivadas");
       } catch (err) {
         notify.error(
-          "Error",
+          "Error de navegador",
           err instanceof Error ? err.message : String(err),
         );
       }

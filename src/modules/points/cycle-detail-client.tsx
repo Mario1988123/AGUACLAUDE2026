@@ -17,9 +17,9 @@ import {
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  adjustCycleLine,
-  closeCycle,
-  reopenCycle,
+  adjustCycleLineSafeAction,
+  closeCycleSafeAction,
+  reopenCycleSafeAction,
   type UserCycleDetail,
 } from "./cycles-actions";
 import { reasonLabel } from "./reason-labels";
@@ -97,20 +97,20 @@ export function CycleDetailClient({
       return;
     }
     startTransition(async () => {
-      try {
-        await adjustCycleLine({
-          cycle_id: cycleId,
-          user_id: modal.user_id,
-          ledger_entry_id: modal.ledger_entry_id,
-          delta_points: delta,
-          reason: reason.trim(),
-        });
-        notify.success("Ajuste registrado");
-        setModal(EMPTY_MODAL);
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await adjustCycleLineSafeAction({
+        cycle_id: cycleId,
+        user_id: modal.user_id,
+        ledger_entry_id: modal.ledger_entry_id,
+        delta_points: delta,
+        reason: reason.trim(),
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Ajuste registrado");
+      setModal(EMPTY_MODAL);
+      router.refresh();
     });
   }
 
@@ -124,13 +124,13 @@ export function CycleDetailClient({
     }
     if (!confirm("¿Cerrar el ciclo? Después no se podrán hacer ajustes.")) return;
     startTransition(async () => {
-      try {
-        await closeCycle(cycleId);
-        notify.success("Ciclo cerrado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await closeCycleSafeAction(cycleId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Ciclo cerrado");
+      router.refresh();
     });
   }
 
@@ -140,15 +140,15 @@ export function CycleDetailClient({
       return;
     }
     startTransition(async () => {
-      try {
-        await reopenCycle(cycleId, reopenReason.trim());
-        notify.success("Ciclo reabierto");
-        setReopenOpen(false);
-        setReopenReason("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await reopenCycleSafeAction(cycleId, reopenReason.trim());
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Ciclo reabierto");
+      setReopenOpen(false);
+      setReopenReason("");
+      router.refresh();
     });
   }
 

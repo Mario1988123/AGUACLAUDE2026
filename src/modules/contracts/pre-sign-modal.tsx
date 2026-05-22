@@ -42,8 +42,8 @@ import { updateCustomerSafeAction } from "@/modules/customers/actions";
 import { upsertAddressSafeAction } from "@/modules/addresses/actions";
 import { createBankAccountSafeAction } from "@/modules/customers/bank-accounts/actions";
 import { uploadContractPhotoAction } from "./photo-actions";
-import { markContractSigned } from "./actions";
-import { recordCustomerConsent } from "@/modules/customers/consents-actions";
+import { markContractSignedSafeAction } from "./actions";
+import { recordCustomerConsentSafe } from "@/modules/customers/consents-actions";
 
 interface Props {
   contractId: string;
@@ -105,39 +105,43 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
       return;
     }
     startTransition(async () => {
-      try {
-        // Registrar consentimientos ANTES de firmar — si fallan, no firma
-        const cid = readiness.customer.id;
-        await Promise.all([
-          recordCustomerConsent({
-            customer_id: cid,
-            kind: "data_processing",
-            granted: true,
-            source: "contract_sign",
-            source_ref_id: contractId,
-          }),
-          recordCustomerConsent({
-            customer_id: cid,
-            kind: "commercial",
-            granted: consentCommercial,
-            source: "contract_sign",
-            source_ref_id: contractId,
-          }),
-          recordCustomerConsent({
-            customer_id: cid,
-            kind: "profiling",
-            granted: consentProfiling,
-            source: "contract_sign",
-            source_ref_id: contractId,
-          }),
-        ]);
-        await markContractSigned(contractId);
-        notify.success("Contrato firmado");
-        onClose();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const cid = readiness.customer.id;
+      const consents = await Promise.all([
+        recordCustomerConsentSafe({
+          customer_id: cid,
+          kind: "data_processing",
+          granted: true,
+          source: "contract_sign",
+          source_ref_id: contractId,
+        }),
+        recordCustomerConsentSafe({
+          customer_id: cid,
+          kind: "commercial",
+          granted: consentCommercial,
+          source: "contract_sign",
+          source_ref_id: contractId,
+        }),
+        recordCustomerConsentSafe({
+          customer_id: cid,
+          kind: "profiling",
+          granted: consentProfiling,
+          source: "contract_sign",
+          source_ref_id: contractId,
+        }),
+      ]);
+      const firstFail = consents.find((r) => !r.ok);
+      if (firstFail && !firstFail.ok) {
+        notify.error("No se pudo registrar el consentimiento", firstFail.error);
+        return;
       }
+      const r = await markContractSignedSafeAction(contractId);
+      if (!r.ok) {
+        notify.error("No se pudo firmar", r.error);
+        return;
+      }
+      notify.success("Contrato firmado");
+      onClose();
+      router.refresh();
     });
   }
 

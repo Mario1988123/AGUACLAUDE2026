@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { RotateCw } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { backfillSalesRecordsAction } from "./backfill-sales-records";
+import { backfillSalesRecordsSafeAction } from "./backfill-sales-records";
 
 /**
  * Botón "Recalcular ventas del mes" — fuerza un recompute completo de
@@ -33,34 +33,27 @@ export function BackfillSalesRecordsButton() {
     )
       return;
     startTransition(async () => {
-      try {
-        const r = await backfillSalesRecordsAction();
-        const okMsg = `${r.records_inserted} registros creados (${r.contracts_processed} contratos procesados)`;
-        if (r.errors.length > 0) {
-          notify.warning(
-            "Backfill con errores",
-            `${okMsg}. Errores:\n${r.errors.slice(0, 3).join("\n")}`,
-          );
-          setLast({
-            ok: false,
-            msg: `${okMsg}. ${r.errors.length} errores: ${r.errors.join("; ")}`,
-          });
-        } else {
-          notify.success("Listo", okMsg);
-          setLast({ ok: true, msg: okMsg });
-        }
-        // Forzamos refresh del dashboard al volver
-        setTimeout(() => location.reload(), 800);
-      } catch (err) {
-        notify.error(
-          "Error",
-          err instanceof Error ? err.message : String(err),
+      const r = await backfillSalesRecordsSafeAction();
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        setLast({ ok: false, msg: r.error });
+        return;
+      }
+      const okMsg = `${r.records_inserted} registros creados (${r.contracts_processed} contratos procesados)`;
+      if (r.errors.length > 0) {
+        notify.warning(
+          "Backfill con errores",
+          `${okMsg}. Errores:\n${r.errors.slice(0, 3).join("\n")}`,
         );
         setLast({
           ok: false,
-          msg: err instanceof Error ? err.message : String(err),
+          msg: `${okMsg}. ${r.errors.length} errores: ${r.errors.join("; ")}`,
         });
+      } else {
+        notify.success("Listo", okMsg);
+        setLast({ ok: true, msg: okMsg });
       }
+      setTimeout(() => location.reload(), 800);
     });
   }
 

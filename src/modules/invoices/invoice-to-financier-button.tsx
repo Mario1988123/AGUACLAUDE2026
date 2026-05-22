@@ -6,7 +6,7 @@ import { Banknote } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { createInvoiceForFinancierFromContractAction } from "./actions";
+import { createInvoiceForFinancierFromContractSafeAction } from "./actions";
 
 /**
  * Emite una factura a la FINANCIERA por el capital empresa del contrato
@@ -32,13 +32,13 @@ export function InvoiceToFinancierButton({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const id = await createInvoiceForFinancierFromContractAction(contractId);
-        notify.success("Factura emitida", "Borrador listo. Revísala y valida.");
-        router.push(`/facturas/${id}` as never);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await createInvoiceForFinancierFromContractSafeAction(contractId);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Factura emitida", "Borrador listo. Revísala y valida.");
+      router.push(`/facturas/${r.id}` as never);
     });
   }
   return (

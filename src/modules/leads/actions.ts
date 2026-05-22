@@ -958,3 +958,16 @@ export async function logLeadContactSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export async function updateLeadStatusSafeAction(
+  id: string,
+  status: LeadStatus,
+  lostReason?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateLeadStatus(id, status, lostReason);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

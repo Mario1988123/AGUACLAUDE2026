@@ -6,7 +6,7 @@ import { Lock, Pause } from "lucide-react";
 import * as Icons from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { toggleCompanyModule, type ModuleRow } from "./actions";
+import { toggleCompanyModuleSafeAction, type ModuleRow } from "./actions";
 
 export function ModulesManager({ modules }: { modules: ModuleRow[] }) {
   const [pending, startTransition] = useTransition();
@@ -18,13 +18,13 @@ export function ModulesManager({ modules }: { modules: ModuleRow[] }) {
       return;
     }
     startTransition(async () => {
-      try {
-        await toggleCompanyModule(m.key, !m.is_active);
-        notify.success(m.is_active ? "Módulo desactivado" : "Módulo activado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await toggleCompanyModuleSafeAction(m.key, !m.is_active);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success(m.is_active ? "Módulo desactivado" : "Módulo activado");
+      router.refresh();
     });
   }
 

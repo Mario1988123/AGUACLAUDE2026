@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { Upload, Trash2, ImageIcon } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
-import { uploadCompanyLogoAction } from "./actions";
+import { uploadCompanyLogoSafeAction } from "./actions";
 
 /** 1 MB (mismo límite que el server). */
 const MAX_BYTES = 1 * 1024 * 1024;
@@ -66,19 +66,16 @@ export function LogoUploader({
         setNaturalSize(null);
       }
       startTransition(async () => {
-        try {
-          const r = await uploadCompanyLogoAction({
-            data_url: dataUrl,
-            original_filename: file.name,
-          });
-          onUploaded(r.url);
-          notify.success("Logo subido", "Recuerda «Guardar» para conservar el cambio.");
-        } catch (err) {
-          notify.error(
-            "No se pudo subir",
-            err instanceof Error ? err.message : String(err),
-          );
+        const r = await uploadCompanyLogoSafeAction({
+          data_url: dataUrl,
+          original_filename: file.name,
+        });
+        if (!r.ok) {
+          notify.error("No se pudo subir", r.error);
+          return;
         }
+        onUploaded(r.url);
+        notify.success("Logo subido", "Recuerda «Guardar» para conservar el cambio.");
       });
     };
     reader.readAsDataURL(file);

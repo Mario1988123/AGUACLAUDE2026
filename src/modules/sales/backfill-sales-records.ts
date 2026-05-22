@@ -47,3 +47,20 @@ export async function backfillSalesRecordsAction(): Promise<{
     errors: r.errors,
   };
 }
+
+export async function backfillSalesRecordsSafeAction(): Promise<
+  | { ok: true; contracts_processed: number; records_inserted: number; errors: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const r = await backfillSalesRecordsAction();
+    return {
+      ok: true,
+      contracts_processed: r.contracts_processed,
+      records_inserted: r.records_inserted,
+      errors: r.errors,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

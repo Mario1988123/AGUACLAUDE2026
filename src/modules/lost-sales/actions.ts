@@ -112,3 +112,39 @@ export async function markRecoveredAction(lostSaleId: string) {
     .eq("id", lostSaleId);
   revalidatePath("/ventas-perdidas");
 }
+
+// =================== Safe wrappers ===================
+
+export async function assignRecoverySafeAction(
+  lostSaleId: string,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await assignRecoveryAction(lostSaleId, userId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function reopenLostSaleSafeAction(
+  lostSaleId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await reopenLostSaleAction(lostSaleId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function markRecoveredSafeAction(
+  lostSaleId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await markRecoveredAction(lostSaleId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

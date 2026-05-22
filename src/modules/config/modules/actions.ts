@@ -111,3 +111,15 @@ export async function toggleCompanyModule(moduleKey: string, isActive: boolean):
 
   revalidatePath("/configuracion/modulos");
 }
+
+export async function toggleCompanyModuleSafeAction(
+  moduleKey: string,
+  isActive: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await toggleCompanyModule(moduleKey, isActive);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

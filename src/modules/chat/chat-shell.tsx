@@ -26,12 +26,12 @@ import { cn } from "@/shared/lib/utils";
 import {
   getChatMessages,
   markChatThreadRead,
-  sendChatMessageAction,
-  createBroadcastThreadAction,
-  createTeamThreadAction,
-  getOrCreateDirectThreadAction,
-  editChatMessageAction,
-  deleteChatMessageAction,
+  sendChatMessageSafeAction,
+  createBroadcastThreadSafeAction,
+  createTeamThreadSafeAction,
+  getOrCreateDirectThreadSafeAction,
+  editChatMessageSafeAction,
+  deleteChatMessageSafeAction,
   type ChatMessageRow,
   type ChatThreadRow,
   type DirectoryUser,
@@ -133,15 +133,15 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
     const body = draft;
     setDraft("");
     startTransition(async () => {
-      try {
-        await sendChatMessageAction(activeId, body);
-        const rows = await getChatMessages(activeId);
-        setMessages(rows);
-        router.refresh();
-      } catch (err) {
-        notify.error("No se pudo enviar", err instanceof Error ? err.message : String(err));
+      const r = await sendChatMessageSafeAction(activeId, body);
+      if (!r.ok) {
+        notify.error("No se pudo enviar", r.error);
         setDraft(body);
+        return;
       }
+      const rows = await getChatMessages(activeId);
+      setMessages(rows);
+      router.refresh();
     });
   }
 
@@ -353,13 +353,13 @@ function ChatMessageItem({
       return;
     }
     startTransition(async () => {
-      try {
-        await editChatMessageAction(message.id, draft);
-        setEditing(false);
-        onChanged();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await editChatMessageSafeAction(message.id, draft);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      setEditing(false);
+      onChanged();
     });
   }
 
@@ -371,12 +371,12 @@ function ChatMessageItem({
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        await deleteChatMessageAction(message.id);
-        onChanged();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteChatMessageSafeAction(message.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      onChanged();
     });
   }
 
@@ -489,30 +489,30 @@ function NewThreadDialog({
 
   function create() {
     startTransition(async () => {
-      try {
-        let id: string;
-        if (tab === "direct") {
-          const uid = selectedIds[0];
-          if (!uid) {
-            notify.warning("Elige un usuario");
-            return;
-          }
-          id = await getOrCreateDirectThreadAction(uid);
-        } else if (tab === "team") {
-          if (selectedIds.length === 0) {
-            notify.warning("Añade al menos un miembro");
-            return;
-          }
-          id = await createTeamThreadAction(name, selectedIds);
-        } else {
-          id = await createBroadcastThreadAction(name);
+      let res: { ok: true; id: string } | { ok: false; error: string };
+      if (tab === "direct") {
+        const uid = selectedIds[0];
+        if (!uid) {
+          notify.warning("Elige un usuario");
+          return;
         }
-        notify.success("Conversación creada");
-        reset();
-        onCreated(id);
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+        res = await getOrCreateDirectThreadSafeAction(uid);
+      } else if (tab === "team") {
+        if (selectedIds.length === 0) {
+          notify.warning("Añade al menos un miembro");
+          return;
+        }
+        res = await createTeamThreadSafeAction(name, selectedIds);
+      } else {
+        res = await createBroadcastThreadSafeAction(name);
       }
+      if (!res.ok) {
+        notify.error("Error", res.error);
+        return;
+      }
+      notify.success("Conversación creada");
+      reset();
+      onCreated(res.id);
     });
   }
 

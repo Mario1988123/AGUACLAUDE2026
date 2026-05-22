@@ -61,3 +61,14 @@ export async function setVerifactuModeAction(
 
   revalidatePath("/configuracion/facturacion");
 }
+
+export async function setVerifactuModeSafeAction(
+  mode: "no_envio" | "verifactu" | "verifactu_test",
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await setVerifactuModeAction(mode);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

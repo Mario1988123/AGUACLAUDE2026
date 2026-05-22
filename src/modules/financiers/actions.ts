@@ -245,3 +245,49 @@ export async function deleteFinancierCoefficientAction(id: string): Promise<void
   await admin.from("financier_coefficients").delete().eq("id", id);
   revalidatePath("/configuracion/financieras");
 }
+
+// =================== Safe wrappers ===================
+
+export async function upsertFinancierSafeAction(
+  input: unknown,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const r = await upsertFinancierAction(input);
+    return { ok: true, id: r.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteFinancierSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteFinancierAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function upsertFinancierCoefficientSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertFinancierCoefficientAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteFinancierCoefficientSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteFinancierCoefficientAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

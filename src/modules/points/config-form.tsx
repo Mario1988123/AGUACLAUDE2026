@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { updatePointsSettingsAction } from "./config-actions";
+import { updatePointsSettingsSafeAction } from "./config-actions";
 import type { PointsSettings } from "./settings";
 
 export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
@@ -19,12 +19,12 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
 
   function save() {
     startTransition(async () => {
-      try {
-        await updatePointsSettingsAction(v);
-        notify.success("Configuración guardada");
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await updatePointsSettingsSafeAction(v);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Configuración guardada");
     });
   }
 

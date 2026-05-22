@@ -329,3 +329,30 @@ export async function cancelMaintenanceContractAction(
 
   revalidatePath("/mantenimientos");
 }
+
+// =================== Safe wrappers ===================
+
+export async function createMaintenanceContractSafeAction(input: {
+  customer_id: string;
+  plan_id: string;
+  source_installation_id?: string | null;
+  source_contract_id?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createMaintenanceContractAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function generateMonthlyMaintenanceInvoicesSafeAction(): Promise<
+  { ok: true; created: number; skipped: number } | { ok: false; error: string }
+> {
+  try {
+    const r = await generateMonthlyMaintenanceInvoicesAction();
+    return { ok: true, created: r.created, skipped: r.skipped };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

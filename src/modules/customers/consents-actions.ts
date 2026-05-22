@@ -95,3 +95,14 @@ export async function hasActiveConsent(
   if (!data) return false;
   return (data as { granted: boolean }).granted === true;
 }
+
+export async function recordCustomerConsentSafe(
+  args: RecordConsentArgs,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await recordCustomerConsent(args);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

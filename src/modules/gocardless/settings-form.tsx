@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { saveGoCardlessSettingsAction } from "./actions";
+import { saveGoCardlessSettingsSafeAction } from "./actions";
 
 export function GoCardlessSettingsForm({
   initial,
@@ -31,20 +31,20 @@ export function GoCardlessSettingsForm({
       return;
     }
     startTransition(async () => {
-      try {
-        await saveGoCardlessSettingsAction({
-          environment,
-          access_token: accessToken || "__keep__",  // backend ignora si vacío en update
-          webhook_secret: webhookSecret || undefined,
-          enabled,
-        });
-        notify.success("Configuración guardada");
-        setAccessToken("");
-        setWebhookSecret("");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await saveGoCardlessSettingsSafeAction({
+        environment,
+        access_token: accessToken || "__keep__",
+        webhook_secret: webhookSecret || undefined,
+        enabled,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Configuración guardada");
+      setAccessToken("");
+      setWebhookSecret("");
+      router.refresh();
     });
   }
 

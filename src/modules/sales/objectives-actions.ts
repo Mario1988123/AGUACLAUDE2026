@@ -82,3 +82,25 @@ export async function deleteObjectiveAction(id: string) {
   revalidatePath("/configuracion/objetivos");
   revalidatePath("/ventas");
 }
+
+export async function upsertObjectiveSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await upsertObjectiveAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function deleteObjectiveSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await deleteObjectiveAction(id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

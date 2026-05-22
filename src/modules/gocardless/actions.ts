@@ -750,3 +750,17 @@ export async function importMandateByIdAction(input: {
   }
 }
 
+
+export async function saveGoCardlessSettingsSafeAction(input: {
+  environment: Environment;
+  access_token: string;
+  webhook_secret?: string;
+  enabled?: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await saveGoCardlessSettingsAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

@@ -1107,3 +1107,27 @@ export async function deleteOrRectifyInvoiceSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+// =================== Safe wrappers ===================
+
+export async function generateMonthlyRecurringInvoicesSafeAction(): Promise<
+  { ok: true; created: number } | { ok: false; error: string }
+> {
+  try {
+    const r = await generateMonthlyRecurringInvoicesAction();
+    return { ok: true, created: r.created };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function createInvoiceForFinancierFromContractSafeAction(
+  contractId: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const id = await createInvoiceForFinancierFromContractAction(contractId);
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

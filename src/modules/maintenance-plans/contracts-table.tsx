@@ -8,7 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  generateMonthlyMaintenanceInvoicesAction,
+  generateMonthlyMaintenanceInvoicesSafeAction,
   type MaintenanceContractRow,
 } from "./actions";
 
@@ -112,31 +112,28 @@ export function MaintenanceRemesaButton() {
     });
     if (!ok) return;
     startTransition(async () => {
-      try {
-        const r = await generateMonthlyMaintenanceInvoicesAction();
-        if (r.created === 0 && r.skipped === 0) {
-          notify.info(
-            "Nada que remesar",
-            "No hay contratos de mantenimiento activos pendientes de facturar este mes.",
-          );
-        } else if (r.created === 0) {
-          notify.info(
-            "Sin facturas nuevas",
-            `${r.skipped} ya existían — no se ha creado ninguna.`,
-          );
-        } else {
-          notify.success(
-            `${r.created} factura${r.created === 1 ? "" : "s"} creada${r.created === 1 ? "" : "s"}`,
-            r.skipped > 0 ? `${r.skipped} omitida${r.skipped === 1 ? "" : "s"} (ya existían)` : undefined,
-          );
-        }
-        router.refresh();
-      } catch (err) {
-        notify.error(
-          "No se pudo generar la remesa",
-          err instanceof Error ? err.message : String(err),
+      const r = await generateMonthlyMaintenanceInvoicesSafeAction();
+      if (!r.ok) {
+        notify.error("No se pudo generar la remesa", r.error);
+        return;
+      }
+      if (r.created === 0 && r.skipped === 0) {
+        notify.info(
+          "Nada que remesar",
+          "No hay contratos de mantenimiento activos pendientes de facturar este mes.",
+        );
+      } else if (r.created === 0) {
+        notify.info(
+          "Sin facturas nuevas",
+          `${r.skipped} ya existían — no se ha creado ninguna.`,
+        );
+      } else {
+        notify.success(
+          `${r.created} factura${r.created === 1 ? "" : "s"} creada${r.created === 1 ? "" : "s"}`,
+          r.skipped > 0 ? `${r.skipped} omitida${r.skipped === 1 ? "" : "s"} (ya existían)` : undefined,
         );
       }
+      router.refresh();
     });
   }
 

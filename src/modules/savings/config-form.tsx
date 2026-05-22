@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { saveSavingsConfigAction } from "./actions";
+import { saveSavingsConfigSafeAction } from "./actions";
 import type { CalcConfig } from "./calc";
 
 export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
@@ -35,30 +35,30 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
       return;
     }
     startTransition(async () => {
-      try {
-        await saveSavingsConfigAction({
-          osmosis_annual_cost_cents: Math.round(Number(form.osmosis_eur.replace(",", ".")) * 100),
-          liters_per_person_day_home: Number(form.liters_home.replace(",", ".")),
-          liters_per_person_day_office: Number(form.liters_office.replace(",", ".")),
-          co2_per_bottle_kg: Number(form.co2),
-          plastic_per_bottle_kg: Number(form.plastic),
-          default_bottle_size_liters: Number(form.bottle),
-          service_garrafa_size_liters: Number(form.garrafa),
-          service_cycles_per_year: Number(form.cycles),
-          recommended_dispensers_threshold: Number(form.threshold),
-          enabled_plans: {
-            cash: form.plan_cash,
-            rental: form.plan_rental,
-            renting: form.plan_renting,
-          },
-          default_renting_duration_months: Number(form.default_renting_duration) || 48,
-          default_rental_permanence_months: Number(form.default_rental_permanence) || 24,
-        });
-        notify.success("Guardado");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await saveSavingsConfigSafeAction({
+        osmosis_annual_cost_cents: Math.round(Number(form.osmosis_eur.replace(",", ".")) * 100),
+        liters_per_person_day_home: Number(form.liters_home.replace(",", ".")),
+        liters_per_person_day_office: Number(form.liters_office.replace(",", ".")),
+        co2_per_bottle_kg: Number(form.co2),
+        plastic_per_bottle_kg: Number(form.plastic),
+        default_bottle_size_liters: Number(form.bottle),
+        service_garrafa_size_liters: Number(form.garrafa),
+        service_cycles_per_year: Number(form.cycles),
+        recommended_dispensers_threshold: Number(form.threshold),
+        enabled_plans: {
+          cash: form.plan_cash,
+          rental: form.plan_rental,
+          renting: form.plan_renting,
+        },
+        default_renting_duration_months: Number(form.default_renting_duration) || 48,
+        default_rental_permanence_months: Number(form.default_rental_permanence) || 24,
+      });
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Guardado");
+      router.refresh();
     });
   }
 

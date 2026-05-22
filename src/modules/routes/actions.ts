@@ -162,3 +162,28 @@ export async function applyMyDayRouteAction(
   revalidatePath("/mi-dia");
   revalidatePath("/agenda");
 }
+
+// =================== Safe wrappers ===================
+
+export async function planMyDayRouteSafeAction(): Promise<
+  { ok: true; plan: DayRoutePlan } | { ok: false; error: string }
+> {
+  try {
+    const plan = await planMyDayRoute();
+    return { ok: true, plan };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function applyMyDayRouteSafeAction(
+  orderedIds: string[],
+  spacingMinutes: number = 60,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await applyMyDayRouteAction(orderedIds, spacingMinutes);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

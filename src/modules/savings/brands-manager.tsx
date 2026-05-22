@@ -8,8 +8,8 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import {
-  upsertSavingsBrandAction,
-  deleteSavingsBrandAction,
+  upsertSavingsBrandSafeAction,
+  deleteSavingsBrandSafeAction,
   type SavingsBrand,
 } from "./actions";
 
@@ -118,13 +118,13 @@ function BrandRow({
   function del() {
     if (!confirm(`¿Eliminar "${brand.name}"?`)) return;
     startTransition(async () => {
-      try {
-        await deleteSavingsBrandAction(brand.id);
-        notify.success("Marca eliminada");
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+      const r = await deleteSavingsBrandSafeAction(brand.id);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
       }
+      notify.success("Marca eliminada");
+      router.refresh();
     });
   }
 
@@ -194,33 +194,33 @@ function BrandModal({
       return;
     }
     startTransition(async () => {
-      try {
-        const payload: Partial<SavingsBrand> & { id?: string } = {
-          name,
-          kind: brand.kind,
-          is_active: true,
-        };
-        if (!isNew) payload.id = brand.id;
-        if (brand.kind === "supermarket") {
-          const v = Number(pricePerLiterEur.replace(",", "."));
-          payload.price_per_liter_cents = Number.isFinite(v) ? Math.round(v * 100) : 0;
-          payload.price_source = priceSource;
-          payload.scrape_query = scrapeQuery || null;
-        } else {
-          const out: Record<string, number> = {};
-          for (const [g, eur] of Object.entries(pricesByGarrafas)) {
-            const v = Number(eur.replace(",", "."));
-            if (Number.isFinite(v) && v > 0) out[g] = Math.round(v * 100);
-          }
-          payload.prices_by_garrafas = out;
+      const payload: Partial<SavingsBrand> & { id?: string } = {
+        name,
+        kind: brand.kind,
+        is_active: true,
+      };
+      if (!isNew) payload.id = brand.id;
+      if (brand.kind === "supermarket") {
+        const v = Number(pricePerLiterEur.replace(",", "."));
+        payload.price_per_liter_cents = Number.isFinite(v) ? Math.round(v * 100) : 0;
+        payload.price_source = priceSource;
+        payload.scrape_query = scrapeQuery || null;
+      } else {
+        const out: Record<string, number> = {};
+        for (const [g, eur] of Object.entries(pricesByGarrafas)) {
+          const v = Number(eur.replace(",", "."));
+          if (Number.isFinite(v) && v > 0) out[g] = Math.round(v * 100);
         }
-        await upsertSavingsBrandAction(payload);
-        notify.success("Marca guardada");
-        onClose();
-        router.refresh();
-      } catch (err) {
-        notify.error("Error", err instanceof Error ? err.message : String(err));
+        payload.prices_by_garrafas = out;
       }
+      const r = await upsertSavingsBrandSafeAction(payload);
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
+      }
+      notify.success("Marca guardada");
+      onClose();
+      router.refresh();
     });
   }
 
