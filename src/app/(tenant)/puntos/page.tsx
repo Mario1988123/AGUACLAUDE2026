@@ -10,6 +10,9 @@ import {
   MilestonesCard,
   PointsHistoryCard,
 } from "@/modules/points/milestones-card";
+import { getPointsBreakdownSafeAction } from "@/modules/points/breakdown-actions";
+import { PointsBreakdownCard } from "@/modules/points/breakdown-card";
+import { resolveVisibleUserIds } from "@/shared/lib/auth/role-scope";
 import { KpiCard } from "@/shared/components/kpi-card";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +54,7 @@ function getUserLevel(roles: string[], isSuper: boolean): 1 | 2 | 3 {
 export default async function PuntosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ dept?: string }>;
+  searchParams: Promise<{ dept?: string; breakdown?: string }>;
 }) {
   const session = await requireSession();
   const sp = await searchParams;
@@ -62,6 +65,16 @@ export default async function PuntosPage({
     level === 1 && (sp.dept === "tech" || sp.dept === "sales" || sp.dept === "tmk")
       ? sp.dept
       : null;
+
+  // Resolver qué user_ids puede ver la sesión en detalle (admin = todos)
+  const visibleUserIds = await resolveVisibleUserIds(session);
+  // El propio usuario siempre se ve a sí mismo aunque sea nivel 3
+  const ownBreakdownUserId =
+    sp.breakdown && typeof sp.breakdown === "string"
+      ? sp.breakdown
+      : level === 3
+        ? session.user_id
+        : null;
 
   // Scope efectivo:
   // Nivel 3 → su departamento
@@ -76,12 +89,17 @@ export default async function PuntosPage({
     scopeArgs = { scope: "department", department: myDept ?? "sales" };
   }
 
-  const [my, ranking, milestones, history] = await Promise.all([
+  const [my, ranking, milestones, history, breakdownResult] = await Promise.all([
     getMyPoints(),
     getPointsRanking(scopeArgs),
     getMyMilestones(),
     getMyPointsHistory(12),
+    ownBreakdownUserId
+      ? getPointsBreakdownSafeAction(ownBreakdownUserId)
+      : Promise.resolve(null as null),
   ]);
+  const breakdown =
+    breakdownResult && breakdownResult.ok ? breakdownResult.data : null;
 
   const rankingTitle =
     level === 1
@@ -157,7 +175,27 @@ export default async function PuntosPage({
         rows={ranking}
         highlightUserId={session.user_id}
         title={rankingTitle}
+        breakdownAllowedIds={
+          visibleUserIds === null
+            ? new Set(ranking.map((r) => r.user_id))
+            : new Set(visibleUserIds)
+        }
       />
+
+      {breakdown && (
+        <PointsBreakdownCard
+          data={breakdown}
+          isOwn={breakdown.user_id === session.user_id}
+        />
+      )}
+
+      {sp.breakdown && !breakdown && (
+        <p className="rounded-xl border border-dashed border-warning/40 bg-warning/5 p-4 text-sm text-warning">
+          No puedes ver el desglose de ese usuario. Solo el administrador, el
+          director del equipo correspondiente y el propio usuario pueden
+          consultar de dónde vienen sus puntos.
+        </p>
+      )}
     </div>
   );
 }

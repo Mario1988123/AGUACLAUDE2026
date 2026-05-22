@@ -1,4 +1,5 @@
-import { Crown, Medal } from "lucide-react";
+import Link from "next/link";
+import { Crown, Medal, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { UserAvatar } from "@/shared/components/user-avatar";
 import type { PointsRankingRow } from "./ranking-actions";
@@ -13,10 +14,15 @@ export function PointsRankingCard({
   rows,
   highlightUserId,
   title = "Clasificación",
+  /** user_ids cuyo desglose puede ver la sesión actual (admin, dueño, o
+   *  miembros del equipo de un director). Si la sesión está aquí, la fila
+   *  se renderiza como link a /puntos?breakdown=userId; si no, texto plano. */
+  breakdownAllowedIds,
 }: {
   rows: PointsRankingRow[];
   highlightUserId?: string;
   title?: string;
+  breakdownAllowedIds?: Set<string>;
 }) {
   const max = rows[0]?.points_month ?? 0;
   return (
@@ -37,13 +43,9 @@ export function PointsRankingCard({
             {rows.map((r, idx) => {
               const isMe = r.user_id === highlightUserId;
               const pct = max > 0 ? Math.round((r.points_month * 100) / max) : 0;
-              return (
-                <li
-                  key={r.user_id}
-                  className={`relative overflow-hidden rounded-2xl border p-3 ${
-                    isMe ? "border-primary bg-primary/5" : "border-border bg-card"
-                  }`}
-                >
+              const canDrill = breakdownAllowedIds?.has(r.user_id) ?? false;
+              const inner = (
+                <>
                   <div
                     className="absolute inset-y-0 left-0 bg-primary/10"
                     style={{ width: `${pct}%` }}
@@ -60,7 +62,7 @@ export function PointsRankingCard({
                     </div>
                     <UserAvatar userId={r.user_id} name={r.user_name} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-sm flex items-center gap-2">
+                      <div className="font-semibold text-sm flex items-center gap-2 flex-wrap">
                         {r.user_name}
                         {isMe && <span className="text-xs text-primary">(tú)</span>}
                         {r.department && (
@@ -69,8 +71,14 @@ export function PointsRankingCard({
                           </span>
                         )}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {r.points_year} pts acumulados año
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span>{r.points_year} pts acumulados año</span>
+                        {r.equipments_month > 0 && (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1.5 py-0.5 font-semibold">
+                            <Package className="h-3 w-3" />
+                            {r.equipments_month} equipo{r.equipments_month === 1 ? "" : "s"} mes
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -80,6 +88,23 @@ export function PointsRankingCard({
                       </div>
                     </div>
                   </div>
+                </>
+              );
+              const baseCls = `relative overflow-hidden rounded-2xl border p-3 ${
+                isMe ? "border-primary bg-primary/5" : "border-border bg-card"
+              }`;
+              return (
+                <li key={r.user_id}>
+                  {canDrill ? (
+                    <Link
+                      href={`/puntos?breakdown=${r.user_id}` as never}
+                      className={`${baseCls} block transition-colors hover:border-primary/60`}
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div className={baseCls}>{inner}</div>
+                  )}
                 </li>
               );
             })}

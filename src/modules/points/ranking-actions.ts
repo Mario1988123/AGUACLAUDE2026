@@ -24,6 +24,11 @@ export interface PointsRankingRow {
   department: "tech" | "sales" | "tmk" | null;
   points_month: number;
   points_year: number;
+  /** Equipos asociados al usuario este mes (suma metadata.equipments en
+   *  asientos sale / sale_with_discount / sale_tmk_split). Para tech
+   *  habitualmente 0; para comerciales y TMK refleja su producción. Se
+   *  expone a todos: es agregado sin revelar contratos concretos. */
+  equipments_month: number;
 }
 
 interface RankingArgs {
@@ -66,7 +71,7 @@ export async function getPointsRanking(args: RankingArgs): Promise<PointsRanking
     candidateIds = args.user_ids;
   }
 
-  // 2) Sumas mes y año en una sola consulta cada
+  // 2) Sumas mes y año + equipos vendidos del mes
   const monthQ = supabase
     .from("points_ledger")
     .select("user_id, points")
@@ -78,10 +83,20 @@ export async function getPointsRanking(args: RankingArgs): Promise<PointsRanking
     .select("user_id, points")
     .eq("company_id", session.company_id)
     .eq("period_year", year);
-  const [{ data: monthData }, { data: yearData }] = await Promise.all([
-    candidateIds && candidateIds.length > 0 ? monthQ.in("user_id", candidateIds) : monthQ,
-    candidateIds && candidateIds.length > 0 ? yearQ.in("user_id", candidateIds) : yearQ,
-  ]);
+  // Equipos vendidos: asientos de venta del mes con metadata.equipments
+  const equipQ = supabase
+    .from("points_ledger")
+    .select("user_id, metadata, reason")
+    .eq("company_id", session.company_id)
+    .eq("period_year", year)
+    .eq("period_month", month)
+    .in("reason", ["sale", "sale_with_discount", "sale_tmk_split"]);
+  const [{ data: monthData }, { data: yearData }, { data: equipData }] =
+    await Promise.all([
+      candidateIds && candidateIds.length > 0 ? monthQ.in("user_id", candidateIds) : monthQ,
+      candidateIds && candidateIds.length > 0 ? yearQ.in("user_id", candidateIds) : yearQ,
+      candidateIds && candidateIds.length > 0 ? equipQ.in("user_id", candidateIds) : equipQ,
+    ]);
 
   type Row = { user_id: string; points: number };
   const monthMap = new Map<string, number>();
@@ -91,6 +106,28 @@ export async function getPointsRanking(args: RankingArgs): Promise<PointsRanking
   const yearMap = new Map<string, number>();
   for (const r of (yearData ?? []) as Row[]) {
     yearMap.set(r.user_id, (yearMap.get(r.user_id) ?? 0) + r.points);
+  }
+  // metadata es JSONB → puede venir como string si la lib no lo parsea.
+  // Defensivo: aceptamos string|object y extraemos .equipments numérico.
+  const equipMap = new Map<string, number>();
+  type EquipRow = {
+    user_id: string;
+    reason: string;
+    metadata: Record<string, unknown> | string | null;
+  };
+  for (const r of (equipData ?? []) as EquipRow[]) {
+    let meta: Record<string, unknown> | null = null;
+    if (r.metadata && typeof r.metadata === "object") {
+      meta = r.metadata as Record<string, unknown>;
+    } else if (typeof r.metadata === "string") {
+      try {
+        meta = JSON.parse(r.metadata);
+      } catch {
+        meta = null;
+      }
+    }
+    const n = meta && typeof meta.equipments === "number" ? meta.equipments : 0;
+    if (n > 0) equipMap.set(r.user_id, (equipMap.get(r.user_id) ?? 0) + n);
   }
 
   // Set final de ids: union de candidatos + quienes tengan puntos
@@ -128,6 +165,7 @@ export async function getPointsRanking(args: RankingArgs): Promise<PointsRanking
       department: deptMap.get(id) ?? null,
       points_month: monthMap.get(id) ?? 0,
       points_year: yearMap.get(id) ?? 0,
+      equipments_month: equipMap.get(id) ?? 0,
     }))
     .sort((a, b) => b.points_month - a.points_month);
 }
