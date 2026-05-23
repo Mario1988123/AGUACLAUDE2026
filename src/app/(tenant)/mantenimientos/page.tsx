@@ -135,11 +135,21 @@ export default async function MantenimientosPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Mantenimientos</h1>
-        <p className="text-sm text-muted-foreground">
-          {contracts.length} contratos · {jobs.length} trabajos
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Mantenimientos</h1>
+          <p className="text-sm text-muted-foreground">
+            {contracts.length} contratos · {jobs.length} trabajos
+          </p>
+        </div>
+        {isUpper && (
+          <Link
+            href="/mantenimientos/por-confirmar"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-primary bg-primary/5 px-4 text-sm font-semibold text-primary hover:bg-primary/10"
+          >
+            Por confirmar →
+          </Link>
+        )}
       </div>
 
       {isUpper && alerts && <MaintenanceSmartAlerts alerts={alerts} />}

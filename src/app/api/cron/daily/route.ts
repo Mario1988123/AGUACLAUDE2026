@@ -656,6 +656,33 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 4a-bis) Extender ventana de mantenimientos preprogrammed para todos los
+  // contratos activos. Asegura que siempre haya 12 meses por delante de
+  // visitas teóricas en estado preprogrammed (admin/dir técnico los
+  // confirma desde /mantenimientos/por-confirmar). Idempotente.
+  const maintenanceWindowStats = { processed: 0, created: 0, failed: 0 };
+  try {
+    const { ensureMaintenanceWindow } = await import(
+      "@/modules/maintenance/auto-schedule"
+    );
+    const { data: activeContracts } = await admin
+      .from("contracts")
+      .select("id")
+      .eq("maintenance_included", true)
+      .in("status", ["signed", "active", "installed"]);
+    for (const c of (activeContracts ?? []) as Array<{ id: string }>) {
+      try {
+        const n = await ensureMaintenanceWindow(c.id, 12);
+        maintenanceWindowStats.processed += 1;
+        maintenanceWindowStats.created += n;
+      } catch {
+        maintenanceWindowStats.failed += 1;
+      }
+    }
+  } catch (e) {
+    console.error("[cron/daily] ensureMaintenanceWindow failed:", e);
+  }
+
   // 4b) Generar órdenes de carga sugeridas para mañana (furgonetas)
   let loadingStats = { companies: 0, requests_created: 0, errors: 0 };
   try {
@@ -1921,6 +1948,7 @@ export async function GET(req: NextRequest) {
     savings_scraper: scraperStats,
     stock_alerts: stockAlertsStats,
     auto_loading: loadingStats,
+    maintenance_window: maintenanceWindowStats,
     incident_sla_breaches: slaBreaches,
     gocardless_retry: gcRetry,
     cycles_pending_review: cyclesPending,

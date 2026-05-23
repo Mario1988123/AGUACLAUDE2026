@@ -180,14 +180,45 @@ export async function listAgenda(
  * hoy es jueves, por ejemplo). El cron daily crea instalaciones desde
  * primera hora, así que el caller suele pasar inicio-de-día en local.
  */
+export interface ListAgendaRangeOptions {
+  user_id?: string;
+  kind?: string;
+  /** Estado(s) a incluir. Si se omite trae todos los estados.
+   *  Útil para vista listado donde el usuario filtra por "Programado"
+   *  o "Completado". Aplica solo a agenda_events (los virtuales ya
+   *  vienen pre-filtrados a scheduled/in_progress). */
+  status?: string[];
+  /** Tope de filas devueltas tras merge. Defensa contra empresas con
+   *  miles de mantenimientos en el rango. Default 500. */
+  limit?: number;
+}
+
+export interface ListAgendaRangeResult {
+  events: AgendaItem[];
+  truncated: boolean;
+  total_before_limit: number;
+}
+
 export async function listAgendaRange(
   fromIso: string,
   toIso: string,
-  filters?: { user_id?: string; kind?: string },
+  filters?: ListAgendaRangeOptions,
 ): Promise<AgendaItem[]> {
+  const r = await listAgendaRangeFull(fromIso, toIso, filters);
+  return r.events;
+}
+
+/** Versión que también expone si la respuesta se truncó. Pensada para la
+ *  vista listado, que muestra banner cuando llegamos al cap. */
+export async function listAgendaRangeFull(
+  fromIso: string,
+  toIso: string,
+  filters?: ListAgendaRangeOptions,
+): Promise<ListAgendaRangeResult> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  const limit = Math.max(50, Math.min(filters?.limit ?? 500, 2000));
 
   const isLevel1or2 =
     session.is_superadmin ||
@@ -216,6 +247,9 @@ export async function listAgendaRange(
 
   if (filters?.kind) {
     query = query.eq("kind", filters.kind);
+  }
+  if (filters?.status && filters.status.length > 0) {
+    query = query.in("status", filters.status);
   }
 
   const { data, error } = await query;
@@ -247,8 +281,17 @@ export async function listAgendaRange(
     ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
 
+  const totalBeforeLimit = merged.length;
+  const truncated = totalBeforeLimit > limit;
+  if (truncated) merged = merged.slice(0, limit);
+
   await enrichTitlesFromSubjects(merged);
-  return await recomputeOutsideHoursForList(merged, session.company_id);
+  const finalEvents = await recomputeOutsideHoursForList(merged, session.company_id);
+  return {
+    events: finalEvents,
+    truncated,
+    total_before_limit: totalBeforeLimit,
+  };
 }
 
 /** Reescribe el title de los eventos cuyo subject_type sea installation
@@ -356,6 +399,11 @@ async function loadVirtualAgendaItems(args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  // Defensa: cap por query para evitar pesos de DOM en empresas con muchos
+  // mantenimientos. El listAgendaRangeFull aplica además un cap global tras
+  // el merge, este es solo para no traer 5000 filas de BD por query.
+  const PER_QUERY_CAP = 1000;
+
   let instQ = supabase
     .from("installations")
     .select(
@@ -366,7 +414,9 @@ async function loadVirtualAgendaItems(args: {
     .not("scheduled_at", "is", null)
     .gte("scheduled_at", args.from)
     .lte("scheduled_at", args.to)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .order("scheduled_at", { ascending: true })
+    .limit(PER_QUERY_CAP);
   if (args.restrictToUserId) {
     instQ = instQ.eq("installer_user_id", args.restrictToUserId);
   }
@@ -378,7 +428,9 @@ async function loadVirtualAgendaItems(args: {
     .in("status", ["scheduled", "in_progress"])
     .not("scheduled_at", "is", null)
     .gte("scheduled_at", args.from)
-    .lte("scheduled_at", args.to);
+    .lte("scheduled_at", args.to)
+    .order("scheduled_at", { ascending: true })
+    .limit(PER_QUERY_CAP);
   if (args.restrictToUserId) {
     maintQ = maintQ.eq("technician_user_id", args.restrictToUserId);
   }
