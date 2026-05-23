@@ -7,12 +7,8 @@ import {
   FunnelChart,
   YearComparisonChart,
 } from "@/modules/dashboard/charts";
-import {
-  getDashboardObjectives,
-  getMonthRanking,
-} from "@/modules/sales/dashboard-actions";
+import { getDashboardObjectives } from "@/modules/sales/dashboard-actions";
 import { DashboardObjectivesCard } from "@/modules/sales/dashboard-objectives-card";
-import { RankingCard } from "@/modules/sales/ranking-card";
 import { DashboardFilters } from "@/modules/sales/dashboard-filters";
 import { getPointsRanking } from "@/modules/points/ranking-actions";
 import { PointsRankingCard } from "@/modules/points/ranking-card";
@@ -142,7 +138,6 @@ async function renderDashboard({
     salesLastYearRes,
     leadsByStatusRes,
     objectives,
-    ranking,
     teamMembers,
   ] = scopeEmpty
     ? await Promise.all([
@@ -154,7 +149,6 @@ async function renderDashboard({
         Promise.resolve({ data: [] as Array<{ total_cents: number; recorded_at: string }> }),
         Promise.resolve({ data: [] as Array<{ status: string }> }),
         getDashboardObjectives(filterUser, filterDept),
-        Promise.resolve([] as never[]),
         listTeamMembers().catch(() => []),
       ])
     : await Promise.all([
@@ -218,7 +212,6 @@ async function renderDashboard({
           "assigned_user_id",
         ),
         getDashboardObjectives(filterUser, filterDept),
-        getMonthRanking(filterDept).catch(() => []),
         listTeamMembers().catch(() => []),
       ]);
 
@@ -483,24 +476,21 @@ async function renderDashboard({
         <UpcomingMaintenanceCard items={upcomingMaintenance} />
       </div>
 
-      {/* Ranking de ventas (€): solo nivel 1 y 2. */}
-      {(isLevel1 || isLevel2) && (
-        <RankingCard rows={ranking} highlightUserId={session.user_id} />
-      )}
-
-      {/* Ranking de puntos del mes: visible a todos (todos ganan puntos).
-          Nivel 3 ve su departamento; nivel 1/2 ven el scope que les
-          corresponde. Las filas con scope (admin / dueño / equipo del
-          director) enlazan al desglose detallado en /puntos. */}
+      {/* Ranking de puntos: card único con tabs Mensual / Anual, visible a
+          todos los roles (todos ganan puntos). Nivel 3 ve su departamento;
+          nivel 1/2 ven el scope que les corresponde. Las filas con scope
+          enlazan al desglose detallado en /puntos. El antiguo RankingCard
+          de ventas (€) se retiró 2026-05-23: el ranking ahora es por
+          puntos, que ya consolida méritos comerciales + técnicos. */}
       <PointsRankingCard
         rows={pointsRanking}
         highlightUserId={session.user_id}
         title={
           isLevel1
             ? filterDept
-              ? "Ranking puntos · departamento"
-              : "Ranking puntos · global"
-            : "Ranking puntos · mi departamento"
+              ? "Ranking · departamento"
+              : "Ranking global"
+            : "Ranking · mi departamento"
         }
         breakdownAllowedIds={pointsBreakdownAllowedIds}
       />
