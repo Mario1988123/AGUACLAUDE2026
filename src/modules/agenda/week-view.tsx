@@ -124,6 +124,15 @@ export function AgendaWeekView({
     () => weekEvents.filter((ev) => ev.is_outside_hours),
     [weekEvents],
   );
+  // Días que contienen alguna tarea fuera de horario. Cada día de la
+  // cabecera se pinta en ámbar para que el usuario lo localice de un vistazo.
+  const outsideHoursDayKeys = useMemo(
+    () =>
+      new Set(
+        outsideHoursEvents.map((ev) => localKey(new Date(ev.starts_at))),
+      ),
+    [outsideHoursEvents],
+  );
 
   const eventsByDay: Record<string, AgendaItem[]> = {};
   for (const ev of events) {
@@ -214,7 +223,7 @@ export function AgendaWeekView({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-xl font-bold capitalize">
           {weekStart.toLocaleDateString("es-ES", { day: "numeric", month: "short" })} —{" "}
           {weekEnd.toLocaleDateString("es-ES", {
@@ -223,7 +232,28 @@ export function AgendaWeekView({
             year: "numeric",
           })}
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Date picker: salta directamente a la semana que contiene
+              esa fecha. Útil para ver tareas a meses vista sin pulsar
+              prev/next decenas de veces. */}
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="font-semibold uppercase tracking-wide">Ir a</span>
+            <input
+              type="date"
+              value={isoDate(cursor)}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
+                const parts = v.split("-").map((n) => Number(n));
+                const d = new Date(parts[0]!, (parts[1] ?? 1) - 1, parts[2] ?? 1);
+                if (Number.isNaN(d.getTime())) return;
+                const monday = startOfWeek(d);
+                setCursor(monday);
+                navigateToWeek(monday);
+              }}
+              className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+            />
+          </label>
           <Button variant="outline" size="sm" onClick={today}>
             Esta semana
           </Button>
@@ -285,18 +315,50 @@ export function AgendaWeekView({
           {days.map((d, i) => {
             const key = localKey(d);
             const isToday = key === todayKey;
+            const hasOutside = outsideHoursDayKeys.has(key);
             return (
               <div
                 key={i}
                 className={cn(
-                  "border-b border-r last:border-r-0 px-2 py-2 text-center",
-                  isToday ? "bg-primary/10" : "bg-muted/30",
+                  "border-b border-r last:border-r-0 px-2 py-2 text-center relative",
+                  hasOutside
+                    ? "bg-amber-100 ring-1 ring-inset ring-amber-300"
+                    : isToday
+                      ? "bg-primary/10"
+                      : "bg-muted/30",
                 )}
+                title={
+                  hasOutside
+                    ? "Hay alguna tarea fuera de horario este día"
+                    : undefined
+                }
               >
-                <div className="text-[10px] uppercase font-bold text-muted-foreground">
+                {hasOutside && (
+                  <span
+                    aria-label="Tarea fuera de horario"
+                    className="absolute right-1 top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white"
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5" />
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    "text-[10px] uppercase font-bold",
+                    hasOutside ? "text-amber-900" : "text-muted-foreground",
+                  )}
+                >
                   {WEEKDAYS[i]}
                 </div>
-                <div className={cn("text-sm font-extrabold", isToday && "text-primary")}>
+                <div
+                  className={cn(
+                    "text-sm font-extrabold",
+                    hasOutside
+                      ? "text-amber-900"
+                      : isToday
+                        ? "text-primary"
+                        : undefined,
+                  )}
+                >
                   {d.getDate()}
                 </div>
               </div>
