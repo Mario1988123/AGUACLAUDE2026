@@ -60,3 +60,30 @@ export async function updatePointsSettingsSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+/**
+ * Admin only — recorre instalaciones completadas sin puntos de venta y
+ * los recalcula. Útil tras el fix del bug assigned_user_id (2026-05-22).
+ */
+export async function recomputeMissingSalesPointsSafeAction(): Promise<
+  | { ok: true; processed: number; awarded: number; skipped: number; errors: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const { recomputeMissingSalesPoints } = await import("./sales-bundle");
+    const r = await recomputeMissingSalesPoints(session.company_id);
+    revalidatePath("/puntos");
+    revalidatePath("/configuracion/puntos");
+    return {
+      ok: true,
+      processed: r.processed,
+      awarded: r.awarded,
+      skipped: r.skipped,
+      errors: r.errors,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

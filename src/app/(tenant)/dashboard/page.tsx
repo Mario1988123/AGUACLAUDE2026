@@ -14,6 +14,8 @@ import {
 import { DashboardObjectivesCard } from "@/modules/sales/dashboard-objectives-card";
 import { RankingCard } from "@/modules/sales/ranking-card";
 import { DashboardFilters } from "@/modules/sales/dashboard-filters";
+import { getPointsRanking } from "@/modules/points/ranking-actions";
+import { PointsRankingCard } from "@/modules/points/ranking-card";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import {
   UpcomingMaintenanceCard,
@@ -220,6 +222,26 @@ async function renderDashboard({
         listTeamMembers().catch(() => []),
       ]);
 
+  // Ranking de puntos del mes: scope idéntico a /puntos. Nivel 1 ve global
+  // (con filtro de dpto si lo pidió), nivel 2/3 ven su departamento.
+  const userDept: "tech" | "sales" | "tmk" | null =
+    session.roles.includes("technical_director") ||
+    session.roles.includes("installer")
+      ? "tech"
+      : session.roles.includes("commercial_director") ||
+          session.roles.includes("sales_rep")
+        ? "sales"
+        : session.roles.includes("telemarketing_director") ||
+            session.roles.includes("telemarketer")
+          ? "tmk"
+          : null;
+  const pointsScopeArgs: Parameters<typeof getPointsRanking>[0] =
+    objectives.level === 1
+      ? filterDept
+        ? { scope: "department", department: filterDept }
+        : { scope: "all" }
+      : { scope: "department", department: userDept ?? "sales" };
+
   const [
     upcomingMaintenance,
     upcomingInstallations,
@@ -229,6 +251,7 @@ async function renderDashboard({
     pendingTrials,
     criticalStockAlerts,
     consolidatedAlerts,
+    pointsRanking,
   ] = await Promise.all([
     getUpcomingMaintenance().catch(() => []),
     getUpcomingInstallations().catch(() => []),
@@ -240,7 +263,12 @@ async function renderDashboard({
     objectives.level === 1 || objectives.level === 2
       ? getConsolidatedAlerts().catch(() => null)
       : Promise.resolve(null),
+    getPointsRanking(pointsScopeArgs).catch(() => []),
   ]);
+  const pointsBreakdownAllowedIds =
+    visibleUserIds === null
+      ? new Set(pointsRanking.map((r) => r.user_id))
+      : new Set(visibleUserIds);
 
   const totalYear = ((salesYearRes.data ?? []) as { total_cents: number }[]).reduce(
     (s, r) => s + r.total_cents,
@@ -455,10 +483,27 @@ async function renderDashboard({
         <UpcomingMaintenanceCard items={upcomingMaintenance} />
       </div>
 
-      {/* Ranking: solo nivel 1 y 2 (nivel 3 ya ve sus KPIs propios arriba). */}
+      {/* Ranking de ventas (€): solo nivel 1 y 2. */}
       {(isLevel1 || isLevel2) && (
         <RankingCard rows={ranking} highlightUserId={session.user_id} />
       )}
+
+      {/* Ranking de puntos del mes: visible a todos (todos ganan puntos).
+          Nivel 3 ve su departamento; nivel 1/2 ven el scope que les
+          corresponde. Las filas con scope (admin / dueño / equipo del
+          director) enlazan al desglose detallado en /puntos. */}
+      <PointsRankingCard
+        rows={pointsRanking}
+        highlightUserId={session.user_id}
+        title={
+          isLevel1
+            ? filterDept
+              ? "Ranking puntos · departamento"
+              : "Ranking puntos · global"
+            : "Ranking puntos · mi departamento"
+        }
+        breakdownAllowedIds={pointsBreakdownAllowedIds}
+      />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SalesByMonthChart data={salesData} />

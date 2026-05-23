@@ -389,6 +389,11 @@ export async function createContractFromProposal(proposalId: string) {
     clauses_snapshot: clausesSnapshot,
     pending_fields: pending,
     created_by: session.user_id,
+    // Comercial responsable de la venta: por defecto el creador. Admin
+    // puede reasignar después. Importante para que awardSalesBundleOnInstall
+    // sepa a quién dar los puntos cuando se complete la instalación.
+    assigned_user_id: session.user_id,
+    assigned_at: new Date().toISOString(),
     // Snapshot de financiera (Fase 4). Si no es renting o no hay
     // financier_id, todo queda en null.
     financier_id: p.financier_id ?? null,
@@ -419,6 +424,7 @@ export async function createContractFromProposal(proposalId: string) {
         monthly_cents: monthlyCents,
         status: has_provisional_data ? "pending_data" : "pending_signature",
         created_by: session.user_id,
+        assigned_user_id: session.user_id,
       };
       const r2 = await supabase
         .from("contracts")

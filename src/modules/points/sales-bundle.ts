@@ -64,16 +64,25 @@ export async function awardSalesBundleOnInstall(
     return { awarded: false, reason: "ya_otorgados" };
   }
 
-  // Cargar contrato + assigned_user_id
+  // Cargar contrato + comercial asignado (fallback a created_by). Hasta
+  // 2026-05-22 contracts.assigned_user_id solo se rellenaba al reasignar,
+  // así que la mayoría de contratos antiguos lo tenían NULL y este path
+  // retornaba "sin_comercial_asignado" → el comercial nunca cobraba.
   const { data: contract } = await admin
     .from("contracts")
-    .select("id, assigned_user_id, customer_id")
+    .select("id, assigned_user_id, created_by, customer_id")
     .eq("id", i.contract_id)
     .maybeSingle();
   const c = contract as
-    | { id: string; assigned_user_id: string | null; customer_id: string | null }
+    | {
+        id: string;
+        assigned_user_id: string | null;
+        created_by: string | null;
+        customer_id: string | null;
+      }
     | null;
-  if (!c?.assigned_user_id) {
+  const salesUserId = c?.assigned_user_id ?? c?.created_by ?? null;
+  if (!c || !salesUserId) {
     return { awarded: false, reason: "sin_comercial_asignado" };
   }
 
@@ -147,14 +156,14 @@ export async function awardSalesBundleOnInstall(
     ? Math.round((base * (100 - cfg.discount_penalty_percent)) / 100)
     : base;
 
-  const tmkPct = tmkUserId && tmkUserId !== c.assigned_user_id ? cfg.tmk_split_percent : 0;
+  const tmkPct = tmkUserId && tmkUserId !== salesUserId ? cfg.tmk_split_percent : 0;
   const tmkPoints = Math.round((adjusted * tmkPct) / 100);
   const commercialPoints = adjusted - tmkPoints;
 
   if (commercialPoints > 0) {
     await awardPoints({
       company_id: i.company_id,
-      user_id: c.assigned_user_id,
+      user_id: salesUserId,
       points: commercialPoints,
       reason: hasDiscount ? "sale_with_discount" : "sale",
       subject_type: "contract",
@@ -183,4 +192,63 @@ export async function awardSalesBundleOnInstall(
   }
 
   return { awarded: true };
+}
+
+/**
+ * Recorre todas las instalaciones COMPLETADAS de la empresa cuyo contrato
+ * no tenga aún puntos de venta otorgados (sale / sale_with_discount /
+ * sale_tmk_split) y reintenta `awardSalesBundleOnInstall`. Idempotente —
+ * el propio bundle hace el check antes de insertar.
+ *
+ * Solo admin (validación al final del handler en config-actions).
+ *
+ * Devuelve { processed, awarded, skipped } como resumen.
+ */
+export async function recomputeMissingSalesPoints(
+  companyId: string,
+): Promise<{
+  processed: number;
+  awarded: number;
+  skipped: number;
+  errors: string[];
+}> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // 1) Listar instalaciones completadas de la empresa con kind=normal.
+  const { data: installs } = await admin
+    .from("installations")
+    .select("id, contract_id, completed_at")
+    .eq("company_id", companyId)
+    .eq("kind", "normal")
+    .not("completed_at", "is", null)
+    .not("contract_id", "is", null);
+
+  type IR = {
+    id: string;
+    contract_id: string | null;
+    completed_at: string | null;
+  };
+  const rows = (installs ?? []) as IR[];
+  if (rows.length === 0) {
+    return { processed: 0, awarded: 0, skipped: 0, errors: [] };
+  }
+
+  // 2) Para cada una llamar al bundle (idempotente: salta si ya tiene
+  //    asientos sale*, también si el contrato sigue sin comercial).
+  let awarded = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+  for (const r of rows) {
+    try {
+      const res = await awardSalesBundleOnInstall(r.id);
+      if (res.awarded) awarded += 1;
+      else skipped += 1;
+    } catch (e) {
+      errors.push(
+        `installation ${r.id}: ${e instanceof Error ? e.message : "error"}`,
+      );
+    }
+  }
+  return { processed: rows.length, awarded, skipped, errors };
 }
