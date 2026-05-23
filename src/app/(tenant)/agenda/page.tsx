@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { listAgenda, listAgendaMonth, listTeamMembers } from "@/modules/agenda/actions";
+import {
+  listAgenda,
+  listAgendaMonth,
+  listAgendaRange,
+  listTeamMembers,
+} from "@/modules/agenda/actions";
 import { KIND_LABEL } from "@/modules/agenda/constants";
 import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { AgendaCalendar } from "@/modules/agenda/calendar";
@@ -18,7 +23,7 @@ const KIND_FILTER_OPTIONS = ["visit", "call", "manual", "meeting", "reminder"] a
 export default async function AgendaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ user?: string; kind?: string; view?: string }>;
+  searchParams: Promise<{ user?: string; kind?: string; view?: string; w?: string }>;
 }) {
   const sp = await searchParams;
   const userFilter = sp.user || undefined;
@@ -27,10 +32,43 @@ export default async function AgendaPage({
   const view: "calendar" | "week" | "list" =
     sp.view === "list" ? "list" : sp.view === "week" ? "week" : "calendar";
 
+  // En vista semana cargamos exactamente la semana visible (parámetro
+  // ?w=YYYY-MM-DD = lunes de esa semana). Si no viene, la semana actual.
+  // Para que listAgenda(14) sirva al resto de vistas mantenemos los dos
+  // fetches en paralelo cuando aplica.
   const now = new Date();
-  const [events, monthEvents, team, session, unscheduled] = await Promise.all([
+  function startOfWeek(d: Date): Date {
+    const day = (d.getDay() + 6) % 7; // lunes=0
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+  }
+  let weekStart = startOfWeek(now);
+  if (sp.w && /^\d{4}-\d{2}-\d{2}$/.test(sp.w)) {
+    const parts = sp.w.split("-").map((n) => Number(n));
+    const candidate = new Date(parts[0]!, (parts[1] ?? 1) - 1, parts[2] ?? 1);
+    if (!Number.isNaN(candidate.getTime())) weekStart = startOfWeek(candidate);
+  }
+  const weekEnd = new Date(
+    weekStart.getFullYear(),
+    weekStart.getMonth(),
+    weekStart.getDate() + 6,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  const weekEventsPromise =
+    view === "week"
+      ? listAgendaRange(weekStart.toISOString(), weekEnd.toISOString(), {
+          user_id: userFilter,
+          kind: kindFilter,
+        })
+      : Promise.resolve([] as Awaited<ReturnType<typeof listAgenda>>);
+
+  const [events, monthEvents, weekEvents, team, session, unscheduled] = await Promise.all([
     listAgenda(14, { user_id: userFilter, kind: kindFilter }),
     listAgendaMonth(now.getFullYear(), now.getMonth()),
+    weekEventsPromise,
     listTeamMembers(),
     requireSession(),
     listUnscheduledInstallations().catch(() => []),
@@ -193,7 +231,12 @@ export default async function AgendaPage({
         </>
       )}
       {view === "week" && (
-        <AgendaWeekView events={events} team={team} canReassign={canReassign} />
+        <AgendaWeekView
+          events={weekEvents}
+          team={team}
+          canReassign={canReassign}
+          weekStartIso={weekStart.toISOString()}
+        />
       )}
       {view === "list" && (
         <div className="space-y-3">

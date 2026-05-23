@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -13,7 +13,14 @@ import { rescheduleAgendaEventSafeAction } from "./actions";
 import { MoveEventDialog } from "./move-event-dialog";
 
 const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-const HOURS = Array.from({ length: 12 }, (_, i) => 8 + i); // 08:00 → 19:00
+const HOURS = Array.from({ length: 15 }, (_, i) => 7 + i); // 07:00 → 21:00
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
 
 const KIND_COLOR: Record<string, string> = {
   visit: "bg-[#e6e6ff] text-[#5a5acf]",
@@ -40,16 +47,53 @@ interface Props {
   events: AgendaItem[];
   team?: { user_id: string; full_name: string }[];
   canReassign?: boolean;
+  /** ISO del lunes de la semana visible (la página ya pre-cargó esos
+   *  eventos). El componente lo usa como cursor inicial y para navegar
+   *  vía URL en prev/next/today. */
+  weekStartIso?: string;
 }
 
-export function AgendaWeekView({ events: initial, team = [], canReassign = false }: Props) {
-  const [cursor, setCursor] = useState(() => startOfWeek(new Date()));
+export function AgendaWeekView({
+  events: initial,
+  team = [],
+  canReassign = false,
+  weekStartIso,
+}: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Si el server pasó weekStartIso, lo usamos. Si no, semana actual.
+  const initialCursor = useMemo(() => {
+    if (weekStartIso) {
+      const d = new Date(weekStartIso);
+      if (!Number.isNaN(d.getTime())) return startOfWeek(d);
+    }
+    return startOfWeek(new Date());
+  }, [weekStartIso]);
+
+  const [cursor, setCursor] = useState(initialCursor);
   const [moveTarget, setMoveTarget] = useState<AgendaItem | null>(null);
   const [events, setEvents] = useState<AgendaItem[]>(initial);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overCell, setOverCell] = useState<string | null>(null);
   const [, startTransition] = useTransition();
-  const router = useRouter();
+
+  // Re-sincronizar el state cuando el servidor re-renderiza con otra
+  // semana (cambio de ?w=...). Sin esto, navegar a otra semana mostraría
+  // el cursor nuevo pero seguiría filtrando los eventos viejos.
+  useEffect(() => {
+    setEvents(initial);
+  }, [initial]);
+  useEffect(() => {
+    setCursor(initialCursor);
+  }, [initialCursor]);
+
+  function navigateToWeek(monday: Date) {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("view", "week");
+    params.set("w", isoDate(monday));
+    router.push(`/agenda?${params.toString()}` as never);
+  }
 
   const userNameMap = useMemo(
     () => new Map(team.map((u) => [u.user_id, u.full_name])),
@@ -92,14 +136,18 @@ export function AgendaWeekView({ events: initial, team = [], canReassign = false
     const r = new Date(cursor);
     r.setDate(r.getDate() - 7);
     setCursor(r);
+    navigateToWeek(r);
   }
   function next() {
     const r = new Date(cursor);
     r.setDate(r.getDate() + 7);
     setCursor(r);
+    navigateToWeek(r);
   }
   function today() {
-    setCursor(startOfWeek(new Date()));
+    const t = startOfWeek(new Date());
+    setCursor(t);
+    navigateToWeek(t);
   }
 
   const todayKey = localKey(new Date());

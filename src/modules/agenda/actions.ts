@@ -166,15 +166,28 @@ export async function listAgenda(
   daysAhead = 14,
   filters?: { user_id?: string; kind?: string },
 ): Promise<AgendaItem[]> {
-  const session = await requireSession();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  // El cron daily crea instalaciones de hoy desde primera hora; si arrancamos
-  // la query con now.toISOString() (medio día) se pierden las de las 8-9-10
-  // de la mañana. Usamos start-of-today.
+  // Implementación: delegamos en listAgendaRange con [start-of-today, +daysAhead].
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
   const until = new Date(now.getTime() + daysAhead * 86400000);
+  return listAgendaRange(startOfToday.toISOString(), until.toISOString(), filters);
+}
+
+/**
+ * Igual que listAgenda pero con rango arbitrario. Útil para la vista
+ * semanal de la agenda, que necesita cargar la semana visible aunque
+ * incluya días anteriores a hoy (lunes/martes de la semana en curso si
+ * hoy es jueves, por ejemplo). El cron daily crea instalaciones desde
+ * primera hora, así que el caller suele pasar inicio-de-día en local.
+ */
+export async function listAgendaRange(
+  fromIso: string,
+  toIso: string,
+  filters?: { user_id?: string; kind?: string },
+): Promise<AgendaItem[]> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
 
   const isLevel1or2 =
     session.is_superadmin ||
@@ -189,8 +202,8 @@ export async function listAgenda(
       "id, kind, status, title, description, starts_at, ends_at, assigned_user_id, is_outside_hours, subject_type, subject_id",
     )
     .is("deleted_at", null)
-    .gte("starts_at", startOfToday.toISOString())
-    .lte("starts_at", until.toISOString())
+    .gte("starts_at", fromIso)
+    .lte("starts_at", toIso)
     .order("starts_at");
 
   // Scope. Si el caller es nivel 3 (sales_rep, telemarketer, installer) NO
@@ -218,8 +231,8 @@ export async function listAgenda(
       ? session.user_id
       : filters?.user_id ?? null;
     const virtuals = await loadVirtualAgendaItems({
-      from: startOfToday.toISOString(),
-      to: until.toISOString(),
+      from: fromIso,
+      to: toIso,
       restrictToUserId: restrictUid,
       companyId: session.company_id ?? null,
     });
