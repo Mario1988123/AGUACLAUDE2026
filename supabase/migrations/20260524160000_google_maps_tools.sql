@@ -68,10 +68,11 @@ create table if not exists public.google_api_usage (
 
 create index if not exists idx_gau_company_called_at
   on public.google_api_usage (company_id, called_at desc);
-create index if not exists idx_gau_company_month
-  on public.google_api_usage (company_id, date_trunc('month', called_at));
-create index if not exists idx_gau_company_day
-  on public.google_api_usage (company_id, date_trunc('day', called_at));
+-- Nota: no usamos date_trunc('month', called_at) en índices porque
+-- date_trunc(text, timestamptz) es STABLE (depende de timezone session),
+-- no IMMUTABLE — Postgres rechaza el índice. El índice anterior
+-- (company_id, called_at desc) cubre los rangos "since monthStart"
+-- y "since dayStart" que usa el código (gte sobre called_at).
 
 alter table public.google_api_usage enable row level security;
 
