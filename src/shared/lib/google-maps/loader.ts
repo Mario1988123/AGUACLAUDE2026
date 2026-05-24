@@ -2,9 +2,11 @@
 
 /**
  * Loader perezoso del bundle de Google Maps JS API. Se reutiliza una
- * sola carga por sesión y libraries solicitadas. Si la empresa no tiene
- * la feature `interactive_maps` activa, devuelve `null` y el caller
- * debe caer a Leaflet/OSM.
+ * sola carga por sesión; las libraries adicionales se cargan on-demand
+ * mediante `google.maps.importLibrary` (API moderna, v=weekly).
+ *
+ * Devuelve `null` si la empresa no tiene Google Maps Tools activo —
+ * el caller debe caer a Leaflet/OSM.
  *
  *   const g = await loadGoogleMaps(["places"]);
  *   if (!g) { fallbackToLeaflet(); return; }
@@ -42,12 +44,16 @@ async function fetchClientKey(): Promise<ClientKeyResponse> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let loaderPromise: Promise<any> | null = null;
-let loadedLibraries = new Set<GmapsLibrary>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const libraryPromises = new Map<GmapsLibrary, Promise<any>>();
 
 /**
- * Carga el bundle `https://maps.googleapis.com/maps/api/js` con las
- * libraries indicadas. Devuelve el objeto `google` global del bundle
- * o `null` si la empresa no tiene gmaps activo.
+ * Carga el bundle de Google Maps. La primera llamada inyecta el
+ * `<script>` con bootstrap moderno (sin `libraries=` en la URL) y
+ * después usa `google.maps.importLibrary(lib)` para cargar cada library
+ * solo cuando alguien la pide. Esto evita el bug clásico: si el primer
+ * caller pasa [], el script se carga sin places y un caller posterior
+ * con ["places"] no lo encuentra.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function loadGoogleMaps(
@@ -60,40 +66,71 @@ export async function loadGoogleMaps(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const w = window as any;
-  if (w.google?.maps) return w.google;
 
-  if (loaderPromise) return loaderPromise;
+  // Si el script aún no se ha cargado, lo inyectamos. Usamos el
+  // bootstrap loader inline (recomendado por Google) que define
+  // `google.maps.importLibrary` antes de cargar nada más.
+  if (!w.google?.maps?.importLibrary && !loaderPromise) {
+    loaderPromise = new Promise((resolve) => {
+      // Si ya hay un script en curso (otro componente lo añadió),
+      // esperamos a su load.
+      const existing = document.querySelector<HTMLScriptElement>(
+        'script[data-google-maps-loader="1"]',
+      );
+      if (existing) {
+        existing.addEventListener("load", () => resolve(w.google ?? null));
+        existing.addEventListener("error", () => resolve(null));
+        return;
+      }
 
-  const libs = Array.from(new Set([...loadedLibraries, ...libraries]));
-  loadedLibraries = new Set(libs);
-  const url = new URL("https://maps.googleapis.com/maps/api/js");
-  url.searchParams.set("key", ck.key);
-  url.searchParams.set("v", "weekly");
-  url.searchParams.set("language", "es");
-  url.searchParams.set("region", "ES");
-  if (libs.length > 0) url.searchParams.set("libraries", libs.join(","));
-  url.searchParams.set("loading", "async");
+      // Inline bootstrap (mismo patrón que el snippet oficial de Google).
+      // Define google.maps con importLibrary disponible inmediatamente.
+      // Documentación: https://developers.google.com/maps/documentation/javascript/load-maps-js-api
+      const script = document.createElement("script");
+      script.dataset.googleMapsLoader = "1";
+      script.text = `
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=\`https://maps.\${c}apis.com/maps/api/js?\`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+          key: ${JSON.stringify(ck.key)},
+          v: "weekly",
+          language: "es",
+          region: "ES"
+        });
+      `;
+      document.head.appendChild(script);
 
-  loaderPromise = new Promise((resolve) => {
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[data-google-maps-loader="1"]',
-    );
-    if (existing) {
-      existing.addEventListener("load", () => resolve(w.google ?? null));
-      existing.addEventListener("error", () => resolve(null));
-      return;
+      // Poll hasta que google.maps esté disponible.
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries++;
+        if (w.google?.maps?.importLibrary) {
+          clearInterval(iv);
+          resolve(w.google);
+        } else if (tries > 100) {
+          clearInterval(iv);
+          resolve(null);
+        }
+      }, 50);
+    });
+  }
+
+  await loaderPromise;
+  if (!w.google?.maps?.importLibrary) return null;
+
+  // Cargar las libraries solicitadas usando importLibrary (cached por
+  // library entre llamadas).
+  for (const lib of libraries) {
+    if (!libraryPromises.has(lib)) {
+      libraryPromises.set(lib, w.google.maps.importLibrary(lib));
     }
-    const s = document.createElement("script");
-    s.src = url.toString();
-    s.async = true;
-    s.defer = true;
-    s.dataset.googleMapsLoader = "1";
-    s.onload = () => resolve(w.google ?? null);
-    s.onerror = () => resolve(null);
-    document.head.appendChild(s);
-  });
+    try {
+      await libraryPromises.get(lib);
+    } catch {
+      libraryPromises.delete(lib);
+      return null;
+    }
+  }
 
-  return loaderPromise;
+  return w.google;
 }
 
 /** Limpia el cache del client-key tras un cambio de config. */
