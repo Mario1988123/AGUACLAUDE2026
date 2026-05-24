@@ -29,6 +29,8 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
   const [installedAt, setInstalledAt] = useState("");
+  const [lastMaintenanceAt, setLastMaintenanceAt] = useState("");
+  const [nextMaintenanceAt, setNextMaintenanceAt] = useState("");
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -41,6 +43,8 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
     setModel("");
     setSerial("");
     setInstalledAt("");
+    setLastMaintenanceAt("");
+    setNextMaintenanceAt("");
     setNotes("");
   }
 
@@ -61,6 +65,8 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
         external_model: source === "external" ? model : undefined,
         serial_number: serial || null,
         installed_at: installedAt || null,
+        last_maintenance_at: lastMaintenanceAt || null,
+        next_maintenance_at: nextMaintenanceAt || null,
         notes: notes || null,
       });
       if (!r.ok) {
@@ -179,6 +185,43 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
                     value={installedAt}
                     onChange={(e) => setInstalledAt(e.target.value)}
                   />
+                </div>
+              </div>
+
+              {/* Ciclo de mantenimiento — opcional pero clave para equipos
+                  que llegan a mitad de ciclo desde otro proveedor. */}
+              <div className="space-y-2 rounded-xl border-2 border-primary/20 bg-primary/5 p-3">
+                <Label className="text-sm font-bold text-primary">
+                  Ciclo de mantenimiento (opcional)
+                </Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Si el equipo está a mitad de ciclo (ya tenía mantenimiento
+                  hecho por otra empresa), rellena estas fechas para que el
+                  sistema calcule correctamente cuándo toca el siguiente.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Último mantenimiento conocido</Label>
+                    <Input
+                      type="date"
+                      value={lastMaintenanceAt}
+                      onChange={(e) => setLastMaintenanceAt(e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Se registra como un job retroactivo (sin técnico).
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Próxima visita programada</Label>
+                    <Input
+                      type="date"
+                      value={nextMaintenanceAt}
+                      onChange={(e) => setNextMaintenanceAt(e.target.value)}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Crea un job scheduled para esa fecha.
+                    </p>
+                  </div>
                 </div>
               </div>
 

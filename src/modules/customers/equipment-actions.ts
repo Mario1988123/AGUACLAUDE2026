@@ -26,7 +26,11 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: equipment } = await supabase
+  // Bug histórico (2026-05-24): pedíamos `addresses(line1, city)` pero
+  // la tabla no tiene columna `line1` (usa street_type/street/city/...).
+  // Supabase devolvía error y rows=[] aunque el INSERT había funcionado,
+  // por eso el usuario veía "0 equipos" tras el toast de éxito.
+  const { data: equipment, error } = await supabase
     .from("customer_equipment")
     .select(
       `
@@ -41,12 +45,16 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
         notes,
         installation_id,
         product:products(name),
-        external:external_equipment_models(name),
-        address:addresses(line1, city)
+        external:external_equipment_models(name, brand, model),
+        address:addresses(street_type, street, street_number, city)
       `,
     )
     .eq("customer_id", customerId)
     .order("installed_at", { ascending: false });
+  if (error) {
+    console.error("[listCustomerEquipment] select failed:", error.message);
+    return [];
+  }
 
   const rows = (equipment ?? []) as Array<{
     id: string;
@@ -60,8 +68,13 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     notes: string | null;
     installation_id: string | null;
     product: { name: string } | null;
-    external: { name: string } | null;
-    address: { line1: string; city: string | null } | null;
+    external: { name: string | null; brand: string | null; model: string | null } | null;
+    address: {
+      street_type: string | null;
+      street: string | null;
+      street_number: string | null;
+      city: string | null;
+    } | null;
   }>;
 
   if (rows.length === 0) return [];
@@ -93,8 +106,22 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     notes: r.notes,
     installation_id: r.installation_id,
     product_name: r.product?.name ?? null,
-    external_model_name: r.external?.name ?? null,
-    address_label: r.address ? `${r.address.line1}${r.address.city ? `, ${r.address.city}` : ""}` : null,
+    external_model_name:
+      r.external?.name ??
+      (r.external?.brand && r.external?.model
+        ? `${r.external.brand} ${r.external.model}`
+        : null),
+    address_label: r.address
+      ? [
+          r.address.street_type,
+          r.address.street,
+          r.address.street_number,
+          r.address.city,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .replace(/^([a-zñA-ZÑ]+) /, (m) => m.charAt(0).toUpperCase() + m.slice(1))
+      : null,
     last_maintenance_at: lastMaintenance[r.id] ?? null,
   }));
 }
@@ -118,6 +145,20 @@ export async function addCustomerEquipmentAction(input: {
   installed_at?: string | null;
   notes?: string | null;
   address_id?: string | null;
+  /**
+   * Fecha del último mantenimiento conocido. Si se informa, creamos
+   * un `maintenance_jobs` retroactivo (status=completed, sin técnico)
+   * para que el cron de programación calcule correctamente cuándo
+   * toca el siguiente. Útil para equipos heredados a mitad de ciclo.
+   */
+  last_maintenance_at?: string | null;
+  /**
+   * Fecha en que queremos que se ejecute el PRÓXIMO mantenimiento.
+   * Si se informa, creamos un `maintenance_jobs` scheduled para esa
+   * fecha. Útil cuando el cliente nos contrata mid-cycle y queremos
+   * fijar el inicio de los servicios.
+   */
+  next_maintenance_at?: string | null;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -177,6 +218,47 @@ export async function addCustomerEquipmentAction(input: {
     .single();
   if (error) throw new Error(error.message);
 
+  const equipmentId = (row as { id: string }).id;
+
+  // Histórico: si el usuario sabe cuándo fue el último mantenimiento,
+  // creamos un maintenance_jobs completado retroactivo. Así el cron y
+  // los plans calculan correctamente cuándo toca el próximo.
+  if (input.last_maintenance_at) {
+    try {
+      await admin.from("maintenance_jobs").insert({
+        company_id: session.company_id,
+        customer_id: input.customer_id,
+        customer_equipment_id: equipmentId,
+        kind: "contracted",
+        status: "completed",
+        completed_at: new Date(input.last_maintenance_at).toISOString(),
+        notes:
+          "Registro histórico introducido al añadir el equipo (anterior al CRM).",
+      });
+    } catch (e) {
+      console.error("[addCustomerEquipment] last_maintenance insert failed:", e);
+    }
+  }
+
+  // Programar el próximo: si el usuario quiere fijar la siguiente
+  // visita (típico cuando contratamos a mitad de ciclo), creamos un
+  // job scheduled con esa fecha. El técnico se asigna después.
+  if (input.next_maintenance_at) {
+    try {
+      await admin.from("maintenance_jobs").insert({
+        company_id: session.company_id,
+        customer_id: input.customer_id,
+        customer_equipment_id: equipmentId,
+        kind: "contracted",
+        status: "scheduled",
+        scheduled_at: new Date(input.next_maintenance_at).toISOString(),
+        notes: "Programado al registrar el equipo.",
+      });
+    } catch (e) {
+      console.error("[addCustomerEquipment] next_maintenance insert failed:", e);
+    }
+  }
+
   await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "customer",
@@ -186,12 +268,14 @@ export async function addCustomerEquipmentAction(input: {
       product_id: productId,
       external_model_id: externalModelId,
       installed_by_other: !productId,
+      had_last_maintenance: !!input.last_maintenance_at,
+      had_next_maintenance: !!input.next_maintenance_at,
     },
     actor_user_id: session.user_id,
   });
 
   revalidatePath(`/clientes/${input.customer_id}`);
-  return { id: (row as { id: string }).id };
+  return { id: equipmentId };
 }
 
 export async function removeCustomerEquipmentAction(
