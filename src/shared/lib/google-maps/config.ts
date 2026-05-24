@@ -50,19 +50,6 @@ export async function loadGoogleMapsConfig(
     return stripKey(cached.data);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data: c } = await admin
-    .from("companies")
-    .select("gmaps_mode, gmaps_monthly_cap_usd, gmaps_daily_cap_usd")
-    .eq("id", companyId)
-    .maybeSingle();
-  const { data: s } = await admin
-    .from("company_settings")
-    .select("gmaps_features, gmaps_api_key_encrypted, gmaps_alert_email")
-    .eq("company_id", companyId)
-    .maybeSingle();
-
   type CRow = {
     gmaps_mode: GmapsMode | null;
     gmaps_monthly_cap_usd: number | null;
@@ -73,8 +60,53 @@ export async function loadGoogleMapsConfig(
     gmaps_api_key_encrypted: string | null;
     gmaps_alert_email: string | null;
   };
-  const company = (c ?? null) as CRow | null;
-  const settings = (s ?? null) as SRow | null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  // Defensivo: la migración 20260524160000 añade las columnas gmaps_*;
+  // si no se ha aplicado en este entorno, el select cae a solo gmaps_mode
+  // o nada. Defaults: monthly $50, daily $10.
+  let c: CRow | null = null;
+  try {
+    const r = await admin
+      .from("companies")
+      .select("gmaps_mode, gmaps_monthly_cap_usd, gmaps_daily_cap_usd")
+      .eq("id", companyId)
+      .maybeSingle();
+    c = (r?.data ?? null) as CRow | null;
+  } catch {
+    try {
+      const r2 = await admin
+        .from("companies")
+        .select("gmaps_mode")
+        .eq("id", companyId)
+        .maybeSingle();
+      const row = (r2?.data ?? null) as { gmaps_mode: GmapsMode | null } | null;
+      c = row
+        ? {
+            gmaps_mode: row.gmaps_mode,
+            gmaps_monthly_cap_usd: null,
+            gmaps_daily_cap_usd: null,
+          }
+        : null;
+    } catch {
+      c = null;
+    }
+  }
+  let s: SRow | null = null;
+  try {
+    const r = await admin
+      .from("company_settings")
+      .select("gmaps_features, gmaps_api_key_encrypted, gmaps_alert_email")
+      .eq("company_id", companyId)
+      .maybeSingle();
+    s = (r?.data ?? null) as SRow | null;
+  } catch {
+    s = null;
+  }
+
+  const company = c;
+  const settings = s;
 
   const mode: GmapsMode = company?.gmaps_mode ?? "disabled";
   const encrypted_key = settings?.gmaps_api_key_encrypted ?? null;

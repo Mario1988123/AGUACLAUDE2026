@@ -532,7 +532,12 @@ export async function setCompanyGmapsSafeAction(input: {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = (await createClient()) as any;
-    const { error } = await supabase
+    // Defensivo: si la migración 20260524160000 no se ha aplicado todavía
+    // (o el schema cache de PostgREST está stale), el update con los caps
+    // falla con "could not find column". Reintentamos con solo gmaps_mode
+    // para que el toggle de modo no se quede atascado.
+    let updateError: { message: string } | null = null;
+    const fullUpdate = await supabase
       .from("companies")
       .update({
         gmaps_mode: input.mode,
@@ -540,7 +545,21 @@ export async function setCompanyGmapsSafeAction(input: {
         gmaps_daily_cap_usd: daily,
       })
       .eq("id", input.company_id);
-    if (error) return { ok: false, error: error.message };
+    if (fullUpdate.error) {
+      const msg = fullUpdate.error.message ?? "";
+      const isMissingCol =
+        /could not find.*column|column .* does not exist/i.test(msg);
+      if (isMissingCol) {
+        const fallback = await supabase
+          .from("companies")
+          .update({ gmaps_mode: input.mode })
+          .eq("id", input.company_id);
+        if (fallback.error) updateError = fallback.error;
+      } else {
+        updateError = fullUpdate.error;
+      }
+    }
+    if (updateError) return { ok: false, error: updateError.message };
 
     try {
       const { logSuperadminAction } = await import(

@@ -60,18 +60,43 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
-  // Datos Google Maps Tools (módulo gateado)
-  const { data: gmapsRow } = await supabase
-    .from("companies")
-    .select("gmaps_mode, gmaps_monthly_cap_usd, gmaps_daily_cap_usd")
-    .eq("id", id)
-    .maybeSingle();
+  // Datos Google Maps Tools (módulo gateado). Defensivo: si la migración
+  // 20260524160000 no se ha aplicado todavía o PostgREST tiene schema
+  // cache stale, el select cae a solo gmaps_mode (o nada).
   type GmapsRow = {
     gmaps_mode: "disabled" | "shared_key" | "own_key" | null;
     gmaps_monthly_cap_usd: number | null;
     gmaps_daily_cap_usd: number | null;
   };
-  const gmaps = (gmapsRow ?? null) as GmapsRow | null;
+  let gmaps: GmapsRow | null = null;
+  try {
+    const r = await supabase
+      .from("companies")
+      .select("gmaps_mode, gmaps_monthly_cap_usd, gmaps_daily_cap_usd")
+      .eq("id", id)
+      .maybeSingle();
+    gmaps = (r.data ?? null) as GmapsRow | null;
+  } catch {
+    try {
+      const r2 = await supabase
+        .from("companies")
+        .select("gmaps_mode")
+        .eq("id", id)
+        .maybeSingle();
+      const row = (r2.data ?? null) as
+        | { gmaps_mode: GmapsRow["gmaps_mode"] }
+        | null;
+      gmaps = row
+        ? {
+            gmaps_mode: row.gmaps_mode,
+            gmaps_monthly_cap_usd: null,
+            gmaps_daily_cap_usd: null,
+          }
+        : null;
+    } catch {
+      gmaps = null;
+    }
+  }
   // Consumo mes actual (informativo)
   let gmapsMonthUsd = 0;
   if ((gmaps?.gmaps_mode ?? "disabled") !== "disabled") {
