@@ -14,14 +14,25 @@ interface ProductOption {
   name: string;
 }
 
+interface AddressOption {
+  id: string;
+  label: string;
+  is_primary: boolean;
+}
+
 interface Props {
   customerId: string;
   ownProducts: ProductOption[];
+  addresses?: AddressOption[];
 }
 
 type Source = "own" | "external";
 
-export function AddEquipmentButton({ customerId, ownProducts }: Props) {
+export function AddEquipmentButton({
+  customerId,
+  ownProducts,
+  addresses = [],
+}: Props) {
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<Source>("own");
   const [productId, setProductId] = useState("");
@@ -29,6 +40,10 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
   const [model, setModel] = useState("");
   const [serial, setSerial] = useState("");
   const [installedAt, setInstalledAt] = useState("");
+  // Pre-seleccionamos la dirección principal si existe (caso común).
+  const defaultAddressId =
+    addresses.find((a) => a.is_primary)?.id ?? addresses[0]?.id ?? "";
+  const [addressId, setAddressId] = useState(defaultAddressId);
   const [lastMaintenanceAt, setLastMaintenanceAt] = useState("");
   const [nextMaintenanceAt, setNextMaintenanceAt] = useState("");
   const [notes, setNotes] = useState("");
@@ -46,6 +61,7 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
     setLastMaintenanceAt("");
     setNextMaintenanceAt("");
     setNotes("");
+    setAddressId(defaultAddressId);
   }
 
   function save() {
@@ -68,6 +84,7 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
         last_maintenance_at: lastMaintenanceAt || null,
         next_maintenance_at: nextMaintenanceAt || null,
         notes: notes || null,
+        address_id: addressId || null,
       });
       if (!r.ok) {
         notify.error("No se pudo añadir el equipo", r.error);
@@ -143,6 +160,28 @@ export function AddEquipmentButton({ customerId, ownProducts }: Props) {
                   </button>
                 </div>
               </div>
+
+              {/* Selector de dirección — opcional pero clave para que el
+                  equipo quede asociado al lugar donde está instalado y
+                  el AddressList pueda mostrar "N equipos" por dirección. */}
+              {addresses.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Dirección donde está instalado</Label>
+                  <select
+                    value={addressId}
+                    onChange={(e) => setAddressId(e.target.value)}
+                    className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="">— Sin dirección asignada —</option>
+                    {addresses.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.is_primary ? "★ " : ""}
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {source === "own" ? (
                 <div className="space-y-1.5">

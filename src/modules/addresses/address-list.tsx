@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { MapPin, Pencil, Trash2, Plus, Star } from "lucide-react";
+import { MapPin, Pencil, Trash2, Plus, Star, Package } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
@@ -15,9 +15,17 @@ interface Props {
   customerId?: string;
   leadId?: string;
   addresses: AddressRow[];
+  /** Equipos agrupados por address_id para mostrar badge en cada
+   *  tarjeta de dirección. Si se omite, no se renderiza el badge. */
+  equipmentByAddress?: Record<string, number>;
 }
 
-export function AddressList({ customerId, leadId, addresses }: Props) {
+export function AddressList({
+  customerId,
+  leadId,
+  addresses,
+  equipmentByAddress,
+}: Props) {
   const sp = useSearchParams();
   const [editing, setEditing] = useState<AddressRow | "new" | null>(null);
   const [pending, startTransition] = useTransition();
@@ -101,6 +109,16 @@ export function AddressList({ customerId, leadId, addresses }: Props) {
                     <Star className="h-3 w-3 fill-current" /> Principal
                   </Badge>
                 )}
+                {(() => {
+                  const n = equipmentByAddress?.[a.id] ?? 0;
+                  if (n === 0) return null;
+                  return (
+                    <Badge variant="outline" className="gap-1">
+                      <Package className="h-3 w-3" />
+                      {n} {n === 1 ? "equipo" : "equipos"}
+                    </Badge>
+                  );
+                })()}
               </div>
               <div className="mt-1.5 text-sm">
                 {STREET_TYPE_LABEL[a.street_type]} {a.street}

@@ -14,7 +14,6 @@ import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
 import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-button";
 import { listInstallers } from "@/modules/agenda/actions";
 import { CustomerConsentsCard } from "@/modules/customers/consents-card";
-import { CustomerRgpdCard } from "@/modules/customers/rgpd-card";
 import { getCustomerConsents } from "@/modules/customers/consents-actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
@@ -337,7 +336,19 @@ export default async function CustomerDetailPage({
             <CardTitle>Direcciones ({addresses.length})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <AddressList customerId={id} addresses={addresses} />
+            <AddressList
+              customerId={id}
+              addresses={addresses}
+              equipmentByAddress={(() => {
+                const acc: Record<string, number> = {};
+                for (const e of equipment) {
+                  if (e.address_id) {
+                    acc[e.address_id] = (acc[e.address_id] ?? 0) + 1;
+                  }
+                }
+                return acc;
+              })()}
+            />
             {(() => {
               const primary =
                 addresses.find((a) => a.is_primary) ?? addresses[0];
@@ -434,6 +445,16 @@ export default async function CustomerDetailPage({
                 <AddEquipmentButton
                   customerId={id}
                   ownProducts={ownProductsForEquipment}
+                  addresses={addresses.map((a) => ({
+                    id: a.id,
+                    label:
+                      [a.street_type, a.street, a.street_number, a.city]
+                        .filter(Boolean)
+                        .join(" ") ||
+                      a.label ||
+                      "Dirección",
+                    is_primary: a.is_primary,
+                  }))}
                 />
               </div>
             </CardTitle>
@@ -502,11 +523,12 @@ export default async function CustomerDetailPage({
 
       <CustomerConsentsCard customerId={id} consents={customerConsents} />
 
+      {/* RGPD unificado (decisión 2026-05-24): antes había dos tarjetas
+          casi idénticas — RgpdCard y RGPDPanel. Unificadas en una sola
+          con la copy de derechos del cliente + funcionalidad export +
+          anonimizar, ambas para admin de empresa. */}
       {(session.is_superadmin || session.roles.includes("company_admin")) && (
-        <CustomerRgpdCard
-          customerId={id}
-          customerName={displayName}
-        />
+        <CustomerRGPDPanel customerId={id} customerName={displayName} />
       )}
 
       <MaintenanceHistoryCard rows={maintenanceHistory} />
@@ -519,10 +541,6 @@ export default async function CustomerDetailPage({
           <Timeline subjectType="customer" subjectId={id} enriched />
         </CardContent>
       </Card>
-
-      {canSeeBank && (
-        <CustomerRGPDPanel customerId={id} customerName={displayName} />
-      )}
     </div>
   );
 }

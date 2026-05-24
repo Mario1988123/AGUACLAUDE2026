@@ -75,18 +75,19 @@ export function CustomerRGPDPanel({ customerId, customerName }: Props) {
   }
 
   return (
-    <Card className="border-dashed">
+    <Card className="border-amber-300 bg-amber-50/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
-          🛡 RGPD — Datos personales
+          🛡 RGPD · Derechos del cliente
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
-          Acciones RGPD para este cliente. El export descarga un JSON con
-          todos sus datos personales y movimientos (art. 15). El borrado
-          anonimiza la información PII pero mantiene los registros fiscales
-          obligatorios (art. 17 con matiz AEAT).
+          Solo admin de empresa. El cliente puede ejercer sus derechos del
+          Reglamento (UE) 2016/679: <strong>art. 15</strong> acceso (export
+          JSON con todos sus datos y movimientos) y <strong>art. 17</strong>{" "}
+          supresión (anonimiza PII manteniendo los registros fiscales
+          obligatorios, AEAT 6 años).
         </p>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -96,7 +97,7 @@ export function CustomerRGPDPanel({ customerId, customerName }: Props) {
             disabled={pending}
             className="gap-2"
           >
-            <Download className="h-4 w-4" /> Exportar mis datos
+            <Download className="h-4 w-4" /> Exportar datos (art. 15)
           </Button>
           {!deleteOpen ? (
             <Button
@@ -106,7 +107,7 @@ export function CustomerRGPDPanel({ customerId, customerName }: Props) {
               disabled={pending}
               className="gap-2"
             >
-              <ShieldOff className="h-4 w-4" /> Solicitar borrado
+              <ShieldOff className="h-4 w-4" /> Anonimizar (art. 17, derecho al olvido)
             </Button>
           ) : null}
         </div>

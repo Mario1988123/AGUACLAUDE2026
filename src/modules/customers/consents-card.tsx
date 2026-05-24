@@ -51,9 +51,9 @@ export function CustomerConsentsCard({
         notify.error("Error", r.error);
         return;
       }
-      notify.success(
-        granted ? "Consentimiento registrado" : "Consentimiento revocado",
-      );
+      // Sin toast de éxito: el usuario suele tocar varios consentimientos
+      // seguidos y el toast bloquea la sensación de inmediatez. El estado
+      // se actualiza visualmente con router.refresh + badge "Concedido".
       router.refresh();
     });
   }
