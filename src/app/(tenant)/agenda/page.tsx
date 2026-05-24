@@ -330,7 +330,11 @@ export default async function AgendaPage({
                 className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
               />
             </div>
-            <input type="hidden" name="view" value="list" />
+            {/* No duplicamos el hidden view: ya lo emite el bloque común
+                (línea ~247) cuando view !== "calendar". Si lo metemos dos
+                veces, el browser envía ?view=list&view=list y Next.js lo
+                parsea como array, no como string → la comparación falla
+                y la página cae a la vista de mes por defecto. */}
           </>
         )}
         <button

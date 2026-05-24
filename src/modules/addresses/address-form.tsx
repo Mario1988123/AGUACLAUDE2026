@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { MapPin, Crosshair, Search } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -167,6 +167,65 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       return next;
     });
   }
+
+  // Auto-geocode al completar el CP a 5 dígitos: centra el mapa en ese
+  // código postal Y autocompleta ciudad/provincia desde el reverse de
+  // OSM. Solo se dispara si no hay coords todavía (no pisa una chincheta
+  // ya colocada manualmente).
+  const cpRef = useRef<string>("");
+  useEffect(() => {
+    const cp = form.postal_code.trim();
+    if (cp.length !== 5 || cp === cpRef.current) return;
+    if (!validateSpanishPostalCode(cp)) return;
+    if (form.latitude != null && form.longitude != null) {
+      cpRef.current = cp; // sólo si no hay coords ya
+      return;
+    }
+    cpRef.current = cp;
+    let cancelled = false;
+    (async () => {
+      const res = await forwardGeocode(`${cp}, España`);
+      if (cancelled || !res) return;
+      await fillFromCoords(res.lat, res.lng, "geocoded");
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.postal_code]);
+
+  // Auto-geocode al teclear la calle (debounce 1.2 s). Solo si tenemos CP
+  // y población — sin ellos OSM da resultados ambiguos. No pisa coords
+  // si el user ya colocó chincheta a mano.
+  const streetRef = useRef<string>("");
+  useEffect(() => {
+    const key = `${form.street}|${form.street_number}|${form.postal_code}|${form.city}`;
+    if (key === streetRef.current) return;
+    if (!form.street.trim() || !form.city.trim() || form.postal_code.length !== 5) return;
+    if (form.geo_source === "user_pin" || form.geo_source === "user_location") return;
+    const timer = setTimeout(async () => {
+      streetRef.current = key;
+      const query = [
+        form.street,
+        form.street_number,
+        form.postal_code,
+        form.city,
+        "España",
+      ]
+        .filter(Boolean)
+        .join(", ");
+      const res = await forwardGeocode(query);
+      if (!res) return;
+      setForm((f) => ({
+        ...f,
+        latitude: res.lat,
+        longitude: res.lng,
+        geo_source: "geocoded",
+      }));
+    }, 1200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.street, form.street_number, form.postal_code, form.city]);
 
   /** Comprueba que CP, provincia y población forman una combinación posible. */
   function validateGeo(): string | null {

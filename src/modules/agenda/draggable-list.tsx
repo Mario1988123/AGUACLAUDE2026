@@ -152,6 +152,21 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                     // draggable. rescheduleAgendaEventAction detecta prefijo
                     // "virtual-inst-"/"virtual-maint-" y actualiza la tabla
                     // origen (installations / maintenance_jobs).
+
+                    // Marcador visual (decisión usuario 2026-05-24):
+                    //  · verde → completada
+                    //  · rojo  → vencida (scheduled/in_progress con fecha < ahora)
+                    //  · gris  → futura
+                    const startsMs = new Date(ev.starts_at).getTime();
+                    const isOverdue =
+                      (ev.status === "scheduled" || ev.status === "in_progress") &&
+                      startsMs < Date.now();
+                    const stateBorder =
+                      ev.status === "completed"
+                        ? "border-l-4 border-emerald-500"
+                        : isOverdue
+                          ? "border-l-4 border-red-500"
+                          : "border-l-4 border-transparent";
                     return (
                     <li
                       key={ev.id}
@@ -167,7 +182,14 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                       }}
                       role="button"
                       tabIndex={0}
-                      className={`flex items-start gap-3 py-3 cursor-pointer hover:bg-muted/40 rounded-lg px-2 -mx-2 transition-all ${
+                      title={
+                        ev.status === "completed"
+                          ? "Tarea completada"
+                          : isOverdue
+                            ? "Tarea vencida — pasada de fecha sin completar"
+                            : undefined
+                      }
+                      className={`flex items-start gap-3 py-3 pl-3 -ml-1 cursor-pointer hover:bg-muted/40 rounded-lg pr-2 -mr-2 transition-all ${stateBorder} ${
                         draggingId === ev.id ? "opacity-40" : ""
                       }`}
                     >
