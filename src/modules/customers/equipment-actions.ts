@@ -30,6 +30,10 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
   // la tabla no tiene columna `line1` (usa street_type/street/city/...).
   // Supabase devolvía error y rows=[] aunque el INSERT había funcionado,
   // por eso el usuario veía "0 equipos" tras el toast de éxito.
+  // external_equipment_models NO tiene columna `name` — solo brand+model
+  // (verificado en migración 20260501121100_products.sql:134-143).
+  // El SELECT anterior con `name` rompía el join y devolvía rows=[]
+  // aunque el INSERT funcionara, dejando el listado siempre a 0.
   const { data: equipment, error } = await supabase
     .from("customer_equipment")
     .select(
@@ -45,7 +49,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
         notes,
         installation_id,
         product:products(name),
-        external:external_equipment_models(name, brand, model),
+        external:external_equipment_models(brand, model),
         address:addresses(street_type, street, street_number, city)
       `,
     )
@@ -68,7 +72,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     notes: string | null;
     installation_id: string | null;
     product: { name: string } | null;
-    external: { name: string | null; brand: string | null; model: string | null } | null;
+    external: { brand: string | null; model: string | null } | null;
     address: {
       street_type: string | null;
       street: string | null;
@@ -107,10 +111,9 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     installation_id: r.installation_id,
     product_name: r.product?.name ?? null,
     external_model_name:
-      r.external?.name ??
-      (r.external?.brand && r.external?.model
+      r.external?.brand && r.external?.model
         ? `${r.external.brand} ${r.external.model}`
-        : null),
+        : null,
     address_label: r.address
       ? [
           r.address.street_type,
