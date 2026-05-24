@@ -42,8 +42,16 @@ export function resolveServerKey(args: {
       return null;
     }
   }
-  // shared_key
-  return process.env.GOOGLE_MAPS_PLATFORM_SERVER_KEY ?? null;
+  // shared_key: preferimos la SERVER key (sin restricción referrer, ideal
+  // para llamadas Node). Si el admin no la configuró, fallback a la
+  // pública para que el reverse-geocode no falle silenciosamente. Si la
+  // pública está restringida por referrer, Google devolverá 403 y
+  // caeremos a Nominatim de todos modos — pero al menos lo intentamos.
+  return (
+    process.env.GOOGLE_MAPS_PLATFORM_SERVER_KEY ??
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ??
+    null
+  );
 }
 
 /**

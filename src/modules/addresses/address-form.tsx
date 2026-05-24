@@ -118,6 +118,21 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       return;
     }
     const replace = source === "user_location";
+    // Si el CP es válido y la provincia derivada NO coincide con la
+    // devuelta por reverse-geocode, confiamos en el CP (siempre fiable
+    // en España). Resuelve el caso "Galicia" devuelto por OSM cuando
+    // el CP 15220 dice claramente "A Coruña".
+    const cpForProvince = rev.postal_code ?? "";
+    const cpProvince = cpForProvince
+      ? provinceFromPostalCode(cpForProvince)
+      : null;
+    const revProvince = rev.province ?? "";
+    const provinceFromRev =
+      cpProvince &&
+      revProvince.toLowerCase().trim() !== cpProvince.toLowerCase().trim()
+        ? cpProvince
+        : revProvince;
+
     setForm((f) => ({
       ...f,
       street_type: STREET_TYPE.includes(rev.street_type as StreetType)
@@ -131,7 +146,9 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
         ? rev.postal_code ?? ""
         : f.postal_code || rev.postal_code || "",
       city: replace ? rev.city ?? "" : f.city || rev.city || "",
-      province: replace ? rev.province ?? "" : f.province || rev.province || "",
+      province: replace
+        ? provinceFromRev
+        : f.province || provinceFromRev || "",
     }));
     notify.success(
       replace ? "Dirección detectada y aplicada" : "Dirección autorrellenada",

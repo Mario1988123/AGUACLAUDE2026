@@ -239,16 +239,24 @@ async function reverseNominatim(
       street: rest,
       street_number: a.house_number ?? null,
       postal_code: a.postcode ?? null,
+      // Para España: preferir municipality / city / town antes que
+      // suburb o village. Nominatim a veces devuelve `village=O Porto`
+      // (barrio/parroquia) y nos quedaríamos sin el municipio real
+      // (Ames). El orden correcto: ciudades grandes primero, luego
+      // municipality (Ayuntamiento), y al final sub-localidades.
       city:
         a.city ??
         a.town ??
+        a.municipality ??
         a.village ??
         a.hamlet ??
-        a.suburb ??
         a.city_district ??
-        a.municipality ??
+        a.suburb ??
         null,
-      province: a.province ?? a.state ?? a.county ?? null,
+      // Para España: `county` es la provincia (A Coruña), `state` es
+      // la comunidad autónoma (Galicia). Preferir county. `province`
+      // existe en algunas regiones pero es raro.
+      province: a.county ?? a.province ?? a.state ?? null,
       display_name: data.display_name ?? "",
     };
   } catch {

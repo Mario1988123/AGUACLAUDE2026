@@ -110,9 +110,16 @@ export async function loadGoogleMapsConfig(
 
   const mode: GmapsMode = company?.gmaps_mode ?? "disabled";
   const encrypted_key = settings?.gmaps_api_key_encrypted ?? null;
+  // shared_key: aceptamos SERVER key o, en su defecto, la pública.
+  // La server key es lo correcto (sin restricción referrer); si solo
+  // hay pública, lo intentaremos igualmente — algunas llamadas server
+  // pueden funcionar si la key no tiene restricción de referrer.
   const has_key =
     mode === "shared_key"
-      ? Boolean(process.env.GOOGLE_MAPS_PLATFORM_SERVER_KEY)
+      ? Boolean(
+          process.env.GOOGLE_MAPS_PLATFORM_SERVER_KEY ??
+            process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY,
+        )
       : mode === "own_key"
         ? Boolean(encrypted_key)
         : false;

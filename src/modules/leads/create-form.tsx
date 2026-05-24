@@ -101,8 +101,20 @@ export function LeadCreateForm() {
       setCity((cur) => (force || !cur ? (rev.city as string) : cur));
       filled.push("ciudad");
     }
-    if (rev.province) {
-      setProvince((cur) => (force || !cur ? (rev.province as string) : cur));
+    // Provincia: si el CP es válido y la provincia derivada NO coincide
+    // con la devuelta por reverse, confiamos en el CP (siempre fiable
+    // en España). Resuelve casos como OSM devolviendo "Galicia" en vez
+    // de "A Coruña" para CP 15220.
+    const cpForProv = rev.postal_code ?? "";
+    const cpProv = cpForProv ? provinceFromPostalCode(cpForProv) : null;
+    const provinceFinal =
+      cpProv &&
+      (rev.province ?? "").toLowerCase().trim() !==
+        cpProv.toLowerCase().trim()
+        ? cpProv
+        : rev.province;
+    if (provinceFinal) {
+      setProvince((cur) => (force || !cur ? provinceFinal : cur));
       filled.push("provincia");
     }
     if (filled.length === 0) {
