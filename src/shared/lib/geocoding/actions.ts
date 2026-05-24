@@ -6,36 +6,7 @@ import {
   trackGoogleApiCall,
 } from "@/shared/lib/google-maps/config";
 import type { ReverseGeocode } from "./nominatim";
-
-const STREET_TYPE_MAP: Record<string, string> = {
-  calle: "calle",
-  avenida: "avenida",
-  avda: "avenida",
-  plaza: "plaza",
-  paseo: "paseo",
-  ronda: "ronda",
-  camino: "camino",
-  carretera: "carretera",
-  glorieta: "glorieta",
-  travesia: "travesia",
-  travesía: "travesia",
-  urbanización: "urbanizacion",
-  urbanizacion: "urbanizacion",
-  polígono: "poligono",
-  poligono: "poligono",
-  vía: "via",
-  via: "via",
-};
-
-function detectStreetType(road: string): { type: string; rest: string } {
-  const lower = road.toLowerCase().trim();
-  for (const key of Object.keys(STREET_TYPE_MAP)) {
-    if (lower.startsWith(`${key} `)) {
-      return { type: STREET_TYPE_MAP[key]!, rest: road.slice(key.length).trim() };
-    }
-  }
-  return { type: "calle", rest: road };
-}
+import { detectStreetType } from "./street-type";
 
 /**
  * Reverse geocoding híbrido: Google si la empresa tiene gmaps activo +

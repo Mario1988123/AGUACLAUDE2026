@@ -21,6 +21,7 @@ import {
   validateSpanishPostalCode,
 } from "@/shared/lib/validations/spanish";
 import { reverseGeocodeAction as reverseGeocode, forwardGeocodeAction as forwardGeocode } from "@/shared/lib/geocoding/actions";
+import { detectStreetType } from "@/shared/lib/geocoding/street-type";
 import {
   lookupMunicipalitiesByPostalCode,
   lookupPostalCodesByMunicipality,
@@ -359,22 +360,29 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     ? `https://www.google.com/maps?q=${form.latitude},${form.longitude}`
     : null;
 
-  const hasGoogleKey = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* Búsqueda inteligente (Google Places). Solo visible si el admin
-          configuró NEXT_PUBLIC_GOOGLE_MAPS_KEY. Sin clave seguimos
-          funcionando con OSM Nominatim + datalist CP/municipio. */}
-      {hasGoogleKey && (
+      {/* Búsqueda inteligente (Google Places). El propio componente
+          consulta /api/maps/client-key y se rinde como input plano si
+          la empresa no tiene Google Maps Tools activo. Sin clave
+          seguimos funcionando con OSM Nominatim + datalist CP/municipio. */}
+      {(
         <div className="space-y-1.5 rounded-xl border-2 border-primary/30 bg-primary/5 p-3">
           <Label>🪄 Búsqueda inteligente (Google)</Label>
           <PlacesAutocomplete
             placeholder="Calle, número, ciudad…"
             onSelect={(addr) => {
+              // Google devuelve `route` con el tipo de vía incluido
+              // ("Avenida de la Paz"). Lo dividimos para alimentar el
+              // select street_type + campo street por separado.
+              const { type, rest } = detectStreetType(addr.street);
+              const validType = STREET_TYPE.includes(type as StreetType)
+                ? (type as StreetType)
+                : form.street_type;
               setForm((f) => ({
                 ...f,
-                street: addr.street || f.street,
+                street_type: addr.street ? validType : f.street_type,
+                street: rest || f.street,
                 street_number: addr.street_number || f.street_number,
                 postal_code: addr.postal_code || f.postal_code,
                 city: addr.city || f.city,
@@ -437,7 +445,31 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
             id="street"
             required
             value={form.street}
-            onChange={(e) => update("street", e.target.value)}
+            onChange={(e) => {
+              const raw = e.target.value;
+              // Autodetectar tipo de vía si el usuario escribe "Avenida X"
+              // al inicio. Si el prefijo coincide con un tipo conocido,
+              // movemos el tipo al select y dejamos solo el resto en
+              // el campo. Sólo si la cadena tiene al menos un espacio
+              // (evita disparar al teclear "av" letra a letra).
+              if (raw.includes(" ")) {
+                const parsed = detectStreetType(raw);
+                if (parsed.type !== "calle" && parsed.rest !== raw) {
+                  const validType = STREET_TYPE.includes(
+                    parsed.type as StreetType,
+                  )
+                    ? (parsed.type as StreetType)
+                    : form.street_type;
+                  setForm((f) => ({
+                    ...f,
+                    street_type: validType,
+                    street: parsed.rest,
+                  }));
+                  return;
+                }
+              }
+              update("street", raw);
+            }}
           />
         </div>
         <div className="space-y-1.5">

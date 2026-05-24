@@ -21,6 +21,7 @@ import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
 import { STREET_TYPE, STREET_TYPE_LABEL, type StreetType } from "@/modules/addresses/schemas";
 import { reverseGeocodeAction, forwardGeocodeAction } from "@/shared/lib/geocoding/actions";
+import { detectStreetType } from "@/shared/lib/geocoding/street-type";
 
 /**
  * Wizard 2 pasos. Tablet-first.
@@ -518,17 +519,26 @@ export function LeadCreateForm() {
             Dirección principal (opcional). Puedes usar tu ubicación o buscar por dirección.
           </div>
 
-          {/* Búsqueda inteligente con Google Places (opcional). Solo
-              visible si NEXT_PUBLIC_GOOGLE_MAPS_KEY está configurada;
-              si no, el componente devuelve un input plano con hint y
-              no estorba al flujo. */}
-          {process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY && (
+          {/* Búsqueda inteligente con Google Places. El componente
+              consulta /api/maps/client-key dinámicamente y se rinde
+              como input plano si la empresa no tiene Google Maps Tools
+              activo o sin la feature interactive_maps. */}
+          {(
             <div className="space-y-1.5 rounded-xl border-2 border-primary/30 bg-primary/5 p-3">
               <Label>🪄 Búsqueda inteligente (Google)</Label>
               <PlacesAutocomplete
                 placeholder="Calle, número, ciudad…"
                 onSelect={(addr) => {
-                  if (addr.street) setStreet(addr.street);
+                  // Google devuelve `route` con el tipo de vía
+                  // ("Avenida de la Paz"). Lo dividimos en select +
+                  // campo para que street_type quede correcto.
+                  if (addr.street) {
+                    const { type, rest } = detectStreetType(addr.street);
+                    if (STREET_TYPE.includes(type as StreetType)) {
+                      setStreetType(type as StreetType);
+                    }
+                    setStreet(rest || addr.street);
+                  }
                   if (addr.street_number) setStreetNumber(addr.street_number);
                   if (addr.postal_code) setPostal(addr.postal_code);
                   if (addr.city) setCity(addr.city);
@@ -605,7 +615,25 @@ export function LeadCreateForm() {
               <Label>Nombre *</Label>
               <Input
                 value={street}
-                onChange={(e) => setStreet(e.target.value)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  // Si el usuario escribe "Avenida X" al inicio, lo
+                  // movemos al select. Sólo si hay espacio (evita el
+                  // disparo letra a letra al teclear "av").
+                  if (raw.includes(" ")) {
+                    const { type, rest } = detectStreetType(raw);
+                    if (
+                      type !== "calle" &&
+                      rest !== raw &&
+                      STREET_TYPE.includes(type as StreetType)
+                    ) {
+                      setStreetType(type as StreetType);
+                      setStreet(rest);
+                      return;
+                    }
+                  }
+                  setStreet(raw);
+                }}
                 placeholder="Gran Vía"
               />
             </div>

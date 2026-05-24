@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { loadGoogleMaps } from "@/shared/lib/google-maps/loader";
 
 export interface PlacesAddress {
   street: string;
@@ -26,12 +27,12 @@ interface Props {
 
 /**
  * Input con autocompletado de direcciones via Google Places (New).
- * Se carga el script de Maps JS API una sola vez por sesión.
- * Si `NEXT_PUBLIC_GOOGLE_MAPS_KEY` no está definida, el componente
- * se rinde como input plano sin autocompletado y muestra hint.
+ * Usa el loader compartido (`loadGoogleMaps`) que respeta la
+ * configuración Google Maps Tools de la empresa: si está activado
+ * (shared_key o own_key) descarga la API y autocompleta; si no, se
+ * rinde como input plano y muestra hint.
  *
- * No depende de @googlemaps/js-api-loader — cargamos el <script> a mano
- * para no añadir ~3 KB de dependencia al bundle de todos los formularios.
+ * Carga la library `places` específicamente.
  */
 export function PlacesAutocomplete({
   onSelect,
@@ -43,53 +44,27 @@ export function PlacesAutocomplete({
   const ref = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
-    if (!apiKey || typeof window === "undefined") return;
     let cancelled = false;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    if (w.google?.maps?.places) {
-      setReady(true);
-      return;
-    }
-
-    // Marker para que múltiples instancias del componente no carguen el
-    // script dos veces. Cuando termine de cargarse, todos los listeners
-    // se enteran via `google-maps-loaded` evento custom.
-    if (!w.__gmapsLoading) {
-      w.__gmapsLoading = true;
-      const script = document.createElement("script");
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&language=es&region=ES`;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        window.dispatchEvent(new CustomEvent("google-maps-loaded"));
-      };
-      script.onerror = () => {
-        window.dispatchEvent(new CustomEvent("google-maps-failed"));
-      };
-      document.head.appendChild(script);
-    }
-
-    function onLoaded() {
+    (async () => {
+      const g = await loadGoogleMaps(["places"]);
       if (cancelled) return;
+      if (!g) {
+        setUnavailable(true);
+        return;
+      }
+      if (!g.maps?.places) {
+        setFailed(true);
+        return;
+      }
       setReady(true);
-    }
-    function onFailed() {
-      if (cancelled) return;
-      setFailed(true);
-    }
-    window.addEventListener("google-maps-loaded", onLoaded);
-    window.addEventListener("google-maps-failed", onFailed);
+    })();
     return () => {
       cancelled = true;
-      window.removeEventListener("google-maps-loaded", onLoaded);
-      window.removeEventListener("google-maps-failed", onFailed);
     };
-  }, [apiKey]);
+  }, []);
 
   // Bind del Autocomplete al input cuando el script está listo.
   useEffect(() => {
@@ -139,7 +114,7 @@ export function PlacesAutocomplete({
     };
   }, [ready, onSelect, country]);
 
-  if (!apiKey) {
+  if (unavailable) {
     return (
       <div className="space-y-1">
         <input
@@ -152,9 +127,9 @@ export function PlacesAutocomplete({
           }
         />
         <p className="text-[11px] text-muted-foreground">
-          Google Places no configurado. El admin debe añadir{" "}
-          <code>NEXT_PUBLIC_GOOGLE_MAPS_KEY</code> en las variables de entorno
-          para activar el autocompletado inteligente.
+          Autocompletado Google no disponible para tu empresa. Configura
+          Google Maps Tools en <code>/configuracion/google-maps</code> para
+          activarlo (o usa los campos manuales debajo).
         </p>
       </div>
     );
