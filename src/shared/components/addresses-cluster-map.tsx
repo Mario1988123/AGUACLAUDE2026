@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { loadGoogleMaps } from "@/shared/lib/google-maps/loader";
 
 export interface MapPoint {
   id: string;
@@ -124,10 +125,105 @@ export function AddressesClusterMap({
     })();
   }, []);
 
-  // 2) Crear el mapa + clusters
+  // 2) Crear el mapa + clusters. Intenta Google primero (si la empresa
+  //    tiene `interactive_maps`); cae a Leaflet+OSM si no.
   useEffect(() => {
     if (!containerRef.current || valid.length === 0) return;
     let cancelled = false;
+
+    async function tryGoogle(): Promise<boolean> {
+      const g = await loadGoogleMaps([]);
+      if (cancelled || !g || !containerRef.current) return false;
+      try {
+        // Limpia mapa Leaflet previo si existía
+        if (mapRef.current && typeof mapRef.current.remove === "function") {
+          try {
+            mapRef.current.remove();
+          } catch {
+            /* ignore */
+          }
+          mapRef.current = null;
+        }
+        const bounds = new g.maps.LatLngBounds();
+        for (const p of valid) bounds.extend({ lat: p.lat, lng: p.lng });
+        const map = new g.maps.Map(containerRef.current, {
+          center: bounds.getCenter(),
+          zoom: 6,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+        });
+        mapRef.current = map;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const markers: any[] = [];
+        for (const p of valid) {
+          const color = KIND_COLOR[p.kind ?? "agenda"];
+          const label = KIND_LABEL[p.kind ?? "agenda"];
+          const marker = new g.maps.Marker({
+            position: { lat: p.lat, lng: p.lng },
+            map,
+            label: { text: label[0]!, color: "white", fontWeight: "bold" },
+            icon: {
+              path: g.maps.SymbolPath.CIRCLE,
+              scale: 14,
+              fillColor: color,
+              fillOpacity: 1,
+              strokeColor: "white",
+              strokeWeight: 2,
+            },
+          });
+          const sub = p.subtitle
+            ? `<div style="font-size:11px;color:#666;margin-top:2px">${escapeHtml(p.subtitle)}</div>`
+            : "";
+          const link = p.href
+            ? `<div style="margin-top:6px"><a href="${escapeHtml(p.href)}" style="color:${color};font-weight:600;font-size:12px">Abrir →</a></div>`
+            : "";
+          const info = new g.maps.InfoWindow({
+            content: `<div style="min-width:180px"><div style="font-size:10px;text-transform:uppercase;color:${color};font-weight:700">${label}</div><div style="font-weight:600;font-size:13px;margin-top:2px">${escapeHtml(p.title)}</div>${sub}${link}</div>`,
+          });
+          marker.addListener("click", () => info.open({ map, anchor: marker }));
+          markers.push(marker);
+        }
+        map.fitBounds(bounds, 40);
+        // Carga el clusterer vía CDN si no está
+        await ensureClustererScript();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const w = window as any;
+        if (w.markerClusterer?.MarkerClusterer) {
+          clusterRef.current = new w.markerClusterer.MarkerClusterer({
+            map,
+            markers,
+          });
+        }
+        return true;
+      } catch (e) {
+        console.error("[AddressesClusterMap] google init failed:", e);
+        return false;
+      }
+    }
+
+    function ensureClustererScript(): Promise<void> {
+      return new Promise((resolve) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window as any).markerClusterer?.MarkerClusterer) return resolve();
+        const existing = document.querySelector<HTMLScriptElement>(
+          'script[data-gmaps-clusterer="1"]',
+        );
+        if (existing) {
+          existing.addEventListener("load", () => resolve());
+          existing.addEventListener("error", () => resolve());
+          return;
+        }
+        const s = document.createElement("script");
+        s.src =
+          "https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js";
+        s.async = true;
+        s.dataset.gmapsClusterer = "1";
+        s.onload = () => resolve();
+        s.onerror = () => resolve();
+        document.body.appendChild(s);
+      });
+    }
 
     function init() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -189,20 +285,21 @@ export function AddressesClusterMap({
       }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((window as any).L?.markerClusterGroup) {
-      init();
-    } else {
-      function onReady() {
-        if (cancelled) return;
+    (async () => {
+      const used = await tryGoogle();
+      if (used || cancelled) return;
+      // Fallback Leaflet
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((window as any).L?.markerClusterGroup) {
         init();
+      } else {
+        function onReady() {
+          if (cancelled) return;
+          init();
+        }
+        window.addEventListener("leaflet-cluster-loaded", onReady);
       }
-      window.addEventListener("leaflet-cluster-loaded", onReady);
-      return () => {
-        cancelled = true;
-        window.removeEventListener("leaflet-cluster-loaded", onReady);
-      };
-    }
+    })();
 
     return () => {
       cancelled = true;

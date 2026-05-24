@@ -26,6 +26,7 @@ import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
 import { EditCustomerDataButton } from "@/modules/customers/edit-data-button";
 import { FromProposalBanner } from "@/modules/customers/from-proposal-banner";
 import { Timeline } from "@/modules/events/timeline";
+import { StreetViewCard } from "@/shared/components/street-view-card";
 import { Plus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -335,8 +336,25 @@ export default async function CustomerDetailPage({
           <CardHeader>
             <CardTitle>Direcciones ({addresses.length})</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             <AddressList customerId={id} addresses={addresses} />
+            {(() => {
+              const primary =
+                addresses.find((a) => a.is_primary) ?? addresses[0];
+              if (
+                !primary ||
+                primary.latitude == null ||
+                primary.longitude == null
+              )
+                return null;
+              return (
+                <StreetViewCard
+                  lat={Number(primary.latitude)}
+                  lng={Number(primary.longitude)}
+                  label="dirección principal"
+                />
+              );
+            })()}
           </CardContent>
         </Card>
 

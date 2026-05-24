@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getMyDayItems } from "@/modules/my-day/actions";
 import { nearestNeighborRoute, totalDistanceKm, type RoutePoint } from "./haversine";
+import { optimizeRouteWithGoogle } from "@/shared/lib/google-maps/routes";
 
 export interface DayRouteItem {
   id: string;
@@ -92,13 +93,36 @@ export async function planMyDayRoute(): Promise<DayRoutePlan> {
       : { lat: withGeo[0]!.lat, lng: withGeo[0]!.lng, label: "Primera parada del día" };
 
   const points: RoutePoint[] = withGeo.map((p) => ({ id: p.id, lat: p.lat, lng: p.lng }));
-  const { ordered, totalKm: optimizedKm } = nearestNeighborRoute(start, points);
   const currentKm = totalDistanceKm(start, points);
 
+  // Si la empresa tiene Routes API activo (smart_routes), pedimos a
+  // Google que reordene con tráfico real. Si la llamada falla o la
+  // feature no está activa, caemos a Haversine + nearest-neighbor.
+  let optimizedKm: number;
+  let optimizedItems: DayRouteItem[];
   const byId = new Map(withGeo.map((p) => [p.id, p]));
-  const optimized = ordered
-    .map((o) => byId.get(o.id))
-    .filter((v): v is DayRouteItem => !!v);
+  let googlePlan = null as Awaited<ReturnType<typeof optimizeRouteWithGoogle>> | null;
+  if (session.company_id) {
+    googlePlan = await optimizeRouteWithGoogle({
+      companyId: session.company_id,
+      userId: session.user_id,
+      start,
+      waypoints: withGeo.map((p) => ({ lat: p.lat, lng: p.lng })),
+    });
+  }
+  if (googlePlan) {
+    optimizedKm = googlePlan.totalKm;
+    optimizedItems = googlePlan.order
+      .map((idx) => withGeo[idx])
+      .filter((v): v is DayRouteItem => !!v);
+  } else {
+    const nn = nearestNeighborRoute(start, points);
+    optimizedKm = nn.totalKm;
+    optimizedItems = nn.ordered
+      .map((o) => byId.get(o.id))
+      .filter((v): v is DayRouteItem => !!v);
+  }
+  const optimized = optimizedItems;
 
   return {
     start,

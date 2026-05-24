@@ -11,6 +11,7 @@ import {
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { fetchStaticMapPng } from "@/shared/lib/google-maps/static-maps";
 
 // ============================================================================
 // Diseño (mismo estilo que contrato / albarán)
@@ -1080,6 +1081,35 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
       title: "GEOLOCALIZACIÓN DE LA INSTALACIÓN",
       rows: [["Coordenadas GPS (inicio del parte)", coords, "ok"], distRow],
     });
+
+    // Static Maps de Google (si la empresa tiene la feature activa).
+    // No bloquea el PDF: si falla, simplemente no embebemos imagen.
+    try {
+      const png = await fetchStaticMapPng({
+        companyId: session.company_id,
+        userId: session.user_id ?? null,
+        lat: Number(i.started_geo_lat),
+        lng: Number(i.started_geo_lng),
+        zoom: 17,
+        width: 600,
+        height: 280,
+      });
+      if (png) {
+        const img = await doc.pdf.embedPng(png.data);
+        const imgW = CONTENT_W;
+        const imgH = (img.height / img.width) * imgW;
+        if (doc.cursorY - imgH < MARGIN) newPage(doc);
+        doc.page.drawImage(img, {
+          x: MARGIN,
+          y: doc.cursorY - imgH,
+          width: imgW,
+          height: imgH,
+        });
+        doc.cursorY -= imgH + 10;
+      }
+    } catch {
+      /* fail-soft: el PDF se genera sin mapa */
+    }
   }
 
   // Estado inicial del lugar

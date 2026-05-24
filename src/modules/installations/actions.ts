@@ -1220,6 +1220,47 @@ export async function completeInstallation(input: unknown) {
     .eq("id", parsed.id);
   // installation_steps_log dropeada — los wizards escriben en `events`.
 
+  // Anti-fraude Roads API (decisión usuario, feature opcional). Si la
+  // empresa tiene `anti_fraud_roads` activado, verificamos que las
+  // coordenadas de cierre están realmente sobre una calle. Si el snap
+  // está a >300 m, registramos un evento informativo para revisión
+  // manual (no bloquea el cierre — preferimos no romper la firma).
+  const companyIdForRoads = (inst as { company_id: string | null } | null)
+    ?.company_id;
+  if (
+    companyIdForRoads &&
+    parsed.geo_lat != null &&
+    parsed.geo_lng != null
+  ) {
+    try {
+      const { snapToRoadWithGoogle } = await import(
+        "@/shared/lib/google-maps/routes"
+      );
+      const snap = await snapToRoadWithGoogle({
+        companyId: companyIdForRoads,
+        userId: session.user_id,
+        lat: parsed.geo_lat,
+        lng: parsed.geo_lng,
+      });
+      if (snap && snap.distanceM > 300) {
+        await admin.from("events").insert({
+          company_id: companyIdForRoads,
+          subject_type: "installation",
+          subject_id: parsed.id,
+          kind: "installation.geo_off_road",
+          payload: {
+            given: { lat: parsed.geo_lat, lng: parsed.geo_lng },
+            snapped: { lat: snap.lat, lng: snap.lng },
+            distance_m: Math.round(snap.distanceM),
+          },
+          actor_user_id: session.user_id,
+        });
+      }
+    } catch {
+      /* fail-soft */
+    }
+  }
+
   // Incidencia silenciosa si se completó FUERA DE HORARIO programado.
   // Umbral: completed_at > scheduled_at + 30 min. Notifica admin/director
   // técnico SIN bloquear el cierre del parte (decisión 2026-05-19).

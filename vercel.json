@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/purchase-suggestions",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/gmaps-budget-alert",
+      "schedule": "0 7 * * *"
     }
   ]
 }
