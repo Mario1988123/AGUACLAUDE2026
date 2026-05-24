@@ -1,6 +1,9 @@
 import { requireSession } from "@/shared/lib/auth/session";
 import { BackButton } from "@/shared/components/back-button";
-import { getMyGmapsConfig } from "@/modules/config/google-maps/actions";
+import {
+  getMyGmapsConfig,
+  getAntiFraudSettings,
+} from "@/modules/config/google-maps/actions";
 import { GoogleMapsDashboard } from "@/modules/config/google-maps/dashboard";
 import { getGmapsUsageSummary } from "@/shared/lib/google-maps/config";
 
@@ -25,6 +28,7 @@ export default async function GoogleMapsPage() {
         by_user: [],
         history: [],
       };
+  const antiFraud = await getAntiFraudSettings();
 
   return (
     <div className="space-y-6">
@@ -43,6 +47,7 @@ export default async function GoogleMapsPage() {
         config={config}
         usage={usage}
         has_key={config.has_key}
+        antiFraud={antiFraud}
       />
     </div>
   );

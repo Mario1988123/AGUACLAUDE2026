@@ -1113,6 +1113,90 @@ export async function startInstallation(input: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const now = new Date().toISOString();
+
+  // Distancia a la dirección registrada. Si supera el umbral configurable
+  // por empresa (default 200 m), registramos event + notif a admin / dir
+  // técnico. NO bloquea el inicio del parte (anti-fraude soft).
+  let distanceM: number | null = null;
+  if (parsed.geo_lat != null && parsed.geo_lng != null && session.company_id) {
+    try {
+      const { data: inst } = await supabase
+        .from("installations")
+        .select("address_id, customer_id, reference_code")
+        .eq("id", parsed.id)
+        .maybeSingle();
+      const addrId = (inst as { address_id: string | null } | null)?.address_id;
+      if (addrId) {
+        const { data: addr } = await supabase
+          .from("addresses")
+          .select("latitude, longitude")
+          .eq("id", addrId)
+          .maybeSingle();
+        const lat = (addr as { latitude: number | null } | null)?.latitude;
+        const lng = (addr as { longitude: number | null } | null)?.longitude;
+        if (lat != null && lng != null) {
+          distanceM = haversineMeters(
+            parsed.geo_lat,
+            parsed.geo_lng,
+            Number(lat),
+            Number(lng),
+          );
+        }
+      }
+      let threshold = 200;
+      try {
+        const { data: cs } = await supabase
+          .from("company_settings")
+          .select("geo_max_distance_start_m")
+          .eq("company_id", session.company_id)
+          .maybeSingle();
+        const row = (cs ?? null) as
+          | { geo_max_distance_start_m: number | null }
+          | null;
+        if (row?.geo_max_distance_start_m != null) {
+          threshold = Number(row.geo_max_distance_start_m);
+        }
+      } catch {
+        /* default */
+      }
+      if (distanceM != null && distanceM > threshold) {
+        await supabase.from("events").insert({
+          company_id: session.company_id,
+          subject_type: "installation",
+          subject_id: parsed.id,
+          kind: "installation.start_far_from_address",
+          payload: {
+            distance_m: Math.round(distanceM),
+            threshold_m: threshold,
+          },
+          actor_user_id: session.user_id,
+        });
+        try {
+          const { notifyByRoles } = await import(
+            "@/modules/notifications/notifier"
+          );
+          await notifyByRoles(
+            session.company_id,
+            ["company_admin", "technical_director"],
+            {
+              kind: "installation.start_far_from_address",
+              severity: "warning",
+              title: "Inicio de instalación lejos de la dirección",
+              body: `Un técnico ha iniciado un parte a ${Math.round(distanceM)} m de la dirección registrada (umbral: ${threshold} m). Revísalo.`,
+              subject_type: "installation",
+              subject_id: parsed.id,
+              action_url: `/instalaciones/${parsed.id}`,
+            },
+          );
+        } catch {
+          /* no-op */
+        }
+      }
+    } catch {
+      /* fail-soft */
+    }
+  }
+
   const { error } = await supabase
     .from("installations")
     .update({
@@ -1120,6 +1204,8 @@ export async function startInstallation(input: unknown) {
       started_at: now,
       geo_started_lat: parsed.geo_lat ?? null,
       geo_started_lng: parsed.geo_lng ?? null,
+      geo_distance_to_address_m:
+        distanceM != null ? Math.round(distanceM) : null,
     })
     .eq("id", parsed.id);
   if (error) throw new Error(error.message);
@@ -1143,6 +1229,22 @@ export async function startInstallation(input: unknown) {
   });
 
   revalidatePath(`/instalaciones/${parsed.id}`);
+}
+
+function haversineMeters(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371000;
+  const toRad = (n: number) => (n * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
 
 export async function pauseInstallation(id: string) {
@@ -1233,6 +1335,24 @@ export async function completeInstallation(input: unknown) {
     parsed.geo_lng != null
   ) {
     try {
+      // Umbral configurable por empresa (default 300 m si no aplicada
+      // la migración 20260524190000 o columna ausente).
+      let threshold = 300;
+      try {
+        const { data: cs } = await admin
+          .from("company_settings")
+          .select("geo_off_road_threshold_m")
+          .eq("company_id", companyIdForRoads)
+          .maybeSingle();
+        const row = (cs ?? null) as
+          | { geo_off_road_threshold_m: number | null }
+          | null;
+        if (row?.geo_off_road_threshold_m != null) {
+          threshold = Number(row.geo_off_road_threshold_m);
+        }
+      } catch {
+        /* default */
+      }
       const { snapToRoadWithGoogle } = await import(
         "@/shared/lib/google-maps/routes"
       );
@@ -1242,7 +1362,7 @@ export async function completeInstallation(input: unknown) {
         lat: parsed.geo_lat,
         lng: parsed.geo_lng,
       });
-      if (snap && snap.distanceM > 300) {
+      if (snap && snap.distanceM > threshold) {
         await admin.from("events").insert({
           company_id: companyIdForRoads,
           subject_type: "installation",
@@ -1252,9 +1372,31 @@ export async function completeInstallation(input: unknown) {
             given: { lat: parsed.geo_lat, lng: parsed.geo_lng },
             snapped: { lat: snap.lat, lng: snap.lng },
             distance_m: Math.round(snap.distanceM),
+            threshold_m: threshold,
           },
           actor_user_id: session.user_id,
         });
+        // Notif a admin + director técnico
+        try {
+          const { notifyByRoles } = await import(
+            "@/modules/notifications/notifier"
+          );
+          await notifyByRoles(
+            companyIdForRoads,
+            ["company_admin", "technical_director"],
+            {
+              kind: "installation.geo_off_road",
+              severity: "warning",
+              title: "GPS sospechoso al cerrar instalación",
+              body: `El técnico cerró el parte a ${Math.round(snap.distanceM)} m de la calle más cercana (umbral: ${threshold} m). Revísalo en /instalaciones/anti-fraude.`,
+              subject_type: "installation",
+              subject_id: parsed.id,
+              action_url: `/instalaciones/${parsed.id}`,
+            },
+          );
+        } catch {
+          /* no-op */
+        }
       }
     } catch {
       /* fail-soft */

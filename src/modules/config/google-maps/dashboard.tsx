@@ -12,6 +12,8 @@ import {
   setGmapsApiKeySafeAction,
   setGmapsFeaturesSafeAction,
   setGmapsAlertEmailSafeAction,
+  setAntiFraudSettingsSafeAction,
+  type AntiFraudSettings,
 } from "./actions";
 import {
   FREE_TIER_USD,
@@ -42,6 +44,7 @@ interface Props {
   /** Indica si la empresa tiene una key configurada (no exponemos la
    *  key real al cliente). Solo informativo. */
   has_key: boolean;
+  antiFraud: AntiFraudSettings;
 }
 
 const FEATURE_ORDER: GmapsFeature[] = [
@@ -53,7 +56,7 @@ const FEATURE_ORDER: GmapsFeature[] = [
   "anti_fraud_roads",
 ];
 
-export function GoogleMapsDashboard({ config, usage, has_key }: Props) {
+export function GoogleMapsDashboard({ config, usage, has_key, antiFraud }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -65,6 +68,26 @@ export function GoogleMapsDashboard({ config, usage, has_key }: Props) {
   const [features, setFeatures] = useState(config.features);
 
   const [alertEmail, setAlertEmail] = useState(config.alert_email ?? "");
+
+  // Anti-fraude
+  const [startMaxM, setStartMaxM] = useState(String(antiFraud.start_max_m));
+  const [offRoadM, setOffRoadM] = useState(
+    String(antiFraud.off_road_threshold_m),
+  );
+
+  function saveAntiFraud() {
+    startTransition(async () => {
+      const r = await setAntiFraudSettingsSafeAction({
+        start_max_m: Number(startMaxM),
+        off_road_threshold_m: Number(offRoadM),
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar", r.error);
+        return;
+      }
+      notify.success("Umbrales anti-fraude guardados");
+    });
+  }
 
   function saveKey() {
     if (!apiKey.trim()) {
@@ -266,6 +289,53 @@ export function GoogleMapsDashboard({ config, usage, has_key }: Props) {
           />
           <Button onClick={saveAlertEmail} disabled={pending} variant="outline">
             Guardar
+          </Button>
+        </div>
+      </div>
+
+      {/* Anti-fraude geo */}
+      <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <h2 className="text-base font-bold">Anti-fraude (geolocalización)</h2>
+        <p className="text-xs text-muted-foreground">
+          Si el técnico inicia o cierra un parte lejos de la dirección
+          registrada o de cualquier calle conocida, registramos un evento y
+          notificamos a admin / director técnico. No bloquea el flujo —
+          es solo aviso para revisión manual.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Distancia máxima al iniciar parte (m)</Label>
+            <Input
+              type="number"
+              min={0}
+              step="10"
+              value={startMaxM}
+              onChange={(e) => setStartMaxM(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Si la posición GPS al iniciar parte está a más de N metros de
+              la dirección registrada, evento + notif. Default 200 m.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Umbral &laquo;fuera de calle&raquo; al cerrar (m)</Label>
+            <Input
+              type="number"
+              min={0}
+              step="10"
+              value={offRoadM}
+              onChange={(e) => setOffRoadM(e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Snap-to-roads de Google: si el cierre cae a más de N metros
+              de la calle más cercana, evento + notif. Solo si Roads API
+              está activa (feature anti_fraud_roads). Default 300 m.
+            </p>
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={saveAntiFraud} disabled={pending} variant="outline">
+            Guardar umbrales
           </Button>
         </div>
       </div>
