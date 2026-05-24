@@ -132,7 +132,7 @@ export function AddressesClusterMap({
     let cancelled = false;
 
     async function tryGoogle(): Promise<boolean> {
-      const g = await loadGoogleMaps([]);
+      const g = await loadGoogleMaps(["marker"]);
       if (cancelled || !g || !containerRef.current) return false;
       try {
         // Limpia mapa Leaflet previo si existía

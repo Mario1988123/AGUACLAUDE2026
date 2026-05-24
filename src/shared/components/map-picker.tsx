@@ -45,7 +45,9 @@ export function MapPicker({
     const zoom = latitude != null && longitude != null ? 17 : 5;
 
     async function tryGoogle(): Promise<boolean> {
-      const g = await loadGoogleMaps([]);
+      // "maps" se carga implícitamente; pedimos "marker" extra para
+      // g.maps.Marker (con la API modular no viene en core).
+      const g = await loadGoogleMaps(["marker"]);
       if (cancelled || !g || !containerRef.current) return false;
       try {
         const map = new g.maps.Map(containerRef.current, {

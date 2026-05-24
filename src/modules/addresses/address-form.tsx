@@ -78,6 +78,25 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     geo_source: null as null | "user_pin" | "user_location" | "geocoded",
   });
 
+  // Auto-corregir datos heredados: si la dirección guardada tiene
+  // street="Avenida Pío XII" + street_type="calle" (data del pasado, antes
+  // del parser), arreglamos al mount para que el usuario vea la versión
+  // correcta del primer render.
+  useEffect(() => {
+    if (!form.street.includes(" ")) return;
+    if (form.street_type !== "calle") return;
+    const parsed = detectStreetType(form.street);
+    if (parsed.type === "calle" || parsed.rest === form.street) return;
+    if (!STREET_TYPE.includes(parsed.type as StreetType)) return;
+    setForm((f) => ({
+      ...f,
+      street_type: parsed.type as StreetType,
+      street: parsed.rest,
+    }));
+    // Solo se ejecuta una vez al montar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [gpsLoading, setGpsLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   // Sugerencias para datalist:
@@ -88,24 +107,35 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
 
   async function fillFromCoords(lat: number, lng: number, source: "user_pin" | "user_location" | "geocoded") {
     setForm((f) => ({ ...f, latitude: lat, longitude: lng, geo_source: source }));
-    // Reverse geocoding → autorelleno campos vacíos (no machacamos lo que ya escribió)
+    // Reverse geocoding. Si la fuente es user_location (el comercial ha
+    // pulsado «Usar mi ubicación»), SOBRESCRIBIMOS todos los campos
+    // aunque ya hubiera algo escrito — fuente más fiable que el texto
+    // tecleado. Para user_pin (arrastró la chincheta) o geocoded
+    // (resultado de búsqueda) solo rellenamos los huecos.
     const rev = await reverseGeocode(lat, lng);
     if (!rev) {
       notify.warning("Coordenadas capturadas pero no se pudo identificar la calle");
       return;
     }
+    const replace = source === "user_location";
     setForm((f) => ({
       ...f,
-      street_type: (STREET_TYPE.includes(rev.street_type as StreetType)
+      street_type: STREET_TYPE.includes(rev.street_type as StreetType)
         ? (rev.street_type as StreetType)
-        : f.street_type),
-      street: f.street || rev.street,
-      street_number: f.street_number || rev.street_number || "",
-      postal_code: f.postal_code || rev.postal_code || "",
-      city: f.city || rev.city || "",
-      province: f.province || rev.province || "",
+        : f.street_type,
+      street: replace ? rev.street : f.street || rev.street,
+      street_number: replace
+        ? rev.street_number ?? ""
+        : f.street_number || rev.street_number || "",
+      postal_code: replace
+        ? rev.postal_code ?? ""
+        : f.postal_code || rev.postal_code || "",
+      city: replace ? rev.city ?? "" : f.city || rev.city || "",
+      province: replace ? rev.province ?? "" : f.province || rev.province || "",
     }));
-    notify.success("Dirección autorrellenada");
+    notify.success(
+      replace ? "Dirección detectada y aplicada" : "Dirección autorrellenada",
+    );
   }
 
   function captureMyLocation() {

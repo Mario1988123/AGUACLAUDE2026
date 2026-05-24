@@ -13,7 +13,13 @@
  *   const map = new g.maps.Map(el, opts);
  */
 
-type GmapsLibrary = "places" | "marker" | "geometry" | "drawing" | "visualization";
+type GmapsLibrary =
+  | "maps"
+  | "places"
+  | "marker"
+  | "geometry"
+  | "drawing"
+  | "visualization";
 
 interface ClientKeyResponse {
   key: string | null;
@@ -116,9 +122,14 @@ export async function loadGoogleMaps(
   await loaderPromise;
   if (!w.google?.maps?.importLibrary) return null;
 
-  // Cargar las libraries solicitadas usando importLibrary (cached por
-  // library entre llamadas).
-  for (const lib of libraries) {
+  // SIEMPRE cargar "maps" (Map, Marker, InfoWindow, …) salvo que el
+  // caller lo excluya. Con el API modular nuevo, ni siquiera la clase
+  // Map está disponible hasta hacer importLibrary("maps"). Antes mi
+  // MapPicker caía silenciosamente a Leaflet por este motivo.
+  const libsToLoad: GmapsLibrary[] = Array.from(
+    new Set<GmapsLibrary>(["maps" as GmapsLibrary, ...libraries]),
+  );
+  for (const lib of libsToLoad) {
     if (!libraryPromises.has(lib)) {
       libraryPromises.set(lib, w.google.maps.importLibrary(lib));
     }

@@ -128,7 +128,10 @@ export function LeadCreateForm() {
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        await fillFromCoords(pos.coords.latitude, pos.coords.longitude);
+        // force=true: la fuente GPS es más fiable que el texto que el
+        // comercial pueda haber tecleado a medias, así que sobrescribimos
+        // todos los campos.
+        await fillFromCoords(pos.coords.latitude, pos.coords.longitude, true);
         setGpsLoading(false);
       },
       (err) => {
