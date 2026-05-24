@@ -19,6 +19,10 @@ export interface FiscalSettings {
   fiscal_logo_url: string | null;
   /** Color hex aplicado a cabeceras y bandas de los PDFs emitidos. */
   pdf_brand_color: string;
+  /** Creditor Identifier SEPA. Formato típico ES##ZZZ########## (max 35 chars).
+   *  Lo asigna el banco al empresa para domiciliar cuotas con SEPA Core.
+   *  Lo usa generateSepaXmlForPendingDebits + el snapshot de cada mandato. */
+  sepa_creditor_id: string | null;
   invoice_default_iva: number;
   invoice_default_due_days: number;
   invoice_footer_text: string | null;
@@ -38,6 +42,7 @@ const DEFAULTS: FiscalSettings = {
   fiscal_mercantile_reg: null,
   fiscal_logo_url: null,
   pdf_brand_color: "#4880FF",
+  sepa_creditor_id: null,
   invoice_default_iva: 21,
   invoice_default_due_days: 30,
   invoice_footer_text: null,
@@ -59,7 +64,7 @@ export async function getFiscalSettings(): Promise<FiscalSettings> {
     const { data } = await admin
       .from("company_settings")
       .select(
-        "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban, fiscal_mercantile_reg, fiscal_logo_url, pdf_brand_color, invoice_default_iva, invoice_default_due_days, invoice_footer_text",
+        "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban, fiscal_mercantile_reg, fiscal_logo_url, pdf_brand_color, sepa_creditor_id, invoice_default_iva, invoice_default_due_days, invoice_footer_text",
       )
       .eq("company_id", session.company_id)
       .maybeSingle();

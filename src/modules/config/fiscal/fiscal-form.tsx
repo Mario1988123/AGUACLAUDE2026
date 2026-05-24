@@ -142,6 +142,34 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
               onChange={(val) => set("fiscal_iban", val || null)}
             />
           </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Identificador SEPA del acreedor (CID)</Label>
+            <Input
+              value={v.sepa_creditor_id ?? ""}
+              onChange={(e) =>
+                set(
+                  "sepa_creditor_id",
+                  e.target.value
+                    .toUpperCase()
+                    .replace(/\s+/g, "")
+                    .slice(0, 35) || null,
+                )
+              }
+              placeholder="ES23ZZZ001234567890"
+              className="font-mono"
+              maxLength={35}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="text-xs text-muted-foreground">
+              Te lo asigna tu banco al solicitar el alta como acreedor SEPA
+              (formato típico <code>ES##ZZZ##########</code>). Es{" "}
+              <strong>obligatorio para domiciliar cuotas</strong> de alquiler
+              o renting vía SEPA Core: aparece en el mandato firmado por el
+              cliente y en el XML pain.008 de la remesa. Si solo cobras con
+              tarjeta o transferencia manual, puedes dejarlo vacío.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
