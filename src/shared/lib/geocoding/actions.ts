@@ -1,5 +1,10 @@
 "use server";
 
+import { requireSession } from "@/shared/lib/auth/session";
+import {
+  canUseGoogleMaps,
+  trackGoogleApiCall,
+} from "@/shared/lib/google-maps/config";
 import type { ReverseGeocode } from "./nominatim";
 
 const STREET_TYPE_MAP: Record<string, string> = {
@@ -33,12 +38,181 @@ function detectStreetType(road: string): { type: string; rest: string } {
 }
 
 /**
- * Reverse-geocode server-side. Mejor que el cliente porque:
- *  - User-Agent custom (Nominatim lo exige).
- *  - Sin problemas de CORS / rate-limit por IP del cliente.
- *  - El cliente sólo recibe un objeto pequeño y normalizado.
+ * Reverse geocoding híbrido: Google si la empresa tiene gmaps activo +
+ * key + cap disponible, OSM Nominatim si no. Track automático en
+ * google_api_usage para contabilidad por empresa.
+ *
+ * Devuelve null si ambos fallan — el caller debe poder gestionar el
+ * "no se pudo identificar".
  */
 export async function reverseGeocodeAction(
+  lat: number,
+  lng: number,
+): Promise<ReverseGeocode | null> {
+  // Resolver sesión y empresa para decidir Google vs OSM
+  let companyId: string | null = null;
+  let userId: string | null = null;
+  try {
+    const s = await requireSession();
+    companyId = s.company_id ?? null;
+    userId = s.user_id;
+  } catch {
+    /* sin sesión: directo a Nominatim */
+  }
+
+  if (companyId) {
+    const gm = await canUseGoogleMaps({ companyId });
+    if (gm.ok) {
+      const result = await reverseGoogle(lat, lng, gm.key);
+      if (result) {
+        await trackGoogleApiCall({
+          companyId,
+          api: "geocoding",
+          endpoint: "reverse",
+          userId,
+        });
+        return result;
+      }
+      // Si Google falla, registramos error y caemos a Nominatim
+      await trackGoogleApiCall({
+        companyId,
+        api: "geocoding",
+        endpoint: "reverse",
+        userId,
+        success: false,
+        errorCode: "no_result",
+      });
+    }
+  }
+
+  return reverseNominatim(lat, lng);
+}
+
+export async function forwardGeocodeAction(
+  query: string,
+): Promise<{ lat: number; lng: number } | null> {
+  let companyId: string | null = null;
+  let userId: string | null = null;
+  try {
+    const s = await requireSession();
+    companyId = s.company_id ?? null;
+    userId = s.user_id;
+  } catch {
+    /* sin sesión: Nominatim */
+  }
+
+  if (companyId) {
+    const gm = await canUseGoogleMaps({ companyId });
+    if (gm.ok) {
+      const result = await forwardGoogle(query, gm.key);
+      if (result) {
+        await trackGoogleApiCall({
+          companyId,
+          api: "geocoding",
+          endpoint: "forward",
+          userId,
+        });
+        return result;
+      }
+      await trackGoogleApiCall({
+        companyId,
+        api: "geocoding",
+        endpoint: "forward",
+        userId,
+        success: false,
+        errorCode: "no_result",
+      });
+    }
+  }
+
+  return forwardNominatim(query);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Google implementations
+// ─────────────────────────────────────────────────────────────────────
+
+async function reverseGoogle(
+  lat: number,
+  lng: number,
+  key: string,
+): Promise<ReverseGeocode | null> {
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    url.searchParams.set("latlng", `${lat},${lng}`);
+    url.searchParams.set("language", "es");
+    url.searchParams.set("region", "es");
+    url.searchParams.set("key", key);
+    const res = await fetch(url.toString(), { next: { revalidate: 60 } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status: string;
+      results?: Array<{
+        formatted_address: string;
+        address_components: Array<{
+          long_name: string;
+          short_name: string;
+          types: string[];
+        }>;
+      }>;
+    };
+    if (data.status !== "OK" || !data.results?.length) return null;
+    const r = data.results[0]!;
+    const comp = (type: string) =>
+      r.address_components.find((c) => c.types.includes(type))?.long_name ?? null;
+    const route = comp("route") ?? "";
+    const { type, rest } = detectStreetType(route);
+    return {
+      street_type: type,
+      street: rest,
+      street_number: comp("street_number"),
+      postal_code: comp("postal_code"),
+      city:
+        comp("locality") ??
+        comp("administrative_area_level_3") ??
+        comp("administrative_area_level_4") ??
+        null,
+      province:
+        comp("administrative_area_level_2") ??
+        comp("administrative_area_level_1") ??
+        null,
+      display_name: r.formatted_address,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function forwardGoogle(
+  query: string,
+  key: string,
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+    url.searchParams.set("address", query);
+    url.searchParams.set("language", "es");
+    url.searchParams.set("region", "es");
+    url.searchParams.set("components", "country:ES");
+    url.searchParams.set("key", key);
+    const res = await fetch(url.toString(), { next: { revalidate: 60 } });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      status: string;
+      results?: Array<{ geometry: { location: { lat: number; lng: number } } }>;
+    };
+    if (data.status !== "OK" || !data.results?.length) return null;
+    const loc = data.results[0]!.geometry.location;
+    return { lat: loc.lat, lng: loc.lng };
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Nominatim fallback (idéntico al anterior)
+// ─────────────────────────────────────────────────────────────────────
+
+async function reverseNominatim(
   lat: number,
   lng: number,
 ): Promise<ReverseGeocode | null> {
@@ -51,7 +225,6 @@ export async function reverseGeocodeAction(
           "User-Agent": "AguaClaude-CRM/1.0 (contact@aguaclaude.local)",
           "Accept-Language": "es-ES,es",
         },
-        // Cache muy corto para no machacar Nominatim con la misma coord
         next: { revalidate: 60 },
       },
     );
@@ -81,7 +254,6 @@ export async function reverseGeocodeAction(
     };
     if (!data.address) return null;
     const a = data.address;
-    // Más campos posibles para "calle" en Nominatim — ampliamos cobertura
     const rawRoad =
       a.road ??
       a.pedestrian ??
@@ -113,7 +285,7 @@ export async function reverseGeocodeAction(
   }
 }
 
-export async function forwardGeocodeAction(
+async function forwardNominatim(
   query: string,
 ): Promise<{ lat: number; lng: number } | null> {
   try {

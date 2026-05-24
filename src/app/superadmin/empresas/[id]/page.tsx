@@ -6,6 +6,7 @@ import { Badge } from "@/shared/ui/badge";
 import { CompanyEditForm } from "@/modules/superadmin/companies/edit-form";
 import { CompanyModulesPanel } from "@/modules/superadmin/companies/modules-panel";
 import { CompanyAdminPanel } from "@/modules/superadmin/companies/admin-panel";
+import { CompanyGmapsPanel } from "@/modules/superadmin/companies/gmaps-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,39 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  // Datos Google Maps Tools (módulo gateado)
+  const { data: gmapsRow } = await supabase
+    .from("companies")
+    .select("gmaps_mode, gmaps_monthly_cap_usd, gmaps_daily_cap_usd")
+    .eq("id", id)
+    .maybeSingle();
+  type GmapsRow = {
+    gmaps_mode: "disabled" | "shared_key" | "own_key" | null;
+    gmaps_monthly_cap_usd: number | null;
+    gmaps_daily_cap_usd: number | null;
+  };
+  const gmaps = (gmapsRow ?? null) as GmapsRow | null;
+  // Consumo mes actual (informativo)
+  let gmapsMonthUsd = 0;
+  if ((gmaps?.gmaps_mode ?? "disabled") !== "disabled") {
+    const monthStart = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      1,
+    ).toISOString();
+    const { data: usageRows } = await supabase
+      .from("google_api_usage")
+      .select("cost_micro_usd")
+      .eq("company_id", id)
+      .eq("success", true)
+      .gte("called_at", monthStart);
+    const micro = ((usageRows ?? []) as Array<{ cost_micro_usd: number }>).reduce(
+      (s, r) => s + Number(r.cost_micro_usd),
+      0,
+    );
+    gmapsMonthUsd = micro / 1_000_000;
+  }
 
   const companyAdmin = await getCompanyAdmin(id);
   const [modulesRes, companyModulesRes, usersRes] = await Promise.all([
@@ -138,6 +172,26 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
             companyId={id}
             modules={modulesCatalog}
             activeMap={Object.fromEntries(activeMap)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Google Maps Tools</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CompanyGmapsPanel
+            companyId={id}
+            initial={{
+              mode: (gmaps?.gmaps_mode ?? "disabled") as
+                | "disabled"
+                | "shared_key"
+                | "own_key",
+              monthly_cap_usd: Number(gmaps?.gmaps_monthly_cap_usd ?? 50),
+              daily_cap_usd: Number(gmaps?.gmaps_daily_cap_usd ?? 10),
+            }}
+            current_month_usd={gmapsMonthUsd}
           />
         </CardContent>
       </Card>

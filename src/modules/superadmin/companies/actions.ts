@@ -507,3 +507,66 @@ export async function resetCompanyAdminPasswordSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+// =================== Google Maps Tools (superadmin) ===================
+
+export async function setCompanyGmapsSafeAction(input: {
+  company_id: string;
+  mode: "disabled" | "shared_key" | "own_key";
+  monthly_cap_usd: number;
+  daily_cap_usd: number;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await ensureSuperadmin();
+    if (!input.company_id) return { ok: false, error: "Sin empresa" };
+    if (!["disabled", "shared_key", "own_key"].includes(input.mode)) {
+      return { ok: false, error: "Modo inválido" };
+    }
+    const monthly = Number(input.monthly_cap_usd);
+    const daily = Number(input.daily_cap_usd);
+    if (!Number.isFinite(monthly) || monthly < 0 || monthly > 100000) {
+      return { ok: false, error: "Cap mensual inválido" };
+    }
+    if (!Number.isFinite(daily) || daily < 0 || daily > 100000) {
+      return { ok: false, error: "Cap diario inválido" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase
+      .from("companies")
+      .update({
+        gmaps_mode: input.mode,
+        gmaps_monthly_cap_usd: monthly,
+        gmaps_daily_cap_usd: daily,
+      })
+      .eq("id", input.company_id);
+    if (error) return { ok: false, error: error.message };
+
+    try {
+      const { logSuperadminAction } = await import(
+        "@/modules/superadmin/audit-actions"
+      );
+      await logSuperadminAction({
+        action: "company.gmaps_mode_changed",
+        affected_company_id: input.company_id,
+        payload: { mode: input.mode, monthly, daily },
+      });
+    } catch {
+      /* fail-soft */
+    }
+    try {
+      const { invalidateGoogleMapsConfig } = await import(
+        "@/shared/lib/google-maps/config"
+      );
+      await invalidateGoogleMapsConfig(input.company_id);
+    } catch {
+      /* fail-soft */
+    }
+
+    revalidatePath(`/superadmin/empresas/${input.company_id}`);
+    revalidatePath("/configuracion/google-maps");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
