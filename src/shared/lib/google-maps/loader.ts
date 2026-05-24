@@ -21,9 +21,19 @@ type GmapsLibrary =
   | "drawing"
   | "visualization";
 
+type GmapsFeatureFlags = Partial<{
+  interactive_maps: boolean;
+  smart_routes: boolean;
+  directions: boolean;
+  static_pdfs: boolean;
+  street_view: boolean;
+  anti_fraud_roads: boolean;
+}>;
+
 interface ClientKeyResponse {
   key: string | null;
   mode: "disabled" | "shared_key" | "own_key";
+  features?: GmapsFeatureFlags;
 }
 
 let clientKeyCache: ClientKeyResponse | null = null;
@@ -158,7 +168,12 @@ export function resetGoogleMapsClientKeyCache() {
 export async function getGoogleMapsAvailability(): Promise<{
   available: boolean;
   mode: "disabled" | "shared_key" | "own_key";
+  features: GmapsFeatureFlags;
 }> {
   const ck = await fetchClientKey();
-  return { available: !!ck.key, mode: ck.mode };
+  return {
+    available: !!ck.key,
+    mode: ck.mode,
+    features: ck.features ?? {},
+  };
 }
