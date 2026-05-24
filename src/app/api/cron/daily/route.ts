@@ -656,6 +656,24 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 4a-ter) Procesar backlog de geocoding: direcciones sin lat/lng que
+  // tienen calle+CP. Lote máximo 30 por tick para no superar maxDuration
+  // y respetar el rate limit 1req/seg de Nominatim (~33s para 30 filas).
+  // Pensado para tras importaciones masivas CSV.
+  const geocodeStats = { processed: 0, succeeded: 0, failed: 0, exhausted: 0 };
+  try {
+    const { processGeocodeBacklog } = await import(
+      "@/modules/addresses/geocode-backlog"
+    );
+    const r = await processGeocodeBacklog(30);
+    geocodeStats.processed = r.processed;
+    geocodeStats.succeeded = r.succeeded;
+    geocodeStats.failed = r.failed;
+    geocodeStats.exhausted = r.exhausted;
+  } catch (e) {
+    console.error("[cron/daily] geocode backlog failed:", e);
+  }
+
   // 4a-bis) Extender ventana de mantenimientos preprogrammed para todos los
   // contratos activos. Asegura que siempre haya 12 meses por delante de
   // visitas teóricas en estado preprogrammed (admin/dir técnico los
@@ -1949,6 +1967,7 @@ export async function GET(req: NextRequest) {
     stock_alerts: stockAlertsStats,
     auto_loading: loadingStats,
     maintenance_window: maintenanceWindowStats,
+    geocode_backlog: geocodeStats,
     incident_sla_breaches: slaBreaches,
     gocardless_retry: gcRetry,
     cycles_pending_review: cyclesPending,

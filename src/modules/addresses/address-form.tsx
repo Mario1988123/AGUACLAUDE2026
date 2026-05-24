@@ -26,6 +26,7 @@ import {
   lookupPostalCodesByMunicipality,
   type MunicipalityHit,
 } from "@/shared/lib/geocoding/municipalities";
+import { PlacesAutocomplete } from "@/shared/components/places-autocomplete";
 import type { AddressRow } from "./actions";
 
 interface Props {
@@ -358,8 +359,36 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     ? `https://www.google.com/maps?q=${form.latitude},${form.longitude}`
     : null;
 
+  const hasGoogleKey = !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY;
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Búsqueda inteligente (Google Places). Solo visible si el admin
+          configuró NEXT_PUBLIC_GOOGLE_MAPS_KEY. Sin clave seguimos
+          funcionando con OSM Nominatim + datalist CP/municipio. */}
+      {hasGoogleKey && (
+        <div className="space-y-1.5 rounded-xl border-2 border-primary/30 bg-primary/5 p-3">
+          <Label>🪄 Búsqueda inteligente (Google)</Label>
+          <PlacesAutocomplete
+            placeholder="Calle, número, ciudad…"
+            onSelect={(addr) => {
+              setForm((f) => ({
+                ...f,
+                street: addr.street || f.street,
+                street_number: addr.street_number || f.street_number,
+                postal_code: addr.postal_code || f.postal_code,
+                city: addr.city || f.city,
+                province: addr.province || f.province,
+                latitude: addr.lat,
+                longitude: addr.lng,
+                geo_source: "geocoded",
+              }));
+              notify.success("Dirección rellenada", addr.formatted);
+            }}
+          />
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="kind">Tipo</Label>

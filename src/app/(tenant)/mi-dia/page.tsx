@@ -14,6 +14,10 @@ import { getMyDayItems, getMyDayItemsOptimized } from "@/modules/my-day/actions"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { RoutePlannerButton } from "@/modules/routes/route-planner-button";
+import {
+  AddressesClusterMap,
+  type MapPoint,
+} from "@/shared/components/addresses-cluster-map";
 
 export const dynamic = "force-dynamic";
 
@@ -122,6 +126,31 @@ export default async function MiDiaPage({
           </CardContent>
         </Card>
       ) : (
+        <>
+          {/* Mapa con todas las paradas del día geolocalizadas. Solo se
+              muestra si hay al menos un punto con coords; si ninguna
+              tarea las tiene, el componente devuelve null. */}
+          <AddressesClusterMap
+            points={items
+              .filter(
+                (it) =>
+                  it.geo_latitude != null && it.geo_longitude != null,
+              )
+              .map<MapPoint>((it) => ({
+                id: `${it.kind}-${it.id}`,
+                lat: it.geo_latitude as number,
+                lng: it.geo_longitude as number,
+                kind: it.kind,
+                title: it.title,
+                subtitle:
+                  it.subtitle ?? it.address_summary ?? null,
+                href: it.href,
+              }))}
+            height={320}
+          />
+        </>
+      )}
+      {items.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Programado para hoy ({items.length})</CardTitle>
