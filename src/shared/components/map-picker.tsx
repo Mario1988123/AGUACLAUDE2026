@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { loadGoogleMaps } from "@/shared/lib/google-maps/loader";
+import { useEffect, useRef, useState } from "react";
+import {
+  loadGoogleMaps,
+  getGoogleMapsAvailability,
+} from "@/shared/lib/google-maps/loader";
 
 /**
  * Mini-mapa con chincheta. Si la empresa tiene Google Maps Tools activo
@@ -31,11 +34,18 @@ export function MapPicker({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const markerRef = useRef<any>(null);
   const providerRef = useRef<"google" | "leaflet" | null>(null);
+  const [providerStatus, setProviderStatus] = useState<
+    "checking" | "google_loading" | "google" | "leaflet" | "google_failed"
+  >("checking");
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  // Inicializa el mapa una sola vez. Intenta Google primero; si falla,
-  // cae a Leaflet. Si las coords iniciales son null se centra en España.
+  // Inicializa el mapa una sola vez. REGLA (decisión usuario 2026-05-24):
+  // si la empresa tiene Google Maps Tools activado, SIEMPRE intentar
+  // Google primero — Leaflet/OSM solo cuando el módulo está disabled o
+  // la carga de Google falla. Mientras Google se carga mostramos un
+  // estado "checking/loading" para que el usuario no vea Leaflet ni
+  // siquiera unos segundos.
   useEffect(() => {
     let cancelled = false;
     const center: [number, number] =
@@ -175,8 +185,25 @@ export function MapPicker({
     }
 
     (async () => {
+      // Paso 1: averiguar si la empresa tiene Google Maps Tools activo
+      const avail = await getGoogleMapsAvailability();
+      if (cancelled) return;
+      if (!avail.available) {
+        // Módulo gmaps disabled o sin key → Leaflet directamente
+        setProviderStatus("leaflet");
+        await tryLeaflet();
+        return;
+      }
+      // Empresa CON Google activo: mostramos "cargando Google" mientras
+      // se descarga el bundle. NO caemos a Leaflet hasta confirmar fallo.
+      setProviderStatus("google_loading");
       const used = await tryGoogle();
-      if (!used && !cancelled) {
+      if (cancelled) return;
+      if (used) {
+        setProviderStatus("google");
+      } else {
+        // Google falló (timeout, error de red, key inválida) — fallback
+        setProviderStatus("google_failed");
         await tryLeaflet();
       }
     })();
@@ -247,11 +274,26 @@ export function MapPicker({
 
   return (
     <div className="space-y-1">
-      <div
-        ref={containerRef}
-        className="overflow-hidden rounded-xl border border-border"
-        style={{ height }}
-      />
+      <div className="relative">
+        <div
+          ref={containerRef}
+          className="overflow-hidden rounded-xl border border-border"
+          style={{ height }}
+        />
+        {(providerStatus === "checking" ||
+          providerStatus === "google_loading") && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-card/80 text-xs text-muted-foreground backdrop-blur-sm">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <span>Cargando Google Maps…</span>
+          </div>
+        )}
+      </div>
+      {providerStatus === "google_failed" && (
+        <p className="text-[11px] text-amber-700">
+          ⚠ Falló la carga de Google Maps — mostrando OpenStreetMap. Revisa
+          tu conexión o las restricciones de tu API key en Google Cloud.
+        </p>
+      )}
       {(latitude == null || longitude == null) && (
         <p className="text-[11px] text-muted-foreground">
           Pulsa &laquo;Usar mi ubicación&raquo;, &laquo;Buscar por dirección&raquo; o pincha

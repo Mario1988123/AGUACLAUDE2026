@@ -149,3 +149,16 @@ export function resetGoogleMapsClientKeyCache() {
   clientKeyCache = null;
   clientKeyCacheAt = 0;
 }
+
+/**
+ * Devuelve si la empresa tiene Google Maps Tools activo. Útil para
+ * decidir en componentes si deben mostrar "Cargando Google Maps…" o
+ * caer directamente a Leaflet/OSM. Cache 60 s (compartida con fetchClientKey).
+ */
+export async function getGoogleMapsAvailability(): Promise<{
+  available: boolean;
+  mode: "disabled" | "shared_key" | "own_key";
+}> {
+  const ck = await fetchClientKey();
+  return { available: !!ck.key, mode: ck.mode };
+}

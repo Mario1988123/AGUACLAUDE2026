@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { loadGoogleMaps } from "@/shared/lib/google-maps/loader";
+import {
+  loadGoogleMaps,
+  getGoogleMapsAvailability,
+} from "@/shared/lib/google-maps/loader";
 
 export interface MapPoint {
   id: string;
@@ -286,9 +289,15 @@ export function AddressesClusterMap({
     }
 
     (async () => {
-      const used = await tryGoogle();
-      if (used || cancelled) return;
-      // Fallback Leaflet
+      // REGLA: si la empresa tiene Google Maps Tools activado, intentar
+      // Google siempre. Leaflet sólo si module disabled o si Google falla.
+      const avail = await getGoogleMapsAvailability();
+      if (cancelled) return;
+      if (avail.available) {
+        const used = await tryGoogle();
+        if (used || cancelled) return;
+        console.warn("[AddressesClusterMap] Google falló, fallback Leaflet");
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((window as any).L?.markerClusterGroup) {
         init();
