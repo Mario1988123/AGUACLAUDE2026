@@ -196,7 +196,7 @@ export function GoogleMapsDashboard({ config, usage, has_key }: Props) {
           {has_key ? (
             <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
               ✓ Hay una API key guardada y cifrada. Si quieres sustituirla,
-              pega la nueva debajo. Para borrarla, pulsa "Borrar key".
+              pega la nueva debajo. Para borrarla, pulsa &laquo;Borrar key&raquo;.
             </div>
           ) : (
             <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

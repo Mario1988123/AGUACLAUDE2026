@@ -379,4 +379,3 @@ export async function getGmapsUsageSummary(
   };
 }
 
-export { GOOGLE_API_PRICING_PER_1K };
