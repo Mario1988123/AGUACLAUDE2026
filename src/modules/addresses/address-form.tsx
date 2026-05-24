@@ -21,6 +21,11 @@ import {
   validateSpanishPostalCode,
 } from "@/shared/lib/validations/spanish";
 import { reverseGeocodeAction as reverseGeocode, forwardGeocodeAction as forwardGeocode } from "@/shared/lib/geocoding/actions";
+import {
+  lookupMunicipalitiesByPostalCode,
+  lookupPostalCodesByMunicipality,
+  type MunicipalityHit,
+} from "@/shared/lib/geocoding/municipalities";
 import type { AddressRow } from "./actions";
 
 interface Props {
@@ -73,6 +78,11 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
 
   const [gpsLoading, setGpsLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  // Sugerencias para datalist:
+  //  · cpSuggestions  = municipios candidatos del CP actual (CP → ciudad)
+  //  · citySuggestions = CPs candidatos de la ciudad escrita (ciudad → CP)
+  const [cpSuggestions, setCpSuggestions] = useState<MunicipalityHit[]>([]);
+  const [citySuggestions, setCitySuggestions] = useState<MunicipalityHit[]>([]);
 
   async function fillFromCoords(lat: number, lng: number, source: "user_pin" | "user_location" | "geocoded") {
     setForm((f) => ({ ...f, latitude: lat, longitude: lng, geo_source: source }));
@@ -193,6 +203,59 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.postal_code]);
+
+  // Sugerencias CP → municipios para el datalist de "Población".
+  // Disparo independiente del auto-geocode; aquí no toca coordenadas,
+  // solo rellena un combobox.
+  useEffect(() => {
+    const cp = form.postal_code.trim();
+    if (cp.length !== 5 || !validateSpanishPostalCode(cp)) {
+      setCpSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const list = await lookupMunicipalitiesByPostalCode(cp);
+      if (cancelled) return;
+      setCpSuggestions(list);
+      // Si solo hay un municipio para ese CP y la ciudad está vacía o
+      // coincide con la del único hit, lo autocompletamos.
+      if (list.length === 1) {
+        const only = list[0]!;
+        setForm((f) => ({
+          ...f,
+          city: f.city || only.municipality,
+          province: f.province || only.province,
+        }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.postal_code]);
+
+  // Sugerencias ciudad → CPs para el datalist de "CP" (debounce 600ms
+  // para no atacar Nominatim en cada keystroke).
+  useEffect(() => {
+    const city = form.city.trim();
+    if (city.length < 3) {
+      setCitySuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const list = await lookupPostalCodesByMunicipality(
+        city,
+        form.province || undefined,
+      );
+      if (cancelled) return;
+      setCitySuggestions(list);
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [form.city, form.province]);
 
   // Auto-geocode al teclear la calle (debounce 1.2 s). Solo si tenemos CP
   // y población — sin ellos OSM da resultados ambiguos. No pisa coords
@@ -375,21 +438,61 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
-          <Label>CP *</Label>
+          <Label htmlFor="postal_code">CP *</Label>
           <Input
+            id="postal_code"
             inputMode="numeric"
             maxLength={5}
             value={form.postal_code}
             onChange={(e) => update("postal_code", e.target.value)}
+            list="address-cp-options"
           />
+          {/* CPs sugeridos según la población escrita. El user puede
+              escribir libremente; el datalist es solo ayuda visual. */}
+          <datalist id="address-cp-options">
+            {citySuggestions.map((s) => (
+              <option key={`${s.postal_code}-${s.municipality}`} value={s.postal_code}>
+                {s.municipality}
+                {s.province ? ` · ${s.province}` : ""}
+              </option>
+            ))}
+          </datalist>
         </div>
         <div className="space-y-1.5">
-          <Label>Población *</Label>
-          <Input value={form.city} onChange={(e) => update("city", e.target.value)} />
+          <Label htmlFor="city">Población *</Label>
+          <Input
+            id="city"
+            value={form.city}
+            onChange={(e) => update("city", e.target.value)}
+            list="address-city-options"
+            autoComplete="off"
+          />
+          {/* Municipios sugeridos del CP actual. Si el usuario elige uno
+              del desplegable, también ajustamos provincia. */}
+          <datalist id="address-city-options">
+            {cpSuggestions.map((s) => (
+              <option
+                key={`${s.postal_code}-${s.municipality}`}
+                value={s.municipality}
+              >
+                {s.province ? `${s.province} (${s.postal_code})` : s.postal_code}
+              </option>
+            ))}
+          </datalist>
+          {cpSuggestions.length > 1 && (
+            <p className="text-[11px] text-muted-foreground">
+              Este CP tiene {cpSuggestions.length} municipios posibles — abre
+              el desplegable o escribe libremente.
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
-          <Label>Provincia</Label>
-          <Input value={form.province} onChange={(e) => update("province", e.target.value)} />
+          <Label htmlFor="province">Provincia</Label>
+          <Input
+            id="province"
+            value={form.province}
+            onChange={(e) => update("province", e.target.value)}
+          />
         </div>
       </div>
       {geoWarning && form.postal_code.length >= 5 && (
