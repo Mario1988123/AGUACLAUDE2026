@@ -114,6 +114,49 @@ export default async function MiDiaPage({
                   {totalKm} km totales
                 </span>
               )}
+              {(() => {
+                // Deep link a Google Maps con todas las paradas del día.
+                // Formato: origin = primera parada, destination = última,
+                // waypoints = intermedias separadas por '|'.
+                const geoItems = items.filter(
+                  (it) =>
+                    it.geo_latitude != null && it.geo_longitude != null,
+                );
+                if (geoItems.length < 2) return null;
+                const first = geoItems[0]!;
+                const last = geoItems[geoItems.length - 1]!;
+                const middle = geoItems.slice(1, -1);
+                const url = new URL("https://www.google.com/maps/dir/");
+                url.searchParams.set("api", "1");
+                url.searchParams.set(
+                  "origin",
+                  `${first.geo_latitude},${first.geo_longitude}`,
+                );
+                url.searchParams.set(
+                  "destination",
+                  `${last.geo_latitude},${last.geo_longitude}`,
+                );
+                if (middle.length > 0) {
+                  url.searchParams.set(
+                    "waypoints",
+                    middle
+                      .map((m) => `${m.geo_latitude},${m.geo_longitude}`)
+                      .join("|"),
+                  );
+                }
+                url.searchParams.set("travelmode", "driving");
+                return (
+                  <a
+                    href={url.toString()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-emerald-500 bg-emerald-500 px-3 text-sm font-bold text-white hover:bg-emerald-600"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Navegar en Google Maps
+                  </a>
+                );
+              })()}
               <RoutePlannerButton />
             </>
           )}
