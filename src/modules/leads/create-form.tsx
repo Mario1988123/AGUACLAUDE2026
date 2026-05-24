@@ -14,6 +14,7 @@ import {
   validateSpanishPostalCode,
 } from "@/shared/lib/validations/spanish";
 import { MapPicker } from "@/shared/components/map-picker";
+import { PlacesAutocomplete } from "@/shared/components/places-autocomplete";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { PhoneInput } from "@/shared/components/phone-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
@@ -516,6 +517,29 @@ export function LeadCreateForm() {
             <MapPin className="h-4 w-4 text-primary" />
             Dirección principal (opcional). Puedes usar tu ubicación o buscar por dirección.
           </div>
+
+          {/* Búsqueda inteligente con Google Places (opcional). Solo
+              visible si NEXT_PUBLIC_GOOGLE_MAPS_KEY está configurada;
+              si no, el componente devuelve un input plano con hint y
+              no estorba al flujo. */}
+          {process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY && (
+            <div className="space-y-1.5 rounded-xl border-2 border-primary/30 bg-primary/5 p-3">
+              <Label>🪄 Búsqueda inteligente (Google)</Label>
+              <PlacesAutocomplete
+                placeholder="Calle, número, ciudad…"
+                onSelect={(addr) => {
+                  if (addr.street) setStreet(addr.street);
+                  if (addr.street_number) setStreetNumber(addr.street_number);
+                  if (addr.postal_code) setPostal(addr.postal_code);
+                  if (addr.city) setCity(addr.city);
+                  if (addr.province) setProvince(addr.province);
+                  setLatitude(addr.lat);
+                  setLongitude(addr.lng);
+                  notify.success("Dirección rellenada", addr.formatted);
+                }}
+              />
+            </div>
+          )}
 
           {/* Botones de geolocalización */}
           <div className="flex flex-wrap gap-2">
