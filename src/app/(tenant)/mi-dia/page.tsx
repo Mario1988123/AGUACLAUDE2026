@@ -10,6 +10,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
+import { isModuleActive } from "@/shared/lib/auth/module-guard";
 import { getMyDayItems, getMyDayItemsOptimized } from "@/modules/my-day/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -65,9 +66,12 @@ export default async function MiDiaPage({
   const session = await requireSession();
   const sp = await searchParams;
   // Ordenamiento óptimo (decisión 2026-05-20): por defecto orden cronológico;
-  // ?orden=ruta calcula TSP greedy desde la casa del usuario.
+  // ?orden=ruta calcula TSP greedy desde la casa del usuario. La opción
+  // se gatea por el módulo `routes`: si la empresa no lo tiene activo,
+  // /mi-dia muestra solo la lista cronológica sin botón "ordenar".
+  const routesModuleOn = await isModuleActive("routes");
   const optimized =
-    sp.orden === "ruta"
+    routesModuleOn && sp.orden === "ruta"
       ? await getMyDayItemsOptimized().catch(() => null)
       : null;
   const items =
@@ -92,7 +96,7 @@ export default async function MiDiaPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {items.length > 1 && (
+          {routesModuleOn && items.length > 1 && (
             <>
               <Link
                 href={sp.orden === "ruta" ? "/mi-dia" : "/mi-dia?orden=ruta"}
@@ -110,9 +114,9 @@ export default async function MiDiaPage({
                   {totalKm} km totales
                 </span>
               )}
+              <RoutePlannerButton />
             </>
           )}
-          {items.length > 1 && <RoutePlannerButton />}
         </div>
       </div>
 

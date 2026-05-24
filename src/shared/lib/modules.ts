@@ -95,6 +95,11 @@ export const MODULES: ModuleEntry[] = [
   { key: "installations", label: "Instalaciones", icon: "Wrench", href: "/instalaciones", group: "operations", rolesAllowed: FIELD_ROLES },
   { key: "maintenance", label: "Mantenimientos", icon: "ShieldCheck", href: "/mantenimientos", group: "operations", rolesAllowed: FIELD_ROLES },
   { key: "incidents", label: "Incidencias", icon: "AlertTriangle", href: "/incidencias", group: "operations", rolesAllowed: FIELD_ROLES },
+  // Rutas con IA — módulo opcional. Si OFF: /mi-dia solo lista
+  // cronológica. Si ON: optimización ruta diaria + vista equipo para
+  // nivel 1/2. Calidad: Haversine NN local (gratis) o Routes API
+  // Google si la empresa también tiene smart_routes activo.
+  { key: "routes", label: "Rutas", icon: "Map", href: "/rutas", group: "operations", rolesAllowed: [...LEVEL_1_2, "installer", "sales_rep", "telemarketer"] },
 
   // ===== 5. CATÁLOGO Y STOCK (productos + almacenes juntos) =====
   { key: "products", label: "Productos", icon: "Package", href: "/productos", configHref: "/configuracion/productos", group: "catalog", rolesAllowed: LEVEL_1_2 },

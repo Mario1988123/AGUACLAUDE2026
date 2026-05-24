@@ -33,6 +33,7 @@ const SECTIONS = [
   { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo, roles y permisos" },
   { href: "/configuracion/agenda", label: "Agenda", icon: "Calendar", desc: "Horario, tolerancias y tipos de evento" },
   { href: "/configuracion/almacenes", label: "Almacenes", icon: "Warehouse", desc: "Almacenes, furgonetas y stock" },
+  { href: "/configuracion/google-maps", label: "Google Maps Tools", icon: "Map", desc: "Mapas, rutas IA, Street View, anti-fraude · consumo y caps" },
   { href: "/configuracion/modulos", label: "Módulos activos", icon: "Layers", desc: "Activar/desactivar módulos por empresa" },
 ];
 
