@@ -221,6 +221,21 @@ export async function generateMonthlyMaintenanceInvoicesAction(): Promise<{
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const MONTH_LABELS = [
+    "enero",
+    "febrero",
+    "marzo",
+    "abril",
+    "mayo",
+    "junio",
+    "julio",
+    "agosto",
+    "septiembre",
+    "octubre",
+    "noviembre",
+    "diciembre",
+  ];
+  const monthHuman = `${MONTH_LABELS[month - 1]} ${year}`;
   const issueDate = now.toISOString().slice(0, 10);
   // Fin de mes
   const due = new Date(year, month, 0);
@@ -284,11 +299,14 @@ export async function generateMonthlyMaintenanceInvoicesAction(): Promise<{
       continue;
     }
     try {
+      const ref = mc.reference_code ?? `MNT-${mc.id.slice(0, 8).toUpperCase()}`;
       await createInvoiceAction({
         customer_id: mc.customer_id,
         kind: "invoice",
         due_date: dueDate,
-        notes: `Remesa mensual ${monthKey}. maintenance_contract ${mc.id}`,
+        notes: `Remesa mensual de mantenimiento · ${monthHuman} · contrato ${ref}`,
+        maintenance_contract_id: mc.id,
+        billing_period: monthKey,
         lines: [
           {
             description,

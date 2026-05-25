@@ -36,6 +36,10 @@ export interface InvoiceListItem {
   /** ID de la factura original a la que ESTA rectifica (si es credit_note) */
   corrects_invoice_id: string | null;
   corrects_reference: string | null;
+  /** Si la factura proviene de remesa mensual de mantenimiento, true.
+   *  Permite badge "Remesa" + filtro en /facturas. */
+  is_maintenance_remesa: boolean;
+  billing_period: string | null;
 }
 
 export interface InvoiceLine {
@@ -168,7 +172,7 @@ export async function listInvoices(filters?: {
   let query = admin
     .from("invoices")
     .select(
-      "id, full_reference, kind, status, customer_id, contract_id, series_id, number, fiscal_year, issue_date, due_date, total_cents, corrects_invoice_id",
+      "id, full_reference, kind, status, customer_id, contract_id, series_id, number, fiscal_year, issue_date, due_date, total_cents, corrects_invoice_id, maintenance_contract_id, billing_period",
     )
     .eq("company_id", session.company_id)
     .order("issue_date", { ascending: false })
@@ -195,6 +199,8 @@ export async function listInvoices(filters?: {
     due_date: string | null;
     total_cents: number;
     corrects_invoice_id: string | null;
+    maintenance_contract_id: string | null;
+    billing_period: string | null;
   };
   const rows = (data ?? []) as R[];
   if (rows.length === 0) return [];
@@ -279,6 +285,8 @@ export async function listInvoices(filters?: {
       corrects_reference: r.corrects_invoice_id
         ? origMap.get(r.corrects_invoice_id) ?? null
         : null,
+      is_maintenance_remesa: !!r.maintenance_contract_id,
+      billing_period: r.billing_period ?? null,
     };
   });
 }
@@ -349,6 +357,11 @@ interface CreateInvoiceInput {
   notes?: string | null;
   lines: InvoiceLine[];
   corrects_invoice_id?: string | null;
+  /** Si la factura viene de una remesa de mantenimiento, apunta al
+   *  maintenance_contracts.id. Aparece como badge "Remesa" en /facturas. */
+  maintenance_contract_id?: string | null;
+  /** Periodo de facturación (YYYY-MM) cuando proviene de remesa. */
+  billing_period?: string | null;
 }
 
 export async function createInvoiceAction(input: CreateInvoiceInput): Promise<string> {
@@ -459,12 +472,22 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
         .slice(0, 10),
     corrects_invoice_id: input.corrects_invoice_id ?? null,
     notes: input.notes ?? null,
+    maintenance_contract_id: input.maintenance_contract_id ?? null,
+    billing_period: input.billing_period ?? null,
   };
-  // INSERT defensivo: si financier_id no existe en cache, eliminarlo y
-  // dejar la factura sin él (en BD viejas aún sin migrar).
+  // INSERT defensivo: si financier_id / maintenance_contract_id /
+  // billing_period no existen en cache (migración pendiente), los
+  // eliminamos y reintentamos para no romper en entornos viejos.
   let inv = await admin.from("invoices").insert(insertPayload).select("id").single();
-  if (inv.error && /financier_id|schema cache|Could not find/i.test(inv.error.message ?? "")) {
+  if (
+    inv.error &&
+    /financier_id|maintenance_contract_id|billing_period|schema cache|Could not find/i.test(
+      inv.error.message ?? "",
+    )
+  ) {
     delete insertPayload.financier_id;
+    delete insertPayload.maintenance_contract_id;
+    delete insertPayload.billing_period;
     inv = await admin.from("invoices").insert(insertPayload).select("id").single();
   }
   const created = inv.data;

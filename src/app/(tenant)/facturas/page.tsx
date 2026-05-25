@@ -323,6 +323,11 @@ export default async function InvoicesPage({
                       >
                         {i.full_reference}
                       </Link>
+                      {i.is_maintenance_remesa && (
+                        <span className="ml-1.5 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-800">
+                          REMESA {i.billing_period ?? ""}
+                        </span>
+                      )}
                       <div className="mt-0.5 font-medium truncate">
                         {i.customer_name ?? "—"}
                       </div>
@@ -423,6 +428,20 @@ export default async function InvoicesPage({
                         >
                           {i.full_reference}
                         </Link>
+                        {i.is_maintenance_remesa && (
+                          <span
+                            className="ml-1.5 inline-flex items-center gap-0.5 rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-800"
+                            title={`Remesa mensual mantenimiento${i.billing_period ? ` · ${i.billing_period}` : ""}`}
+                          >
+                            REMESA
+                            {i.billing_period && (
+                              <span className="font-normal">
+                                {" "}
+                                {i.billing_period}
+                              </span>
+                            )}
+                          </span>
+                        )}
                         {i.corrected_by_reference && (
                           <div className="mt-0.5 text-[10px] text-amber-700">
                             ↳ rectificada por{" "}
