@@ -48,9 +48,8 @@ comment on column public.maintenance_jobs.customer_called_by is
 comment on column public.maintenance_jobs.original_scheduled_at is
   'Fecha original propuesta por el cron al crear el job. Si admin la cambia tras hablar con el cliente, scheduled_at se actualiza pero esto se conserva para auditoría / análisis de desviaciones.';
 
--- 3) Índice para que la cola "por confirmar" sea rápida
-create index if not exists idx_mjobs_pending_confirm
-  on public.maintenance_jobs (company_id, scheduled_at)
-  where status = 'preprogrammed' and confirmed_at is null;
+-- (índice idx_mjobs_pending_confirm se crea en 20260525120000 — Postgres
+--  no permite usar un valor de enum recién añadido en la misma
+--  transacción).
 
 notify pgrst, 'reload schema';

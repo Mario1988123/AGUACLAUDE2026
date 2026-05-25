@@ -63,9 +63,8 @@ comment on column public.maintenance_jobs.customer_reminder_sent_at is
 comment on column public.maintenance_jobs.customer_day_before_sent_at is
   'Fecha en que se mandó el email de víspera (24h antes). Idempotencia para el cron.';
 
--- 4) Índice de cola needs_callback
-create index if not exists idx_mjobs_needs_callback
-  on public.maintenance_jobs (company_id, scheduled_at)
-  where status = 'needs_callback';
+-- (índice idx_mjobs_needs_callback se crea en 20260525120000 — Postgres
+--  no permite usar un valor de enum recién añadido en la misma
+--  transacción).
 
 notify pgrst, 'reload schema';
