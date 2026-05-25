@@ -649,25 +649,39 @@ export async function completeMaintenanceAction(input: unknown) {
  */
 export async function isLastContractedMaintenance(
   jobId: string,
-): Promise<{ isLast: boolean; contract_id: string | null }> {
+): Promise<{
+  isLast: boolean;
+  contract_id: string | null;
+  customer_equipment_id: string | null;
+}> {
   try {
     await requireSession();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const { data: job } = await admin
       .from("maintenance_jobs")
-      .select("id, contract_id, kind, customer_id")
+      .select("id, contract_id, kind, customer_id, customer_equipment_id")
       .eq("id", jobId)
       .maybeSingle();
-    if (!job) return { isLast: false, contract_id: null };
+    if (!job)
+      return {
+        isLast: false,
+        contract_id: null,
+        customer_equipment_id: null,
+      };
     const j = job as {
       id: string;
       contract_id: string | null;
       kind: string;
       customer_id: string;
+      customer_equipment_id: string | null;
     };
     if (j.kind !== "contracted" || !j.contract_id) {
-      return { isLast: false, contract_id: null };
+      return {
+        isLast: false,
+        contract_id: null,
+        customer_equipment_id: j.customer_equipment_id,
+      };
     }
     // ¿Quedan otras visitas contracted del mismo contrato que NO estén
     // completed/cancelled (incluyendo la propia)?
@@ -678,9 +692,13 @@ export async function isLastContractedMaintenance(
       .eq("kind", "contracted")
       .not("id", "eq", j.id)
       .in("status", ["preprogrammed", "scheduled", "in_progress"]);
-    return { isLast: (count ?? 0) === 0, contract_id: j.contract_id };
+    return {
+      isLast: (count ?? 0) === 0,
+      contract_id: j.contract_id,
+      customer_equipment_id: j.customer_equipment_id,
+    };
   } catch {
-    return { isLast: false, contract_id: null };
+    return { isLast: false, contract_id: null, customer_equipment_id: null };
   }
 }
 
@@ -763,6 +781,9 @@ export async function declineRenewalAction(input: {
 export async function acceptRenewalAction(input: {
   contract_id: string;
   maintenance_plan_id: string;
+  /** Regla 2026-05-25: contrato POR EQUIPO. Se rellena desde el wizard
+   *  con el customer_equipment_id del job que cerró la última visita. */
+  customer_equipment_id?: string | null;
 }): Promise<
   | { ok: true; new_maintenance_contract_id: string }
   | { ok: false; error: string }
@@ -793,12 +814,15 @@ export async function acceptRenewalAction(input: {
       name: string;
     };
 
-    // Crear maintenance_contract activo
+    // Crear maintenance_contract activo. Si el job que disparó la
+    // renovación venía con customer_equipment_id, lo propagamos para
+    // que el contrato quede ligado al equipo concreto (regla 2026-05-25).
     const { data: created, error } = await admin
       .from("maintenance_contracts")
       .insert({
         company_id: session.company_id,
         customer_id: c.customer_id,
+        customer_equipment_id: input.customer_equipment_id ?? null,
         plan_id: p.id,
         tier_snapshot: p.tier,
         monthly_cents_snapshot: p.monthly_cents,

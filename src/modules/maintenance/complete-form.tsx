@@ -47,6 +47,7 @@ export function MaintenanceCompleteForm({
   // Estado del modal de renovación post-cierre.
   const [renewalOpen, setRenewalOpen] = useState(false);
   const [renewalContractId, setRenewalContractId] = useState<string | null>(null);
+  const [renewalEquipmentId, setRenewalEquipmentId] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const plans = maintenancePlans ?? [];
 
@@ -78,6 +79,7 @@ export function MaintenanceCompleteForm({
       const r = await isLastContractedMaintenance(maintenanceId);
       if (r.isLast && r.contract_id && plans.length > 0) {
         setRenewalContractId(r.contract_id);
+        setRenewalEquipmentId(r.customer_equipment_id);
         setRenewalOpen(true);
         return;
       }
@@ -94,6 +96,8 @@ export function MaintenanceCompleteForm({
       const r = await acceptRenewalAction({
         contract_id: renewalContractId,
         maintenance_plan_id: selectedPlanId,
+        // Contrato POR EQUIPO (regla 2026-05-25)
+        customer_equipment_id: renewalEquipmentId,
       });
       if (!r.ok) {
         notify.error("No se pudo registrar la renovación", r.error);
