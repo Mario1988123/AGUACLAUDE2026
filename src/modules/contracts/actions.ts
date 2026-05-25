@@ -895,6 +895,10 @@ export async function markContractSigned(id: string) {
         company_id: session.company_id!,
         contract_id: p.contract_id,
         contract_payment_id: p.id,
+        // Bug 2026-05-25: faltaba customer_id → en /wallet salía "—"
+        // en columna Cliente para los pagos creados al firmar el
+        // contrato (no cuando el comercial usaba "Cobrar" después).
+        customer_id: customerId ?? null,
         concept: p.concept,
         amount_cents: p.amount_cents,
         method: p.method,
