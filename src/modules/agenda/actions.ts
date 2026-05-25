@@ -146,16 +146,31 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
     companyId: session.company_id ?? null,
   });
 
-  // Quitar duplicados: si ya existe un agenda_events para la misma
-  // installation/maintenance (subject_type+subject_id), descartar el virtual.
+  // Dedupe: clave primaria subject_type:subject_id, secundaria por
+  // (reference_code en title + starts_at) para cubrir agenda_events
+  // antiguos sin subject_id.
   const existingKey = new Set(
     events
       .filter((e) => e.subject_type && e.subject_id)
       .map((e) => `${e.subject_type}:${e.subject_id}`),
   );
+  const refRegex = /\b([IM]-\d{4}-\d{4})\b/;
+  const existingRefAt = new Set(
+    events
+      .map((e) => {
+        const m = refRegex.exec(e.title);
+        return m ? `${m[1]}@${e.starts_at}` : null;
+      })
+      .filter((k): k is string => !!k),
+  );
   const merged = [
     ...events,
-    ...virtuals.filter((v) => !existingKey.has(`${v.subject_type}:${v.subject_id}`)),
+    ...virtuals.filter((v) => {
+      if (existingKey.has(`${v.subject_type}:${v.subject_id}`)) return false;
+      const m = refRegex.exec(v.title);
+      if (m && existingRefAt.has(`${m[1]}@${v.starts_at}`)) return false;
+      return true;
+    }),
   ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
   await enrichTitlesFromSubjects(merged);
@@ -270,14 +285,33 @@ export async function listAgendaRangeFull(
       restrictToUserId: restrictUid,
       companyId: session.company_id ?? null,
     });
+    // Dedupe: clave primaria subject_type:subject_id, clave secundaria
+    // por (starts_at + reference_code en title) para cubrir agenda_events
+    // antiguos sin subject_id que llevan el ref-code en el título
+    // ("Instalación · I-2026-0007 · ..."). Sin esto los datos legacy
+    // aparecían duplicados (uno en agenda_events, otro como virtual).
     const existingKey = new Set(
       events
         .filter((e) => e.subject_type && e.subject_id)
         .map((e) => `${e.subject_type}:${e.subject_id}`),
     );
+    const refRegex = /\b([IM]-\d{4}-\d{4})\b/;
+    const existingRefAt = new Set(
+      events
+        .map((e) => {
+          const m = refRegex.exec(e.title);
+          return m ? `${m[1]}@${e.starts_at}` : null;
+        })
+        .filter((k): k is string => !!k),
+    );
     merged = [
       ...events,
-      ...virtuals.filter((v) => !existingKey.has(`${v.subject_type}:${v.subject_id}`)),
+      ...virtuals.filter((v) => {
+        if (existingKey.has(`${v.subject_type}:${v.subject_id}`)) return false;
+        const m = refRegex.exec(v.title);
+        if (m && existingRefAt.has(`${m[1]}@${v.starts_at}`)) return false;
+        return true;
+      }),
     ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
 
