@@ -602,7 +602,18 @@ export default async function ContractDetailPage({
                       {PAYMENT_MOMENT_LABEL[p.moment] ?? p.moment}
                     </td>
                     <td className="px-2 py-2">
-                      <Badge variant={p.status === "validated" ? "success" : "secondary"}>
+                      <Badge
+                        variant={
+                          p.status === "validated"
+                            ? "success"
+                            : p.status === "collected_pending_validation"
+                              ? "warning"
+                              : p.status === "rejected" ||
+                                  p.status === "cancelled"
+                                ? "destructive"
+                                : "secondary"
+                        }
+                      >
                         {PAYMENT_STATUS_LABEL[p.status] ?? p.status}
                       </Badge>
                     </td>

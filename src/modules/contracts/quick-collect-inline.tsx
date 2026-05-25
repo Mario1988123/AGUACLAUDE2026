@@ -62,6 +62,7 @@ export function CollectInline({
     (defaultMethod as Method | undefined) ?? "cash",
   );
   const [pending, startTransition] = useTransition();
+  const [lastError, setLastError] = useState<string | null>(null);
   const router = useRouter();
   // Sin permiso para editar cobros ya cobrados → no se renderiza
   if (isEdit && !canEditAfterCollect) {
@@ -69,6 +70,7 @@ export function CollectInline({
   }
 
   function confirm() {
+    setLastError(null);
     startTransition(async () => {
       const input =
         when === "at_office"
@@ -80,6 +82,10 @@ export function CollectInline({
           : { when: "now" as const, method };
       const r = await collectContractPaymentSafeAction(paymentId, input);
       if (!r.ok) {
+        // Error PERSISTENTE en pantalla además del toast — para
+        // diagnosticar cuando el cobro falla silenciosamente y el badge
+        // se queda en "Pendiente" sin pista de por qué.
+        setLastError(r.error || "Error desconocido");
         notify.error("No se pudo cobrar", r.error);
         return;
       }
@@ -176,6 +182,11 @@ export function CollectInline({
           })}
         </div>
       </div>
+      {lastError && (
+        <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-2 text-xs text-rose-900">
+          <strong>No se pudo cobrar:</strong> {lastError}
+        </div>
+      )}
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="outline" onClick={() => setOpen(false)} disabled={pending}>
           Cancelar

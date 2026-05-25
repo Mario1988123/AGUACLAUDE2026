@@ -205,7 +205,15 @@ export function ContractCompleteWizard({
                                 {PAYMENT_METHOD_LABEL[p.method] ?? p.method}
                               </div>
                             </div>
-                            <Badge variant={p.status === "validated" ? "success" : "secondary"}>
+                            <Badge
+                              variant={
+                                p.status === "validated"
+                                  ? "success"
+                                  : p.status === "collected_pending_validation"
+                                    ? "warning"
+                                    : "secondary"
+                              }
+                            >
                               {STATUS_LABEL[p.status] ?? p.status}
                             </Badge>
                           </div>
