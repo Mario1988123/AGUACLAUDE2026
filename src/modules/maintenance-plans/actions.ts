@@ -243,43 +243,79 @@ export async function generateMonthlyMaintenanceInvoicesAction(): Promise<{
     reference_code: string | null;
   }>;
 
+  // IVA por defecto del mantenimiento. España estándar 21%.
+  const TAX_RATE = 21;
+  // Usamos el createInvoiceAction canónico que asigna series_id, number,
+  // fiscal_year, full_reference, snapshots fiscales, líneas, etc. El
+  // INSERT directo anterior fallaba silenciosamente porque invoices
+  // tiene varias columnas NOT NULL que no estábamos rellenando, y
+  // supabase-js NO lanza throw — devuelve {error}. Por eso el contador
+  // decía "created" pero la BD no tenía nada.
+  const { createInvoiceAction } = await import("@/modules/invoices/actions");
+
+  const errors: Array<{ contract: string; error: string }> = [];
   let created = 0;
   let skipped = 0;
   for (const mc of list) {
-    const concept = `Mantenimiento ${mc.tier_snapshot.toUpperCase()} ${monthKey} (${mc.reference_code ?? ""})`;
-    // Idempotencia: comprobar si ya existe factura con el mismo concepto
-    const { data: existing } = await admin
-      .from("invoices")
-      .select("id")
-      .eq("company_id", session.company_id)
-      .eq("customer_id", mc.customer_id)
-      .ilike("concept", `%${monthKey}%`)
-      .ilike("concept", `%${mc.reference_code ?? ""}%`)
-      .limit(1)
-      .maybeSingle();
-    if (existing) {
+    const description = `Mantenimiento ${mc.tier_snapshot.toUpperCase()} ${monthKey}${mc.reference_code ? ` · ${mc.reference_code}` : ""}`;
+    // Idempotencia: ya existe factura del mes para ese cliente con
+    // descripción que contiene el reference_code del maintenance_contract.
+    const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
+    const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
+    let alreadyExists = false;
+    try {
+      const ref = mc.reference_code ?? mc.id.slice(0, 8);
+      const { data: existing } = await admin
+        .from("invoices")
+        .select("id, invoice_lines!inner(description)")
+        .eq("company_id", session.company_id)
+        .eq("customer_id", mc.customer_id)
+        .gte("issue_date", monthStart)
+        .lte("issue_date", monthEnd)
+        .ilike("invoice_lines.description", `%${ref}%`)
+        .limit(1)
+        .maybeSingle();
+      alreadyExists = !!existing;
+    } catch {
+      /* si la query falla intentamos igualmente la creación */
+    }
+    if (alreadyExists) {
       skipped += 1;
       continue;
     }
     try {
-      await admin.from("invoices").insert({
-        company_id: session.company_id,
+      await createInvoiceAction({
         customer_id: mc.customer_id,
-        concept,
-        issue_date: issueDate,
+        kind: "invoice",
         due_date: dueDate,
-        subtotal_cents: mc.monthly_cents_snapshot,
-        total_cents: mc.monthly_cents_snapshot,
-        status: "issued",
-        source: "maintenance_contract",
-        source_id: mc.id,
+        notes: `Remesa mensual ${monthKey}. maintenance_contract ${mc.id}`,
+        lines: [
+          {
+            description,
+            quantity: 1,
+            // monthly_cents_snapshot es importe SIN IVA (subtotal). El
+            // createInvoiceAction le aplica el tax_rate_percent encima.
+            unit_price_cents: mc.monthly_cents_snapshot,
+            discount_percent: 0,
+            tax_rate_percent: TAX_RATE,
+          },
+        ],
       });
       created += 1;
-    } catch {
-      // Si la tabla invoices no existe o el insert falla, contamos como skipped
+    } catch (e) {
+      errors.push({
+        contract: mc.reference_code ?? mc.id.slice(0, 8),
+        error: e instanceof Error ? e.message : "Error",
+      });
       skipped += 1;
     }
   }
+  if (errors.length > 0) {
+    console.error("[generateMonthlyMaintenanceInvoices] errores:", errors);
+  }
+
+  // issueDate ya no se usa directamente (createInvoiceAction usa current_date)
+  void issueDate;
 
   revalidatePath("/facturas");
   revalidatePath("/mantenimientos");

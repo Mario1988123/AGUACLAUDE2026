@@ -20,6 +20,9 @@ export interface CustomerEquipmentRow {
   address_label: string | null;
   installation_id: string | null;
   last_maintenance_at: string | null;
+  /** Próximo mantenimiento programado (scheduled/preprogrammed) — la
+   *  ficha del cliente lo muestra como cuenta atrás "en X días". */
+  next_maintenance_at: string | null;
 }
 
 export async function listCustomerEquipment(customerId: string): Promise<CustomerEquipmentRow[]> {
@@ -98,6 +101,26 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     }
   }
 
+  // Próximo mantenimiento por equipo: primer scheduled/preprogrammed
+  // con fecha >= hoy. Útil para mostrar countdown en la ficha cliente.
+  const { data: upcoming } = await supabase
+    .from("maintenance_jobs")
+    .select("customer_equipment_id, scheduled_at")
+    .in("customer_equipment_id", ids)
+    .in("status", ["scheduled", "preprogrammed"])
+    .not("scheduled_at", "is", null)
+    .gte("scheduled_at", new Date().toISOString())
+    .order("scheduled_at", { ascending: true });
+  const nextMaintenance: Record<string, string> = {};
+  for (const m of (upcoming ?? []) as Array<{
+    customer_equipment_id: string;
+    scheduled_at: string;
+  }>) {
+    if (!nextMaintenance[m.customer_equipment_id]) {
+      nextMaintenance[m.customer_equipment_id] = m.scheduled_at;
+    }
+  }
+
   return rows.map((r) => ({
     id: r.id,
     customer_id: r.customer_id,
@@ -126,6 +149,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
           .replace(/^([a-zñA-ZÑ]+) /, (m) => m.charAt(0).toUpperCase() + m.slice(1))
       : null,
     last_maintenance_at: lastMaintenance[r.id] ?? null,
+    next_maintenance_at: nextMaintenance[r.id] ?? null,
   }));
 }
 

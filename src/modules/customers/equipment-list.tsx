@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { Wrench, Package, MapPin, ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  Wrench,
+  Package,
+  MapPin,
+  ShieldCheck,
+  ShieldAlert,
+  Clock,
+} from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { RelocateEquipmentButton } from "./relocate-button";
 import { OfferMaintenanceContractButton } from "./offer-maintenance-contract-button";
@@ -86,6 +93,37 @@ export function CustomerEquipmentList({
                       Último mant.: {fmtDate(e.last_maintenance_at)}
                     </span>
                   )}
+                  {(() => {
+                    if (!e.next_maintenance_at) return null;
+                    const d = new Date(e.next_maintenance_at);
+                    const days = Math.ceil(
+                      (d.getTime() - Date.now()) / 86400_000,
+                    );
+                    const overdue = days < 0;
+                    const soon = !overdue && days <= 7;
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-bold ${
+                          overdue
+                            ? "bg-rose-100 text-rose-800"
+                            : soon
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-emerald-50 text-emerald-800"
+                        }`}
+                      >
+                        <Clock className="h-3 w-3" />
+                        Próximo:{" "}
+                        {overdue
+                          ? `vencido hace ${Math.abs(days)} día${Math.abs(days) === 1 ? "" : "s"}`
+                          : days === 0
+                            ? "hoy"
+                            : `en ${days} día${days === 1 ? "" : "s"}`}
+                        <span className="font-normal opacity-75">
+                          · {fmtDate(e.next_maintenance_at)}
+                        </span>
+                      </span>
+                    );
+                  })()}
                   {e.warranty_until && (
                     <span
                       className={`inline-flex items-center gap-1 ${warrantyActive ? "text-success" : "text-destructive"}`}
