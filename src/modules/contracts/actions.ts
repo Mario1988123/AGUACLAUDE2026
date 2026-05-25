@@ -844,18 +844,23 @@ export async function markContractSigned(id: string) {
   // Cuando se firma el contrato, el lead origen (si existía) ya cumplió
   // su ciclo: lo soft-deleteamos para que desaparezca de /leads.
   // El cliente sigue visible en /clientes con todo su historial.
+  // contractCustomerId se reutiliza más abajo al crear wallet_entries
+  // (bug 2026-05-25: si no se setea customer_id, /wallet sale "—").
+  let contractCustomerId: string | null = null;
   try {
     const { data: contractRow } = await supabase
       .from("contracts")
       .select("customer_id")
       .eq("id", id)
       .maybeSingle();
-    const customerId = (contractRow as { customer_id: string | null } | null)?.customer_id;
-    if (customerId) {
+    contractCustomerId =
+      (contractRow as { customer_id: string | null } | null)?.customer_id ??
+      null;
+    if (contractCustomerId) {
       const { data: cust } = await supabase
         .from("customers")
         .select("source_lead_id")
-        .eq("id", customerId)
+        .eq("id", contractCustomerId)
         .maybeSingle();
       const sourceLeadId = (cust as { source_lead_id: string | null } | null)?.source_lead_id;
       if (sourceLeadId) {
@@ -898,7 +903,7 @@ export async function markContractSigned(id: string) {
         // Bug 2026-05-25: faltaba customer_id → en /wallet salía "—"
         // en columna Cliente para los pagos creados al firmar el
         // contrato (no cuando el comercial usaba "Cobrar" después).
-        customer_id: customerId ?? null,
+        customer_id: contractCustomerId,
         concept: p.concept,
         amount_cents: p.amount_cents,
         method: p.method,

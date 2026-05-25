@@ -2,7 +2,6 @@
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import {
-  GOOGLE_API_PRICING_PER_1K,
   microUsdForCall,
   type GmapsApi,
   type GmapsFeature,
