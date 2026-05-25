@@ -4,6 +4,7 @@ export const STATUS_LABEL: Record<string, string> = {
   // del contrato. Necesita confirmación admin/TMK (llamada al cliente)
   // antes de pasar a 'scheduled'.
   preprogrammed: "Por confirmar",
+  needs_callback: "Cliente pidió llamada",
   scheduled: "Confirmado",
   in_progress: "En curso",
   completed: "Completado",
@@ -19,6 +20,7 @@ export const STATUS_VARIANT: Record<
 > = {
   pending: "secondary",
   preprogrammed: "outline",
+  needs_callback: "destructive",
   scheduled: "default",
   in_progress: "warning",
   completed: "success",

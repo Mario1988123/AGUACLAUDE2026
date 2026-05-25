@@ -55,8 +55,19 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Rutas públicas (solo aplica a GET)
-  const PUBLIC_PATHS = ["/login", "/recuperar-password", "/restablecer-password", "/api/health"];
+  // Rutas públicas (solo aplica a GET):
+  //  · /login + recuperación de contraseña
+  //  · /api/health para uptime checks
+  //  · /m/[token] — confirmación pública de mantenimiento por cliente
+  //  · /firmar-contrato — firma remota de contrato
+  const PUBLIC_PATHS = [
+    "/login",
+    "/recuperar-password",
+    "/restablecer-password",
+    "/api/health",
+    "/m/",
+    "/firmar-contrato",
+  ];
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublic) {

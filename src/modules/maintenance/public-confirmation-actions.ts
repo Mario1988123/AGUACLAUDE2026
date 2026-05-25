@@ -1,0 +1,403 @@
+"use server";
+
+import { randomBytes } from "crypto";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+
+interface TokenRow {
+  id: string;
+  job_id: string;
+  expires_at: string;
+  used_at: string | null;
+}
+
+interface JobInfo {
+  id: string;
+  company_id: string;
+  customer_id: string;
+  status: string;
+  scheduled_at: string | null;
+  technician_user_id: string | null;
+}
+
+/**
+ * Genera (o reutiliza si ya existe vigente) un token público para que
+ * el cliente confirme/reagende/posponga su visita vía email.
+ *
+ * Se llama desde el cron de recordatorios. La duración es 30 días por
+ * defecto para cubrir tanto el aviso 14d antes como el de víspera.
+ */
+export async function ensureConfirmationToken(jobId: string): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    // Reutilizar token vigente
+    const { data: existing } = await admin
+      .from("maintenance_confirmation_tokens")
+      .select("token, expires_at, used_at")
+      .eq("job_id", jobId)
+      .is("used_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .limit(1)
+      .maybeSingle();
+    if (existing) {
+      return (existing as { token: string }).token;
+    }
+    const token = randomBytes(24).toString("base64url");
+    const expires = new Date(Date.now() + 30 * 86400_000).toISOString();
+    const { error } = await admin
+      .from("maintenance_confirmation_tokens")
+      .insert({ job_id: jobId, token, expires_at: expires });
+    if (error) return null;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+interface PublicView {
+  ok: true;
+  job: {
+    id: string;
+    scheduled_at: string;
+    customer_name: string;
+    customer_address: string | null;
+    technician_name: string | null;
+    company_name: string;
+    company_phone: string | null;
+    status: string;
+  };
+  token: { used: boolean; used_action: string | null };
+}
+
+/**
+ * Devuelve la info pública mínima necesaria para renderizar la página
+ * de confirmación. Nunca expone teléfono/email del cliente: el cliente
+ * ya sabe sus datos.
+ */
+export async function getPublicJobView(
+  token: string,
+): Promise<PublicView | { ok: false; error: string }> {
+  try {
+    if (!token || token.length < 10) return { ok: false, error: "Token inválido" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: tok } = await admin
+      .from("maintenance_confirmation_tokens")
+      .select("id, job_id, expires_at, used_at, used_action")
+      .eq("token", token)
+      .maybeSingle();
+    if (!tok) return { ok: false, error: "Enlace no válido o caducado" };
+    const t = tok as TokenRow & { used_action: string | null };
+    if (new Date(t.expires_at).getTime() < Date.now()) {
+      return { ok: false, error: "Este enlace ha caducado. Llámanos para coordinar." };
+    }
+
+    const { data: jobRow } = await admin
+      .from("maintenance_jobs")
+      .select(
+        "id, company_id, customer_id, status, scheduled_at, technician_user_id",
+      )
+      .eq("id", t.job_id)
+      .maybeSingle();
+    if (!jobRow) return { ok: false, error: "Visita no encontrada" };
+    const j = jobRow as JobInfo;
+
+    const [{ data: customer }, { data: company }] = await Promise.all([
+      admin
+        .from("customers")
+        .select("first_name, last_name, trade_name, legal_name, party_kind")
+        .eq("id", j.customer_id)
+        .maybeSingle(),
+      admin
+        .from("companies")
+        .select("name, phone, email")
+        .eq("id", j.company_id)
+        .maybeSingle(),
+    ]);
+    const c = (customer ?? {}) as {
+      first_name: string | null;
+      last_name: string | null;
+      trade_name: string | null;
+      legal_name: string | null;
+      party_kind: string | null;
+    };
+    const co = (company ?? {}) as { name: string | null; phone: string | null };
+
+    // Dirección primaria del cliente
+    const { data: addr } = await admin
+      .from("addresses")
+      .select("street_type, street, street_number, city, postal_code")
+      .eq("customer_id", j.customer_id)
+      .eq("is_primary", true)
+      .maybeSingle();
+    const a = addr as
+      | {
+          street_type: string | null;
+          street: string | null;
+          street_number: string | null;
+          city: string | null;
+          postal_code: string | null;
+        }
+      | null;
+    const customerAddress = a?.street
+      ? `${a.street_type ? a.street_type + " " : ""}${a.street}${a.street_number ? " " + a.street_number : ""}${a.postal_code ? ", " + a.postal_code : ""}${a.city ? " " + a.city : ""}`
+      : null;
+
+    let technicianName: string | null = null;
+    if (j.technician_user_id) {
+      const { data: prof } = await admin
+        .from("user_profiles")
+        .select("full_name")
+        .eq("user_id", j.technician_user_id)
+        .maybeSingle();
+      technicianName = (prof as { full_name: string | null } | null)?.full_name ?? null;
+    }
+
+    const customerName =
+      c.party_kind === "company"
+        ? c.trade_name ?? c.legal_name ?? "Cliente"
+        : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente";
+
+    return {
+      ok: true,
+      job: {
+        id: j.id,
+        scheduled_at: j.scheduled_at ?? new Date().toISOString(),
+        customer_name: customerName,
+        customer_address: customerAddress,
+        technician_name: technicianName,
+        company_name: co.name ?? "AguaClaude",
+        company_phone: co.phone,
+        status: j.status,
+      },
+      token: { used: !!t.used_at, used_action: t.used_action },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+interface ActionResult {
+  ok: boolean;
+  message: string;
+}
+
+async function consumeToken(
+  token: string,
+  action: "confirmed" | "rescheduled" | "postponed" | "reconfirmed",
+): Promise<
+  | { ok: true; jobId: string; companyId: string; previous: string | null }
+  | { ok: false; error: string }
+> {
+  if (!token || token.length < 10) return { ok: false, error: "Token inválido" };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: tok } = await admin
+    .from("maintenance_confirmation_tokens")
+    .select("id, job_id, expires_at, used_at")
+    .eq("token", token)
+    .maybeSingle();
+  if (!tok) return { ok: false, error: "Enlace no válido" };
+  const t = tok as TokenRow;
+  if (new Date(t.expires_at).getTime() < Date.now()) {
+    return { ok: false, error: "Enlace caducado" };
+  }
+  // Permitimos reusar el token si la acción anterior fue "reconfirmed"
+  // (24h antes) — el cliente puede aún cambiar de opinión. Otras
+  // acciones son finales.
+  if (t.used_at) {
+    return { ok: false, error: "Este enlace ya se ha utilizado" };
+  }
+  const { data: jobRow } = await admin
+    .from("maintenance_jobs")
+    .select("id, company_id, status, scheduled_at")
+    .eq("id", t.job_id)
+    .maybeSingle();
+  if (!jobRow) return { ok: false, error: "Visita no encontrada" };
+  const j = jobRow as {
+    id: string;
+    company_id: string;
+    status: string;
+    scheduled_at: string | null;
+  };
+
+  await admin
+    .from("maintenance_confirmation_tokens")
+    .update({
+      used_at: new Date().toISOString(),
+      used_action: action,
+    })
+    .eq("id", t.id);
+
+  return {
+    ok: true,
+    jobId: j.id,
+    companyId: j.company_id,
+    previous: j.scheduled_at,
+  };
+}
+
+export async function customerConfirmAction(
+  token: string,
+): Promise<ActionResult> {
+  const r = await consumeToken(token, "confirmed");
+  if (!r.ok) return { ok: false, message: r.error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const nowIso = new Date().toISOString();
+  await admin
+    .from("maintenance_jobs")
+    .update({
+      status: "scheduled",
+      confirmed_at: nowIso,
+      customer_called_at: nowIso,
+    })
+    .eq("id", r.jobId);
+  await admin.from("events").insert({
+    company_id: r.companyId,
+    subject_type: "maintenance",
+    subject_id: r.jobId,
+    kind: "maintenance.customer_confirmed",
+    payload: { via: "public_link" },
+  });
+  return {
+    ok: true,
+    message: "¡Gracias! Tu cita queda confirmada.",
+  };
+}
+
+export async function customerReconfirmAction(
+  token: string,
+): Promise<ActionResult> {
+  const r = await consumeToken(token, "reconfirmed");
+  if (!r.ok) return { ok: false, message: r.error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await admin.from("events").insert({
+    company_id: r.companyId,
+    subject_type: "maintenance",
+    subject_id: r.jobId,
+    kind: "maintenance.customer_reconfirmed",
+    payload: { via: "public_link" },
+  });
+  return {
+    ok: true,
+    message: "Perfecto, mañana nos vemos.",
+  };
+}
+
+export async function customerRescheduleAction(
+  token: string,
+  newScheduledAt: string,
+): Promise<ActionResult> {
+  const dt = new Date(newScheduledAt);
+  if (isNaN(dt.getTime())) return { ok: false, message: "Fecha no válida" };
+  if (dt.getTime() < Date.now() + 86400_000) {
+    return {
+      ok: false,
+      message: "Elige al menos 24 horas más tarde para que podamos organizarlo.",
+    };
+  }
+  const r = await consumeToken(token, "rescheduled");
+  if (!r.ok) return { ok: false, message: r.error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const nowIso = new Date().toISOString();
+  // Cliente eligió día → preprogrammed con nueva fecha, admin tendrá
+  // que validar técnico/disponibilidad. NO pasa a scheduled directamente.
+  await admin
+    .from("maintenance_jobs")
+    .update({
+      status: "preprogrammed",
+      scheduled_at: dt.toISOString(),
+      customer_called_at: nowIso,
+    })
+    .eq("id", r.jobId);
+  await admin.from("events").insert({
+    company_id: r.companyId,
+    subject_type: "maintenance",
+    subject_id: r.jobId,
+    kind: "maintenance.customer_rescheduled",
+    payload: {
+      previous_scheduled_at: r.previous,
+      new_scheduled_at: dt.toISOString(),
+    },
+  });
+  // Notif admin / TMK
+  try {
+    const { notifyByRoles } = await import("@/modules/notifications/notifier");
+    await notifyByRoles(
+      r.companyId,
+      ["company_admin", "technical_director", "telemarketing_director"],
+      {
+        kind: "maintenance.customer_rescheduled",
+        severity: "info",
+        title: "Cliente ha pedido otra fecha",
+        body: `Un cliente ha cambiado su próxima visita a ${dt.toLocaleDateString(
+          "es-ES",
+          { day: "numeric", month: "long", year: "numeric" },
+        )}. Revisa disponibilidad técnico y confírmasela.`,
+        subject_type: "maintenance",
+        subject_id: r.jobId,
+        action_url: `/mantenimientos/${r.jobId}`,
+      },
+    );
+  } catch {
+    /* no-op */
+  }
+  return {
+    ok: true,
+    message:
+      "Anotada la nueva fecha. La revisaremos y te enviaremos confirmación final.",
+  };
+}
+
+export async function customerPostponeAction(
+  token: string,
+  reason?: string,
+): Promise<ActionResult> {
+  const r = await consumeToken(token, "postponed");
+  if (!r.ok) return { ok: false, message: r.error };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const nowIso = new Date().toISOString();
+  await admin
+    .from("maintenance_jobs")
+    .update({
+      status: "needs_callback",
+      customer_called_at: nowIso,
+    })
+    .eq("id", r.jobId);
+  await admin.from("events").insert({
+    company_id: r.companyId,
+    subject_type: "maintenance",
+    subject_id: r.jobId,
+    kind: "maintenance.customer_postponed",
+    payload: { reason: reason ?? null, previous_scheduled_at: r.previous },
+  });
+  try {
+    const { notifyByRoles } = await import("@/modules/notifications/notifier");
+    await notifyByRoles(
+      r.companyId,
+      ["company_admin", "telemarketing_director", "technical_director"],
+      {
+        kind: "maintenance.customer_postponed",
+        severity: "warning",
+        title: "Cliente ha pedido posponer su mantenimiento",
+        body:
+          "Necesita que le llaméis para coordinar otra fecha." +
+          (reason ? ` Motivo: ${reason}` : ""),
+        subject_type: "maintenance",
+        subject_id: r.jobId,
+        action_url: `/mantenimientos/${r.jobId}`,
+      },
+    );
+  } catch {
+    /* no-op */
+  }
+  return {
+    ok: true,
+    message:
+      "Gracias por avisar. Nos pondremos en contacto contigo lo antes posible.",
+  };
+}

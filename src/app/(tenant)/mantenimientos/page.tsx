@@ -25,6 +25,7 @@ const MAINT_TONE: Record<
   "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
 > = {
   preprogrammed: "onhold",
+  needs_callback: "rejected",
   scheduled: "info",
   in_progress: "processing",
   completed: "success",

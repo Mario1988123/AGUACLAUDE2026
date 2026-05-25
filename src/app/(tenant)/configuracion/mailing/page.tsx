@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Eye } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { getMailingDomain } from "@/modules/mailing/actions";
@@ -26,7 +28,16 @@ export default async function MailingConfigPage() {
             (propuestas, facturas, recordatorios, campañas).
           </p>
         </div>
-        <BackButton href="/configuracion" />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/configuracion/mailing/preview"
+            className="inline-flex items-center gap-1 rounded-md border border-primary bg-primary/5 px-3 py-2 text-sm font-bold text-primary hover:bg-primary/10"
+          >
+            <Eye className="h-4 w-4" />
+            Preview plantillas
+          </Link>
+          <BackButton href="/configuracion" />
+        </div>
       </div>
 
       <Card>

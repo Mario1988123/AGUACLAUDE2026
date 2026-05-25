@@ -311,6 +311,83 @@ const TEMPLATES: SystemTemplate[] = [
     variables: ["customer_first_name", "months_since_install", "price"],
   },
   {
+    key: "maintenance_confirm_request",
+    name: "Confirmar próxima visita (14 días antes)",
+    description:
+      "Cron envía 14 días antes de un mantenimiento. Cliente puede confirmar, elegir otra fecha o posponer.",
+    kind: "transactional",
+    subject: "¿Te viene bien tu próxima revisión, {{customer_first_name}}?",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}}</h2>
+      <p>Tu próxima visita de mantenimiento con <strong>{{company_name}}</strong> está prevista para:</p>
+      <table cellspacing="0" cellpadding="0" border="0" style="background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 16px 0; width: 100%;">
+        <tr>
+          <td style="padding: 14px 18px; font-size: 16px;">
+            <strong>📅 {{appointment_date|date}}</strong> a las <strong>{{appointment_time}}</strong><br>
+            <span style="color:#555;">📍 {{customer_address}}</span>
+          </td>
+        </tr>
+      </table>
+      <p>¿Te viene bien esa fecha?</p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="{{confirm_url}}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 4px;">
+          Sí, lo confirmo
+        </a>
+        <a href="{{confirm_url}}?action=reschedule" style="display: inline-block; background: white; color: #0ea5e9; border: 2px solid #0ea5e9; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 4px;">
+          Elegir otra fecha
+        </a>
+        <a href="{{confirm_url}}?action=postpone" style="display: inline-block; background: white; color: #6b7280; border: 1px solid #d1d5db; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 4px;">
+          Posponer / llámame
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #666;">Si no haces nada, daremos por buena la fecha propuesta y te recordaremos por email el día anterior.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "company_name",
+      "appointment_date",
+      "appointment_time",
+      "customer_address",
+      "confirm_url",
+    ],
+  },
+  {
+    key: "maintenance_day_before",
+    name: "Recordatorio víspera mantenimiento",
+    description:
+      "Cron envía 24h antes. Cliente puede reconfirmar (nada cambia) o posponer (marca needs_callback).",
+    kind: "transactional",
+    subject: "Mañana pasamos a verte, {{customer_first_name}} 👋",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}}</h2>
+      <p>Solo un recordatorio: <strong>mañana {{appointment_date|date}} a las {{appointment_time}}</strong> te visitará nuestro técnico <strong>{{technician_name}}</strong> para tu mantenimiento.</p>
+      <table cellspacing="0" cellpadding="0" border="0" style="background: #f0fdf4; border-left: 4px solid #16a34a; border-radius: 8px; padding: 14px 18px; margin: 16px 0; width: 100%;">
+        <tr><td style="padding: 12px 16px;">
+          <strong>📍</strong> {{customer_address}}
+        </td></tr>
+      </table>
+      <p>¿Sigue todo correcto?</p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="{{confirm_url}}?action=reconfirm" style="display: inline-block; background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 4px;">
+          Sí, perfecto
+        </a>
+        <a href="{{confirm_url}}?action=postpone" style="display: inline-block; background: white; color: #b45309; border: 2px solid #f59e0b; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 4px;">
+          No puedo, posponer
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #666;">Si necesitas cambiar la hora, mejor llámanos para coordinar — el técnico ya tiene la ruta del día preparada.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "company_name",
+      "appointment_date",
+      "appointment_time",
+      "customer_address",
+      "technician_name",
+      "confirm_url",
+    ],
+  },
+  {
     key: "contract_send_remote_sign",
     name: "Envío de contrato para firma remota",
     description: "Link con token para que el cliente firme online sin cuenta.",

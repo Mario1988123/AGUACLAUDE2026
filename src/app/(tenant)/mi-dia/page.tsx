@@ -96,6 +96,7 @@ export default async function MiDiaPage({
     session.roles.includes("technical_director") ||
     session.roles.includes("telemarketing_director");
   let pendingConfirmCount = 0;
+  let needsCallbackCount = 0;
   if (canConfirmMaintenance && session.company_id) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -113,10 +114,43 @@ export default async function MiDiaPage({
     } catch {
       /* migración aún no aplicada — banner oculto */
     }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const { count } = await admin
+        .from("maintenance_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", session.company_id)
+        .eq("status", "needs_callback");
+      needsCallbackCount = count ?? 0;
+    } catch {
+      /* migración 20260525110000 aún no aplicada */
+    }
   }
 
   return (
     <div className="space-y-6">
+      {needsCallbackCount > 0 && (
+        <Link
+          href={"/mantenimientos/por-confirmar" as never}
+          className="flex items-center justify-between gap-3 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 hover:bg-rose-100"
+        >
+          <div className="flex items-center gap-3">
+            <PhoneCall className="h-5 w-5 text-rose-700" />
+            <div>
+              <div className="font-bold text-rose-900">
+                {needsCallbackCount} cliente{needsCallbackCount === 1 ? "" : "s"} pidieron que les llaméis
+              </div>
+              <p className="text-xs text-rose-800">
+                Han pospuesto su mantenimiento desde el email. Llámales para coordinar nueva fecha.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-md bg-rose-200 px-2 py-1 text-xs font-bold text-rose-900">
+            Abrir cola →
+          </span>
+        </Link>
+      )}
       {pendingConfirmCount > 0 && (
         <Link
           href={"/mantenimientos/por-confirmar" as never}

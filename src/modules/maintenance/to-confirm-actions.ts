@@ -86,7 +86,9 @@ export async function listMaintenanceToConfirm(
       "id, contract_id, customer_id, scheduled_at, customers(party_kind, legal_name, trade_name, first_name, last_name, phone_primary), contracts(reference_code)",
     )
     .eq("company_id", session.company_id)
-    .eq("status", "preprogrammed")
+    // Incluye también needs_callback — cliente pospuso desde email,
+    // hay que llamarle. Visible en la misma cola.
+    .in("status", ["preprogrammed", "needs_callback"])
     .gte("scheduled_at", fromIso)
     .lte("scheduled_at", toIso)
     .order("scheduled_at", { ascending: true });
