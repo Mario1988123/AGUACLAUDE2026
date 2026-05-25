@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { ToastProvider } from "@/shared/components/toast-provider";
 import { ConfirmDialogProvider } from "@/shared/components/confirm-dialog";
 import { ServiceWorkerRegister } from "@/shared/components/sw-register";
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ConfirmDialogProvider>{children}</ConfirmDialogProvider>
         <ToastProvider />
         <ServiceWorkerRegister />
+        <Analytics />
       </body>
     </html>
   );
