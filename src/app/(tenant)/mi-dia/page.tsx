@@ -12,6 +12,8 @@ import {
 import { requireSession } from "@/shared/lib/auth/session";
 import { isModuleActive } from "@/shared/lib/auth/module-guard";
 import { getMyDayItems, getMyDayItemsOptimized } from "@/modules/my-day/actions";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { PhoneCall } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { RoutePlannerButton } from "@/modules/routes/route-planner-button";
@@ -86,8 +88,57 @@ export default async function MiDiaPage({
     month: "long",
   });
 
+  // Banner para admin/TMK: cuántos mantenimientos por confirmar tienen
+  // pendientes para los próximos 30 días. Solo para roles con permiso.
+  const canConfirmMaintenance =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("telemarketing_director");
+  let pendingConfirmCount = 0;
+  if (canConfirmMaintenance && session.company_id) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const next30 = new Date();
+      next30.setDate(next30.getDate() + 30);
+      const { count } = await admin
+        .from("maintenance_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", session.company_id)
+        .eq("status", "preprogrammed")
+        .is("confirmed_at", null)
+        .lte("scheduled_at", next30.toISOString());
+      pendingConfirmCount = count ?? 0;
+    } catch {
+      /* migración aún no aplicada — banner oculto */
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {pendingConfirmCount > 0 && (
+        <Link
+          href={"/mantenimientos/por-confirmar" as never}
+          className="flex items-center justify-between gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 hover:bg-amber-100"
+        >
+          <div className="flex items-center gap-3">
+            <PhoneCall className="h-5 w-5 text-amber-700" />
+            <div>
+              <div className="font-bold text-amber-900">
+                {pendingConfirmCount} mantenimiento
+                {pendingConfirmCount === 1 ? "" : "s"} por confirmar
+              </div>
+              <p className="text-xs text-amber-800">
+                Llama a los clientes para fijar fecha. Próximos 30 días.
+              </p>
+            </div>
+          </div>
+          <span className="rounded-md bg-amber-200 px-2 py-1 text-xs font-bold text-amber-900">
+            Abrir cola →
+          </span>
+        </Link>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Mi día</h1>

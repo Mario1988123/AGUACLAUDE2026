@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, Calendar, Frown, UserMinus } from "lucide-react";
+import { AlertTriangle, Calendar, Frown, PhoneCall, UserMinus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 
@@ -8,6 +8,7 @@ export interface MaintenanceAlerts {
   unassigned_next_7d: number;
   low_nps_30d: number;       // últimos 30d con NPS <=2
   active_contracts_without_job: number; // contratos activos sin job programado
+  pending_confirmation_30d: number; // preprogrammed sin confirmed_at en próximos 30d
 }
 
 export function MaintenanceSmartAlerts({ alerts }: { alerts: MaintenanceAlerts }) {
@@ -19,6 +20,16 @@ export function MaintenanceSmartAlerts({ alerts }: { alerts: MaintenanceAlerts }
     color: string;
     href: string;
   }> = [];
+  if (alerts.pending_confirmation_30d > 0) {
+    items.push({
+      key: "pending_confirm",
+      label: "Por confirmar (próximos 30d)",
+      value: alerts.pending_confirmation_30d,
+      icon: PhoneCall,
+      color: "border-amber-300 bg-amber-50 text-amber-900",
+      href: "/mantenimientos/por-confirmar",
+    });
+  }
   if (alerts.overdue > 0) {
     items.push({
       key: "overdue",
@@ -112,6 +123,7 @@ export async function getMaintenanceAlerts(): Promise<MaintenanceAlerts> {
       unassigned_next_7d: 0,
       low_nps_30d: 0,
       active_contracts_without_job: 0,
+      pending_confirmation_30d: 0,
     };
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -201,5 +213,30 @@ export async function getMaintenanceAlerts(): Promise<MaintenanceAlerts> {
     /* */
   }
 
-  return { overdue, unassigned_next_7d, low_nps_30d, active_contracts_without_job };
+  // 5) Por confirmar próximos 30 días (preprogrammed sin confirmed_at)
+  let pending_confirmation_30d = 0;
+  try {
+    const next30 = new Date();
+    next30.setDate(next30.getDate() + 30);
+    const next30Iso = next30.toISOString();
+    const { count } = await admin
+      .from("maintenance_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .eq("status", "preprogrammed")
+      .is("confirmed_at", null)
+      .lte("scheduled_at", next30Iso);
+    pending_confirmation_30d = count ?? 0;
+  } catch {
+    // Si la migración 20260525100000 aún no se ha aplicado (sin
+    // confirmed_at) caemos a 0 — fail-soft.
+  }
+
+  return {
+    overdue,
+    unassigned_next_7d,
+    low_nps_30d,
+    active_contracts_without_job,
+    pending_confirmation_30d,
+  };
 }

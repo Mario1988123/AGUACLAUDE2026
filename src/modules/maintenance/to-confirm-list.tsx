@@ -17,7 +17,10 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { validateMaintenanceJobAction } from "./actions";
+import {
+  validateMaintenanceJobAction,
+  rescheduleMaintenanceProposalAction,
+} from "./actions";
 import type { ToConfirmRow } from "./to-confirm-actions";
 
 const PAGE_SIZE = 25;
@@ -33,6 +36,21 @@ export function ToConfirmList({
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<ToConfirmRow | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+
+  async function quickMove(id: string, deltaDays: number) {
+    setMovingId(id);
+    const r = await rescheduleMaintenanceProposalAction({
+      id,
+      delta_days: deltaDays,
+    });
+    setMovingId(null);
+    if (!r.ok) {
+      notify.error("No se pudo mover", r.error);
+      return;
+    }
+    router.refresh();
+  }
 
   const filtered = useMemo(() => {
     if (!query.trim()) return rows;
@@ -134,7 +152,26 @@ export function ToConfirmList({
                 )}
               </div>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              {/* Ajuste rápido sin abrir modal — cliente pide otro día
+                  o hay incidencia que adelantar. Mueve scheduled_at y
+                  registra customer_called_at. El job sigue preprogrammed. */}
+              {[-7, -3, +3, +7].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={movingId === r.id}
+                  onClick={() => quickMove(r.id, d)}
+                  className={`rounded-md border px-2 py-1 text-[11px] font-bold disabled:opacity-50 ${
+                    d < 0
+                      ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted"
+                  }`}
+                  title={d < 0 ? "Adelantar" : "Aplazar"}
+                >
+                  {d > 0 ? `+${d}d` : `${d}d`}
+                </button>
+              ))}
               <Link
                 href={`/mantenimientos/${r.id}` as never}
                 className="inline-flex h-9 items-center gap-1 rounded-xl border border-border bg-card px-3 text-xs font-semibold hover:bg-muted"
@@ -150,7 +187,7 @@ export function ToConfirmList({
                 className="gap-1"
               >
                 <CalendarCheck2 className="h-3.5 w-3.5" />
-                Confirmar visita
+                Confirmar
               </Button>
             </div>
           </li>
