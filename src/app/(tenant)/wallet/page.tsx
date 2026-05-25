@@ -240,39 +240,54 @@ export default async function WalletPage({
 
       {isAdmin && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center justify-between gap-3">
-              <span>Histórico mensual {historyYear}</span>
-              <form className="flex gap-2">
-                <select
-                  name="history_year"
-                  defaultValue={String(historyYear)}
-                  className="h-8 rounded-xl border border-input bg-background px-3 text-xs"
-                >
-                  {yearsAvailable.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-                {/* preserve other params */}
-                {method && <input type="hidden" name="method" value={method} />}
-                {status && <input type="hidden" name="status" value={status} />}
-                {sp.from && <input type="hidden" name="from" value={sp.from} />}
-                {sp.to && <input type="hidden" name="to" value={sp.to} />}
-                {sp.invoice && <input type="hidden" name="invoice" value={sp.invoice} />}
-                <input type="hidden" name="period_year" value={String(periodYear)} />
-                <input type="hidden" name="period_month" value={String(periodMonth)} />
-                <button
-                  type="submit"
-                  className="inline-flex h-8 items-center rounded-xl border border-border bg-card px-3 text-xs font-semibold hover:bg-muted"
-                >
-                  Ver año
-                </button>
-              </form>
-            </CardTitle>
-          </CardHeader>
+          {/* Colapsable nativo HTML — minimizado por defecto (sin
+              atributo open). Ocupaba mucho espacio siempre desplegado.
+              Summary = solo título + toggle; el form va en el content
+              expandido para no provocar toggles accidentales. */}
+          <details className="group">
+            <summary className="flex cursor-pointer items-center justify-between gap-3 p-6 list-none [&::-webkit-details-marker]:hidden hover:bg-muted/30 transition-colors">
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground transition-transform group-open:rotate-90">
+                  ▶
+                </span>
+                Histórico mensual {historyYear}
+                <span className="text-xs font-normal text-muted-foreground">
+                  ({formatCents(yearHistory.reduce((s, m) => s + m.total_final_cents, 0))} total)
+                </span>
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">
+                Pulsa para {/* fallback informativo */}
+                <span className="group-open:hidden">desplegar</span>
+                <span className="hidden group-open:inline">ocultar</span>
+              </span>
+            </summary>
           <CardContent>
+            <form className="mb-3 flex gap-2">
+              <select
+                name="history_year"
+                defaultValue={String(historyYear)}
+                className="h-8 rounded-xl border border-input bg-background px-3 text-xs"
+              >
+                {yearsAvailable.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              {method && <input type="hidden" name="method" value={method} />}
+              {status && <input type="hidden" name="status" value={status} />}
+              {sp.from && <input type="hidden" name="from" value={sp.from} />}
+              {sp.to && <input type="hidden" name="to" value={sp.to} />}
+              {sp.invoice && <input type="hidden" name="invoice" value={sp.invoice} />}
+              <input type="hidden" name="period_year" value={String(periodYear)} />
+              <input type="hidden" name="period_month" value={String(periodMonth)} />
+              <button
+                type="submit"
+                className="inline-flex h-8 items-center rounded-xl border border-border bg-card px-3 text-xs font-semibold hover:bg-muted"
+              >
+                Ver año
+              </button>
+            </form>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -331,6 +346,7 @@ export default async function WalletPage({
               </table>
             </div>
           </CardContent>
+          </details>
         </Card>
       )}
 
