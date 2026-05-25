@@ -1,9 +1,10 @@
 export const STATUS_LABEL: Record<string, string> = {
   pending: "Pendiente",
-  // 'preprogrammed' = preprogramado por sistema al firmar contrato.
-  // Necesita validación admin/TMK antes de pasar a 'scheduled'.
-  preprogrammed: "Preprogramado",
-  scheduled: "Agendado",
+  // 'preprogrammed' = preprogramado por sistema según periodicidad
+  // del contrato. Necesita confirmación admin/TMK (llamada al cliente)
+  // antes de pasar a 'scheduled'.
+  preprogrammed: "Por confirmar",
+  scheduled: "Confirmado",
   in_progress: "En curso",
   completed: "Completado",
   cancelled: "Cancelado",

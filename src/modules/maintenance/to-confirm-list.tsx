@@ -297,6 +297,34 @@ function ConfirmVisitModal({
               />
             </div>
           </div>
+          {/* Botones rápidos: el cliente suele decir "no puedo, mejor
+              3 días más tarde" o "vente antes, tengo una avería". */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide">
+              Mover:
+            </span>
+            {[-7, -3, -1, +1, +3, +7].map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => {
+                  const cur = new Date(`${date}T${time || "10:00"}:00`);
+                  cur.setDate(cur.getDate() + d);
+                  const pad = (n: number) => String(n).padStart(2, "0");
+                  setDate(
+                    `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`,
+                  );
+                }}
+                className={`rounded-md border px-2 py-1 text-xs font-bold ${
+                  d < 0
+                    ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    : "border-border bg-card text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                {d > 0 ? `+${d}d` : `${d}d`}
+              </button>
+            ))}
+          </div>
           <div className="space-y-1.5">
             <Label>Técnico asignado *</Label>
             <select

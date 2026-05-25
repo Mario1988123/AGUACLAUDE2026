@@ -130,6 +130,10 @@ export async function ensureMaintenanceWindow(
     kind: "contracted",
     status: "preprogrammed" as const,
     scheduled_at: cd.scheduledAt.toISOString(),
+    // Conservamos la fecha original que propuso el cron para auditoría —
+    // si admin/TMK la mueve al confirmar con el cliente, scheduled_at
+    // cambia pero esto se queda como referencia.
+    original_scheduled_at: cd.scheduledAt.toISOString(),
     is_charged: false,
   }));
 

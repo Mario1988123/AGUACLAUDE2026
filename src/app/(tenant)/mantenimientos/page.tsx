@@ -24,10 +24,12 @@ const MAINT_TONE: Record<
   string,
   "info" | "processing" | "success" | "rejected" | "onhold" | "neutral"
 > = {
+  preprogrammed: "onhold",
   scheduled: "info",
-  in_progress: "onhold",
+  in_progress: "processing",
   completed: "success",
   cancelled: "rejected",
+  rescheduled: "neutral",
 };
 
 const STATUS_OPTIONS = ["preprogrammed", "scheduled", "in_progress", "completed", "cancelled"] as const;

@@ -176,7 +176,14 @@ export async function validateMaintenanceJobAction(input: {
       return { ok: false, error: `La visita ya está en estado ${j.status}` };
     }
 
-    const updates: Record<string, unknown> = { status: "scheduled" };
+    const nowIso = new Date().toISOString();
+    const updates: Record<string, unknown> = {
+      status: "scheduled",
+      confirmed_at: nowIso,
+      confirmed_by: session.user_id,
+      customer_called_at: nowIso,
+      customer_called_by: session.user_id,
+    };
     if (input.scheduled_at) {
       const dt = new Date(input.scheduled_at);
       if (!isNaN(dt.getTime()) && dt.getTime() < Date.now() - 60 * 1000) {
@@ -212,6 +219,94 @@ export async function validateMaintenanceJobAction(input: {
     revalidatePath("/mantenimientos");
     revalidatePath("/agenda");
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Mueve la fecha propuesta de un mantenimiento preprogrammed sin
+ * confirmarlo todavía. Sirve para reagendar rápido cuando el cliente
+ * pide otro día pero no se cierra acuerdo en la misma llamada.
+ * Permite delta en días (positivo o negativo) o fecha absoluta.
+ */
+export async function rescheduleMaintenanceProposalAction(input: {
+  id: string;
+  delta_days?: number;
+  new_date?: string;
+}): Promise<{ ok: true; new_scheduled_at: string } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const allowed =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director") ||
+      session.roles.includes("telemarketing_director");
+    if (!allowed)
+      return { ok: false, error: "Solo admin / dirección técnica / TMK" };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: job } = await admin
+      .from("maintenance_jobs")
+      .select("id, status, company_id, scheduled_at")
+      .eq("id", input.id)
+      .maybeSingle();
+    if (!job) return { ok: false, error: "Visita no encontrada" };
+    const j = job as {
+      status: string;
+      company_id: string;
+      scheduled_at: string | null;
+    };
+    if (j.company_id !== session.company_id)
+      return { ok: false, error: "Otra empresa" };
+    if (j.status !== "preprogrammed")
+      return {
+        ok: false,
+        error: "Solo se puede mover una propuesta sin confirmar",
+      };
+
+    const base = j.scheduled_at ? new Date(j.scheduled_at) : new Date();
+    let next: Date;
+    if (input.new_date) {
+      next = new Date(input.new_date);
+    } else if (typeof input.delta_days === "number") {
+      next = new Date(base.getTime() + input.delta_days * 86400_000);
+    } else {
+      return { ok: false, error: "Falta delta_days o new_date" };
+    }
+    if (isNaN(next.getTime())) return { ok: false, error: "Fecha inválida" };
+    if (next.getTime() < Date.now() - 60_000)
+      return { ok: false, error: "No puedes mover al pasado" };
+
+    const nowIso = new Date().toISOString();
+    const newIso = next.toISOString();
+    const { error } = await admin
+      .from("maintenance_jobs")
+      .update({
+        scheduled_at: newIso,
+        customer_called_at: nowIso,
+        customer_called_by: session.user_id,
+      })
+      .eq("id", input.id);
+    if (error) return { ok: false, error: error.message };
+
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "maintenance",
+      subject_id: input.id,
+      kind: "maintenance.proposal_moved",
+      payload: {
+        previous_scheduled_at: j.scheduled_at,
+        new_scheduled_at: newIso,
+        delta_days: input.delta_days ?? null,
+      },
+      actor_user_id: session.user_id,
+    });
+    revalidatePath("/mantenimientos");
+    revalidatePath("/mantenimientos/por-confirmar");
+    return { ok: true, new_scheduled_at: newIso };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
