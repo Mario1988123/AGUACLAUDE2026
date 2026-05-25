@@ -44,8 +44,10 @@ export function MaintenanceContractsTable({
   if (contracts.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-        Sin contratos de mantenimiento todavía. Se generan desde la ficha del
-        cliente o al completar una instalación.
+        Sin contratos de mantenimiento todavía. Abre la ficha de un cliente,
+        despliega un equipo instalado y pulsa &laquo;Ofrecer contrato de
+        mantenimiento&raquo;. También se ofrece automáticamente al técnico al
+        cerrar el último mantenimiento de la cobertura actual.
       </div>
     );
   }

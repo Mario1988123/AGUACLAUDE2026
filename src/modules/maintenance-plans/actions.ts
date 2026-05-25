@@ -96,6 +96,12 @@ export async function createMaintenanceContractAction(input: {
   source_contract_id?: string | null;
   starts_on?: string;
   ends_on?: string | null;
+  /**
+   * Equipo concreto al que va asignado el contrato. Regla 2026-05-25:
+   * el contrato es por equipo, no por cliente. Si se omite, queda como
+   * contrato legacy a nivel cliente (cubre todos los equipos).
+   */
+  customer_equipment_id?: string | null;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -156,6 +162,7 @@ export async function createMaintenanceContractAction(input: {
     .insert({
       company_id: session.company_id,
       customer_id: input.customer_id,
+      customer_equipment_id: input.customer_equipment_id ?? null,
       plan_id: p.id,
       source_installation_id: input.source_installation_id ?? null,
       source_contract_id: input.source_contract_id ?? null,
@@ -337,12 +344,41 @@ export async function createMaintenanceContractSafeAction(input: {
   plan_id: string;
   source_installation_id?: string | null;
   source_contract_id?: string | null;
+  customer_equipment_id?: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await createMaintenanceContractAction(input);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Devuelve mapa equipment_id → true para los equipos del cliente que
+ * ya tienen un contrato de mantenimiento ACTIVO. Permite a la UI ocultar
+ * el botón "Ofrecer contrato" en los equipos ya cubiertos.
+ */
+export async function getEquipmentsWithActiveMaintenanceContract(
+  customerId: string,
+): Promise<Set<string>> {
+  try {
+    await requireSession();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("maintenance_contracts")
+      .select("customer_equipment_id")
+      .eq("customer_id", customerId)
+      .eq("status", "active")
+      .not("customer_equipment_id", "is", null);
+    const out = new Set<string>();
+    for (const r of (data ?? []) as Array<{ customer_equipment_id: string }>) {
+      out.add(r.customer_equipment_id);
+    }
+    return out;
+  } catch {
+    return new Set();
   }
 }
 

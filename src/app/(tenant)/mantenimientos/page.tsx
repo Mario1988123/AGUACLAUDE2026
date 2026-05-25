@@ -302,6 +302,17 @@ export default async function MantenimientosPage({
                       tone={MAINT_TONE[j.status] ?? "info"}
                     />
                   </div>
+                  <div className="mt-1 text-xs">
+                    {j.technician_name ? (
+                      <span className="text-muted-foreground">
+                        Técnico: <strong>{j.technician_name}</strong>
+                      </span>
+                    ) : (
+                      <span className="rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 font-bold text-amber-800">
+                        Por asignar
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
                     <span className="text-xs tabular-nums">
                       {j.is_charged ? (
@@ -328,6 +339,7 @@ export default async function MantenimientosPage({
                 <tr>
                   <th className="py-2 text-left">Cliente</th>
                   <th className="py-2 text-left">Programado</th>
+                  <th className="py-2 text-left">Técnico</th>
                   <th className="py-2 text-left">Estado</th>
                   <th className="py-2 text-right">Importe</th>
                   <th className="py-2 text-right">Acciones</th>
@@ -343,6 +355,15 @@ export default async function MantenimientosPage({
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {j.scheduled_at ? new Date(j.scheduled_at).toLocaleString("es-ES") : "—"}
+                    </td>
+                    <td className="py-2">
+                      {j.technician_name ? (
+                        <span className="text-sm">{j.technician_name}</span>
+                      ) : (
+                        <span className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-800">
+                          Por asignar
+                        </span>
+                      )}
                     </td>
                     <td className="py-2">
                       <StatusPill

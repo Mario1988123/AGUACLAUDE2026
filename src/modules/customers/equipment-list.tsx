@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Wrench, Package, MapPin, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { RelocateEquipmentButton } from "./relocate-button";
+import { OfferMaintenanceContractButton } from "./offer-maintenance-contract-button";
 import type { CustomerEquipmentRow } from "./equipment-actions";
+import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
 
 function fmtDate(d: string | null) {
   if (!d) return "—";
@@ -24,11 +26,18 @@ export function CustomerEquipmentList({
   customerId,
   addresses = [],
   canRelocate = false,
+  equipmentsWithActiveContract,
+  maintenancePlans = [],
 }: {
   equipment: CustomerEquipmentRow[];
   customerId?: string;
   addresses?: AddressOption[];
   canRelocate?: boolean;
+  /** Set de equipment_ids que ya tienen contrato de mantenimiento activo.
+   *  Si está, ocultamos el botón "Ofrecer contrato" en esos equipos. */
+  equipmentsWithActiveContract?: Set<string>;
+  /** Planes de mantenimiento disponibles para ofrecer. */
+  maintenancePlans?: MaintenancePlan[];
 }) {
   if (equipment.length === 0) {
     return (
@@ -109,6 +118,21 @@ export function CustomerEquipmentList({
                     addresses={addresses}
                   />
                 )}
+                {/* Botón "Ofrecer contrato de mantenimiento" — solo si el
+                    equipo está activo, no tiene contrato vigente y hay
+                    planes configurados. La regla 2026-05-25 es que el
+                    contrato es POR EQUIPO, no por cliente. */}
+                {e.is_active &&
+                  customerId &&
+                  maintenancePlans.length > 0 &&
+                  !equipmentsWithActiveContract?.has(e.id) && (
+                    <OfferMaintenanceContractButton
+                      customerId={customerId}
+                      equipmentId={e.id}
+                      equipmentName={name}
+                      plans={maintenancePlans}
+                    />
+                  )}
               </div>
             </div>
           </li>

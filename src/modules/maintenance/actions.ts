@@ -16,6 +16,7 @@ export interface MaintenanceRow {
   customer_id: string;
   customer_name: string | null;
   technician_user_id: string | null;
+  technician_name: string | null;
   scheduled_at: string | null;
   completed_at: string | null;
   is_charged: boolean;
@@ -368,8 +369,17 @@ export async function listMaintenance(filters?: {
   if (filters?.toDate) query = query.lte("scheduled_at", filters.toDate);
   const { data, error } = await query;
   if (error) throw error;
-  const rows = (data ?? []) as Array<Omit<MaintenanceRow, "customer_name">>;
+  const rows = (data ?? []) as Array<
+    Omit<MaintenanceRow, "customer_name" | "technician_name">
+  >;
   const ids = Array.from(new Set(rows.map((r) => r.customer_id)));
+  const techIds = Array.from(
+    new Set(
+      rows
+        .map((r) => r.technician_user_id)
+        .filter((v): v is string => !!v),
+    ),
+  );
   let nameMap = new Map<string, string>();
   if (ids.length > 0) {
     const { data: cs } = await supabase
@@ -393,7 +403,26 @@ export async function listMaintenance(filters?: {
       ]),
     );
   }
-  return rows.map((r) => ({ ...r, customer_name: nameMap.get(r.customer_id) ?? null }));
+  const techMap = new Map<string, string>();
+  if (techIds.length > 0) {
+    const { data: tprofs } = await supabase
+      .from("user_profiles")
+      .select("user_id, full_name")
+      .in("user_id", techIds);
+    for (const t of (tprofs ?? []) as Array<{
+      user_id: string;
+      full_name: string | null;
+    }>) {
+      if (t.full_name) techMap.set(t.user_id, t.full_name);
+    }
+  }
+  return rows.map((r) => ({
+    ...r,
+    customer_name: nameMap.get(r.customer_id) ?? null,
+    technician_name: r.technician_user_id
+      ? techMap.get(r.technician_user_id) ?? null
+      : null,
+  }));
 }
 
 export async function createMaintenanceAction(input: unknown) {

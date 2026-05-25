@@ -83,6 +83,15 @@ export default async function CustomerDetailPage({
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
+  // Planes de mantenimiento + equipos con contrato activo para que la
+  // lista de equipos pueda mostrar el botón "Ofrecer contrato" solo
+  // donde tiene sentido (equipos sin cobertura).
+  const { listMaintenancePlans, getEquipmentsWithActiveMaintenanceContract } =
+    await import("@/modules/maintenance-plans/actions");
+  const [maintenancePlans, equipmentsWithActiveContract] = await Promise.all([
+    listMaintenancePlans().catch(() => []),
+    getEquipmentsWithActiveMaintenanceContract(id).catch(() => new Set<string>()),
+  ]);
   // Almacenes para destino al desinstalar (sugiere el marcado como
   // is_used_equipment_default si existe).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -482,6 +491,8 @@ export default async function CustomerDetailPage({
                 session.roles.includes("technical_director") ||
                 session.roles.includes("commercial_director")
               }
+              maintenancePlans={maintenancePlans}
+              equipmentsWithActiveContract={equipmentsWithActiveContract}
             />
           </CardContent>
         </Card>
