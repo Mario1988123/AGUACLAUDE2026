@@ -124,7 +124,7 @@ export default async function PropuestasPage({
           </div>
 
           {/* DESKTOP: tabla rica */}
-          <div className="hidden lg:block overflow-hidden rounded-lg border bg-card">
+          <div className="hidden lg:block overflow-x-auto rounded-lg border bg-card">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>

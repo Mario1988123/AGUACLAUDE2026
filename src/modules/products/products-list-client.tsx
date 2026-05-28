@@ -222,7 +222,7 @@ export function ProductsListClient({
           </ul>
 
           {/* Desktop: tabla */}
-          <div className="hidden overflow-hidden rounded-lg border bg-card md:block">
+          <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>

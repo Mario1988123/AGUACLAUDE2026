@@ -342,7 +342,7 @@ function StockTab({
           Sin stock todavía. Pulsa «Añadir stock» para registrar la primera entrada.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -844,7 +844,7 @@ function LocationsTab({
           Sin ubicaciones definidas. Crea estanterías para asignar el stock.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
