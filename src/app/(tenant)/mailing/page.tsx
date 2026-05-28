@@ -82,6 +82,25 @@ export default async function MailingPage({
     listTeamMembers().catch(() => []),
   ]);
 
+  // El tracking de aperturas/clics solo es real si la empresa envía por Resend
+  // (vía webhook). Con SMTP propio no se mide → ocultamos esas métricas para no
+  // mostrar 0% engañosos.
+  let emailIsResend = false;
+  if (session.company_id) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const adminCli = (await import("@/shared/lib/supabase/admin")).createAdminClient() as any;
+      const { data: comp } = await adminCli
+        .from("companies")
+        .select("email_provider")
+        .eq("id", session.company_id)
+        .maybeSingle();
+      emailIsResend = comp?.email_provider === "resend";
+    } catch {
+      emailIsResend = false;
+    }
+  }
+
   let emailData: Awaited<ReturnType<typeof listEmailsPage>> = { rows: [], total: 0 };
   let whatsappData: Awaited<ReturnType<typeof listWhatsAppPage>> = { rows: [], total: 0 };
   let byTemplate: Awaited<ReturnType<typeof getStatsByTemplate>> = [];
@@ -161,6 +180,8 @@ export default async function MailingPage({
         <KpiCard label="Hoy" value={String(kpis.sent_today)} />
         <KpiCard label="Última semana" value={String(kpis.sent_week)} />
         <KpiCard label="Último mes" value={String(kpis.sent_month)} />
+        {emailIsResend && (
+          <>
         <KpiCard label="% Apertura (mes)" value={`${kpis.open_rate_pct}%`} tone="success" />
         <KpiCard label="% Clics (mes)" value={`${kpis.click_rate_pct}%`} tone="success" />
         <KpiCard
@@ -168,6 +189,8 @@ export default async function MailingPage({
           value={`${kpis.bounce_rate_pct}%`}
           tone={kpis.bounce_rate_pct > 5 ? "error" : "muted"}
         />
+          </>
+        )}
         <KpiCard
           label="Cola pendiente"
           value={String(kpis.pending_outbox)}
