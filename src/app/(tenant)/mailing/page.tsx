@@ -139,13 +139,21 @@ export default async function MailingPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold">Mailing y WhatsApp</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isAdminOrLevel2
-            ? "Todos los envíos automáticos y manuales del CRM."
-            : "Solo los envíos hechos por ti."}
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold">Mailing y WhatsApp</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isAdminOrLevel2
+              ? "Todos los envíos automáticos y manuales del CRM."
+              : "Solo los envíos hechos por ti."}
+          </p>
+        </div>
+        <Link
+          href="/mailing/campanas"
+          className="inline-flex items-center gap-2 self-start rounded-md bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+        >
+          Campañas de email
+        </Link>
       </div>
 
       {/* KPIs */}
