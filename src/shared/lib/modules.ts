@@ -120,9 +120,10 @@ export const MODULES: ModuleEntry[] = [
   // 2026-05-18): el timeline ya está accesible en cada ficha
   // individual y el audit log se centraliza en /superadmin/audit con
   // visibilidad solo para superadmin.
-  // Mailing: solo nivel 1/2 ve el módulo (gestiona campañas + plantillas).
-  // Nivel 3 no necesita acceso.
-  { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system", rolesAllowed: LEVEL_1_2 },
+  // Mailing: SOLO el departamento de telemarketing (decisión usuario
+  // 2026-05-29). telemarketing_director + telemarketer. Se mantiene
+  // company_admin porque es quien configura el SMTP/Resend del módulo.
+  { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system", rolesAllowed: ["company_admin", "telemarketing_director", "telemarketer"] },
   // MAIL: histórico de TODOS los emails enviados (manuales + automáticos del
   // sistema + campañas). Distinto de "Mailing" (que es campañas marketing).
   // Visible para todos los roles que envían/reciben emails de leads y clientes

@@ -264,9 +264,45 @@ export async function testSmtpConnection(
     await transporter.verify();
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error de conexión";
-    return { ok: false, error: msg };
+    const raw = e instanceof Error ? e.message : "Error de conexión";
+    return { ok: false, error: friendlySmtpError(raw) };
   }
+}
+
+/**
+ * Traduce errores SMTP crípticos de proveedores a mensajes accionables.
+ * El más común: Gmail/Workspace con 2FA exige "contraseña de aplicación".
+ */
+function friendlySmtpError(raw: string): string {
+  const m = raw.toLowerCase();
+  if (
+    m.includes("application-specific password") ||
+    m.includes("invalidsecondfactor") ||
+    m.includes("5.7.9")
+  ) {
+    return (
+      "Gmail rechaza tu contraseña normal porque la cuenta tiene verificación en 2 pasos. " +
+      "Crea una CONTRASEÑA DE APLICACIÓN en Google (Seguridad → Verificación en 2 pasos → " +
+      "Contraseñas de aplicaciones), de 16 caracteres, y úsala aquí en vez de tu contraseña. " +
+      "Host smtp.gmail.com, puerto 465 (SSL) o 587 (TLS)."
+    );
+  }
+  if (m.includes("username and password not accepted") || m.includes("535")) {
+    return (
+      "Usuario o contraseña no aceptados por el servidor. Revisa el email y la contraseña. " +
+      "En Gmail/Outlook con 2FA necesitas una contraseña de aplicación, no la normal."
+    );
+  }
+  if (m.includes("econnrefused") || m.includes("etimedout") || m.includes("timeout")) {
+    return (
+      "No se pudo conectar al servidor SMTP. Revisa el host y el puerto (465 SSL / 587 TLS) " +
+      "y que el proveedor permita SMTP saliente."
+    );
+  }
+  if (m.includes("self signed") || m.includes("certificate")) {
+    return "Error de certificado TLS del servidor SMTP. Revisa el host/puerto y que use TLS válido.";
+  }
+  return raw;
 }
 
 function buildTransporter(cfg: TestConnectionInput): Transporter {
