@@ -6,6 +6,7 @@ import { Mail, Bell } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { logPaymentReminderAction } from "./payment-reminder-actions";
+import { sendQuickEmailAction } from "@/modules/mailing/actions";
 import {
   getReminderTemplate,
   type ReminderLevel,
@@ -53,19 +54,26 @@ export function PaymentReminderButton({
       total_cents: totalCents,
       days_overdue: daysOverdue,
     });
-    const mailto = `mailto:${customerEmail}?subject=${encodeURIComponent(t.subject)}&body=${encodeURIComponent(t.body)}`;
-    // Registrar antes de abrir cliente de email
+    // Envío INTERNO desde el CRM (antes abría cliente de email externo).
     startTransition(async () => {
-      const r = await logPaymentReminderAction({
+      const sendRes = await sendQuickEmailAction({
+        to_email: customerEmail,
+        to_name: customerName,
+        subject: t.subject,
+        body: t.body,
+        related_subject_type: "invoice",
+        related_subject_id: invoiceId,
+      });
+      if (!sendRes.ok) {
+        notify.error("No se pudo enviar", sendRes.error);
+        return;
+      }
+      await logPaymentReminderAction({
         invoice_id: invoiceId,
         level,
         channel: "email",
       });
-      if (!r.ok) {
-        notify.error("No se pudo registrar", r.error);
-        return;
-      }
-      window.location.href = mailto;
+      notify.success("Recordatorio enviado desde el CRM");
       setOpen(false);
       router.refresh();
     });
@@ -104,8 +112,8 @@ export function PaymentReminderButton({
       </select>
       <div className="text-[11px] text-muted-foreground">
         Sugerido según historial: <strong>{LEVEL_LABEL[suggestedLevel]}</strong>.
-        Al pulsar Enviar se abre tu cliente de email con la plantilla
-        prerellenada y se registra el envío en el timeline.
+        El recordatorio se envía directamente desde el CRM (SMTP/Resend) y se
+        registra en el timeline.
       </div>
       <div className="flex justify-end gap-2">
         <Button

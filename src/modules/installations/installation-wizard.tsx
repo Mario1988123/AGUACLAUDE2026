@@ -1033,6 +1033,15 @@ export function InstallationWizard(props: Props) {
                       ))}
                     </div>
                   )}
+                  {step3Done ? (
+                    <Button onClick={() => setStep(4)} className="w-full">
+                      Continuar <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <p className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs font-medium text-amber-800">
+                      Marca como cobrado o pospón cada línea para poder continuar.
+                    </p>
+                  )}
                 </div>
               )}
 

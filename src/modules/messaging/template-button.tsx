@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { MessageSquare, Copy, Mail, MessageCircle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
+import { sendQuickEmailAction } from "@/modules/mailing/actions";
 import { MESSAGE_TEMPLATES, renderTemplate, type MessageTemplate } from "./templates";
 
 const CHANNEL_LABEL: Record<string, string> = {
@@ -20,6 +21,9 @@ interface Props {
   ref?: string | null;
   phone?: string | null;
   email?: string | null;
+  /** Para registrar el envío y vincularlo a la ficha. */
+  customerId?: string | null;
+  leadId?: string | null;
   /** Plantillas a usar. Si no se pasa, usa MESSAGE_TEMPLATES hardcoded fallback */
   templates?: MessageTemplate[];
 }
@@ -31,11 +35,14 @@ export function MessageTemplateButton({
   ref,
   phone,
   email,
+  customerId,
+  leadId,
   templates,
 }: Props) {
   const list = templates && templates.length > 0 ? templates : MESSAGE_TEMPLATES;
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<MessageTemplate | null>(null);
+  const [sending, startSend] = useTransition();
 
   const rendered = selected
     ? renderTemplate(selected, {
@@ -61,12 +68,26 @@ export function MessageTemplateButton({
     window.open(url, "_blank");
   }
 
-  function openEmail() {
+  function sendEmailInternal() {
     if (!rendered || !email) return;
-    const params = new URLSearchParams();
-    if (rendered.subject) params.set("subject", rendered.subject);
-    params.set("body", rendered.body);
-    window.location.href = `mailto:${email}?${params.toString()}`;
+    startSend(async () => {
+      const r = await sendQuickEmailAction({
+        to_email: email,
+        to_name: recipientName ?? undefined,
+        subject: rendered.subject || "Mensaje",
+        body: rendered.body,
+        customer_id: customerId ?? undefined,
+        lead_id: leadId ?? undefined,
+        related_subject_type: customerId ? "customer" : leadId ? "lead" : undefined,
+        related_subject_id: customerId ?? leadId ?? undefined,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo enviar", r.error);
+        return;
+      }
+      notify.success("Email enviado desde el CRM");
+      setOpen(false);
+    });
   }
 
   return (
@@ -127,8 +148,14 @@ export function MessageTemplateButton({
                     </Button>
                   )}
                   {email && (
-                    <Button size="sm" variant="default" onClick={openEmail}>
-                      <Mail className="h-4 w-4" /> Email
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={sendEmailInternal}
+                      disabled={sending}
+                    >
+                      <Mail className="h-4 w-4" />
+                      {sending ? "Enviando…" : "Enviar email"}
                     </Button>
                   )}
                 </div>

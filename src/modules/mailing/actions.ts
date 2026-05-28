@@ -1,9 +1,11 @@
 "use server";
 
 import crypto from "node:crypto";
+import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import {
   renderTemplate,
   buildEmailHtml,
@@ -613,6 +615,111 @@ export async function sendTransactionalEmail(
 
 // Nota: sendViaSmtp NO se re-exporta aquí (Next 15 "use server" prohíbe
 // re-exports de funciones). Importarlo directamente desde "@/modules/mailing/smtp".
+
+// ============================================================================
+// Envío rápido AD-HOC desde el CRM (sin plantilla). Sustituye los botones que
+// antes abrían mailto: (cliente de correo externo). TODO sale del CRM.
+// ============================================================================
+function escapeHtmlBasic(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+const quickEmailSchema = z.object({
+  to_email: z.string().email("Email destinatario inválido"),
+  to_name: z.string().nullish(),
+  subject: z.string().min(1, "Asunto obligatorio"),
+  body: z.string().min(1, "Cuerpo obligatorio"),
+  customer_id: z.string().uuid().nullish(),
+  lead_id: z.string().uuid().nullish(),
+  related_subject_type: z.string().nullish(),
+  related_subject_id: z.string().uuid().nullish(),
+});
+
+export async function sendQuickEmailAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const parsed = parseOrFriendly(quickEmailSchema, input, "Email");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const { data: cs } = await admin
+      .from("company_settings")
+      .select("fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone")
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    const { data: us } = await admin
+      .from("email_user_settings")
+      .select("signature_html, from_email, from_name")
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+
+    const bodyHtml = `<p>${escapeHtmlBasic(parsed.body).replace(/\n/g, "<br>")}</p>`;
+    const html = buildEmailHtml({
+      body_html: bodyHtml,
+      signature_html: us?.signature_html ?? null,
+      company: {
+        legal_name: cs?.fiscal_legal_name ?? "—",
+        tax_id: cs?.fiscal_tax_id ?? "—",
+        address: cs?.fiscal_street ?? null,
+        email: cs?.fiscal_email ?? null,
+        phone: cs?.fiscal_phone ?? null,
+      },
+      kind: "transactional",
+    });
+
+    const res = await sendViaSmtp({
+      companyId: session.company_id,
+      senderUserId: session.user_id,
+      to: parsed.to_email,
+      toName: parsed.to_name ?? undefined,
+      subject: parsed.subject,
+      html,
+      sendType: "manual",
+      triggerEvent: "manual_send",
+      relatedType: parsed.related_subject_type ?? undefined,
+      relatedId: parsed.related_subject_id ?? undefined,
+      replyTo: us?.from_email ?? session.email ?? undefined,
+    });
+
+    try {
+      await admin.from("email_sends").insert({
+        company_id: session.company_id,
+        user_id: session.user_id,
+        to_email: parsed.to_email,
+        to_name: parsed.to_name ?? null,
+        customer_id: parsed.customer_id ?? null,
+        lead_id: parsed.lead_id ?? null,
+        from_email: us?.from_email ?? cs?.fiscal_email ?? "",
+        from_name: us?.from_name ?? cs?.fiscal_legal_name ?? "",
+        subject: parsed.subject,
+        body_html: html,
+        kind: "transactional",
+        status: res.ok ? "sent" : "failed",
+        error_message: res.ok ? null : res.error,
+        sent_at: res.ok ? new Date().toISOString() : null,
+        related_subject_type: parsed.related_subject_type ?? null,
+        related_subject_id: parsed.related_subject_id ?? null,
+        send_type: "manual",
+        trigger_event: "manual_send",
+        from_account_type: res.ok ? res.accountType : null,
+        resend_id: res.ok ? res.resend_id ?? null : null,
+      });
+    } catch {
+      /* fail-soft del registro */
+    }
+
+    if (!res.ok) return { ok: false, error: res.error };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
 
 // ============================================================================
 // Dominio Resend (solo empresas con email_provider='resend')
