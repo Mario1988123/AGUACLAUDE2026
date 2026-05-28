@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { isModuleActiveForCompany } from "@/shared/lib/auth/module-guard";
 import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
@@ -919,13 +920,17 @@ export async function markContractSigned(id: string) {
     }
   }
 
-  // Generar mantenimientos automáticos según frecuencia del contrato
+  // Generar mantenimientos automáticos según frecuencia del contrato.
+  // Solo si la empresa tiene el módulo maintenance activo: si está OFF, el
+  // contrato se firma igual sin agendar visitas invisibles (degradación suave).
   let scheduledCount = 0;
-  try {
-    const { scheduleMaintenanceForContract } = await import("./maintenance-scheduler");
-    scheduledCount = await scheduleMaintenanceForContract(id);
-  } catch {
-    /* fail-soft: no bloquea la firma si la generación falla */
+  if (await isModuleActiveForCompany(session.company_id!, "maintenance")) {
+    try {
+      const { scheduleMaintenanceForContract } = await import("./maintenance-scheduler");
+      scheduledCount = await scheduleMaintenanceForContract(id);
+    } catch {
+      /* fail-soft: no bloquea la firma si la generación falla */
+    }
   }
 
   // AUTO-CREAR INSTALACIÓN PENDIENTE: si todavía no hay instalación
@@ -935,12 +940,19 @@ export async function markContractSigned(id: string) {
   // y se podrá programar fecha+instalador desde ahí.
   let installationCreated = false;
   try {
+    // Solo auto-crear instalación si el módulo installations está activo en la
+    // empresa. Si está OFF, el contrato se firma sin generar una instalación
+    // que nadie podría gestionar (la página está oculta).
+    const instModuleOn = await isModuleActiveForCompany(
+      session.company_id!,
+      "installations",
+    );
     const { count: instCount } = await admin
       .from("installations")
       .select("id", { count: "exact", head: true })
       .eq("contract_id", id)
       .is("deleted_at", null);
-    if ((instCount ?? 0) === 0) {
+    if (instModuleOn && (instCount ?? 0) === 0) {
       // Generar reference_code I-YYYY-NNNN
       const year = new Date().getFullYear();
       const yearPrefix = `I-${year}-`;

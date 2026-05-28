@@ -589,3 +589,44 @@ export async function setCompanyGmapsSafeAction(input: {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+// =================== Proveedor de email (superadmin) ===================
+
+export async function setCompanyEmailProviderSafeAction(input: {
+  company_id: string;
+  provider: "smtp" | "resend";
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await ensureSuperadmin();
+    if (!input.company_id) return { ok: false, error: "Sin empresa" };
+    if (!["smtp", "resend"].includes(input.provider)) {
+      return { ok: false, error: "Proveedor inválido" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase
+      .from("companies")
+      .update({ email_provider: input.provider })
+      .eq("id", input.company_id);
+    if (error) return { ok: false, error: error.message };
+
+    try {
+      const { logSuperadminAction } = await import(
+        "@/modules/superadmin/audit-actions"
+      );
+      await logSuperadminAction({
+        action: "company.email_provider_changed",
+        affected_company_id: input.company_id,
+        payload: { provider: input.provider },
+      });
+    } catch {
+      /* fail-soft */
+    }
+
+    revalidatePath(`/superadmin/empresas/${input.company_id}`);
+    revalidatePath("/configuracion/mailing");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

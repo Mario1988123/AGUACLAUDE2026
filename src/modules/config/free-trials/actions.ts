@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { DEFAULT_FREE_TRIAL_CONDITIONS } from "./defaults";
 
 export interface FreeTrialsConfig {
@@ -47,7 +48,7 @@ export async function getFreeTrialsConfig(): Promise<FreeTrialsConfig> {
 
 export async function updateFreeTrialsConfig(input: unknown) {
   const session = await ensureAdmin();
-  const parsed = schema.parse(input);
+  const parsed = parseOrFriendly(schema, input, "Pruebas gratuitas");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data: existing } = await supabase

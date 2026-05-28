@@ -1,4 +1,5 @@
 import { listLoadingRequests, listWarehouses } from "@/modules/warehouses/actions";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { listWarehouseStockSummary } from "@/modules/warehouses/stock-summary-actions";
 import { listVanCandidates } from "@/modules/agenda/actions";
 import { listProducts } from "@/modules/products/actions";
@@ -16,6 +17,7 @@ import { getInventoryValuation } from "@/modules/warehouses/import-actions";
 export const dynamic = "force-dynamic";
 
 export default async function AlmacenesPage() {
+  await assertModuleActive("warehouses");
   const [warehouses, requests, team, stockSummary, products, alerts, valuation] =
     await Promise.all([
       listWarehouses(),

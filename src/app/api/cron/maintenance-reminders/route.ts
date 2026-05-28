@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
-import { sendEmailViaResend } from "@/modules/mailing/resend";
+import { verifyCronAuth } from "@/shared/lib/auth/cron";
+import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
+import { sendViaSmtp } from "@/modules/mailing/smtp";
 import { renderTemplate, buildEmailHtml } from "@/modules/mailing/templates";
 import { getSystemTemplateByKey } from "@/modules/mailing/system-templates";
 import { ensureConfirmationToken } from "@/modules/maintenance/public-confirmation-actions";
@@ -27,17 +29,16 @@ export const maxDuration = 300;
  * Auth: header `x-cron-secret` o `Authorization: Bearer CRON_SECRET`.
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const xCron = req.headers.get("x-cron-secret") ?? "";
-  if (secret) {
-    const ok = auth === `Bearer ${secret}` || xCron === secret;
-    if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const stats = { confirm_request: 0, day_before: 0, errors: 0 };
+
+  // Empresas que han DESACTIVADO el módulo maintenance: no enviarles
+  // recordatorios de visitas (degradación suave del módulo OFF).
+  const maintenanceDisabled = await companiesWithModuleDisabled("maintenance");
 
   // === 1) Recordatorio "confirma tu próxima visita" (14 días antes) ===
   try {
@@ -58,6 +59,7 @@ export async function GET(req: NextRequest) {
       scheduled_at: string;
       technician_user_id: string | null;
     }>) {
+      if (maintenanceDisabled.has(j.company_id)) continue;
       const sent = await sendMaintenanceReminder(
         admin,
         j,
@@ -96,6 +98,7 @@ export async function GET(req: NextRequest) {
       scheduled_at: string;
       technician_user_id: string | null;
     }>) {
+      if (maintenanceDisabled.has(j.company_id)) continue;
       const sent = await sendMaintenanceReminder(
         admin,
         j,
@@ -275,20 +278,22 @@ async function sendMaintenanceReminder(
     kind: "transactional",
   });
 
-  const fromEmail =
-    process.env.RESEND_FROM_EMAIL ??
-    csRow.fiscal_email ??
-    "onboarding@resend.dev";
-  const fromName =
-    (company as { name: string | null } | null)?.name ?? "AguaClaude";
-
-  const result = await sendEmailViaResend({
-    from_email: fromEmail,
-    from_name: fromName,
-    to_email: c.email,
-    to_name: customerName,
+  // Envío automático del sistema → usa el SMTP genérico de la empresa.
+  // sendViaSmtp resuelve la cuenta (smtp_automated → smtp_company fallback)
+  // y registra fila en email_outbox. Aquí persistimos también en email_sends
+  // con los metadatos completos (customer_id, related_subject) para que
+  // aparezca en el dashboard de mailing y en el módulo MAIL.
+  const result = await sendViaSmtp({
+    companyId: job.company_id,
+    senderUserId: null, // sistema
+    to: c.email,
+    toName: customerName,
     subject,
-    body_html: fullHtml,
+    html: fullHtml,
+    sendType: "automated",
+    triggerEvent: "maintenance_reminder",
+    relatedType: "maintenance",
+    relatedId: job.id,
   });
 
   await admin.from("email_sends").insert({
@@ -297,18 +302,20 @@ async function sendMaintenanceReminder(
     to_email: c.email,
     to_name: customerName,
     customer_id: job.customer_id,
-    from_email: fromEmail,
-    from_name: fromName,
+    from_email: (company as { name: string | null } | null)?.name ?? "",
+    from_name: (company as { name: string | null } | null)?.name ?? "AguaClaude",
     subject,
     body_html: fullHtml,
     kind: "transactional",
     status: result.ok ? "sent" : "failed",
-    resend_id: result.resend_id,
-    error_code: result.error_code,
-    error_message: result.error_message,
+    error_message: result.ok ? null : result.error,
     sent_at: result.ok ? new Date().toISOString() : null,
     related_subject_type: "maintenance",
     related_subject_id: job.id,
+    send_type: "automated",
+    trigger_event: "maintenance_reminder",
+    from_account_type: result.ok ? result.accountType : null,
+    resend_id: result.ok ? result.resend_id ?? null : null,
   });
 
   return result.ok;

@@ -1,8 +1,20 @@
 "use server";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { categoryOfKind } from "./category-of-kind";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "error";
+/**
+ * Categoría de la notificación:
+ * - 'alert' → accionable / urgente (incidencia, asignación, stock bajo,
+ *   antifraude, validación pendiente, solicitudes). Llega al bell del header.
+ * - 'event' → evento informativo (nuevo lead, contrato firmado, cliente creado,
+ *   instalación completada). Solo aparece en /notificaciones pestaña Eventos.
+ *
+ * Regla mental: si el usuario tiene que HACER algo o ENTERARSE para reaccionar
+ * → alert. Si es solo "se ha producido X" sin requerir acción → event.
+ */
+export type NotificationCategory = "alert" | "event";
 export type NotificationSubjectType =
   | "lead"
   | "customer"
@@ -22,6 +34,7 @@ export interface NotifyInput {
   company_id: string;
   recipient_user_id: string;
   kind: string;
+  category?: NotificationCategory;
   severity?: NotificationSeverity;
   title: string;
   body?: string | null;
@@ -38,6 +51,7 @@ export async function notify(input: NotifyInput): Promise<void> {
     company_id: input.company_id,
     recipient_user_id: input.recipient_user_id,
     kind: input.kind,
+    category: input.category ?? categoryOfKind(input.kind),
     severity: input.severity ?? "info",
     title: input.title,
     body: input.body ?? null,
@@ -107,6 +121,7 @@ export async function notifyByRoles(
       company_id: companyId,
       recipient_user_id: uid,
       kind: payload.kind,
+      category: payload.category ?? categoryOfKind(payload.kind),
       severity: payload.severity ?? "info",
       title: payload.title,
       body: payload.body ?? null,
@@ -130,6 +145,7 @@ export async function notifyLeadCreated(
   try {
     await notifyByRoles(companyId, ["company_admin", "telemarketing_director", "commercial_director"], {
       kind: "lead.created",
+      category: "event", // hito informativo, no acción urgente
       severity: "info",
       title: "Nuevo lead",
       body: leadName,
@@ -153,6 +169,7 @@ export async function notifyContractSigned(
       ["company_admin", "commercial_director", "technical_director"],
       {
         kind: "contract.signed",
+        category: "event", // hito ya cerrado, informativo
         severity: "success",
         title: "Contrato firmado",
         body: ref ? `Ref ${ref}` : null,
@@ -182,6 +199,7 @@ export async function notifyInstallationCompleted(
       ["company_admin", "technical_director", "commercial_director"],
       {
         kind: "installation.completed",
+        category: "event", // ya hecho, informativo
         severity: "success",
         title: "Instalación completada",
         body: ref ? `Ref ${ref}` : null,
@@ -203,6 +221,7 @@ export async function notifyInstallationCompleted(
         company_id: companyId,
         recipient_user_id: salesRepUserId,
         kind: "installation.completed",
+        category: "event", // hito ya cerrado para el comercial
         severity: "success",
         title: "✓ Tu cliente ya está instalado",
         body: ref
@@ -232,6 +251,7 @@ export async function notifyPaymentPendingValidation(
     });
     await notifyByRoles(companyId, ["company_admin", "commercial_director"], {
       kind: "wallet.pending_validation",
+      category: "alert", // requiere validación humana
       severity: "warning",
       title: "Pago pendiente de validar",
       body: `${eur} · ${concept} (${method})`,
@@ -258,6 +278,7 @@ export async function notifyIncidentCreated(
       ["company_admin", "technical_director"],
       {
         kind: "incident.created",
+        category: "alert", // hay que atender la incidencia
         severity: sev,
         title: "Nueva incidencia",
         body: title,

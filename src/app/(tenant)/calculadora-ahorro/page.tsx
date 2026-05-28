@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Eye, Download, Mail, FileSignature, Trash2, TrendingDown } from "lucide-react";
 import { listSavingsProposals } from "@/modules/savings/actions";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -44,6 +45,7 @@ export default async function CalculadoraAhorroListPage({
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  await assertModuleActive("savings_calculator");
   const sp = await searchParams;
   const list = await listSavingsProposals({ status: sp.status });
 

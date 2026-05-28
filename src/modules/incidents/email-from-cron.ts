@@ -1,11 +1,12 @@
 "use server";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { sendViaSmtp, type TriggerEvent } from "@/modules/mailing/smtp";
 
 /**
  * Variante de sendIncidentEmail que NO necesita sesión (para usar desde cron).
- * Hace el envío directo via Resend porque sendTransactionalEmail requiere
- * requireSession() que falla en contexto de cron.
+ * Hace el envío directo vía SMTP usando la cuenta SMTP automatizada de la
+ * empresa (smtp_automated_*, con fallback a smtp_company_*).
  */
 export async function sendIncidentEmailFromCron(
   incidentId: string,
@@ -114,6 +115,22 @@ export async function sendIncidentEmailFromCron(
     );
   }
 
+  const subject = render(t.subject);
+  const html = render(t.body_html);
+
+  const result = await sendViaSmtp({
+    companyId: i.company_id,
+    senderUserId: null,
+    to: c.email,
+    toName: customerName,
+    subject,
+    html,
+    sendType: "automated",
+    triggerEvent: "incident_notification" as TriggerEvent,
+    relatedType: "incident",
+    relatedId: i.id,
+  });
+
   await admin.from("email_sends").insert({
     company_id: i.company_id,
     template_id: t.id,
@@ -121,12 +138,17 @@ export async function sendIncidentEmailFromCron(
     kind: t.kind,
     to_email: c.email,
     to_name: customerName,
-    subject: render(t.subject),
-    body_html: render(t.body_html),
+    subject,
+    body_html: html,
     customer_id: i.customer_id,
     related_subject_type: "incident",
     related_subject_id: i.id,
-    status: "queued",
-    queued_at: new Date().toISOString(),
+    status: result.ok ? "sent" : "failed",
+    error_message: result.ok ? null : result.error,
+    sent_at: result.ok ? new Date().toISOString() : null,
+    send_type: "automated",
+    trigger_event: "incident_notification",
+    from_account_type: result.ok ? result.accountType : null,
+    resend_id: result.ok ? result.resend_id ?? null : null,
   });
 }

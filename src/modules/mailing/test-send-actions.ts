@@ -2,7 +2,7 @@
 
 import { requireSession } from "@/shared/lib/auth/session";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
-import { sendEmailViaResend } from "./resend";
+import { sendViaSmtp } from "./smtp";
 import { renderTemplate, buildEmailHtml } from "./templates";
 import { getSystemTemplates } from "./system-templates";
 
@@ -86,13 +86,6 @@ export async function sendAllTemplatesTestAction(
       phone: csRow.fiscal_phone,
     };
 
-    const fromEmail =
-      process.env.RESEND_FROM_EMAIL ??
-      csRow.fiscal_email ??
-      "onboarding@resend.dev";
-    const fromName =
-      (companyRow as { name: string | null } | null)?.name ?? "AguaClaude";
-
     let sent = 0;
     let failed = 0;
     for (const t of getSystemTemplates()) {
@@ -103,12 +96,18 @@ export async function sendAllTemplatesTestAction(
         company,
         kind: t.kind,
       });
-      const result = await sendEmailViaResend({
-        from_email: fromEmail,
-        from_name: fromName,
-        to_email: toEmail,
+      // sendViaSmtp registra automáticamente en email_outbox.
+      // Para que aparezca también en email_sends (que es lo que el módulo MAIL
+      // y mailing dashboard consultan), insertamos a mano. El envío real lo
+      // hace sendViaSmtp con la cuenta SMTP del admin.
+      const result = await sendViaSmtp({
+        companyId: session.company_id,
+        senderUserId: session.user_id,
+        to: toEmail,
         subject,
-        body_html: fullHtml,
+        html: fullHtml,
+        sendType: "manual",
+        triggerEvent: "test_send",
       });
       try {
         await admin.from("email_sends").insert({
@@ -116,16 +115,19 @@ export async function sendAllTemplatesTestAction(
           user_id: session.user_id,
           template_key: t.key,
           to_email: toEmail,
-          from_email: fromEmail,
-          from_name: fromName,
+          from_email: csRow.fiscal_email ?? "",
+          from_name:
+            (companyRow as { name: string | null } | null)?.name ?? "AguaClaude",
           subject,
           body_html: fullHtml,
           kind: t.kind,
           status: result.ok ? "sent" : "failed",
-          resend_id: result.resend_id,
-          error_code: result.error_code,
-          error_message: result.error_message,
+          error_message: result.ok ? null : result.error,
           sent_at: result.ok ? new Date().toISOString() : null,
+          send_type: "manual",
+          trigger_event: "test_send",
+          from_account_type: result.ok ? result.accountType : null,
+          resend_id: result.ok ? result.resend_id ?? null : null,
         });
       } catch {
         /* fail-soft logging */

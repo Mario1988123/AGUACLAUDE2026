@@ -86,7 +86,8 @@ export async function sendEmailViaResend(
       subject: input.subject,
       html: input.body_html,
       text: input.body_text,
-      reply_to: input.reply_to,
+      // Resend SDK v6 usa camelCase `replyTo`.
+      replyTo: input.reply_to,
       headers: Object.keys(headers).length > 0 ? headers : undefined,
       attachments: input.attachments,
       tags: input.metadata

@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { notifyByRoles } from "@/modules/notifications/notifier";
-import { sendEmailViaResend } from "@/modules/mailing/resend";
+import { sendViaSmtp } from "@/modules/mailing/smtp";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,13 +24,8 @@ const WARN_PCT = 0.8;
  * Auth: header `x-cron-secret` o `Authorization: Bearer CRON_SECRET`.
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const xCron = req.headers.get("x-cron-secret") ?? "";
-  if (secret) {
-    const ok = auth === `Bearer ${secret}` || xCron === secret;
-    if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -129,15 +125,15 @@ export async function GET(req: NextRequest) {
 
     if (alertEmail) {
       try {
-        const fromEmail =
-          process.env.RESEND_FROM_EMAIL ?? "notificaciones@aguaclaude.local";
-        await sendEmailViaResend({
-          from_email: fromEmail,
-          from_name: "AguaClaude CRM",
-          to_email: alertEmail,
+        await sendViaSmtp({
+          companyId: c.id,
+          senderUserId: null, // sistema
+          to: alertEmail,
           subject,
-          body_html: `<p>${body}</p><p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/configuracion/google-maps">Abrir dashboard</a></p>`,
-          body_text: body,
+          html: `<p>${body}</p><p><a href="${process.env.NEXT_PUBLIC_APP_URL ?? ""}/configuracion/google-maps">Abrir dashboard</a></p>`,
+          text: body,
+          sendType: "automated",
+          triggerEvent: "gmaps_budget_alert",
         });
       } catch (e) {
         console.error("[gmaps-budget-alert] email failed", c.id, e);

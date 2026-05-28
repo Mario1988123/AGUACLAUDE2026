@@ -107,10 +107,10 @@ export default async function PerfilPage() {
           <CardTitle className="text-base flex items-center gap-2">
             Email empresa para envíos
             {emailSettings?.from_email ? (
-              emailSettings.domain_verified ? (
-                <Badge variant="success">Verificado</Badge>
+              emailSettings.smtp_configured ? (
+                <Badge variant="success">SMTP propio</Badge>
               ) : (
-                <Badge variant="warning">Dominio sin verificar</Badge>
+                <Badge variant="secondary">Usa SMTP de la empresa</Badge>
               )
             ) : (
               <Badge variant="secondary">Sin configurar</Badge>
@@ -127,7 +127,7 @@ export default async function PerfilPage() {
               job_title: profile?.job_title ?? "",
               phone: profile?.phone ?? "",
             }}
-            domainVerified={emailSettings?.domain_verified ?? false}
+            domainVerified={emailSettings?.smtp_configured ?? false}
           />
         </CardContent>
       </Card>

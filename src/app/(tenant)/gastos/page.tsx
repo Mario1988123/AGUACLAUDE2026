@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { KpiCard } from "@/shared/components/kpi-card";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { MileageButton } from "@/modules/expenses/mileage-button";
 import { PerDiemButton } from "@/modules/expenses/per-diem-button";
 
@@ -43,6 +44,7 @@ export default async function ExpensesPage({
 }: {
   searchParams: Promise<{ status?: string; from?: string; to?: string }>;
 }) {
+  await assertModuleActive("expenses");
   const sp = await searchParams;
   const session = await requireSession();
   const isApprover =

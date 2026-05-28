@@ -4,6 +4,7 @@ import { getPointsSettingsAdmin } from "@/modules/points/config-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import {
   MyCommissionsCard,
   getMyCommissionData,
@@ -38,6 +39,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default async function ComisionesPage() {
+  await assertModuleActive("commissions");
   const session = await requireSession();
   const canManage =
     session.is_superadmin ||

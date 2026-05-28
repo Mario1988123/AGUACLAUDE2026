@@ -108,6 +108,7 @@ export default async function UsuariosPage() {
                           currentRoles={u.roles}
                           status={u.status}
                           fullName={u.full_name}
+                          email={u.email ?? undefined}
                         />
                       </td>
                     </tr>

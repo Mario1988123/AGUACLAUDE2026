@@ -4,6 +4,7 @@ import { CalendarDays, Megaphone, Newspaper, Sparkles, ListTodo } from "lucide-r
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import {
   listEphemeridesForMonth,
   listSocialPosts,
@@ -58,6 +59,7 @@ const STATUS_TONE: Record<string, "secondary" | "warning" | "success" | "outline
 };
 
 export default async function SocialDashboardPage() {
+  await assertModuleActive("social_media");
   const session = await requireSession();
   const allowed =
     session.is_superadmin ||

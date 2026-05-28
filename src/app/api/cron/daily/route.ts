@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
+import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,13 +20,8 @@ export const maxDuration = 60;
  * inyecta vía `Authorization: Bearer ${VERCEL_CRON_SECRET}` — soportamos ambos.
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const xCron = req.headers.get("x-cron-secret") ?? "";
-  if (secret) {
-    const ok = auth === `Bearer ${secret}` || xCron === secret;
-    if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
 
   // Telemetría (decisión 2026-05-20)
   const tracker = await startCronRun("daily");
@@ -40,6 +37,26 @@ export async function GET(req: NextRequest) {
     punches_autoclosed: 0,
     schedule_incidents_opened: 0,
   };
+
+  // Sets de empresas que han DESACTIVADO cada módulo. Se usan en los bloques
+  // de abajo para saltar empresas con el módulo OFF (degradación suave: el
+  // cron no genera datos/avisos de un módulo que la empresa apagó). Empresas
+  // sin fila NO aparecen → se tratan como activas (fail-open).
+  const [
+    offMaintenance,
+    offInstallations,
+    offCommissions,
+    offInvoicing,
+    offFreeTrials,
+    offWarehouses,
+  ] = await Promise.all([
+    companiesWithModuleDisabled("maintenance"),
+    companiesWithModuleDisabled("installations"),
+    companiesWithModuleDisabled("commissions"),
+    companiesWithModuleDisabled("invoicing"),
+    companiesWithModuleDisabled("free_trials"),
+    companiesWithModuleDisabled("warehouses"),
+  ]);
 
   // 0a) Autocierre de fichajes olvidados (también lo hace el cron horario,
   // pero lo repetimos aquí por si el horario fallara o no estuviera activo)
@@ -415,6 +432,7 @@ export async function GET(req: NextRequest) {
     scheduled_at: string;
     installer_user_id: string | null;
   }>) {
+    if (offInstallations.has(inst.company_id)) continue;
     const time = new Date(inst.scheduled_at).toLocaleTimeString("es-ES", {
       hour: "2-digit",
       minute: "2-digit",
@@ -559,6 +577,7 @@ export async function GET(req: NextRequest) {
     scheduled_at: string;
     technician_user_id: string | null;
   }>) {
+    if (offMaintenance.has(j.company_id)) continue;
     const time = new Date(j.scheduled_at).toLocaleTimeString("es-ES", {
       hour: "2-digit",
       minute: "2-digit",
@@ -628,6 +647,7 @@ export async function GET(req: NextRequest) {
   }
 
   for (const ls of lowStockRows) {
+    if (offWarehouses.has(ls.company_id)) continue;
     try {
       // Idempotencia: solo notifica si no ha habido otra notif del mismo producto en 24h
       const since = new Date();
@@ -723,6 +743,7 @@ export async function GET(req: NextRequest) {
       "@/modules/warehouses/alert-actions"
     );
     for (const c of (companiesAll ?? []) as Array<{ id: string }>) {
+      if (offWarehouses.has(c.id)) continue;
       const r = await recomputeStockAlertsForCompany(c.id);
       stockAlertsStats.companies += 1;
       if (r.ok) stockAlertsStats.alerts += r.total;
@@ -941,6 +962,7 @@ export async function GET(req: NextRequest) {
       points_settings: { cycle_close_day?: number } | null;
     };
     for (const row of (pointSettings ?? []) as PS[]) {
+      if (offCommissions.has(row.company_id)) continue;
       const closeDay = row.points_settings?.cycle_close_day ?? 0;
       const now = new Date();
       // Periodo anterior al actual
@@ -1145,6 +1167,7 @@ export async function GET(req: NextRequest) {
       company_id: string;
       assigned_user_id: string | null;
     }>) {
+      if (offFreeTrials.has(t.company_id)) continue;
       if (t.assigned_user_id) {
         try {
           await admin.from("notifications").insert({
@@ -1183,6 +1206,7 @@ export async function GET(req: NextRequest) {
       customer_id: string;
       service_start_date: string | null;
     }>) {
+      if (offMaintenance.has(c.company_id)) continue;
       // ¿Tiene job futuro?
       const { count } = await admin
         .from("maintenance_jobs")
@@ -1337,6 +1361,8 @@ export async function GET(req: NextRequest) {
       }>)) {
         // Skip pausados — no se factura mientras esté en pausa.
         if (c.paused_at) continue;
+        // Skip empresas con módulo invoicing OFF.
+        if (offInvoicing.has(c.company_id)) continue;
         monthlyInvoicing.contracts += 1;
         // Rollback manual ante fallos en cadena (Supabase sin transacciones
         // de cliente). Si fallamos a mitad, deshacemos lo creado para evitar
@@ -1562,6 +1588,7 @@ export async function GET(req: NextRequest) {
       paused_at: string;
       reference_code: string | null;
     }>)) {
+      if (offMaintenance.has(c.company_id)) continue;
       pausedMaintenance.contracts_scanned += 1;
       try {
         const { count: futureJobs } = await admin
@@ -1836,6 +1863,7 @@ export async function GET(req: NextRequest) {
       status: string;
     };
     for (const inv of ((overdue ?? []) as Inv[])) {
+      if (offInvoicing.has(inv.company_id)) continue;
       try {
         const daysOverdue = Math.floor(
           (now - new Date(inv.due_date).getTime()) / 86400000,

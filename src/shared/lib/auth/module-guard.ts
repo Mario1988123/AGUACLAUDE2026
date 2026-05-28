@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import type { SessionClaims } from "./session";
 
 /**
@@ -63,6 +64,60 @@ export async function listActiveModules(): Promise<Set<string> | null> {
 export async function assertModuleActive(moduleKey: string): Promise<void> {
   const active = await isModuleActive(moduleKey);
   if (!active) redirect("/dashboard");
+}
+
+/**
+ * Versión server-to-server (sin sesión) para crons y flujos cross-module que
+ * operan con admin client. Devuelve `false` SOLO si existe una fila explícita
+ * con `is_active=false` para esa empresa+módulo. Si no hay fila o falla la
+ * query → `true` (FAIL-OPEN: no romper flujos de empresas sin configuración
+ * explícita, coherente con `isModuleActive`).
+ */
+export async function isModuleActiveForCompany(
+  companyId: string,
+  moduleKey: string,
+): Promise<boolean> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data, error } = await admin
+      .from("company_modules")
+      .select("is_active")
+      .eq("company_id", companyId)
+      .eq("module_key", moduleKey)
+      .maybeSingle();
+    if (error) return true;
+    if (!data) return true;
+    return Boolean((data as { is_active: boolean }).is_active);
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Para bucles de cron que iteran muchas empresas: devuelve el conjunto de
+ * `company_id` que han DESACTIVADO explícitamente el módulo (fila is_active=
+ * false). El caller hace `if (disabled.has(companyId)) continue;`. Empresas
+ * sin fila NO se incluyen → se las trata como activas (fail-open).
+ */
+export async function companiesWithModuleDisabled(
+  moduleKey: string,
+): Promise<Set<string>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data, error } = await admin
+      .from("company_modules")
+      .select("company_id")
+      .eq("module_key", moduleKey)
+      .eq("is_active", false);
+    if (error) return new Set();
+    return new Set(
+      ((data ?? []) as Array<{ company_id: string }>).map((r) => r.company_id),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 /**

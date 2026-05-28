@@ -495,15 +495,36 @@ export async function resendEmailAction(
     related_subject_id: string | null;
   };
 
-  const { sendEmailViaResend } = await import("./resend");
-  const result = await sendEmailViaResend({
-    from_email: o.from_email,
-    from_name: o.from_name ?? undefined,
-    to_email: o.to_email,
-    to_name: o.to_name ?? undefined,
-    subject: `${o.subject} (reenvío)`,
-    body_html: o.body_html,
+  const { pickSmtpConfig } = await import("./smtp");
+  const cfg = await pickSmtpConfig({
+    companyId,
+    userId: session.user_id,
+    automated: false,
   });
+  let sendOk = false;
+  let sendError: string | null = null;
+  if (!cfg) {
+    sendError = "No hay SMTP configurado. Configura en /configuracion/mailing.";
+  } else {
+    try {
+      const { default: nodemailer } = await import("nodemailer");
+      const transporter = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: { user: cfg.user, pass: cfg.password },
+      });
+      await transporter.sendMail({
+        from: `"${o.from_name ?? cfg.fromName}" <${o.from_email}>`,
+        to: o.to_name ? `"${o.to_name}" <${o.to_email}>` : o.to_email,
+        subject: `${o.subject} (reenvío)`,
+        html: o.body_html,
+      });
+      sendOk = true;
+    } catch (e) {
+      sendError = e instanceof Error ? e.message : "Error al reenviar";
+    }
+  }
 
   const { data: newSend } = await admin
     .from("email_sends")
@@ -519,22 +540,23 @@ export async function resendEmailAction(
       subject: `${o.subject} (reenvío)`,
       body_html: o.body_html,
       kind: o.kind,
-      status: result.ok ? "sent" : "failed",
-      resend_id: result.resend_id,
-      error_code: result.error_code,
-      error_message: result.error_message,
-      sent_at: result.ok ? new Date().toISOString() : null,
+      status: sendOk ? "sent" : "failed",
+      error_message: sendError,
+      sent_at: sendOk ? new Date().toISOString() : null,
       customer_id: o.customer_id,
       lead_id: o.lead_id,
       related_subject_type: o.related_subject_type,
       related_subject_id: o.related_subject_id,
       metadata: { resent_from: id },
+      send_type: "manual",
+      trigger_event: "manual_send",
+      from_account_type: cfg?.accountType ?? null,
     })
     .select("id")
     .single();
   const newId = (newSend as { id: string } | null)?.id;
 
-  if (newId && result.ok) {
+  if (newId && sendOk) {
     try {
       await admin.from("events").insert({
         company_id: companyId,
@@ -557,7 +579,7 @@ export async function resendEmailAction(
   }
   revalidatePath(`/mailing/${id}`);
   revalidatePath("/mailing");
-  return { ok: result.ok, new_send_id: newId, error: result.error_message ?? undefined };
+  return { ok: sendOk, new_send_id: newId, error: sendError ?? undefined };
 }
 
 // ============================================================================

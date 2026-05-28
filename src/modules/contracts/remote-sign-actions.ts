@@ -373,7 +373,9 @@ export async function submitRemoteSignatureAction(input: {
       };
     }
 
-    // Guardar firma + IP + UA
+    // Guardar firma + IP + UA. Update CONDICIONAL a signed_at IS NULL: si dos
+    // POST concurrentes pasan el chequeo de arriba, solo uno hará match aquí
+    // (el otro afecta 0 filas) → evita doble firma por carrera.
     const r1 = await admin
       .from("contract_remote_signatures")
       .update({
@@ -382,8 +384,13 @@ export async function submitRemoteSignatureAction(input: {
         signer_ip: input.client_ip ?? null,
         signer_user_agent: input.client_ua ?? null,
       })
-      .eq("id", s.id);
+      .eq("id", s.id)
+      .is("signed_at", null)
+      .select("id");
     if (r1.error) return { ok: false, error: r1.error.message };
+    if (!r1.data || r1.data.length === 0) {
+      return { ok: false, error: "Ya fue firmado." };
+    }
 
     // Insertar también una contract_signature normal (role=customer) para
     // que aparezca en el PDF del contrato como firma del cliente.

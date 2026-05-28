@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import { ROLE_KEYS, type RoleKey } from "./schemas";
 import { UserPermissionsButton } from "./permissions-dialog";
+import { UserSmtpDialogButton } from "@/modules/mailing/user-smtp-dialog";
 
 const ROLE_LABEL: Record<string, string> = {
   company_admin: "Admin",
@@ -30,11 +31,13 @@ export function UserRowActions({
   currentRoles,
   status,
   fullName,
+  email,
 }: {
   userId: string;
   currentRoles: string[];
   status: string;
   fullName?: string;
+  email?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -150,6 +153,11 @@ export function UserRowActions({
     <>
       <div className="flex items-center justify-end gap-1.5">
         <UserPermissionsButton userId={userId} />
+        <UserSmtpDialogButton
+          userId={userId}
+          userEmail={email ?? ""}
+          userFullName={fullName ?? null}
+        />
         <Button
           size="sm"
           variant="ghost"

@@ -57,13 +57,18 @@ export function Sidebar({
     });
   }
 
-  // Módulos siempre visibles para cualquier rol (sin depender de
-  // company_modules activos): Inicio (dashboard, mi día, agenda),
-  // Personal (fichaje, chat, puntos) y Sistema (auditoría/config).
-  const ALWAYS_ON_GROUPS = new Set<ModuleEntry["group"]>([
-    "main",
-    "personal",
-    "system",
+  // Módulos núcleo que NO dependen de company_modules (siempre visibles para
+  // cualquier rol): navegación base + chat/puntos + configuración. El resto
+  // (incluidos expenses, mailing, mail, social_media, time_tracking, que son
+  // gateables y tienen su propio assertModuleActive) respetan su toggle, para
+  // cumplir la regla "módulo off ⇒ invisible".
+  const ALWAYS_ON_KEYS = new Set<string>([
+    "dashboard",
+    "my_day",
+    "agenda",
+    "chat",
+    "points",
+    "settings",
   ]);
 
   const visibleModules = MODULES.filter((m) => {
@@ -71,7 +76,7 @@ export function Sidebar({
     const ov = moduleOverrides?.[m.key];
     if (ov === false) return false;
     if (ov === true) return true;
-    if (!ALWAYS_ON_GROUPS.has(m.group) && !activeModuleKeys.includes(m.key))
+    if (!ALWAYS_ON_KEYS.has(m.key) && !activeModuleKeys.includes(m.key))
       return false;
     if (m.rolesAllowed && m.rolesAllowed.length > 0) {
       return isSuperadmin || m.rolesAllowed.some((r) => userRoles.includes(r));

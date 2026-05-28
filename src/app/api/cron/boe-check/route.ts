@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { verifyCronAuth } from "@/shared/lib/auth/cron";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -104,13 +105,8 @@ function extractBoeId(item: { link: string; guid: string }): string | null {
 }
 
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const xCron = req.headers.get("x-cron-secret") ?? "";
-  if (secret) {
-    const ok = auth === `Bearer ${secret}` || xCron === secret;
-    if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
 
   let inserted = 0;
   let total = 0;

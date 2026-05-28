@@ -7,6 +7,7 @@ import { CompanyEditForm } from "@/modules/superadmin/companies/edit-form";
 import { CompanyModulesPanel } from "@/modules/superadmin/companies/modules-panel";
 import { CompanyAdminPanel } from "@/modules/superadmin/companies/admin-panel";
 import { CompanyGmapsPanel } from "@/modules/superadmin/companies/gmaps-panel";
+import { CompanyEmailProviderPanel } from "@/modules/superadmin/companies/email-provider-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,36 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
       gmaps = null;
     }
   }
+  // Proveedor de email (smtp|resend) + estado dominio Resend. Defensivo:
+  // si la migración 20260620900000 no está aplicada, cae a 'smtp'.
+  let emailProvider: "smtp" | "resend" = "smtp";
+  let resendDomainVerified = false;
+  try {
+    const r = await supabase
+      .from("companies")
+      .select("email_provider")
+      .eq("id", id)
+      .maybeSingle();
+    emailProvider =
+      ((r.data as { email_provider?: string } | null)?.email_provider as
+        | "smtp"
+        | "resend") ?? "smtp";
+  } catch {
+    emailProvider = "smtp";
+  }
+  try {
+    const r = await supabase
+      .from("company_settings")
+      .select("extra")
+      .eq("company_id", id)
+      .maybeSingle();
+    const er = (r.data?.extra as { email_resend?: { status?: string } } | null)
+      ?.email_resend;
+    resendDomainVerified = er?.status === "verified";
+  } catch {
+    resendDomainVerified = false;
+  }
+
   // Consumo mes actual (informativo)
   let gmapsMonthUsd = 0;
   if ((gmaps?.gmaps_mode ?? "disabled") !== "disabled") {
@@ -217,6 +248,19 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
               daily_cap_usd: Number(gmaps?.gmaps_daily_cap_usd ?? 10),
             }}
             current_month_usd={gmapsMonthUsd}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Proveedor de email</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CompanyEmailProviderPanel
+            companyId={id}
+            initial={emailProvider}
+            resendDomainVerified={resendDomainVerified}
           />
         </CardContent>
       </Card>

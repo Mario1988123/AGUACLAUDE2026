@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getEmailDetail } from "@/modules/mailing/dashboard-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
-import { ResendButton } from "@/modules/mailing/resend-button";
+import { ReenviarButton } from "@/modules/mailing/reenviar-button";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +77,7 @@ export default async function EmailDetailPage({
           <Badge variant={email.kind === "marketing" ? "secondary" : "outline"}>
             {email.kind === "marketing" ? "Marketing" : "Transaccional"}
           </Badge>
-          <ResendButton emailId={email.id} />
+          <ReenviarButton emailId={email.id} />
         </div>
       </div>
 
@@ -110,7 +110,7 @@ export default async function EmailDetailPage({
             <CardContent className="space-y-2 text-sm">
               <Row label="De" value={`${email.from_name ?? ""} <${email.from_email}>`.trim()} />
               <Row label="Plantilla" value={email.template_key ?? "—"} />
-              <Row label="Resend ID" value={email.resend_id ?? "—"} />
+              {/* resend_id queda como dato histórico de envíos antiguos */}
               <Row label="Aperturas" value={String(email.opens_count ?? 0)} />
               <Row label="Clics" value={String(email.clicks_count ?? 0)} />
               {email.attachments_meta && email.attachments_meta.length > 0 && (

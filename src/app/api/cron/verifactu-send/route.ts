@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { processVerifactuQueue } from "@/modules/invoices/verifactu-queue";
+import { verifyCronAuth } from "@/shared/lib/auth/cron";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,15 +19,8 @@ export const maxDuration = 60;
  * Auth: Bearer ${CRON_SECRET} o `x-cron-secret: ${CRON_SECRET}`.
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.get("authorization") ?? "";
-  const xCron = req.headers.get("x-cron-secret") ?? "";
-  if (secret) {
-    const ok = auth === `Bearer ${secret}` || xCron === secret;
-    if (!ok) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  }
+  const denied = verifyCronAuth(req);
+  if (denied) return denied;
 
   const result = await processVerifactuQueue();
   return NextResponse.json({ ok: true, ...result });

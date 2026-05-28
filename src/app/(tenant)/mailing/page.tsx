@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import {
   listEmailsPage,
   listWhatsAppPage,
@@ -59,6 +60,7 @@ export default async function MailingPage({
     search?: string;
   }>;
 }) {
+  await assertModuleActive("mailing");
   const sp = await searchParams;
   const session = await requireSession();
   const tab = sp.tab === "whatsapp" ? "whatsapp" : "email";

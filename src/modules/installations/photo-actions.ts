@@ -88,7 +88,11 @@ export async function uploadInstallationSignature(input: unknown) {
 }
 
 export async function getSignedPhotoUrl(storagePath: string): Promise<string | null> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return null;
+  // El path SIEMPRE empieza por el company_id (ver uploads arriba). Impide que
+  // un usuario firme y descargue documentos de otra empresa pasando un path ajeno.
+  if (!storagePath.startsWith(`${session.company_id}/`)) return null;
   const admin = createAdminClient();
   const { data } = await admin.storage.from("documents").createSignedUrl(storagePath, 3600);
   return data?.signedUrl ?? null;

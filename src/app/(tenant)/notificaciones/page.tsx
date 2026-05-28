@@ -22,18 +22,22 @@ const SEV_LABEL: Record<string, string> = {
   error: "Error",
 };
 
-type Category = "all" | "fichajes" | "ausencias" | "ventas" | "operaciones" | "other";
+type Category = "alert" | "event";
+type Tab = Category | "all";
 
-/** Clasifica una notificación por categoría según su kind. */
-function categoryOf(kind: string): Category {
-  if (kind.startsWith("time_tracking") || kind.startsWith("punch_request")) {
-    return "fichajes";
-  }
-  if (kind.startsWith("absence")) return "ausencias";
+/**
+ * Sub-categorías dentro de la pestaña Eventos para no perder el filtro
+ * fino que ya existía (Ventas, Operaciones, etc.). En la pestaña Alertas
+ * no hace falta: el listado ya es corto y todas son accionables.
+ */
+type EventGroup = "all" | "ventas" | "operaciones" | "fichajes" | "cobros" | "other";
+
+function eventGroupOf(kind: string): Exclude<EventGroup, "all"> {
   if (
-    kind.startsWith("lead") ||
+    kind.startsWith("lead.") ||
     kind.startsWith("proposal") ||
     kind.startsWith("contract") ||
+    kind.startsWith("customer") ||
     kind.startsWith("free_trial")
   ) {
     return "ventas";
@@ -41,72 +45,105 @@ function categoryOf(kind: string): Category {
   if (
     kind.startsWith("installation") ||
     kind.startsWith("maintenance") ||
-    kind.startsWith("incident") ||
-    kind.startsWith("warehouse")
+    kind.startsWith("warehouse") ||
+    kind.startsWith("loading") ||
+    kind === "stock.low"
   ) {
     return "operaciones";
+  }
+  if (kind.startsWith("time_tracking") || kind.startsWith("punch_request") || kind.startsWith("absence")) {
+    return "fichajes";
+  }
+  if (kind.startsWith("invoice") || kind.startsWith("wallet") || kind.startsWith("gocardless") || kind.startsWith("verifactu")) {
+    return "cobros";
   }
   return "other";
 }
 
-const CAT_LABEL: Record<Exclude<Category, "all">, string> = {
-  fichajes: "Fichajes",
-  ausencias: "Ausencias",
+const EVENT_GROUP_LABEL: Record<Exclude<EventGroup, "all">, string> = {
   ventas: "Ventas",
   operaciones: "Operaciones",
+  fichajes: "Personal",
+  cobros: "Cobros",
   other: "Otras",
 };
 
 export default async function NotificacionesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ filter?: string; cat?: string }>;
+  searchParams: Promise<{ tab?: string; filter?: string; group?: string }>;
 }) {
   const sp = await searchParams;
+  const tab: Tab = sp.tab === "event" ? "event" : sp.tab === "all" ? "all" : "alert";
   const filter = sp.filter === "unread" ? "unread" : "all";
-  const cat = (sp.cat as Category | undefined) ?? "all";
+  const group: EventGroup = ((["all", "ventas", "operaciones", "fichajes", "cobros", "other"] as const).includes(
+    sp.group as EventGroup,
+  )
+    ? (sp.group as EventGroup)
+    : "all") as EventGroup;
+
   const all = await listMyNotifications();
 
-  // Contar por categoría (sobre la lista total, no filtrada por sin-leer)
-  const catCount: Record<Category, number> = {
-    all: all.length,
-    fichajes: 0,
-    ausencias: 0,
-    ventas: 0,
-    operaciones: 0,
-    other: 0,
-  };
-  const catUnread: Record<Category, number> = {
+  // Contadores
+  let alertTotal = 0;
+  let alertUnread = 0;
+  let eventTotal = 0;
+  let eventUnread = 0;
+  const eventGroupCount: Record<EventGroup, number> = {
     all: 0,
-    fichajes: 0,
-    ausencias: 0,
     ventas: 0,
     operaciones: 0,
+    fichajes: 0,
+    cobros: 0,
     other: 0,
   };
+  const eventGroupUnread: Record<EventGroup, number> = {
+    all: 0,
+    ventas: 0,
+    operaciones: 0,
+    fichajes: 0,
+    cobros: 0,
+    other: 0,
+  };
+
   for (const n of all) {
-    const c = categoryOf(n.kind);
-    catCount[c]++;
-    if (!n.read_at) {
-      catUnread[c]++;
-      catUnread.all++;
+    if (n.category === "alert") {
+      alertTotal++;
+      if (!n.read_at) alertUnread++;
+    } else {
+      eventTotal++;
+      eventGroupCount.all++;
+      const g = eventGroupOf(n.kind);
+      eventGroupCount[g]++;
+      if (!n.read_at) {
+        eventUnread++;
+        eventGroupUnread.all++;
+        eventGroupUnread[g]++;
+      }
     }
   }
 
-  // Filtrar
+  // Filtrado
   let items = all;
-  if (cat !== "all") items = items.filter((n) => categoryOf(n.kind) === cat);
+  if (tab === "alert") {
+    items = items.filter((n) => n.category === "alert");
+  } else if (tab === "event") {
+    items = items.filter((n) => n.category === "event");
+    if (group !== "all") items = items.filter((n) => eventGroupOf(n.kind) === group);
+  }
   if (filter === "unread") items = items.filter((n) => !n.read_at);
 
-  const tabs: Category[] = ["all", "fichajes", "ausencias", "ventas", "operaciones", "other"];
-
-  function hrefFor(c: Category, f: "all" | "unread"): string {
+  function hrefFor(t: Tab, f: "all" | "unread", g: EventGroup = "all"): string {
     const params = new URLSearchParams();
-    if (c !== "all") params.set("cat", c);
+    if (t !== "alert") params.set("tab", t);
     if (f === "unread") params.set("filter", "unread");
+    if (t === "event" && g !== "all") params.set("group", g);
     const qs = params.toString();
     return qs ? `/notificaciones?${qs}` : "/notificaciones";
   }
+
+  const headerUnread = tab === "alert" ? alertUnread : tab === "event" ? eventUnread : alertUnread + eventUnread;
+  const headerTotal = tab === "alert" ? alertTotal : tab === "event" ? eventTotal : alertTotal + eventTotal;
 
   return (
     <div className="space-y-6">
@@ -114,48 +151,90 @@ export default async function NotificacionesPage({
         <div>
           <h1 className="text-2xl font-bold">Notificaciones</h1>
           <p className="text-sm text-muted-foreground">
-            {catUnread.all} sin leer · {all.length} total
+            {headerUnread} sin leer · {headerTotal} total
           </p>
         </div>
-        {catUnread.all > 0 && <MarkAllReadButton />}
+        {headerUnread > 0 && (
+          <MarkAllReadButton category={tab === "all" ? undefined : (tab as "alert" | "event")} />
+        )}
       </div>
 
-      {/* Tabs categoría */}
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((c) => {
-          const label = c === "all" ? "Todas" : CAT_LABEL[c];
-          const count = c === "all" ? all.length : catCount[c];
-          const unread = c === "all" ? catUnread.all : catUnread[c];
-          if (c !== "all" && count === 0) return null;
+      {/* Tabs principales: Alertas / Eventos */}
+      <div className="flex flex-wrap gap-2 border-b">
+        {(["alert", "event"] as const).map((t) => {
+          const active = tab === t;
+          const total = t === "alert" ? alertTotal : eventTotal;
+          const unread = t === "alert" ? alertUnread : eventUnread;
+          const label = t === "alert" ? "🚨 Alertas" : "📰 Eventos";
+          const hint = t === "alert" ? "Requieren acción" : "Informativos";
           return (
             <Link
-              key={c}
-              href={hrefFor(c, filter) as never}
-              className={`inline-flex h-9 items-center gap-1.5 rounded-xl border-2 px-3 text-xs font-bold ${
-                cat === c
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card hover:bg-muted"
+              key={t}
+              href={hrefFor(t, filter) as never}
+              className={`inline-flex flex-col gap-0.5 px-4 py-2 -mb-px border-b-2 ${
+                active
+                  ? "border-primary text-primary font-bold"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {label}
-              {unread > 0 && (
-                <span
-                  className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
-                    cat === c ? "bg-white text-primary" : "bg-red-500 text-white"
-                  }`}
-                >
-                  {unread}
-                </span>
-              )}
+              <span className="inline-flex items-center gap-2 text-sm">
+                {label}
+                {unread > 0 && (
+                  <span
+                    className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-bold ${
+                      t === "alert" ? "bg-red-500 text-white" : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {unread}
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground">({total})</span>
+              </span>
+              <span className="text-[10px] text-muted-foreground">{hint}</span>
             </Link>
           );
         })}
       </div>
 
+      {/* Sub-tabs solo en pestaña Eventos */}
+      {tab === "event" && (
+        <div className="flex flex-wrap gap-2">
+          {(["all", "ventas", "operaciones", "fichajes", "cobros", "other"] as const).map((g) => {
+            const total = eventGroupCount[g];
+            if (g !== "all" && total === 0) return null;
+            const unread = eventGroupUnread[g];
+            const label = g === "all" ? "Todos" : EVENT_GROUP_LABEL[g];
+            const active = group === g;
+            return (
+              <Link
+                key={g}
+                href={hrefFor("event", filter, g) as never}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-xl border-2 px-3 text-xs font-bold ${
+                  active
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:bg-muted"
+                }`}
+              >
+                {label}
+                {unread > 0 && (
+                  <span
+                    className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold ${
+                      active ? "bg-white text-primary" : "bg-red-500 text-white"
+                    }`}
+                  >
+                    {unread}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filtro sin leer */}
       <div className="flex gap-2">
         <Link
-          href={hrefFor(cat, "all") as never}
+          href={hrefFor(tab, "all", group) as never}
           className={`inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold ${
             filter === "all"
               ? "border-primary bg-primary/10 text-primary"
@@ -165,29 +244,33 @@ export default async function NotificacionesPage({
           Todas
         </Link>
         <Link
-          href={hrefFor(cat, "unread") as never}
+          href={hrefFor(tab, "unread", group) as never}
           className={`inline-flex h-9 items-center rounded-xl border px-3 text-xs font-semibold ${
             filter === "unread"
               ? "border-primary bg-primary/10 text-primary"
               : "border-border bg-card hover:bg-muted"
           }`}
         >
-          Sin leer ({cat === "all" ? catUnread.all : catUnread[cat]})
+          Sin leer ({headerUnread})
         </Link>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>
-            {cat === "all" ? "Centro" : CAT_LABEL[cat]} ({items.length})
+            {tab === "alert" ? "Alertas accionables" : "Eventos informativos"} ({items.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {filter === "unread"
-                ? "No tienes notificaciones sin leer."
-                : "No tienes notificaciones."}
+                ? tab === "alert"
+                  ? "No tienes alertas sin atender. 🎉"
+                  : "No tienes eventos sin leer."
+                : tab === "alert"
+                  ? "No tienes alertas. Todo en orden."
+                  : "No tienes eventos."}
             </p>
           ) : (
             <ul className="divide-y">
@@ -199,6 +282,7 @@ export default async function NotificacionesPage({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`text-sm ${!n.read_at ? "font-semibold" : ""}`}>
+                        {n.category === "alert" && "🚨 "}
                         {n.title}
                       </span>
                       <Badge variant={SEV_VARIANT[n.severity]}>

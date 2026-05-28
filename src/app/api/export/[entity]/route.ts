@@ -1,7 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/shared/lib/supabase/server";
-import { requireSession } from "@/shared/lib/auth/session";
+import { requireSession, hasAnyRole } from "@/shared/lib/auth/session";
 import { toCsv } from "@/shared/lib/csv/to-csv";
+
+// Exportar datos personales (DNI/email/teléfono/IBAN/geolocalización) es
+// privilegio de administración. Un nivel 3 (comercial/instalador) NO debe poder
+// volcar la cartera completa ni el registro horario de toda la plantilla.
+const EXPORT_ROLES = [
+  "company_admin",
+  "technical_director",
+  "commercial_director",
+  "telemarketing_director",
+];
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +57,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
   const session = await requireSession();
   if (!session.company_id) {
     return NextResponse.json({ error: "no company" }, { status: 403 });
+  }
+  if (!hasAnyRole(session, EXPORT_ROLES)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;

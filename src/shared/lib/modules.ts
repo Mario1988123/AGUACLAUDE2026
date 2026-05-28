@@ -123,6 +123,12 @@ export const MODULES: ModuleEntry[] = [
   // Mailing: solo nivel 1/2 ve el módulo (gestiona campañas + plantillas).
   // Nivel 3 no necesita acceso.
   { key: "mailing", label: "Mailing", icon: "Mail", href: "/mailing", configHref: "/configuracion/mailing", group: "system", rolesAllowed: LEVEL_1_2 },
+  // MAIL: histórico de TODOS los emails enviados (manuales + automáticos del
+  // sistema + campañas). Distinto de "Mailing" (que es campañas marketing).
+  // Visible para todos los roles que envían/reciben emails de leads y clientes
+  // (almacén queda fuera). El scoping fino lo aplica el módulo (admin todo,
+  // directores su equipo, nivel 3 lo suyo).
+  { key: "mail", label: "Mail", icon: "Inbox", href: "/mail", group: "system", rolesAllowed: [...LEVEL_1_2, "sales_rep", "telemarketer", "installer"] },
   // RRSS: calendario editorial automático para Instagram, Facebook,
   // LinkedIn, TikTok, Google Business, blog y newsletter. Centrado en
   // contenido de tratamiento del agua, sostenibilidad y efemérides.

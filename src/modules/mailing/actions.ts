@@ -5,17 +5,19 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
-  createOrFetchDomain,
-  verifyDomain,
-  sendEmailViaResend,
-  isResendConfigured,
-} from "./resend";
-import {
   renderTemplate,
   buildEmailHtml,
   buildSignatureHtml,
 } from "./templates";
 import { getSystemTemplates } from "./system-templates";
+import {
+  pickSmtpConfig,
+  testSmtpConnection,
+  sendViaSmtp,
+  type TriggerEvent,
+} from "./smtp";
+import { encryptSecret } from "./encryption";
+import { createOrFetchDomain, verifyDomain } from "./resend";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -28,126 +30,225 @@ async function ensureAdmin() {
 }
 
 // =====================================================================
-// DOMINIOS
+// SMTP DE LA EMPRESA — dos cuentas (manual + automated)
+//
+// El admin configura DOS cuentas SMTP para su empresa:
+//   - manual: el "email del admin como persona" para envíos manuales
+//             y como fallback para usuarios sin SMTP propio.
+//   - automated: el email genérico del sistema (noreply@empresa.com)
+//                para mensajes automáticos (recordatorios, contratos…).
+//
+// Las contraseñas se guardan CIFRADAS (AES-256-GCM).
 // =====================================================================
 
-export interface DomainStatus {
-  id: string | null;
-  domain: string | null;
-  status: string;
-  records: Array<{ type: string; name: string; value: string; status: string }>;
-  verified_at: string | null;
-  failure_reason: string | null;
+export type SmtpScope = "company_manual" | "company_automated";
+
+export interface SmtpFormInput {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  /** Si vacío/undefined, se mantiene la contraseña ya guardada. */
+  smtp_password?: string;
+  smtp_secure: boolean;
+  smtp_from_email: string;
+  smtp_from_name?: string;
+  smtp_provider?: string;
 }
 
-export async function getMailingDomain(): Promise<DomainStatus | null> {
+export interface SmtpConfigSummary {
+  configured: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_secure: boolean;
+  smtp_from_email: string;
+  smtp_from_name: string;
+  smtp_provider: string | null;
+  smtp_updated_at: string | null;
+}
+
+const EMPTY_SMTP: SmtpConfigSummary = {
+  configured: false,
+  smtp_host: "",
+  smtp_port: 587,
+  smtp_user: "",
+  smtp_secure: true,
+  smtp_from_email: "",
+  smtp_from_name: "",
+  smtp_provider: null,
+  smtp_updated_at: null,
+};
+
+function colPrefix(scope: SmtpScope): string {
+  return scope === "company_manual" ? "smtp_company" : "smtp_automated";
+}
+
+export async function getCompanySmtpAction(scope: SmtpScope): Promise<SmtpConfigSummary> {
   const session = await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  const p = colPrefix(scope);
   const { data } = await admin
-    .from("email_domains")
-    .select("id, domain, status, dkim_record, spf_record, dmarc_record, verified_at, failure_reason, resend_domain_id")
-    .eq("company_id", session.company_id)
-    .order("created_at", { ascending: false })
-    .limit(1)
+    .from("companies")
+    .select(
+      [
+        `${p}_host`,
+        `${p}_port`,
+        `${p}_user`,
+        `${p}_password_enc`,
+        `${p}_secure`,
+        `${p}_from_email`,
+        `${p}_from_name`,
+        `${p}_provider`,
+        `${p}_updated_at`,
+      ].join(","),
+    )
+    .eq("id", session.company_id)
     .maybeSingle();
-  if (!data) return null;
-  const records: DomainStatus["records"] = [];
-  if (data.dkim_record) {
-    try {
-      const parsed = JSON.parse(data.dkim_record);
-      if (Array.isArray(parsed)) records.push(...parsed);
-    } catch {
-      /* legacy format */
-    }
-  }
+
+  if (!data) return EMPTY_SMTP;
   return {
-    id: data.id,
-    domain: data.domain,
-    status: data.status,
-    records,
-    verified_at: data.verified_at,
-    failure_reason: data.failure_reason,
+    configured: Boolean(data[`${p}_host`] && data[`${p}_password_enc`]),
+    smtp_host: data[`${p}_host`] ?? "",
+    smtp_port: data[`${p}_port`] ?? 587,
+    smtp_user: data[`${p}_user`] ?? "",
+    smtp_secure: data[`${p}_secure`] ?? true,
+    smtp_from_email: data[`${p}_from_email`] ?? "",
+    smtp_from_name: data[`${p}_from_name`] ?? "",
+    smtp_provider: data[`${p}_provider`] ?? null,
+    smtp_updated_at: data[`${p}_updated_at`] ?? null,
   };
 }
 
-export async function addMailingDomainAction(domain: string): Promise<void> {
-  const session = await ensureAdmin();
-  const cleanDomain = domain.trim().toLowerCase();
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z]{2,})+$/.test(cleanDomain)) {
-    throw new Error("Dominio inválido. Ejemplo: aguasl.com");
+export async function setCompanySmtpAction(
+  scope: SmtpScope,
+  input: SmtpFormInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdmin();
+    if (!input.smtp_host || !input.smtp_user || !input.smtp_from_email) {
+      return { ok: false, error: "Faltan servidor, usuario o email remitente." };
+    }
+    const p = colPrefix(scope);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const update: Record<string, unknown> = {
+      [`${p}_host`]: input.smtp_host,
+      [`${p}_port`]: input.smtp_port || 587,
+      [`${p}_user`]: input.smtp_user,
+      [`${p}_secure`]: input.smtp_secure,
+      [`${p}_from_email`]: input.smtp_from_email,
+      [`${p}_from_name`]: input.smtp_from_name ?? null,
+      [`${p}_provider`]: input.smtp_provider ?? null,
+      [`${p}_updated_at`]: new Date().toISOString(),
+    };
+
+    if (input.smtp_password && input.smtp_password !== "********") {
+      update[`${p}_password_enc`] = encryptSecret(input.smtp_password);
+    }
+
+    const { error } = await admin
+      .from("companies")
+      .update(update)
+      .eq("id", session.company_id);
+    if (error) return { ok: false, error: error.message };
+
+    revalidatePath("/configuracion/mailing");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
-  if (!isResendConfigured()) {
-    throw new Error(
-      "Mailing no configurado en el servidor. Pide al equipo técnico que añada RESEND_API_KEY.",
-    );
-  }
-  const result = await createOrFetchDomain(cleanDomain);
-  if (result.error) {
-    throw new Error(`No se pudo registrar el dominio: ${result.error}`);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-
-  // Borrar previos del mismo dominio
-  await admin
-    .from("email_domains")
-    .delete()
-    .eq("company_id", session.company_id)
-    .eq("domain", cleanDomain);
-
-  await admin.from("email_domains").insert({
-    company_id: session.company_id,
-    domain: cleanDomain,
-    resend_domain_id: result.resend_domain_id,
-    status: result.status === "verified" ? "verified" : "pending",
-    dkim_record: JSON.stringify(result.records),
-    verified_at: result.status === "verified" ? new Date().toISOString() : null,
-    last_check_at: new Date().toISOString(),
-  });
-
-  revalidatePath("/configuracion/mailing");
 }
 
-export async function verifyMailingDomainAction(): Promise<{ status: string }> {
-  const session = await ensureAdmin();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data: dom } = await admin
-    .from("email_domains")
-    .select("id, resend_domain_id")
-    .eq("company_id", session.company_id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!dom) throw new Error("No hay dominio configurado");
-  if (!dom.resend_domain_id) throw new Error("Dominio sin ID de Resend");
+// (setUserSmtpAction vive en user-smtp-actions.ts — más limpio para evitar
+//  acoplar lógica de admin-de-usuario con lógica de empresa.)
 
-  const r = await verifyDomain(dom.resend_domain_id);
-  await admin
-    .from("email_domains")
-    .update({
-      status: r.status === "verified" ? "verified" : r.error ? "failed" : "pending",
-      verified_at: r.status === "verified" ? new Date().toISOString() : null,
-      last_check_at: new Date().toISOString(),
-      failure_reason: r.error,
-    })
-    .eq("id", dom.id);
+// =====================================================================
+// TEST SMTP — probar conexión sin guardar nada
+// =====================================================================
 
-  revalidatePath("/configuracion/mailing");
-  return { status: r.status };
+export interface TestSmtpInput {
+  scope: SmtpScope | "user";
+  /** Si no hay smtp_password, se descifra la guardada en BD. */
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_password?: string;
+  smtp_secure: boolean;
+  /** Para scope='user', el id del usuario cuya contraseña descifrar. */
+  user_id?: string;
+}
+
+export async function testSmtpAction(
+  input: TestSmtpInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+
+    let password = input.smtp_password ?? "";
+    if (!password || password === "********") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      if (input.scope === "user") {
+        const uid = input.user_id ?? session.user_id;
+        if (!session.roles.includes("company_admin") && uid !== session.user_id) {
+          return { ok: false, error: "No autorizado" };
+        }
+        const { data } = await admin
+          .from("email_user_settings")
+          .select("smtp_password_enc")
+          .eq("user_id", uid)
+          .maybeSingle();
+        if (data?.smtp_password_enc) {
+          const { decryptSecret } = await import("./encryption");
+          password = decryptSecret(data.smtp_password_enc);
+        }
+      } else {
+        if (!session.roles.includes("company_admin")) {
+          return { ok: false, error: "Solo admin puede probar SMTP de empresa" };
+        }
+        const p = colPrefix(input.scope);
+        const { data } = await admin
+          .from("companies")
+          .select(`${p}_password_enc`)
+          .eq("id", session.company_id)
+          .maybeSingle();
+        const enc = data?.[`${p}_password_enc`];
+        if (enc) {
+          const { decryptSecret } = await import("./encryption");
+          password = decryptSecret(enc);
+        }
+      }
+    }
+
+    if (!password) {
+      return { ok: false, error: "Falta la contraseña. Introdúcela para probar la conexión." };
+    }
+
+    return await testSmtpConnection({
+      host: input.smtp_host,
+      port: input.smtp_port || 587,
+      secure: input.smtp_secure,
+      user: input.smtp_user,
+      password,
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 // =====================================================================
-// CONFIG USUARIO (su email empresa)
+// CONFIG USUARIO — su email empresa + firma
+// (los campos SMTP por usuario los gestionan setUserSmtpAction / get más abajo)
 // =====================================================================
 
 export async function getMyEmailSettings(): Promise<{
   from_email: string | null;
   from_name: string | null;
   signature_html: string | null;
-  domain_verified: boolean;
+  smtp_configured: boolean;
 } | null> {
   const session = await requireSession();
   if (!session.company_id) return null;
@@ -155,20 +256,14 @@ export async function getMyEmailSettings(): Promise<{
   const admin = createAdminClient() as any;
   const { data: my } = await admin
     .from("email_user_settings")
-    .select("from_email, from_name, signature_html")
+    .select("from_email, from_name, signature_html, smtp_host, smtp_password_enc")
     .eq("user_id", session.user_id)
-    .maybeSingle();
-  const { data: dom } = await admin
-    .from("email_domains")
-    .select("status")
-    .eq("company_id", session.company_id)
-    .eq("status", "verified")
     .maybeSingle();
   return {
     from_email: my?.from_email ?? null,
     from_name: my?.from_name ?? null,
     signature_html: my?.signature_html ?? null,
-    domain_verified: Boolean(dom),
+    smtp_configured: Boolean(my?.smtp_host && my?.smtp_password_enc),
   };
 }
 
@@ -183,20 +278,9 @@ export async function setMyEmailSettingsAction(input: {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error("Email inválido");
   }
-  const emailDomain = email.split("@")[1];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-
-  // Verificar que el dominio del email coincide con el dominio verificado
-  const { data: dom } = await admin
-    .from("email_domains")
-    .select("status, domain")
-    .eq("company_id", session.company_id)
-    .eq("domain", emailDomain)
-    .maybeSingle();
-
-  const isVerified = Boolean(dom && dom.status === "verified");
 
   const payload = {
     user_id: session.user_id,
@@ -204,7 +288,6 @@ export async function setMyEmailSettingsAction(input: {
     from_email: email,
     from_name: input.from_name?.trim() || null,
     signature_html: input.signature_html?.trim() || null,
-    is_verified: isVerified,
     updated_at: new Date().toISOString(),
   };
 
@@ -215,18 +298,9 @@ export async function setMyEmailSettingsAction(input: {
     .maybeSingle();
 
   if (existing) {
-    await admin
-      .from("email_user_settings")
-      .update(payload)
-      .eq("user_id", session.user_id);
+    await admin.from("email_user_settings").update(payload).eq("user_id", session.user_id);
   } else {
     await admin.from("email_user_settings").insert(payload);
-  }
-
-  if (!isVerified) {
-    throw new Error(
-      `Guardado, pero el dominio "${emailDomain}" aún no está verificado. Pide al admin que añada y verifique el dominio en /configuracion/mailing.`,
-    );
   }
 }
 
@@ -310,7 +384,8 @@ export interface SendTransactionalInput {
 /**
  * Envía un email transaccional. Sin opt-out (es operativo).
  * Renderiza la plantilla, le añade firma del usuario actual (si la tiene)
- * y footer legal, y lo manda via Resend.
+ * y footer legal, y lo manda vía SMTP usando la cuenta configurada en
+ * /configuracion/mailing (cascade: SMTP usuario → SMTP empresa).
  */
 export async function sendTransactionalEmail(
   input: SendTransactionalInput,
@@ -386,7 +461,7 @@ export async function sendTransactionalEmail(
     }
   }
 
-  // Settings del usuario (su email empresa)
+  // Settings del usuario (su email empresa + firma)
   const { data: userSettings } = await admin
     .from("email_user_settings")
     .select("from_email, from_name, signature_html")
@@ -396,35 +471,26 @@ export async function sendTransactionalEmail(
   // Datos empresa para footer legal
   const { data: cs } = await admin
     .from("company_settings")
-    .select(
-      "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone",
-    )
+    .select("fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone")
     .eq("company_id", session.company_id)
     .maybeSingle();
 
-  // Dominio + email genérico fallback (si user no tiene su email configurado)
-  const { data: dom } = await admin
-    .from("email_domains")
-    .select("domain, status")
-    .eq("company_id", session.company_id)
-    .eq("status", "verified")
-    .maybeSingle();
+  // Elegimos la cuenta SMTP que enviará (cascade user → company_manual → company_automated).
+  // El "from" mostrado en el email se calcula a partir de la cuenta elegida, pero si el usuario
+  // tiene from_email propio en email_user_settings lo respetamos (más legible para el destinatario).
+  // No exigimos SMTP aquí: una empresa puede estar en modo Resend (sin SMTP).
+  // sendViaSmtp resuelve el proveedor y devuelve un error claro si no hay
+  // ninguno disponible.
+  const cfg = await pickSmtpConfig({
+    companyId: session.company_id,
+    userId: session.user_id,
+    automated: false,
+  });
 
   const fromEmail =
-    userSettings?.from_email ??
-    (dom?.domain ? `info@${dom.domain}` : null);
+    userSettings?.from_email ?? cfg?.fromEmail ?? cs?.fiscal_email ?? "";
   const fromName =
-    userSettings?.from_name ??
-    cs?.fiscal_legal_name ??
-    "AGUACLAUDE";
-
-  if (!fromEmail) {
-    return {
-      ok: false,
-      error:
-        "No hay email configurado. El admin debe verificar el dominio en /configuracion/mailing.",
-    };
-  }
+    userSettings?.from_name ?? cfg?.fromName ?? cs?.fiscal_legal_name ?? "AGUACLAUDE";
 
   // Renderizar
   const baseVars = {
@@ -450,19 +516,33 @@ export async function sendTransactionalEmail(
     kind: tpl.kind,
   });
 
-  // Enviar
-  const result = await sendEmailViaResend({
-    from_email: fromEmail,
-    from_name: fromName,
-    to_email: input.to_email,
-    to_name: input.to_name,
+  // Enviar: delegamos en sendViaSmtp, que enruta por Resend (si la empresa lo
+  // tiene activo y con dominio verificado) o por la cascada SMTP, registra el
+  // intento en email_outbox y devuelve resend_id para el tracking.
+  const sendResult = await sendViaSmtp({
+    companyId: session.company_id,
+    senderUserId: session.user_id,
+    to: input.to_email,
+    toName: input.to_name,
     subject,
-    body_html: html,
+    html,
+    sendType: "manual",
+    triggerEvent: "manual_send",
+    relatedType:
+      input.related_subject_type ??
+      (input.customer_id ? "customer" : input.lead_id ? "lead" : undefined),
+    relatedId:
+      input.related_subject_id ?? input.customer_id ?? input.lead_id ?? undefined,
+    replyTo: userSettings?.from_email ?? session.email ?? undefined,
     attachments: input.attachments?.map((a) => ({
       filename: a.filename,
-      content: a.content_base64,
+      content: Buffer.from(a.content_base64, "base64"),
     })),
   });
+  const sendOk = sendResult.ok;
+  const sendError = sendResult.ok ? null : sendResult.error;
+  const usedAccountType = sendResult.ok ? sendResult.accountType : cfg?.accountType ?? null;
+  const usedResendId = sendResult.ok ? sendResult.resend_id ?? null : null;
 
   // Persistir el envío
   const { data: sendRow } = await admin
@@ -481,17 +561,16 @@ export async function sendTransactionalEmail(
       subject,
       body_html: html,
       kind: tpl.kind,
-      status: result.ok ? "sent" : "failed",
-      resend_id: result.resend_id,
-      error_code: result.error_code,
-      error_message: result.error_message,
-      sent_at: result.ok ? new Date().toISOString() : null,
-      attachments_meta:
-        input.attachments?.map((a) => ({
-          name: a.filename,
-        })) ?? [],
+      status: sendOk ? "sent" : "failed",
+      error_message: sendError,
+      sent_at: sendOk ? new Date().toISOString() : null,
+      attachments_meta: input.attachments?.map((a) => ({ name: a.filename })) ?? [],
       related_subject_type: input.related_subject_type ?? null,
       related_subject_id: input.related_subject_id ?? null,
+      send_type: "manual",
+      trigger_event: "manual_send" as TriggerEvent,
+      from_account_type: usedAccountType,
+      resend_id: usedResendId,
     })
     .select("id")
     .single();
@@ -500,7 +579,7 @@ export async function sendTransactionalEmail(
 
   // Insertar evento timeline en events para que aparezca en la ficha
   // del cliente/contrato/propuesta. Fail-soft.
-  if (sendId && result.ok) {
+  if (sendId && sendOk) {
     try {
       await admin.from("events").insert({
         company_id: session.company_id,
@@ -526,10 +605,130 @@ export async function sendTransactionalEmail(
   }
 
   return {
-    ok: result.ok,
+    ok: sendOk,
     send_id: sendId,
-    error: result.error_message ?? undefined,
+    error: sendError ?? undefined,
   };
+}
+
+// Nota: sendViaSmtp NO se re-exporta aquí (Next 15 "use server" prohíbe
+// re-exports de funciones). Importarlo directamente desde "@/modules/mailing/smtp".
+
+// ============================================================================
+// Dominio Resend (solo empresas con email_provider='resend')
+// La config vive en company_settings.extra->email_resend.
+// ============================================================================
+
+export interface DomainStatus {
+  domain: string;
+  status: string;
+  resend_domain_id: string | null;
+  verified_at: string | null;
+  failure_reason: string | null;
+  records: Array<{ type: string; name: string; value: string; status: string }>;
+}
+
+async function readEmailResend(
+  companyId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+): Promise<{ extra: Record<string, unknown>; cfg: DomainStatus | null }> {
+  const { data } = await admin
+    .from("company_settings")
+    .select("extra")
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const extra = (data?.extra as Record<string, unknown> | null) ?? {};
+  const cfg = (extra.email_resend as DomainStatus | undefined) ?? null;
+  return { extra, cfg };
+}
+
+async function writeEmailResend(
+  companyId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  extra: Record<string, unknown>,
+  cfg: DomainStatus,
+): Promise<void> {
+  const newExtra = { ...extra, email_resend: cfg };
+  const { data: existing } = await admin
+    .from("company_settings")
+    .select("company_id")
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (existing) {
+    await admin.from("company_settings").update({ extra: newExtra }).eq("company_id", companyId);
+  } else {
+    await admin.from("company_settings").insert({ company_id: companyId, extra: newExtra });
+  }
+}
+
+/** Loader para la página de configuración (server component). */
+export async function getMailingDomainStatus(): Promise<DomainStatus | null> {
+  const session = await requireSession();
+  if (!session.company_id) return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { cfg } = await readEmailResend(session.company_id, admin);
+  return cfg && cfg.domain ? cfg : null;
+}
+
+export async function addMailingDomainSafeAction(
+  domain: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const clean = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(clean)) {
+      return { ok: false, error: "Dominio inválido. Usa solo el dominio raíz (ej. aguasl.com)." };
+    }
+    const res = await createOrFetchDomain(clean);
+    if (res.error && !res.resend_domain_id) {
+      return { ok: false, error: res.error };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { extra } = await readEmailResend(session.company_id, admin);
+    await writeEmailResend(session.company_id, admin, extra, {
+      domain: clean,
+      status: res.status,
+      resend_domain_id: res.resend_domain_id,
+      verified_at: res.status === "verified" ? new Date().toISOString() : null,
+      failure_reason: null,
+      records: res.records,
+    });
+    revalidatePath("/configuracion/mailing");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function verifyMailingDomainSafeAction(): Promise<
+  { ok: true; status: string } | { ok: false; error: string }
+> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { extra, cfg } = await readEmailResend(session.company_id, admin);
+    if (!cfg || !cfg.resend_domain_id) {
+      return { ok: false, error: "No hay dominio Resend que verificar. Añádelo primero." };
+    }
+    const res = await verifyDomain(cfg.resend_domain_id);
+    await writeEmailResend(session.company_id, admin, extra, {
+      ...cfg,
+      status: res.status,
+      verified_at: res.status === "verified" ? new Date().toISOString() : cfg.verified_at,
+      failure_reason: res.error ?? null,
+    });
+    revalidatePath("/configuracion/mailing");
+    return { ok: true, status: res.status };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 // =====================================================================
@@ -623,41 +822,15 @@ void buildSignatureHtml; // re-export para que el linter no se queje cuando se u
 
 // =================== Safe wrappers ===================
 
-export async function addMailingDomainSafeAction(
-  domain: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    await addMailingDomainAction(domain);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
-  }
-}
-
-export async function verifyMailingDomainSafeAction(): Promise<
-  { ok: true; status: string } | { ok: false; error: string }
-> {
-  try {
-    const r = await verifyMailingDomainAction();
-    return { ok: true, status: r.status };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
-  }
-}
-
-export async function setMyEmailSettingsSafeAction(
-  input: {
-    from_email: string;
-    from_name?: string;
-    signature_html?: string;
-  },
-): Promise<{ ok: true } | { ok: false; error: string; partial?: boolean }> {
+export async function setMyEmailSettingsSafeAction(input: {
+  from_email: string;
+  from_name?: string;
+  signature_html?: string;
+}): Promise<{ ok: true } | { ok: false; error: string; partial?: boolean }> {
   try {
     await setMyEmailSettingsAction(input);
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
-    const partial = msg.includes("aún no está verificado");
-    return { ok: false, error: msg, partial };
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
