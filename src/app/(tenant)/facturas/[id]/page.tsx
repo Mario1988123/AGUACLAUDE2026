@@ -12,6 +12,12 @@ import { PaymentReminderButton } from "@/modules/invoices/payment-reminder-butto
 import { suggestReminderLevel } from "@/modules/invoices/payment-reminder-actions";
 import { createClient } from "@/shared/lib/supabase/server";
 import { VerifactuV2Actions } from "@/modules/invoices/verifactu-v2-actions";
+import { PushToExternalButton } from "@/modules/invoices/external-providers/push-button";
+import {
+  getExternalProviderSettings,
+  listSelectableProvidersAction,
+} from "@/modules/invoices/external-providers/actions";
+import { listExternalSubmissionsForInvoiceAction } from "@/modules/invoices/external-providers/push-actions";
 
 function eur(c: number): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
@@ -76,6 +82,18 @@ export default async function InvoiceDetailPage({
   } catch {
     /* */
   }
+
+  // Proveedor externo (Verifacti, Invopop, Holded…). Si configurado y
+  // conectado, mostramos botón "Enviar a [proveedor]" + último envío.
+  const extProvider = await getExternalProviderSettings().catch(() => null);
+  const extProviders = await listSelectableProvidersAction().catch(() => []);
+  const extSubmissions = extProvider && extProvider.provider !== "none"
+    ? await listExternalSubmissionsForInvoiceAction(id).catch(() => [])
+    : [];
+  const extProviderMeta = extProvider
+    ? extProviders.find((p) => p.id === extProvider.provider)
+    : null;
+  const lastExtSubmission = extSubmissions[0] ?? null;
 
   // Días de vencimiento (negativo = vencida)
   let daysOverdue = 0;
@@ -249,6 +267,57 @@ export default async function InvoiceDetailPage({
                 />
               </div>
             )}
+            {extProvider &&
+              extProvider.provider !== "none" &&
+              extProviderMeta && (
+                <div className="mt-3 border-t pt-3 space-y-2">
+                  <div className="text-xs font-bold text-muted-foreground">
+                    Proveedor externo: {extProviderMeta.name}
+                  </div>
+                  <PushToExternalButton
+                    invoiceId={inv.id}
+                    providerName={extProviderMeta.name}
+                    lastExternalUrl={lastExtSubmission?.external_url ?? null}
+                  />
+                  {lastExtSubmission && (
+                    <div className="text-xs text-muted-foreground">
+                      Último envío:{" "}
+                      <span
+                        className={
+                          lastExtSubmission.status === "sent"
+                            ? "font-bold text-emerald-700"
+                            : lastExtSubmission.status === "failed"
+                              ? "font-bold text-rose-700"
+                              : "font-bold"
+                        }
+                      >
+                        {lastExtSubmission.status === "sent"
+                          ? "Enviada"
+                          : lastExtSubmission.status === "failed"
+                            ? "Falló"
+                            : lastExtSubmission.status}
+                      </span>
+                      {lastExtSubmission.external_id && (
+                        <> · ID {lastExtSubmission.external_id}</>
+                      )}
+                      {lastExtSubmission.sent_at && (
+                        <>
+                          {" "}·{" "}
+                          {new Date(lastExtSubmission.sent_at).toLocaleString(
+                            "es-ES",
+                          )}
+                        </>
+                      )}
+                      {lastExtSubmission.status === "failed" &&
+                        lastExtSubmission.error_message && (
+                          <div className="mt-1 text-rose-700">
+                            Error: {lastExtSubmission.error_message}
+                          </div>
+                        )}
+                    </div>
+                  )}
+                </div>
+              )}
           </CardContent>
         </Card>
       </div>

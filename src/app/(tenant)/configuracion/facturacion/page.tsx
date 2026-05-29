@@ -9,7 +9,12 @@ import { CertUploader } from "@/modules/invoices/cert-uploader";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { BackButton } from "@/shared/components/back-button";
 import { getCompanyInvoicingMode } from "@/modules/invoices/mode";
-import { ShieldCheck, FileText } from "lucide-react";
+import { ShieldCheck, FileText, Plug, Building2 } from "lucide-react";
+import { ExternalProviderPanel } from "@/modules/invoices/external-providers/panel";
+import {
+  getExternalProviderSettings,
+  listSelectableProvidersAction,
+} from "@/modules/invoices/external-providers/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +35,16 @@ export default async function FacturacionConfigPage() {
     .maybeSingle();
 
   const modeInfo = await getCompanyInvoicingMode(session.company_id!, admin);
+  const extSettings = await getExternalProviderSettings().catch(() => ({
+    provider: "none" as const,
+    environment: "sandbox" as const,
+    has_api_key: false,
+    has_extra: false,
+    last_test_at: null,
+    last_test_ok: null,
+    last_test_error: null,
+  }));
+  const extProviders = await listSelectableProvidersAction().catch(() => []);
 
   return (
     <div className="space-y-6">
@@ -87,57 +102,102 @@ export default async function FacturacionConfigPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            Modo Verifactu
-            <Badge
-              variant={
-                cs?.verifactu_mode === "verifactu"
-                  ? "success"
+      {/* === GRUPO 1: Verifactu in-house (firma + envío AEAT propios) === */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <Building2 className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">
+            Verifactu in-house (firma y envío propios)
+          </h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Tú subes tu certificado FNMT y la AEAT recibe la factura directamente
+          de nuestro servidor. Requiere implementación de firma XAdES — hoy no
+          activa, ver «Conectar con plataforma externa» abajo para alternativa.
+        </p>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              Modo Verifactu
+              <Badge
+                variant={
+                  cs?.verifactu_mode === "verifactu"
+                    ? "success"
+                    : cs?.verifactu_mode === "verifactu_test"
+                      ? "warning"
+                      : "secondary"
+                }
+              >
+                {cs?.verifactu_mode === "verifactu"
+                  ? "Producción"
                   : cs?.verifactu_mode === "verifactu_test"
-                    ? "warning"
-                    : "secondary"
-              }
-            >
-              {cs?.verifactu_mode === "verifactu"
-                ? "Producción"
-                : cs?.verifactu_mode === "verifactu_test"
-                  ? "Test AEAT"
-                  : "Solo registro local"}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VerifactuModePanel
-            initialMode={cs?.verifactu_mode ?? "no_envio"}
-            initialEnvironment={cs?.verifactu_environment ?? "production"}
-            certAlias={cs?.verifactu_cert_alias ?? null}
-            certExpiresAt={cs?.verifactu_cert_expires_at ?? null}
-          />
-        </CardContent>
-      </Card>
+                    ? "Test AEAT"
+                    : "Solo registro local"}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VerifactuModePanel
+              initialMode={cs?.verifactu_mode ?? "no_envio"}
+              initialEnvironment={cs?.verifactu_environment ?? "production"}
+              certAlias={cs?.verifactu_cert_alias ?? null}
+              certExpiresAt={cs?.verifactu_cert_expires_at ?? null}
+            />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Certificado digital FNMT</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CertUploader
-            certAlias={cs?.verifactu_cert_alias ?? null}
-            certExpiresAt={cs?.verifactu_cert_expires_at ?? null}
-          />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Certificado digital FNMT</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CertUploader
+              certAlias={cs?.verifactu_cert_alias ?? null}
+              certExpiresAt={cs?.verifactu_cert_expires_at ?? null}
+            />
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Series de facturación</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <InvoiceSeriesPanel series={series} />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Series de facturación</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InvoiceSeriesPanel series={series} />
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* === GRUPO 2: Plataformas externas === */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 border-b pb-2">
+          <Plug className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">
+            Conectar con plataforma externa
+          </h2>
+        </div>
+        <p className="text-xs text-muted-foreground -mt-2">
+          Recomendado mientras no tengas el módulo XAdES propio. La factura se
+          empuja por API a la plataforma elegida (Verifacti, Invopop, Holded…)
+          y ella se encarga de firmar y enviar a la AEAT. Solo necesitas la
+          API key del proveedor.
+        </p>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Proveedor externo de facturación
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ExternalProviderPanel
+              current={extSettings}
+              options={extProviders}
+            />
+          </CardContent>
+        </Card>
+      </section>
 
       <Card>
         <CardHeader>
