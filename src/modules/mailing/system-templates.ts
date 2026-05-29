@@ -429,6 +429,26 @@ const TEMPLATES: SystemTemplate[] = [
     ],
   },
   {
+    key: "contract_signed_copy",
+    name: "Copia del contrato firmado",
+    description:
+      "Se envía automáticamente al cliente tras firmar (remoto o tablet) con su copia en PDF adjunta.",
+    kind: "transactional",
+    subject: "Tu contrato firmado con {{company_name}}",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">¡Gracias, {{customer_first_name}}!</h2>
+      <p>Tu contrato con <strong>{{company_name}}</strong> ha quedado firmado correctamente.</p>
+      <p style="background: #e8f5e9; border-left: 4px solid #16a34a; padding: 12px 16px; margin: 16px 0;">
+        <strong>Referencia:</strong> {{contract_ref}}<br>
+        Adjuntamos tu copia firmada en PDF.
+      </p>
+      <p>Guarda este email como justificante. En breve nos pondremos en contacto
+      para concretar los siguientes pasos (instalación o puesta en marcha).</p>
+      <p>Si tienes cualquier duda, responde a este mismo correo.</p>
+    `,
+    variables: ["customer_first_name", "company_name", "contract_ref"],
+  },
+  {
     key: "contract_send_remote_sign",
     name: "Envío de contrato para firma remota",
     description: "Link con token para que el cliente firme online sin cuenta.",

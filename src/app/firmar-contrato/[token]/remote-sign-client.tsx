@@ -87,6 +87,7 @@ export function RemoteSignClient({
         token,
         signer_email: email.trim(),
         signature_data_url: dataUrl,
+        consent: acceptTerms,
         client_ip: null, // Vercel header lo capturará en server si está disponible
         client_ua: ua,
       });
@@ -109,9 +110,9 @@ export function RemoteSignClient({
             ¡Contrato firmado!
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
-            Tu firma se ha registrado correctamente. {contract.company_name}{" "}
-            recibirá una notificación y te contactarán para los siguientes
-            pasos.
+            Tu firma se ha registrado correctamente. Te hemos enviado una copia
+            firmada en PDF a tu email. {contract.company_name} recibirá una
+            notificación y te contactarán para los siguientes pasos.
           </p>
           <p className="mt-4 text-xs text-muted-foreground">
             Ya puedes cerrar esta ventana.

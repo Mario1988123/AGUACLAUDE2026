@@ -313,6 +313,7 @@ const submitSchema = z.object({
   token: z.string().min(32),
   signer_email: z.string().trim().email(),
   signature_data_url: z.string().min(200),
+  consent: z.boolean().nullish(),
 });
 
 /**
@@ -325,6 +326,7 @@ export async function submitRemoteSignatureAction(input: {
   token: string;
   signer_email: string;
   signature_data_url: string;
+  consent?: boolean;
   client_ip?: string | null;
   client_ua?: string | null;
 }): Promise<{ ok: true; contract_id: string } | { ok: false; error: string }> {
@@ -340,12 +342,18 @@ export async function submitRemoteSignatureAction(input: {
       };
     }
     const parsed = parseOrFriendly(submitSchema, input, "Firma remota");
+    if (parsed.consent !== true) {
+      return {
+        ok: false,
+        error: "Debes aceptar los términos antes de firmar.",
+      };
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const { data: signRow } = await admin
       .from("contract_remote_signatures")
       .select(
-        "id, contract_id, signer_email, company_id, signed_at, cancelled_at, expires_at",
+        "id, contract_id, signer_email, signer_name, company_id, signed_at, cancelled_at, expires_at",
       )
       .eq("token", parsed.token)
       .maybeSingle();
@@ -354,6 +362,7 @@ export async function submitRemoteSignatureAction(input: {
       id: string;
       contract_id: string;
       signer_email: string;
+      signer_name: string | null;
       company_id: string;
       signed_at: string | null;
       cancelled_at: string | null;
@@ -392,18 +401,34 @@ export async function submitRemoteSignatureAction(input: {
       return { ok: false, error: "Ya fue firmado." };
     }
 
+    // Consentimiento: best-effort separado para no romper la firma si la
+    // columna consent_accepted_at aún no existe en este entorno.
+    try {
+      await admin
+        .from("contract_remote_signatures")
+        .update({ consent_accepted_at: new Date().toISOString() })
+        .eq("id", s.id);
+    } catch {
+      /* migración consent_accepted_at no aplicada todavía */
+    }
+
+    // Datos del firmante (para la firma del PDF y para el email de copia).
+    let signerName = s.signer_name ?? s.signer_email;
+    let referenceCode: string | null = null;
+
     // Insertar también una contract_signature normal (role=customer) para
     // que aparezca en el PDF del contrato como firma del cliente.
     try {
-      // Necesitamos snapshot del nombre — lo cogemos del customer.
       const { data: cinfo } = await admin
         .from("contracts")
-        .select("customer_id")
+        .select("customer_id, reference_code")
         .eq("id", s.contract_id)
         .maybeSingle();
-      const customerId = (cinfo as { customer_id: string | null } | null)
-        ?.customer_id;
-      let signerName = s.signer_email;
+      const customerId = (
+        cinfo as { customer_id: string | null; reference_code: string | null } | null
+      )?.customer_id;
+      referenceCode =
+        (cinfo as { reference_code: string | null } | null)?.reference_code ?? null;
       let signerTaxId: string | null = null;
       if (customerId) {
         const { data: cu } = await admin
@@ -454,6 +479,15 @@ export async function submitRemoteSignatureAction(input: {
       console.error("[remote-sign] mark signed failed:", e);
     }
 
+    // Enviar al cliente su copia firmada en PDF (envío de sistema, sin sesión).
+    await sendSignedContractCopy(admin, {
+      companyId: s.company_id,
+      contractId: s.contract_id,
+      signerEmail: s.signer_email,
+      signerName,
+      referenceCode,
+    });
+
     // Evento
     try {
       await admin.from("events").insert({
@@ -474,5 +508,119 @@ export async function submitRemoteSignatureAction(input: {
     return { ok: true, contract_id: s.contract_id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Envía al cliente su copia firmada del contrato en PDF. Envío de SISTEMA
+ * (sin sesión: el firmante no está autenticado), por eso usa sendViaSmtp
+ * directamente en lugar de sendTransactionalEmail. Fail-soft: si algo falla
+ * no rompe la firma (que ya está registrada).
+ */
+async function sendSignedContractCopy(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  args: {
+    companyId: string;
+    contractId: string;
+    signerEmail: string;
+    signerName: string | null;
+    referenceCode: string | null;
+  },
+): Promise<void> {
+  try {
+    const { generateContractPdf } = await import("./pdf-generator");
+    const bytes = await generateContractPdf(args.contractId);
+
+    const { loadCompanyEmailContext } = await import(
+      "@/modules/mailing/company-context"
+    );
+    const ctx = await loadCompanyEmailContext(args.companyId, admin);
+
+    const { renderTemplate, buildEmailHtml } = await import(
+      "@/modules/mailing/templates"
+    );
+    const tplKey = "contract_signed_copy";
+    let subjectTpl = "";
+    let bodyTpl = "";
+    const { data: tplRow } = await admin
+      .from("email_templates")
+      .select("subject, body_html")
+      .eq("company_id", args.companyId)
+      .eq("key", tplKey)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (tplRow) {
+      subjectTpl = (tplRow as { subject: string }).subject;
+      bodyTpl = (tplRow as { body_html: string }).body_html;
+    } else {
+      const { getSystemTemplateByKey } = await import(
+        "@/modules/mailing/system-templates"
+      );
+      const sys = getSystemTemplateByKey(tplKey);
+      if (!sys) return;
+      subjectTpl = sys.subject;
+      bodyTpl = sys.body_html;
+    }
+
+    const vars = {
+      customer_first_name: (args.signerName ?? "").split(" ")[0] ?? "",
+      company_name: ctx.company.legal_name,
+      contract_ref: args.referenceCode ?? "",
+    };
+    const subject = renderTemplate(subjectTpl, vars);
+    const html = buildEmailHtml({
+      body_html: renderTemplate(bodyTpl, vars),
+      company: ctx.company,
+      branding: ctx.branding,
+      kind: "transactional",
+    });
+
+    const { sendViaSmtp } = await import("@/modules/mailing/smtp");
+    const res = await sendViaSmtp({
+      companyId: args.companyId,
+      senderUserId: null,
+      to: args.signerEmail,
+      toName: args.signerName ?? undefined,
+      subject,
+      html,
+      sendType: "automated",
+      triggerEvent: "contract_signed",
+      relatedType: "contract",
+      relatedId: args.contractId,
+      attachments: [
+        {
+          filename: `contrato-${args.referenceCode ?? args.contractId}.pdf`,
+          content: Buffer.from(bytes),
+        },
+      ],
+    });
+
+    try {
+      await admin.from("email_sends").insert({
+        company_id: args.companyId,
+        to_email: args.signerEmail,
+        to_name: args.signerName ?? null,
+        from_email: ctx.company.email ?? "",
+        from_name: ctx.company.legal_name,
+        subject,
+        body_html: html,
+        kind: "transactional",
+        status: res.ok ? "sent" : "failed",
+        error_message: res.ok ? null : res.error,
+        sent_at: res.ok ? new Date().toISOString() : null,
+        template_key: tplKey,
+        related_subject_type: "contract",
+        related_subject_id: args.contractId,
+        send_type: "automated",
+        trigger_event: "contract_signed",
+        from_account_type: res.ok ? res.accountType : null,
+        resend_id: res.ok ? res.resend_id ?? null : null,
+      });
+    } catch {
+      /* fail-soft del registro */
+    }
+  } catch (e) {
+    console.error("[remote-sign] signed copy email failed:", e);
   }
 }
