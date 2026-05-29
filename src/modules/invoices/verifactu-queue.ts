@@ -23,8 +23,20 @@ export interface QueueResult {
  * Procesa hasta 50 envíos pendientes con backoff exponencial:
  * 1ª inmediato, 2ª +5min, 3ª +30min, 4ª +2h, 5ª +12h.
  * Tras 5 intentos fallidos marca como "failed" definitivamente.
+ *
+ * GATE XADES: AEAT rechaza envíos SIN firma XAdES-BES con el cert FNMT
+ * de la empresa. Esa firma criptográfica (RSA-SHA256 sobre canonicalización
+ * XML C14N + propiedades XAdES-BES) NO está implementada todavía — ver
+ * project_xades_state.md para el plan. Mientras tanto este gate evita
+ * intentar el envío (que solo agotaría reintentos y ensuciaría los logs).
+ * Para activarlo: VERIFACTU_XADES_ENABLED=true en Vercel.
  */
 export async function processVerifactuQueue(): Promise<QueueResult> {
+  if (process.env.VERIFACTU_XADES_ENABLED !== "true") {
+    // Las submissions quedan en 'pending' tal cual; cuando se active la
+    // firma XAdES y se ponga el flag, el siguiente tick las procesará.
+    return { processed: 0, succeeded: 0, failed: 0 };
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

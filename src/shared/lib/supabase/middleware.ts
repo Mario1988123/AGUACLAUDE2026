@@ -71,6 +71,7 @@ export async function updateSession(request: NextRequest) {
     "/firmar-contrato",
     "/baja", // baja de comunicaciones comerciales (link en emails de campaña)
     "/api/webhooks/", // webhooks externos (Resend, GoCardless) verifican su propia firma
+    "/api/track/", // tracking de aperturas/clics SMTP (pixel + redirect)
   ];
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 

@@ -427,12 +427,20 @@ export async function sendViaSmtp(params: SendEmailParams): Promise<SendResult |
       password: config.password,
     });
 
+    // Tracking provider-agnostic SOLO en camino SMTP (Resend ya trackea por
+    // webhook). Inyecta píxel de apertura + reescribe enlaces para que pasen
+    // por /api/track/click/[outbox_id] antes de redirigir al destino real.
+    const { wrapWithTracking } = await import("./tracking");
+    const trackedHtml = params.html
+      ? wrapWithTracking(params.html, outboxId)
+      : params.html;
+
     await transporter.sendMail({
       from: `"${config.fromName}" <${config.fromEmail}>`,
       to: params.toName ? `"${params.toName}" <${params.to}>` : params.to,
       replyTo: params.replyTo,
       subject: params.subject,
-      html: params.html,
+      html: trackedHtml,
       text: params.text,
       attachments: params.attachments,
     });

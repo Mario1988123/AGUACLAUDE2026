@@ -447,6 +447,18 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
   }
   const total = subtotal + tax;
 
+  // En modo Verifactu (empresa con certificado FNMT) ADEMÁS poblamos las
+  // columnas V2 (customer_snapshot, tax_total_cents, invoice_type, due_at,
+  // operation_at) para que el botón "Emitir Verifactu" funcione sobre una
+  // factura creada por este camino legacy. En modo simple se quedan null.
+  const { getCompanyInvoicingMode } = await import("./mode");
+  const modeInfo = await getCompanyInvoicingMode(session.company_id, admin);
+  const dueDate =
+    input.due_date ??
+    new Date(Date.now() + (fiscal.invoice_default_due_days ?? 30) * 86400000)
+      .toISOString()
+      .slice(0, 10);
+
   const insertPayload: Record<string, unknown> = {
     company_id: session.company_id,
     customer_id: input.customer_id ?? null,
@@ -465,16 +477,19 @@ export async function createInvoiceAction(input: CreateInvoiceInput): Promise<st
     total_cents: total,
     withholdings_cents: 0,
     issue_date: new Date().toISOString().slice(0, 10),
-    due_date:
-      input.due_date ??
-      new Date(Date.now() + (fiscal.invoice_default_due_days ?? 30) * 86400000)
-        .toISOString()
-        .slice(0, 10),
+    due_date: dueDate,
     corrects_invoice_id: input.corrects_invoice_id ?? null,
     notes: input.notes ?? null,
     maintenance_contract_id: input.maintenance_contract_id ?? null,
     billing_period: input.billing_period ?? null,
   };
+  if (modeInfo.mode === "verifactu") {
+    insertPayload.customer_snapshot = recipientSnapshot;
+    insertPayload.tax_total_cents = tax;
+    insertPayload.invoice_type = "F1";
+    insertPayload.due_at = dueDate;
+    insertPayload.operation_at = new Date().toISOString().slice(0, 10);
+  }
   // INSERT defensivo: si financier_id / maintenance_contract_id /
   // billing_period no existen en cache (migración pendiente), los
   // eliminamos y reintentamos para no romper en entornos viejos.
@@ -1012,6 +1027,11 @@ export async function generateMonthlyRecurringInvoicesAction(): Promise<{ create
   const admin = createAdminClient() as any;
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  // Modo facturación efectivo de la empresa (derivado del certificado FNMT).
+  // En modo verifactu emitimos cuotas como borradores V2 (customer_snapshot,
+  // tax_total_cents, etc.) para que la emisión final encadene la huella.
+  const { getCompanyInvoicingMode } = await import("./mode");
+  const modeInfo = await getCompanyInvoicingMode(session.company_id, admin);
 
   const { data: contracts } = await admin
     .from("contracts")
@@ -1041,10 +1061,23 @@ export async function generateMonthlyRecurringInvoicesAction(): Promise<{ create
       .maybeSingle();
     if (existing) continue;
     const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-    // Ajuste de redondeo: base + IVA debe == cuota mensual EXACTA (la factura
-    // recurrente debe cuadrar con la cuota del contrato).
     const iva = fiscal.invoice_default_iva;
     const monthlyTotal = c.monthly_cents ?? 0;
+    if (modeInfo.mode === "verifactu") {
+      // Camino V2: borrador con customer_snapshot + tax_total_cents listo para
+      // que admin pulse "Emitir" (issueInvoiceV2Action) y encadene huella.
+      const { createMonthlyV2InvoiceAction } = await import("./verifactu-actions");
+      const r = await createMonthlyV2InvoiceAction({
+        contract_id: c.id,
+        month_label: monthLabel,
+        monthly_total_cents: monthlyTotal,
+        iva_percent: iva,
+      });
+      if (r.ok) created++;
+      else console.error("[monthly recurring V2] failed:", r.error);
+      continue;
+    }
+    // Camino legacy (modo simple): cuadre exacto base + IVA == cuota.
     const taxOf = (b: number) => Math.round((b * iva) / 100);
     let baseCents = Math.round(monthlyTotal / (1 + iva / 100));
     for (let k = 0; k < 3 && baseCents + taxOf(baseCents) !== monthlyTotal; k++) {

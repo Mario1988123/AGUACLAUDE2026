@@ -446,6 +446,154 @@ export async function createInvoiceFromContractV2Action(
 }
 
 /**
+ * Crea un borrador de factura V2 para una CUOTA MENSUAL recurrente (alquiler/
+ * renting). Se diferencia de createInvoiceFromContractV2Action en que NO copia
+ * los items del contrato (eso facturaría el total) — crea una única línea
+ * "Cuota MM-YYYY" con el importe de la cuota mensual. La numeración + huella
+ * Verifactu se aplican cuando admin pulse "Emitir" (issueInvoiceV2Action).
+ *
+ * Devuelve { ok, id } igual que la familia V2.
+ */
+export async function createMonthlyV2InvoiceAction(opts: {
+  contract_id: string;
+  month_label: string;
+  monthly_total_cents: number;
+  iva_percent: number;
+}): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  try {
+    const g = await ensureAdminResult();
+    if (!g.ok) return g;
+    const { session } = g;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const { data: contract } = await admin
+      .from("contracts")
+      .select("id, customer_id")
+      .eq("id", opts.contract_id)
+      .single();
+    if (!contract) return { ok: false, error: "Contrato no encontrado" };
+    const { data: customer } = await admin
+      .from("customers")
+      .select(
+        "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary",
+      )
+      .eq("id", contract.customer_id)
+      .single();
+    if (!customer) return { ok: false, error: "Cliente no encontrado" };
+    const { data: addr } = await admin
+      .from("addresses")
+      .select("street_type, street, street_number, postal_code, city, province")
+      .eq("customer_id", customer.id)
+      .eq("is_primary", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+    const { data: series } = await admin
+      .from("invoice_series")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("is_active", true)
+      .order("is_default", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!series) {
+      return {
+        ok: false,
+        error: "No hay serie de facturación. Crea una en /configuracion/facturacion",
+      };
+    }
+
+    const customerSnapshot = {
+      legal_name: customer.legal_name,
+      trade_name: customer.trade_name,
+      first_name: customer.first_name,
+      last_name: customer.last_name,
+      tax_id: customer.tax_id,
+      email: customer.email,
+      phone: customer.phone_primary,
+      address: addr
+        ? `${addr.street_type ?? ""} ${addr.street ?? ""} ${addr.street_number ?? ""}`.trim()
+        : null,
+      postal_code: addr?.postal_code,
+      city: addr?.city,
+      province: addr?.province,
+      country: "ES",
+    };
+
+    // Cuadre exacto: base + IVA == cuota mensual al céntimo (la factura
+    // recurrente debe coincidir con el importe del contrato).
+    const iva = opts.iva_percent;
+    const total = opts.monthly_total_cents;
+    const taxOf = (b: number) => Math.round((b * iva) / 100);
+    let baseCents = Math.round(total / (1 + iva / 100));
+    for (let k = 0; k < 3 && baseCents + taxOf(baseCents) !== total; k++) {
+      baseCents += baseCents + taxOf(baseCents) < total ? 1 : -1;
+    }
+    const taxCents = total - baseCents;
+
+    const dueAt = new Date();
+    dueAt.setDate(dueAt.getDate() + 30);
+
+    const { data: created, error: insErr } = await admin
+      .from("invoices")
+      .insert({
+        company_id: session.company_id,
+        series_id: series.id,
+        invoice_type: "F1",
+        status: "draft",
+        customer_id: customer.id,
+        customer_snapshot: customerSnapshot,
+        contract_id: contract.id,
+        subtotal_cents: baseCents,
+        tax_total_cents: taxCents,
+        total_cents: total,
+        due_at: dueAt.toISOString().slice(0, 10),
+        operation_at: new Date().toISOString().slice(0, 10),
+        description: `Cuota ${opts.month_label}`,
+        payment_method: "transferencia",
+        created_by: session.user_id,
+      })
+      .select("id")
+      .single();
+    if (insErr) {
+      console.error("[createMonthlyV2] insert failed:", insErr.message);
+      return { ok: false, error: insErr.message };
+    }
+    const invoiceId = (created as { id: string }).id;
+
+    await admin.from("invoice_lines").insert({
+      invoice_id: invoiceId,
+      display_order: 0,
+      description: `Cuota ${opts.month_label}`,
+      quantity: 1,
+      unit_price_cents: baseCents,
+      discount_pct: 0,
+      subtotal_cents: baseCents,
+      tax_rate: iva,
+      tax_cents: taxCents,
+      retention_rate: 0,
+      retention_cents: 0,
+      total_cents: total,
+    });
+    await admin.from("invoice_taxes").insert({
+      invoice_id: invoiceId,
+      tax_rate: iva,
+      base_cents: baseCents,
+      tax_cents: taxCents,
+    });
+
+    revalidatePath("/facturas");
+    revalidatePath(`/contratos/${opts.contract_id}`);
+    return { ok: true, id: invoiceId };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Error desconocido",
+    };
+  }
+}
+
+/**
  * EMITIR factura: numera correlativamente, calcula hash Verifactu
  * encadenado, genera URL del QR. INMUTABLE a partir de aquí.
  */
@@ -618,7 +766,8 @@ export async function issueInvoiceV2Action(
         sent_to_aeat: false,
       });
     if (recErr) {
-      // Rollback
+      // Rollback de la factura al estado borrador para no quedar "issued"
+      // sin registro encadenado.
       await admin
         .from("invoices")
         .update({
@@ -632,6 +781,21 @@ export async function issueInvoiceV2Action(
         })
         .eq("id", invoiceId);
       console.error("[issueInvoice] verifactu insert failed:", recErr.message);
+      // Carrera de concurrencia: índice único en (company_id, prev_hash)
+      // ha rechazado la inserción porque otra emisión consumió ese eslabón
+      // primero. Mensaje friendly + reintento manual del admin.
+      const isRace =
+        recErr.code === "23505" ||
+        /duplicate key|unique constraint|idx_verifactu_records_chain_unique/i.test(
+          recErr.message ?? "",
+        );
+      if (isRace) {
+        return {
+          ok: false,
+          error:
+            "Otra emisión se solapó con la tuya y se quedó con el siguiente eslabón de la cadena Verifactu. Vuelve a pulsar Emitir.",
+        };
+      }
       return { ok: false, error: recErr.message };
     }
 
@@ -728,25 +892,46 @@ export async function cancelInvoiceV2Action(
       record_type: "anulacion",
     });
 
-    await admin.from("invoice_verifactu_records").insert({
-      company_id: session.company_id,
-      invoice_id: invoiceId,
-      record_type: "anulacion",
-      issuer_nif: issuerNif,
-      issuer_name: issuerName,
-      series_code: series.code,
-      invoice_number: inv.number,
-      invoice_type: inv.invoice_type,
-      issued_at: cancelDate.toISOString(),
-      operation_date: cancelDate.toISOString().slice(0, 10),
-      base_total_cents: inv.subtotal_cents,
-      tax_total_cents: inv.tax_total_cents,
-      total_cents: inv.total_cents,
-      prev_hash: prevHash,
-      current_hash: currentHash,
-      qr_url: "",
-      qr_params: { reason },
-    });
+    const { error: cancelRecErr } = await admin
+      .from("invoice_verifactu_records")
+      .insert({
+        company_id: session.company_id,
+        invoice_id: invoiceId,
+        record_type: "anulacion",
+        issuer_nif: issuerNif,
+        issuer_name: issuerName,
+        series_code: series.code,
+        invoice_number: inv.number,
+        invoice_type: inv.invoice_type,
+        issued_at: cancelDate.toISOString(),
+        operation_date: cancelDate.toISOString().slice(0, 10),
+        base_total_cents: inv.subtotal_cents,
+        tax_total_cents: inv.tax_total_cents,
+        total_cents: inv.total_cents,
+        prev_hash: prevHash,
+        current_hash: currentHash,
+        qr_url: "",
+        qr_params: { reason },
+      });
+    if (cancelRecErr) {
+      // Antes este insert NO comprobaba el error y la factura se marcaba
+      // 'cancelled' aunque el registro Verifactu no llegara a existir.
+      // Carrera de concurrencia con índice único → friendly + reintento.
+      console.error("[cancelInvoice] verifactu insert failed:", cancelRecErr.message);
+      const isRace =
+        cancelRecErr.code === "23505" ||
+        /duplicate key|unique constraint|idx_verifactu_records_chain_unique/i.test(
+          cancelRecErr.message ?? "",
+        );
+      if (isRace) {
+        return {
+          ok: false,
+          error:
+            "Otra operación se solapó en la cadena Verifactu. Vuelve a intentar anular.",
+        };
+      }
+      return { ok: false, error: cancelRecErr.message };
+    }
 
     await admin
       .from("invoices")
