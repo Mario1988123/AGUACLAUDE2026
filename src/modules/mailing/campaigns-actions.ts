@@ -7,6 +7,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { z } from "zod";
 import { renderTemplate, buildEmailHtml } from "./templates";
+import { loadCompanyEmailContext } from "./company-context";
 import { sendViaSmtp } from "./smtp";
 import { hasActiveConsent } from "@/modules/customers/consents-actions";
 import { listEphemerides, type Ephemeris } from "@/modules/social/actions";
@@ -208,12 +209,8 @@ export async function sendCampaignAction(
       .maybeSingle();
     if (!tpl) return { ok: false, error: "Plantilla no encontrada" };
 
-    // Datos de empresa para el pie legal.
-    const { data: cs } = await admin
-      .from("company_settings")
-      .select("fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone")
-      .eq("company_id", session.company_id)
-      .maybeSingle();
+    // Datos de empresa para el pie legal + branding (logo/color).
+    const ctx = await loadCompanyEmailContext(session.company_id, admin);
 
     const recipients = await resolveAudience(session.company_id);
     // Marcar como enviando + nº destinatarios.
@@ -228,7 +225,7 @@ export async function sendCampaignAction(
 
     for (const r of recipients) {
       const vars = {
-        company_name: cs?.fiscal_legal_name ?? "Nuestra empresa",
+        company_name: ctx.company.legal_name ?? "Nuestra empresa",
         customer_name: r.name,
         customer_first_name: r.name.split(" ")[0] ?? "",
       };
@@ -249,13 +246,8 @@ export async function sendCampaignAction(
       const html = buildEmailHtml({
         body_html: bodyWithUnsub,
         signature_html: null,
-        company: {
-          legal_name: cs?.fiscal_legal_name ?? "—",
-          tax_id: cs?.fiscal_tax_id ?? "—",
-          address: cs?.fiscal_street ?? null,
-          email: cs?.fiscal_email ?? null,
-          phone: cs?.fiscal_phone ?? null,
-        },
+        company: ctx.company,
+        branding: ctx.branding,
         kind: "marketing",
       });
 
@@ -282,8 +274,8 @@ export async function sendCampaignAction(
           to_email: r.email,
           to_name: r.name,
           customer_id: r.customer_id,
-          from_email: cs?.fiscal_email ?? "",
-          from_name: cs?.fiscal_legal_name ?? "",
+          from_email: ctx.company.email ?? "",
+          from_name: ctx.company.legal_name ?? "",
           subject,
           body_html: html,
           kind: "marketing",

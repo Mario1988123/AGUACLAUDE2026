@@ -11,6 +11,8 @@ import {
   buildEmailHtml,
   buildSignatureHtml,
 } from "./templates";
+import { loadCompanyEmailContext } from "./company-context";
+import { getSampleVars } from "./sample-vars";
 import { getSystemTemplates } from "./system-templates";
 import {
   pickSmtpConfig,
@@ -368,6 +370,169 @@ export async function listTemplates(): Promise<TemplateRow[]> {
 }
 
 // =====================================================================
+// EDITOR DE PLANTILLAS — ver, editar, restaurar, previsualizar
+// La empresa personaliza el asunto/cuerpo de cualquier plantilla. Las de
+// sistema (is_system) se pueden restaurar al original del catálogo.
+// =====================================================================
+
+export interface TemplateEditData {
+  id: string;
+  key: string | null;
+  name: string;
+  description: string | null;
+  kind: "transactional" | "marketing";
+  subject: string;
+  body_html: string;
+  variables: string[];
+  is_system: boolean;
+  is_active: boolean;
+}
+
+export async function getTemplateForEditAction(
+  id: string,
+): Promise<TemplateEditData | null> {
+  const session = await ensureAdmin();
+  await ensureSystemTemplatesSeeded();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("email_templates")
+    .select(
+      "id, key, name, description, kind, subject, body_html, variables, is_system, is_active",
+    )
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    ...(data as TemplateEditData),
+    variables: (data as { variables: string[] | null }).variables ?? [],
+  };
+}
+
+const updateTemplateSchema = z.object({
+  id: z.string().uuid(),
+  subject: z.string().trim().min(1, "El asunto no puede estar vacío"),
+  body_html: z.string().trim().min(1, "El cuerpo no puede estar vacío"),
+  is_active: z.boolean().nullish(),
+});
+
+export async function updateTemplateAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const parsed = parseOrFriendly(updateTemplateSchema, input, "Plantilla");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const update: Record<string, unknown> = {
+      subject: parsed.subject,
+      body_html: parsed.body_html,
+      updated_at: new Date().toISOString(),
+    };
+    if (parsed.is_active !== undefined && parsed.is_active !== null) {
+      update.is_active = parsed.is_active;
+    }
+    const { error } = await admin
+      .from("email_templates")
+      .update(update)
+      .eq("id", parsed.id)
+      .eq("company_id", session.company_id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/configuracion/mailing");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function resetTemplateToSystemAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: row } = await admin
+      .from("email_templates")
+      .select("key")
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    const key = (row as { key: string | null } | null)?.key;
+    if (!key) {
+      return {
+        ok: false,
+        error: "Esta plantilla no tiene equivalente de sistema para restaurar.",
+      };
+    }
+    const { getSystemTemplateByKey } = await import("./system-templates");
+    const sys = getSystemTemplateByKey(key);
+    if (!sys) {
+      return { ok: false, error: "No existe plantilla de sistema con esa clave." };
+    }
+    const { error } = await admin
+      .from("email_templates")
+      .update({
+        subject: sys.subject,
+        body_html: sys.body_html,
+        variables: sys.variables,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("company_id", session.company_id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/configuracion/mailing");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Renderiza una plantilla (en edición, sin guardar) con datos de muestra y el
+ * branding real de la empresa. Devuelve el HTML completo para el iframe de
+ * previsualización del editor.
+ */
+export async function previewTemplateHtmlAction(input: {
+  subject: string;
+  body_html: string;
+  kind: "transactional" | "marketing";
+}): Promise<{ subject: string; html: string }> {
+  const session = await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const ctx = session.company_id
+    ? await loadCompanyEmailContext(session.company_id, admin).catch(() => null)
+    : null;
+  const company = ctx?.company ?? {
+    legal_name: "Tu empresa",
+    tax_id: "—",
+    address: null,
+    email: null,
+    phone: null,
+  };
+  const branding = ctx?.branding ?? null;
+  const vars = getSampleVars({ company_name: company.legal_name });
+  const subject = renderTemplate(input.subject ?? "", vars);
+  const body = renderTemplate(input.body_html ?? "", vars);
+  const html = buildEmailHtml({
+    body_html: body,
+    company,
+    branding,
+    kind: input.kind,
+    unsubscribe_url:
+      input.kind === "marketing"
+        ? "https://example.com/baja?token=preview"
+        : undefined,
+  });
+  return { subject, html };
+}
+
+// =====================================================================
 // ENVIAR EMAIL (transaccional o marketing) — núcleo
 // =====================================================================
 
@@ -470,12 +635,8 @@ export async function sendTransactionalEmail(
     .eq("user_id", session.user_id)
     .maybeSingle();
 
-  // Datos empresa para footer legal
-  const { data: cs } = await admin
-    .from("company_settings")
-    .select("fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone")
-    .eq("company_id", session.company_id)
-    .maybeSingle();
+  // Datos empresa para footer legal + branding (logo/color)
+  const ctx = await loadCompanyEmailContext(session.company_id, admin);
 
   // Elegimos la cuenta SMTP que enviará (cascade user → company_manual → company_automated).
   // El "from" mostrado en el email se calcula a partir de la cuenta elegida, pero si el usuario
@@ -490,13 +651,13 @@ export async function sendTransactionalEmail(
   });
 
   const fromEmail =
-    userSettings?.from_email ?? cfg?.fromEmail ?? cs?.fiscal_email ?? "";
+    userSettings?.from_email ?? cfg?.fromEmail ?? ctx.company.email ?? "";
   const fromName =
-    userSettings?.from_name ?? cfg?.fromName ?? cs?.fiscal_legal_name ?? "AGUACLAUDE";
+    userSettings?.from_name ?? cfg?.fromName ?? ctx.company.legal_name ?? "AGUACLAUDE";
 
   // Renderizar
   const baseVars = {
-    company_name: cs?.fiscal_legal_name ?? "Nuestra empresa",
+    company_name: ctx.company.legal_name ?? "Nuestra empresa",
     customer_name: input.to_name ?? "",
     customer_first_name: input.to_name?.split(" ")[0] ?? "",
     ...input.variables,
@@ -508,13 +669,8 @@ export async function sendTransactionalEmail(
   const html = buildEmailHtml({
     body_html: bodyRendered,
     signature_html: userSettings?.signature_html ?? null,
-    company: {
-      legal_name: cs?.fiscal_legal_name ?? "—",
-      tax_id: cs?.fiscal_tax_id ?? "—",
-      address: cs?.fiscal_street ?? null,
-      email: cs?.fiscal_email ?? null,
-      phone: cs?.fiscal_phone ?? null,
-    },
+    company: ctx.company,
+    branding: ctx.branding,
     kind: tpl.kind,
   });
 
@@ -648,11 +804,7 @@ export async function sendQuickEmailAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
-    const { data: cs } = await admin
-      .from("company_settings")
-      .select("fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone")
-      .eq("company_id", session.company_id)
-      .maybeSingle();
+    const ctx = await loadCompanyEmailContext(session.company_id, admin);
     const { data: us } = await admin
       .from("email_user_settings")
       .select("signature_html, from_email, from_name")
@@ -663,13 +815,8 @@ export async function sendQuickEmailAction(
     const html = buildEmailHtml({
       body_html: bodyHtml,
       signature_html: us?.signature_html ?? null,
-      company: {
-        legal_name: cs?.fiscal_legal_name ?? "—",
-        tax_id: cs?.fiscal_tax_id ?? "—",
-        address: cs?.fiscal_street ?? null,
-        email: cs?.fiscal_email ?? null,
-        phone: cs?.fiscal_phone ?? null,
-      },
+      company: ctx.company,
+      branding: ctx.branding,
       kind: "transactional",
     });
 
@@ -695,8 +842,8 @@ export async function sendQuickEmailAction(
         to_name: parsed.to_name ?? null,
         customer_id: parsed.customer_id ?? null,
         lead_id: parsed.lead_id ?? null,
-        from_email: us?.from_email ?? cs?.fiscal_email ?? "",
-        from_name: us?.from_name ?? cs?.fiscal_legal_name ?? "",
+        from_email: us?.from_email ?? ctx.company.email ?? "",
+        from_name: us?.from_name ?? ctx.company.legal_name ?? "",
         subject: parsed.subject,
         body_html: html,
         kind: "transactional",

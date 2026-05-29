@@ -52,7 +52,20 @@ export function renderTemplate(
  * Construye el HTML completo del email envolviendo el body con la firma
  * del usuario y un footer con identificación legal + link de baja
  * (solo para marketing).
+ *
+ * Si se pasa `branding`, el email lleva una cabecera con el logo (o el
+ * nombre) de la empresa y un acento del color de marca. Es opcional para
+ * no romper a los callers que aún no lo pasan (caen al diseño neutro).
  */
+export interface EmailBranding {
+  /** Nombre visible en la cabecera si no hay logo. */
+  company_name?: string | null;
+  /** URL absoluta del logo (se muestra en la cabecera, max 44px alto). */
+  logo_url?: string | null;
+  /** Color de marca (#hex o nombre CSS). Acentos: franja, hairlines, enlaces. */
+  brand_color?: string | null;
+}
+
 export interface BuildEmailHtmlInput {
   body_html: string;
   signature_html?: string | null;
@@ -64,14 +77,48 @@ export interface BuildEmailHtmlInput {
     email?: string | null;
     phone?: string | null;
   };
+  /** Branding visual de la empresa (logo + color). Opcional. */
+  branding?: EmailBranding | null;
   /** URL de baja (solo marketing). */
   unsubscribe_url?: string;
   /** Tipo de email. transactional NO lleva link de baja. */
   kind: "transactional" | "marketing";
 }
 
+const DEFAULT_BRAND_COLOR = "#4880FF";
+
+/** Solo permite #hex (3-8) o nombre CSS simple; si no, color de marca por defecto. */
+function safeColor(c?: string | null): string {
+  if (!c) return DEFAULT_BRAND_COLOR;
+  const t = c.trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(t)) return t;
+  if (/^[a-zA-Z]{3,20}$/.test(t)) return t;
+  return DEFAULT_BRAND_COLOR;
+}
+
 export function buildEmailHtml(input: BuildEmailHtmlInput): string {
-  const { body_html, signature_html, company, unsubscribe_url, kind } = input;
+  const { body_html, signature_html, company, unsubscribe_url, kind, branding } =
+    input;
+
+  const brand = safeColor(branding?.brand_color);
+  const headerName =
+    branding?.company_name?.trim() || company.legal_name?.trim() || "";
+
+  // Cabecera: logo si lo hay; si no, el nombre en color de marca. Si no hay
+  // ninguno, omitimos la cabecera entera (diseño neutro de siempre).
+  const header =
+    branding && (branding.logo_url || headerName)
+      ? `
+          <tr>
+            <td align="center" style="padding: 28px 28px 8px 28px; background: #ffffff;">
+              ${
+                branding.logo_url
+                  ? `<img src="${escapeHtml(branding.logo_url)}" alt="${escapeHtml(headerName || "Logo")}" style="max-height: 44px; max-width: 220px; height: auto; display: inline-block;">`
+                  : `<div style="font-size: 20px; font-weight: 800; color: ${brand}; letter-spacing: 0.2px;">${escapeHtml(headerName)}</div>`
+              }
+            </td>
+          </tr>`
+      : "";
 
   const footerLegal = `
     <p style="margin: 16px 0 4px 0; color: #888; font-size: 11px; line-height: 1.5;">
@@ -86,7 +133,7 @@ export function buildEmailHtml(input: BuildEmailHtmlInput): string {
       ? `
     <p style="margin: 12px 0 0 0; color: #999; font-size: 11px; line-height: 1.5;">
       ¿No quieres recibir más correos como este?
-      <a href="${unsubscribe_url}" style="color: #4880FF; text-decoration: underline;">Date de baja aquí</a>.
+      <a href="${unsubscribe_url}" style="color: ${brand}; text-decoration: underline;">Date de baja aquí</a>.
     </p>`
       : "";
 
@@ -106,15 +153,19 @@ export function buildEmailHtml(input: BuildEmailHtmlInput): string {
   <table width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #f5f5f7;">
     <tr>
       <td align="center" style="padding: 24px 12px;">
-        <table width="600" cellspacing="0" cellpadding="0" border="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; max-width: 600px;">
+        <table width="600" cellspacing="0" cellpadding="0" border="0" style="background: #ffffff; border-radius: 12px; overflow: hidden; max-width: 600px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);">
           <tr>
-            <td style="padding: 32px 28px; color: #222; font-size: 15px; line-height: 1.6;">
+            <td style="height: 4px; background: ${brand}; line-height: 4px; font-size: 0;">&nbsp;</td>
+          </tr>
+          ${header}
+          <tr>
+            <td style="padding: 24px 28px 32px 28px; color: #222; font-size: 15px; line-height: 1.6;">
               ${body_html}
               ${signature_html ? `<div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #eee;">${signature_html}</div>` : ""}
             </td>
           </tr>
           <tr>
-            <td style="padding: 16px 28px 24px 28px; background: #fafafa; border-top: 1px solid #eee;">
+            <td style="padding: 16px 28px 24px 28px; background: #fafafa; border-top: 2px solid ${brand};">
               ${footerLegal}
               ${footerUnsub}
               ${footerRgpd}

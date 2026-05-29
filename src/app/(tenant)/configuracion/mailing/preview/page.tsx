@@ -2,8 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Mail, ArrowLeft } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { getSystemTemplates } from "@/modules/mailing/system-templates";
 import { renderTemplate, buildEmailHtml } from "@/modules/mailing/templates";
+import { loadCompanyEmailContext } from "@/modules/mailing/company-context";
+import { getSampleVars } from "@/modules/mailing/sample-vars";
 import { TestSendButton } from "@/modules/mailing/test-send-button";
 
 export const dynamic = "force-dynamic";
@@ -18,49 +21,22 @@ export default async function MailingPreviewPage() {
     redirect("/configuracion/mailing");
   }
 
-  const sampleVars: Record<string, string | number> = {
-    // Cliente
-    customer_first_name: "Mario",
-    customer_name: "Mario Ortigueira",
-    customer_address: "Avenida de la Paz 14, 28012 Madrid",
-    customer_email: "mario.ortigueira@gmail.com",
-    customer_phone: "612 345 678",
-    // Empresa
-    company_name: "AguaClaude Demo SL",
-    company_email: "info@aguaclaude.es",
-    company_phone: "900 100 200",
-    // Cita
-    appointment_date: new Date(Date.now() + 14 * 86400_000).toISOString(),
-    appointment_time: "10:00",
-    technician_name: "Juan García",
-    // Propuesta
-    proposal_reference: "PROP-2026-0042",
-    proposal_total: 89000, // 890 €
-    proposal_validity_days: 30,
-    // Contrato
-    contract_ref: "CTR-2026-0042",
-    sign_url: "https://crm.example.com/firma/abc123xyz",
-    days_to_expire: 7,
-    // Factura
-    invoice_number: "F2026/0042",
-    invoice_total: 12500, // 125 €
-    invoice_due_date: new Date(Date.now() + 30 * 86400_000).toISOString(),
-    // Mantenimiento confirm (nuevas)
-    confirm_url: "https://crm.example.com/m/abc123xyz",
-    // Marketing
-    discount_amount: 5000,
-    savings_amount: 24500,
-    promo_code: "VERANO2026",
-    years_with_us: 3,
-  };
-
-  const company = {
+  // Branding + datos reales de la empresa para que el preview se parezca al
+  // email que recibirá el cliente. Fail-soft a datos de muestra.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const ctx = session.company_id
+    ? await loadCompanyEmailContext(session.company_id, admin).catch(() => null)
+    : null;
+  const company = ctx?.company ?? {
     legal_name: "AguaClaude Demo SL",
     tax_id: "B12345678",
     address: "Calle Falsa 123, 28012 Madrid",
     email: "info@aguaclaude.es",
     phone: "900 100 200",
   };
+  const branding = ctx?.branding ?? null;
+  const sampleVars = getSampleVars({ company_name: company.legal_name });
 
   const templates = getSystemTemplates();
 
@@ -96,6 +72,7 @@ export default async function MailingPreviewPage() {
           const fullHtml = buildEmailHtml({
             body_html: body,
             company,
+            branding,
             kind: t.kind,
             unsubscribe_url:
               t.kind === "marketing"

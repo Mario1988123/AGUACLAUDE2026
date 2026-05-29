@@ -25,7 +25,7 @@ export async function ListTemplatesTab() {
       {rows.map((t) => (
         <Link
           key={t.id}
-          href={`/configuracion/mailing/preview?key=${t.key ?? ""}`}
+          href={`/configuracion/mailing/plantillas/${t.id}` as never}
           className="block"
         >
           <Card className="hover:border-primary/40">

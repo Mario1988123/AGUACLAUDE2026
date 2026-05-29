@@ -164,13 +164,13 @@ async function sendMaintenanceReminder(
   // Empresa
   const { data: company } = await admin
     .from("companies")
-    .select("name")
+    .select("name, logo_url, primary_color")
     .eq("id", job.company_id)
     .maybeSingle();
   const { data: cs } = await admin
     .from("company_settings")
     .select(
-      "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone",
+      "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_email, fiscal_phone, fiscal_logo_url, pdf_brand_color",
     )
     .eq("company_id", job.company_id)
     .maybeSingle();
@@ -265,15 +265,28 @@ async function sendMaintenanceReminder(
     fiscal_street?: string | null;
     fiscal_email?: string | null;
     fiscal_phone?: string | null;
+    fiscal_logo_url?: string | null;
+    pdf_brand_color?: string | null;
   };
+  const compRow = (company ?? {}) as {
+    name?: string | null;
+    logo_url?: string | null;
+    primary_color?: string | null;
+  };
+  const legalName = csRow.fiscal_legal_name ?? compRow.name ?? "—";
   const fullHtml = buildEmailHtml({
     body_html: bodyHtml,
     company: {
-      legal_name: csRow.fiscal_legal_name ?? "—",
+      legal_name: legalName,
       tax_id: csRow.fiscal_tax_id ?? "—",
       address: csRow.fiscal_street ?? null,
       email: csRow.fiscal_email ?? null,
       phone: csRow.fiscal_phone ?? null,
+    },
+    branding: {
+      company_name: legalName,
+      logo_url: csRow.fiscal_logo_url ?? compRow.logo_url ?? null,
+      brand_color: csRow.pdf_brand_color ?? compRow.primary_color ?? null,
     },
     kind: "transactional",
   });
