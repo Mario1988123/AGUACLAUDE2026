@@ -39,6 +39,8 @@ export function categoryOfKind(kind: string): "alert" | "event" {
     "installation.late_completion",
     "installation.incident",
     "installation.forgotten",
+    "installation.customer_rescheduled",
+    "installation.customer_postponed",
     // Mantenimientos — acciones requeridas
     "maintenance.tomorrow",
     "maintenance.customer_postponed",

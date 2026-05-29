@@ -28,6 +28,7 @@ import { SubjectNotificationToast } from "@/modules/notifications/subject-toast"
 import { InstallationIncidentRow } from "@/modules/installations/incident-row";
 import { listTeamMembers, listInstallers } from "@/modules/agenda/actions";
 import { ScheduleInstallationButton } from "@/modules/installations/schedule-button";
+import { InstallationConfirmSendButton } from "@/modules/installations/confirm-send-button";
 import { createClient } from "@/shared/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +62,7 @@ export default async function InstallationDetailPage({
     contract_id: string | null;
     installer_user_id: string | null;
     address_id: string | null;
+    customer_confirm_sent_at?: string | null;
   };
 
   const [items, photos, signatures, session, team, installers, photosFull, signaturesFull] =
@@ -373,6 +375,14 @@ export default async function InstallationDetailPage({
               installers={installers}
             />
           )}
+          {i.status !== "completed" &&
+            i.status !== "cancelled" &&
+            i.scheduled_at && (
+              <InstallationConfirmSendButton
+                installationId={i.id}
+                alreadySent={!!i.customer_confirm_sent_at}
+              />
+            )}
           {/* Wizard de RETIRADA dedicado si kind=uninstall (decisión 2026-05-20) */}
           {i.status !== "completed" && i.status !== "cancelled" && i.kind === "uninstall" && (
             <UninstallWizard

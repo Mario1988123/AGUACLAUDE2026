@@ -388,6 +388,47 @@ const TEMPLATES: SystemTemplate[] = [
     ],
   },
   {
+    key: "installation_confirm_request",
+    name: "Confirmar cita de instalación",
+    description:
+      "Email al cliente con la fecha de instalación propuesta. Puede confirmar, elegir otra fecha o posponer desde el enlace.",
+    kind: "transactional",
+    subject: "¿Te viene bien la fecha de tu instalación, {{customer_first_name}}?",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}}</h2>
+      <p>Ya estamos preparando la instalación de tu equipo con <strong>{{company_name}}</strong>. La fecha que tenemos prevista es:</p>
+      <table cellspacing="0" cellpadding="0" border="0" style="background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 8px; padding: 16px; margin: 16px 0; width: 100%;">
+        <tr>
+          <td style="padding: 14px 18px; font-size: 16px;">
+            <strong>📅 {{appointment_date|date}}</strong> a las <strong>{{appointment_time}}</strong><br>
+            <span style="color:#555;">📍 {{customer_address}}</span>
+          </td>
+        </tr>
+      </table>
+      <p>¿Te viene bien esa fecha?</p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="{{confirm_url}}" style="display: inline-block; background: #16a34a; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 4px;">
+          Sí, me viene bien
+        </a>
+        <a href="{{confirm_url}}?action=reschedule" style="display: inline-block; background: white; color: #0ea5e9; border: 2px solid #0ea5e9; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 4px;">
+          Elegir otra fecha
+        </a>
+        <a href="{{confirm_url}}?action=postpone" style="display: inline-block; background: white; color: #6b7280; border: 1px solid #d1d5db; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin: 4px;">
+          Posponer / llámame
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #666;">Si eliges otra fecha, revisaremos la disponibilidad de nuestro técnico y la ruta del día y te confirmaremos. Si no haces nada, daremos por buena la fecha propuesta.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "company_name",
+      "appointment_date",
+      "appointment_time",
+      "customer_address",
+      "confirm_url",
+    ],
+  },
+  {
     key: "contract_send_remote_sign",
     name: "Envío de contrato para firma remota",
     description: "Link con token para que el cliente firme online sin cuenta.",

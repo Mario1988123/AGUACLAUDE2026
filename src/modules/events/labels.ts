@@ -93,6 +93,9 @@ export const EVENT_LABEL: Record<string, string> = {
   "installation.reassigned": "Instalación reasignada",
   "installation.started_far": "Parte iniciado lejos del cliente",
   "installation.stock_shortage": "Stock insuficiente para la instalación",
+  "installation.customer_confirmed": "Cliente confirmó la cita de instalación",
+  "installation.customer_rescheduled": "Cliente pidió otra fecha de instalación",
+  "installation.customer_postponed": "Cliente pidió posponer la instalación",
   // === Cliente / equipo ===
   "customer.equipment_added": "Equipo añadido al cliente",
   // === Mantenimiento ===
