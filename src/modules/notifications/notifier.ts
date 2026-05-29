@@ -47,12 +47,13 @@ export interface NotifyInput {
 
 export async function notify(input: NotifyInput): Promise<void> {
   const admin = createAdminClient();
+  const finalCategory = input.category ?? categoryOfKind(input.kind);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from("notifications").insert({
     company_id: input.company_id,
     recipient_user_id: input.recipient_user_id,
     kind: input.kind,
-    category: input.category ?? categoryOfKind(input.kind),
+    category: finalCategory,
     severity: input.severity ?? "info",
     title: input.title,
     body: input.body ?? null,
@@ -61,6 +62,23 @@ export async function notify(input: NotifyInput): Promise<void> {
     action_url: input.action_url ?? null,
     expires_at: input.expires_at ?? null,
   });
+  // Push al móvil SOLO para alertas accionables. Los eventos informativos
+  // (lead.created, contract.signed…) se quedan en la campana y en
+  // /notificaciones. No spamea el móvil cuando el usuario está fuera.
+  // Fail-soft: si VAPID no está configurado, no-op silente.
+  if (finalCategory === "alert") {
+    try {
+      const { sendPushToUser } = await import("./push-send");
+      await sendPushToUser(input.recipient_user_id, {
+        title: input.title,
+        body: input.body ?? undefined,
+        url: input.action_url ?? undefined,
+        tag: input.subject_id ?? input.kind,
+      });
+    } catch {
+      /* push fail no debe romper la notif in-app */
+    }
+  }
 }
 
 /**
@@ -132,6 +150,27 @@ export async function notifyByRoles(
       expires_at: payload.expires_at ?? null,
     })),
   );
+
+  // Push al móvil para los destinatarios — solo si es alerta accionable.
+  // Fail-soft: VAPID puede no estar configurado y no debe romper.
+  const cat = payload.category ?? categoryOfKind(payload.kind);
+  if (cat === "alert") {
+    try {
+      const { sendPushToUser } = await import("./push-send");
+      await Promise.all(
+        recipientsToNotify.map((uid) =>
+          sendPushToUser(uid, {
+            title: payload.title,
+            body: payload.body ?? undefined,
+            url: payload.action_url ?? undefined,
+            tag: payload.subject_id ?? payload.kind,
+          }).catch(() => undefined),
+        ),
+      );
+    } catch {
+      /* push fail no rompe nada */
+    }
+  }
 }
 
 /**

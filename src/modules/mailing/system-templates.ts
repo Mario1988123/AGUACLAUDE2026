@@ -478,6 +478,87 @@ const TEMPLATES: SystemTemplate[] = [
       "days_to_expire",
     ],
   },
+  {
+    key: "payment_reminder_1",
+    name: "Recordatorio de pago — Nivel 1 (amable)",
+    description:
+      "Primer aviso al cliente cuando una factura lleva 7+ días vencida.",
+    kind: "transactional",
+    subject: "Recordatorio: factura {{invoice_ref}} pendiente",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}},</h2>
+      <p>Te escribimos para recordarte que la factura
+        <strong>{{invoice_ref}}</strong> por importe de
+        <strong>{{pending_amount}} €</strong> está pendiente de pago desde
+        hace {{days_overdue}} días (vencimiento {{due_date}}).</p>
+      <p>Es posible que se te haya pasado o que el pago esté en camino —
+        si ya la has abonado, ignora este aviso.</p>
+      <p>Si necesitas que te enviemos de nuevo el IBAN o tienes cualquier
+        duda, responde a este email y te atendemos personalmente.</p>
+      <p>Gracias.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "invoice_ref",
+      "pending_amount",
+      "days_overdue",
+      "due_date",
+    ],
+  },
+  {
+    key: "payment_reminder_2",
+    name: "Recordatorio de pago — Nivel 2 (insistente)",
+    description: "Segundo aviso cuando la factura lleva 14+ días vencida.",
+    kind: "transactional",
+    subject:
+      "Segundo aviso de pago: factura {{invoice_ref}} ({{days_overdue}} días)",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}},</h2>
+      <p>Te volvemos a escribir respecto a la factura
+        <strong>{{invoice_ref}}</strong> por
+        <strong>{{pending_amount}} €</strong>, que sigue pendiente de pago
+        ({{days_overdue}} días desde vencimiento {{due_date}}).</p>
+      <p>Si ya la has pagado en estos días, por favor envíanos justificante
+        para cuadrarlo. Si tienes algún problema con la factura o necesitas
+        un plan de pagos, contesta a este email y lo hablamos.</p>
+      <p>Si no recibimos respuesta en los próximos días, tendremos que
+        escalar el caso. Confiamos en resolverlo antes.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "invoice_ref",
+      "pending_amount",
+      "days_overdue",
+      "due_date",
+    ],
+  },
+  {
+    key: "payment_reminder_3",
+    name: "Recordatorio de pago — Nivel 3 (último aviso)",
+    description: "Último aviso cuando la factura lleva 30+ días vencida.",
+    kind: "transactional",
+    subject:
+      "ÚLTIMO AVISO: factura {{invoice_ref}} sin pagar ({{days_overdue}} días)",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #b91c1c;">Hola {{customer_first_name}},</h2>
+      <p>Este es el <strong>último aviso</strong> respecto a la factura
+        <strong>{{invoice_ref}}</strong> de <strong>{{pending_amount}} €</strong>,
+        que lleva {{days_overdue}} días vencida (vto. {{due_date}}).</p>
+      <p>Si en los próximos 5 días hábiles no recibimos el pago o no nos
+        confirmas un plan de pagos por escrito, nos veremos obligados a
+        derivar el caso a vía legal con los costes adicionales que conlleva.</p>
+      <p>Si hay algún malentendido o problema con la factura, contáctanos
+        respondiendo a este email cuanto antes — preferimos resolverlo
+        directamente contigo.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "invoice_ref",
+      "pending_amount",
+      "days_overdue",
+      "due_date",
+    ],
+  },
 ];
 
 export function getSystemTemplates(): SystemTemplate[] {

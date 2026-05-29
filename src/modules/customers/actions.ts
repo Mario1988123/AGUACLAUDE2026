@@ -126,7 +126,7 @@ export async function listCustomers(
       supabase
         .from("customer_equipment")
         .select(
-          "customer_id, product_id, external_equipment_model_id, products(name), external_equipment_models(name)",
+          "customer_id, product_id, external_equipment_model_id, products(name), external_equipment_models(brand, model)",
         )
         .in("customer_id", ids)
         .eq("is_active", true),
@@ -154,7 +154,13 @@ export async function listCustomers(
       const cur = equipmentMap.get(e.customer_id) ?? { count: 0, firstName: null };
       cur.count += 1;
       if (!cur.firstName) {
-        cur.firstName = e.products?.name ?? e.external_equipment_models?.name ?? null;
+        const ext = e.external_equipment_models as
+          | { brand?: string | null; model?: string | null }
+          | null;
+        const extLabel = ext
+          ? `${ext.brand ?? ""} ${ext.model ?? ""}`.trim() || null
+          : null;
+        cur.firstName = e.products?.name ?? extLabel ?? null;
       }
       equipmentMap.set(e.customer_id, cur);
     }

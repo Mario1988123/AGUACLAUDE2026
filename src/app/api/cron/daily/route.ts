@@ -1944,7 +1944,9 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Registrar recordatorio (idempotencia primero)
+        // Registrar recordatorio (idempotencia primero — un solo recordatorio
+        // por nivel y factura, aunque el envío falle: si reintentamos al día
+        // siguiente la siguiente vuelta del cron no duplica).
         await admin.from("invoice_reminders_sent").insert({
           invoice_id: inv.id,
           level,
@@ -1953,8 +1955,128 @@ export async function GET(req: NextRequest) {
           template_key: `payment_reminder_${level}`,
         });
 
-        // TODO: invocar sendEmail real con plantilla (cuando estén creadas
-        // en /configuracion/mailing). Por ahora notif admin con resumen.
+        // Envío REAL del recordatorio al cliente vía SMTP (auditoría 2026-05-30
+        // detectó que antes solo notificaba al admin internamente y NO al
+        // cliente — el campo "ya le mandamos 3 recordatorios" era falso).
+        try {
+          const templateKey = `payment_reminder_${level}`;
+          // Plantilla per-empresa; fallback al catálogo de sistema.
+          const { data: tplRow } = await admin
+            .from("email_templates")
+            .select("id, subject, body_html, kind")
+            .eq("company_id", inv.company_id)
+            .eq("key", templateKey)
+            .eq("is_active", true)
+            .maybeSingle();
+          let tplId: string | null = null;
+          let tplSubject = "";
+          let tplBody = "";
+          let tplKind = "transactional";
+          if (tplRow) {
+            const tr = tplRow as {
+              id: string;
+              subject: string;
+              body_html: string;
+              kind: string;
+            };
+            tplId = tr.id;
+            tplSubject = tr.subject;
+            tplBody = tr.body_html;
+            tplKind = tr.kind;
+          } else {
+            const { getSystemTemplateByKey } = await import(
+              "@/modules/mailing/system-templates"
+            );
+            const sys = getSystemTemplateByKey(templateKey);
+            if (sys) {
+              tplSubject = sys.subject;
+              tplBody = sys.body_html;
+            } else {
+              // Genérico mínimo si no hay seed: que al menos llegue algo
+              // útil. (system-templates debería tener payment_reminder_*).
+              tplSubject = `Recordatorio: factura ${inv.full_reference} pendiente`;
+              tplBody = `<p>Hola,</p><p>Te recordamos que la factura <b>${inv.full_reference}</b> de ${(inv.pending_cents / 100).toFixed(2)} € está pendiente de pago desde hace ${daysOverdue} días.</p><p>Si ya la has abonado, ignora este aviso. Si no, ponte en contacto con nosotros.</p>`;
+            }
+          }
+
+          const snapFull = inv.customer_fiscal_snapshot as
+            | Record<string, unknown>
+            | null;
+          const firstName = (snapFull?.first_name as string | null) ?? "";
+          const customerName =
+            (snapFull?.trade_name as string | null) ??
+            (snapFull?.legal_name as string | null) ??
+            `${firstName} ${snapFull?.last_name ?? ""}`.trim() ??
+            "Cliente";
+          const vars: Record<string, string> = {
+            customer_first_name: firstName || customerName,
+            customer_name: customerName,
+            invoice_ref: inv.full_reference ?? "",
+            days_overdue: String(daysOverdue),
+            pending_amount: (inv.pending_cents / 100).toFixed(2),
+            due_date: new Date(inv.due_date).toLocaleDateString("es-ES"),
+          };
+          const render = (s: string) =>
+            s.replace(/\{\{(\w+)\}\}/g, (_m, k: string) =>
+              vars[k] !== undefined ? vars[k] : `{{${k}}}`,
+            );
+
+          const { loadCompanyEmailContext } = await import(
+            "@/modules/mailing/company-context"
+          );
+          const ctx = await loadCompanyEmailContext(inv.company_id, admin);
+          const { buildEmailHtml } = await import("@/modules/mailing/templates");
+          const subjectRendered = render(tplSubject);
+          const htmlWrapped = buildEmailHtml({
+            body_html: render(tplBody),
+            company: ctx.company,
+            branding: ctx.branding,
+            kind: "transactional",
+          });
+
+          const { sendViaSmtp } = await import("@/modules/mailing/smtp");
+          const sendRes = await sendViaSmtp({
+            companyId: inv.company_id,
+            senderUserId: null,
+            to: recipientEmail,
+            toName: customerName,
+            subject: subjectRendered,
+            html: htmlWrapped,
+            sendType: "automated",
+            triggerEvent: "payment_reminder",
+            relatedType: "invoice",
+            relatedId: inv.id,
+          });
+
+          try {
+            await admin.from("email_sends").insert({
+              company_id: inv.company_id,
+              template_id: tplId,
+              template_key: templateKey,
+              kind: tplKind,
+              to_email: recipientEmail,
+              to_name: customerName,
+              subject: subjectRendered,
+              body_html: htmlWrapped,
+              customer_id: inv.customer_id,
+              related_subject_type: "invoice",
+              related_subject_id: inv.id,
+              status: sendRes.ok ? "sent" : "failed",
+              error_message: sendRes.ok ? null : sendRes.error,
+              sent_at: sendRes.ok ? new Date().toISOString() : null,
+              send_type: "automated",
+              trigger_event: "payment_reminder",
+              from_account_type: sendRes.ok ? sendRes.accountType : null,
+              resend_id: sendRes.ok ? sendRes.resend_id ?? null : null,
+            });
+          } catch {
+            /* fail-soft del registro */
+          }
+        } catch (e) {
+          tracker.error("payment-reminder-send", e);
+        }
+
+        // Notificar también al admin internamente para que vea el resumen.
         await notifyByRoles(
           inv.company_id,
           ["company_admin", "commercial_director"],
