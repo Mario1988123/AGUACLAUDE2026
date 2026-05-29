@@ -133,18 +133,30 @@ export async function uploadCertificateAction(
   const admin = createAdminClient() as any;
   const { data: existing } = await admin
     .from("company_settings")
-    .select("company_id")
+    .select("company_id, verifactu_mode")
     .eq("company_id", session.company_id)
     .maybeSingle();
+  const existingRow = existing as
+    | { company_id: string; verifactu_mode: string | null }
+    | null;
 
-  const payload = {
+  // Mutex automático: subir el certificado significa que la empresa quiere
+  // Verifactu (intención inequívoca, decisión 2026-05-30). Si el modo estaba
+  // en no_envio, lo elevamos a 'verifactu_test' (entorno de pruebas AEAT)
+  // para que el admin pueda validar antes de pasar a producción. Si ya
+  // estaba en test o prod, lo respetamos (substitución de cert por renovación).
+  const payload: Record<string, unknown> = {
     verifactu_cert_alias: info.alias,
     verifactu_cert_encrypted: certEncrypted,
     verifactu_cert_password_encrypted: passwordEncrypted,
     verifactu_cert_expires_at: info.valid_to.slice(0, 10),
   };
+  if (!existingRow || existingRow.verifactu_mode === "no_envio" || !existingRow.verifactu_mode) {
+    payload.verifactu_mode = "verifactu_test";
+    payload.verifactu_environment = "test";
+  }
 
-  if (existing) {
+  if (existingRow) {
     const { error } = await admin
       .from("company_settings")
       .update(payload)

@@ -707,12 +707,17 @@ export async function deleteOrRectifyInvoiceAction(
   // Caso 1: borrado duro permitido.
   if (i.status === "draft" && isLast) {
     // Liberar el número para que la siguiente factura tome este número
-    // (decrementar next_number de la serie).
+    // (decrementar next_number de la serie). Guard ATÓMICO: solo se decrementa
+    // si next_number SIGUE siendo i.number+1 — si entre el chequeo isLast y
+    // este UPDATE otra factura concurrente ya tomó el siguiente número
+    // (next_number subió por encima), no decrementamos; queda un hueco (no
+    // duplicado). Antes usábamos `.gte()` que en esa carrera generaba
+    // numeración duplicada (decisión 2026-05-30).
     await admin
       .from("invoice_series")
       .update({ next_number: i.number })
       .eq("id", i.series_id)
-      .gte("next_number", i.number + 1);
+      .eq("next_number", i.number + 1);
     // Borrar líneas y pagos primero (FK)
     await admin.from("invoice_lines").delete().eq("invoice_id", invoiceId);
     await admin.from("invoice_payments").delete().eq("invoice_id", invoiceId);

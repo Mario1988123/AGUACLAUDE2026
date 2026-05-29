@@ -556,6 +556,7 @@ export async function issueInvoiceV2Action(
       issued_at: issuedAt,
       operation_date: issuedAt,
       total_cents: inv.total_cents,
+      tax_cents: inv.tax_total_cents,
       prev_hash: prevHash,
       record_type: "alta",
     });
@@ -722,6 +723,7 @@ export async function cancelInvoiceV2Action(
       issued_at: cancelDate,
       operation_date: cancelDate,
       total_cents: inv.total_cents,
+      tax_cents: inv.tax_total_cents,
       prev_hash: prevHash,
       record_type: "anulacion",
     });

@@ -35,6 +35,10 @@ export interface VerifactuRecordInput {
   operation_date: Date;
   /** Importe total con IVA, en céntimos. */
   total_cents: number;
+  /** Cuota total de IVA (suma de cuotas de todos los tipos), en céntimos.
+   *  Si no se pasa, se usa total_cents como fallback (huella incorrecta
+   *  pero compatible con la versión anterior — ver fix 2026-05-30). */
+  tax_cents?: number;
   /** Hash del registro INMEDIATAMENTE anterior (cadena). Vacío "" en el primero. */
   prev_hash: string;
   /** Tipo de registro: alta o anulación. */
@@ -59,13 +63,17 @@ export interface VerifactuRecordInput {
 export function computeVerifactuHash(input: VerifactuRecordInput): string {
   const fechaExp = formatDateDDMMYYYY(input.issued_at);
   const totalEur = (input.total_cents / 100).toFixed(2);
+  // CuotaTotal es la cuota de IVA agregada, NO el total con IVA. Si no nos lo
+  // pasan (callers antiguos) caemos al total como fallback compat: la huella
+  // no será la que AEAT recalcula, pero no rompe el flujo local.
+  const taxEur = ((input.tax_cents ?? input.total_cents) / 100).toFixed(2);
 
   const concat =
     `IDEmisorFactura=${input.issuer_nif}` +
     `&NumSerieFactura=${input.series_code}-${input.invoice_number}` +
     `&FechaExpedicionFactura=${fechaExp}` +
     `&TipoFactura=${input.invoice_type}` +
-    `&CuotaTotal=${totalEur}` +
+    `&CuotaTotal=${taxEur}` +
     `&ImporteTotal=${totalEur}` +
     `&Huella=${input.prev_hash || ""}` +
     `&FechaHoraHusoGenRegistro=${input.issued_at.toISOString()}` +
