@@ -25,6 +25,8 @@ import { ReassignContractButton } from "@/modules/contracts/reassign-button";
 import { ContractAdminActions } from "@/modules/contracts/admin-actions";
 import { Timeline } from "@/modules/events/timeline";
 import { ContractPhotosCard } from "@/modules/contracts/photo-uploader";
+import { TechPrepCard } from "@/modules/installations/tech-prep-card";
+import { getTechPrepByContract } from "@/modules/installations/tech-prep-actions";
 import { SignaturesCard } from "@/modules/contracts/signature-pad";
 import { InstallPreference } from "@/modules/contracts/install-preference";
 import { ViewA4Button } from "@/modules/contracts/view-a4-button";
@@ -172,6 +174,10 @@ export default async function ContractDetailPage({
     .is("deleted_at", null);
   const hasInstallation = (instCount ?? 0) > 0;
   const isSignedOrActive = ["signed", "active"].includes(contract.status);
+  // Instrucciones del comercial para el técnico (notas + fotos/vídeos).
+  const techPrep = hasInstallation
+    ? await getTechPrepByContract(id).catch(() => null)
+    : null;
 
   // ¿hay algún pago por transferencia? Si sí, mostramos el IBAN de la
   // empresa para que el cliente pueda hacer el ingreso.
@@ -736,6 +742,15 @@ export default async function ContractDetailPage({
       </Card>
 
       <ContractPhotosCard contractId={id} />
+
+      {techPrep?.installationId && (
+        <TechPrepCard
+          contractId={id}
+          initialNotes={techPrep.notes}
+          initialMedia={techPrep.media}
+          canEdit={techPrep.canEdit}
+        />
+      )}
 
       {showSepaPanel && (
         <Card>

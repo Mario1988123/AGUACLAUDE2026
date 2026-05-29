@@ -15,6 +15,8 @@ import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installation
 import { Timeline } from "@/modules/events/timeline";
 import { ReassignInstallationButton } from "@/modules/installations/reassign-button";
 import { InstallationWizard } from "@/modules/installations/installation-wizard";
+import { TechPrepCard } from "@/modules/installations/tech-prep-card";
+import { getTechPrepByContract } from "@/modules/installations/tech-prep-actions";
 import { UninstallWizard } from "@/modules/installations/uninstall-wizard";
 import { PhotoGallery } from "@/modules/installations/photo-gallery";
 import { InstallationPrioritySelector } from "@/modules/installations/priority-selector";
@@ -319,6 +321,10 @@ export default async function InstallationDetailPage({
     }
   }
 
+  const techPrep = i.contract_id
+    ? await getTechPrepByContract(i.contract_id).catch(() => null)
+    : null;
+
   return (
     <div className="space-y-6">
       <SubjectNotificationToast subjectType="installation" subjectId={id} />
@@ -376,6 +382,14 @@ export default async function InstallationDetailPage({
               customerName={customerName}
               scheduledAt={i.scheduled_at}
               warehouses={uninstallWarehouses}
+            />
+          )}
+          {techPrep?.installationId && (
+            <TechPrepCard
+              contractId={i.contract_id ?? ""}
+              initialNotes={techPrep.notes}
+              initialMedia={techPrep.media}
+              canEdit={techPrep.canEdit}
             />
           )}
           {i.status !== "completed" && i.status !== "cancelled" && i.kind !== "uninstall" && (

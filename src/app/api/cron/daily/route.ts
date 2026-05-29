@@ -1988,9 +1988,67 @@ export async function GET(req: NextRequest) {
     tracker.error("invoice-reminders-outer", e);
   }
 
+  // Retención de media "instrucciones para el técnico" (category tech_prep):
+  //  · vídeos → se borran cuando la instalación está completed (ya instalado).
+  //  · fotos  → se borran a los 6 meses. Las notas de texto se conservan.
+  const techPrepCleanup = { videos_deleted: 0, photos_deleted: 0, errors: 0 };
+  try {
+    const { data: vids } = await admin
+      .from("installation_photos")
+      .select("id, storage_path, installation_id")
+      .eq("category", "tech_prep")
+      .like("mime_type", "video/%")
+      .limit(1000);
+    const vidList = (vids ?? []) as Array<{
+      id: string;
+      storage_path: string;
+      installation_id: string;
+    }>;
+    if (vidList.length > 0) {
+      const instIds = Array.from(new Set(vidList.map((v) => v.installation_id)));
+      const { data: completed } = await admin
+        .from("installations")
+        .select("id")
+        .in("id", instIds)
+        .eq("status", "completed");
+      const done = new Set(((completed ?? []) as Array<{ id: string }>).map((r) => r.id));
+      for (const v of vidList) {
+        if (!done.has(v.installation_id)) continue;
+        try {
+          await admin.storage.from("installation-photos").remove([v.storage_path]);
+          await admin.from("installation_photos").delete().eq("id", v.id);
+          techPrepCleanup.videos_deleted += 1;
+        } catch {
+          techPrepCleanup.errors += 1;
+        }
+      }
+    }
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const { data: oldPhotos } = await admin
+      .from("installation_photos")
+      .select("id, storage_path")
+      .eq("category", "tech_prep")
+      .like("mime_type", "image/%")
+      .lt("taken_at", sixMonthsAgo.toISOString())
+      .limit(1000);
+    for (const p of (oldPhotos ?? []) as Array<{ id: string; storage_path: string }>) {
+      try {
+        await admin.storage.from("installation-photos").remove([p.storage_path]);
+        await admin.from("installation_photos").delete().eq("id", p.id);
+        techPrepCleanup.photos_deleted += 1;
+      } catch {
+        techPrepCleanup.errors += 1;
+      }
+    }
+  } catch (e) {
+    tracker.error("tech-prep-cleanup", e);
+  }
+
   const summary = {
     ...stats,
     verifactu,
+    tech_prep_cleanup: techPrepCleanup,
     savings_scraper: scraperStats,
     stock_alerts: stockAlertsStats,
     auto_loading: loadingStats,
