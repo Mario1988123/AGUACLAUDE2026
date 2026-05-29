@@ -88,6 +88,12 @@ export async function deliverLoadingRequestAction(requestId: string) {
   type Item = { id: string; product_id: string; quantity_requested: number };
   const list = (items ?? []) as Item[];
 
+  const shortages: Array<{
+    product_id: string;
+    requested: number;
+    delivered: number;
+  }> = [];
+
   for (const it of list) {
     // Salida del almacén origen
     const moved = await decrementStock({
@@ -100,6 +106,13 @@ export async function deliverLoadingRequestAction(requestId: string) {
       performed_by: session.user_id,
       notes: "Carga vehículo",
     });
+    if (moved < it.quantity_requested) {
+      shortages.push({
+        product_id: it.product_id,
+        requested: it.quantity_requested,
+        delivered: moved,
+      });
+    }
 
     // Entrada en almacén destino
     if (moved > 0) {
@@ -156,6 +169,42 @@ export async function deliverLoadingRequestAction(requestId: string) {
       delivered_by: session.user_id,
     })
     .eq("id", requestId);
+
+  // Entrega PARCIAL: si algún producto se entregó por debajo de lo pedido
+  // (faltaba stock), dejamos constancia (evento + aviso) en lugar de marcar
+  // "entregada" en silencio. Fail-soft.
+  if (shortages.length > 0) {
+    try {
+      await admin.from("events").insert({
+        company_id: r.company_id,
+        subject_type: "loading_request",
+        subject_id: requestId,
+        kind: "loading_request.partial_delivery",
+        payload: { shortages },
+        actor_user_id: session.user_id,
+      });
+    } catch {
+      /* fail-soft */
+    }
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      await notifyByRoles(
+        r.company_id,
+        ["company_admin", "technical_director"],
+        {
+          kind: "loading_request.partial_delivery",
+          severity: "warning",
+          title: "Carga de furgoneta incompleta",
+          body: `Faltó stock para ${shortages.length} producto(s) al cargar la furgoneta. Revisa el almacén y reponlo.`,
+          subject_type: "loading_request",
+          subject_id: requestId,
+          action_url: "/almacenes",
+        },
+      );
+    } catch {
+      /* fail-soft */
+    }
+  }
 
   revalidatePath("/almacenes");
 }

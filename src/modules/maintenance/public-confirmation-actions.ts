@@ -280,18 +280,18 @@ async function consumeToken(
   const admin = createAdminClient() as any;
   const { data: tok } = await admin
     .from("maintenance_confirmation_tokens")
-    .select("id, job_id, expires_at, used_at")
+    .select("id, job_id, expires_at, used_at, used_action")
     .eq("token", token)
     .maybeSingle();
   if (!tok) return { ok: false, error: "Enlace no válido" };
-  const t = tok as TokenRow;
+  const t = tok as TokenRow & { used_action: string | null };
   if (new Date(t.expires_at).getTime() < Date.now()) {
     return { ok: false, error: "Enlace caducado" };
   }
   // Permitimos reusar el token si la acción anterior fue "reconfirmed"
   // (24h antes) — el cliente puede aún cambiar de opinión. Otras
   // acciones son finales.
-  if (t.used_at) {
+  if (t.used_at && t.used_action !== "reconfirmed") {
     return { ok: false, error: "Este enlace ya se ha utilizado" };
   }
   const { data: jobRow } = await admin
@@ -307,13 +307,22 @@ async function consumeToken(
     scheduled_at: string | null;
   };
 
-  await admin
+  // Claim ATÓMICO: el UPDATE solo afecta si el token sigue sin usar (o si la
+  // única acción previa fue "reconfirmed", que no bloquea). Si un doble clic
+  // llega a la vez, solo una petición ve filas afectadas; la otra recibe
+  // "ya utilizado" y no ejecuta la acción dos veces.
+  const { data: claimed } = await admin
     .from("maintenance_confirmation_tokens")
     .update({
       used_at: new Date().toISOString(),
       used_action: action,
     })
-    .eq("id", t.id);
+    .eq("id", t.id)
+    .or("used_at.is.null,used_action.eq.reconfirmed")
+    .select("id");
+  if (!claimed || (claimed as unknown[]).length === 0) {
+    return { ok: false, error: "Este enlace ya se ha utilizado" };
+  }
 
   return {
     ok: true,
@@ -331,13 +340,27 @@ export async function customerConfirmAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const nowIso = new Date().toISOString();
+  // No retroceder estado: una confirmación tardía no debe devolver a
+  // 'scheduled' un trabajo ya en curso, hecho o cancelado. En esos casos
+  // solo registramos la confirmación del cliente sin tocar el status.
+  const { data: cur } = await admin
+    .from("maintenance_jobs")
+    .select("status")
+    .eq("id", r.jobId)
+    .maybeSingle();
+  const curStatus = (cur as { status: string | null } | null)?.status ?? null;
+  const advanced =
+    curStatus === "in_progress" ||
+    curStatus === "completed" ||
+    curStatus === "cancelled";
+  const confirmUpdates: Record<string, unknown> = {
+    confirmed_at: nowIso,
+    customer_called_at: nowIso,
+  };
+  if (!advanced) confirmUpdates.status = "scheduled";
   await admin
     .from("maintenance_jobs")
-    .update({
-      status: "scheduled",
-      confirmed_at: nowIso,
-      customer_called_at: nowIso,
-    })
+    .update(confirmUpdates)
     .eq("id", r.jobId);
   await admin.from("events").insert({
     company_id: r.companyId,

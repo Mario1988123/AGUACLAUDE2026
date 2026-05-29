@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createProductAction } from "./actions";
+import { createProductSafeAction } from "./actions";
 import { KIND_LABEL, PRODUCT_KIND } from "./schemas";
 import { listAttributes, type ProductAttribute } from "./attributes-actions";
 import type { CategoryItem } from "./types";
@@ -141,7 +141,11 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
 
     startTransition(async () => {
       try {
-        await createProductAction(fd);
+        const r = await createProductSafeAction(fd);
+        // El éxito redirige (lanza NEXT_REDIRECT). Si vuelve un objeto, es error.
+        if (r && !r.ok) {
+          notify.error("Error", r.error || "No se pudo crear el producto");
+        }
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {
           const d = String((err as { digest?: unknown }).digest);

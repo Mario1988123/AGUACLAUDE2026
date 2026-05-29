@@ -1036,7 +1036,15 @@ export async function generateMonthlyRecurringInvoicesAction(): Promise<{ create
       .maybeSingle();
     if (existing) continue;
     const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-    const baseCents = Math.round((c.monthly_cents ?? 0) / (1 + fiscal.invoice_default_iva / 100));
+    // Ajuste de redondeo: base + IVA debe == cuota mensual EXACTA (la factura
+    // recurrente debe cuadrar con la cuota del contrato).
+    const iva = fiscal.invoice_default_iva;
+    const monthlyTotal = c.monthly_cents ?? 0;
+    const taxOf = (b: number) => Math.round((b * iva) / 100);
+    let baseCents = Math.round(monthlyTotal / (1 + iva / 100));
+    for (let k = 0; k < 3 && baseCents + taxOf(baseCents) !== monthlyTotal; k++) {
+      baseCents += baseCents + taxOf(baseCents) < monthlyTotal ? 1 : -1;
+    }
     await createInvoiceAction({
       customer_id: c.customer_id,
       contract_id: c.id,

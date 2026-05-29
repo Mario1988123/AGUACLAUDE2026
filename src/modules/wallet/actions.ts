@@ -900,7 +900,15 @@ export async function createInvoiceFromWalletAction(
     const fiscal = await getFiscalSettings();
     const ivaPercent = fiscal.invoice_default_iva ?? 21;
     const totalCents = w.amount_cents;
-    const baseCents = Math.round(totalCents / (1 + ivaPercent / 100));
+    // La factura aplica IVA por línea como round(base*iva/100), así que la
+    // base reconstruida puede descuadrar ±1 cént. respecto al cobro real.
+    // Ajustamos la base para que base + IVA == total EXACTO (la factura debe
+    // cuadrar con el importe cobrado en el wallet).
+    const taxOf = (b: number) => Math.round((b * ivaPercent) / 100);
+    let baseCents = Math.round(totalCents / (1 + ivaPercent / 100));
+    for (let k = 0; k < 3 && baseCents + taxOf(baseCents) !== totalCents; k++) {
+      baseCents += baseCents + taxOf(baseCents) < totalCents ? 1 : -1;
+    }
 
     const { createInvoiceAction } = await import("@/modules/invoices/actions");
     const invoiceId = await createInvoiceAction({

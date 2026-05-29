@@ -465,8 +465,7 @@ export async function submitRemoteSignatureAction(input: {
       console.error("[remote-sign] insert contract_signature failed:", e);
     }
 
-    // Marcar contrato como signed (mismo flujo que markContractSigned
-    // pero más quirúrgico — no llamamos al wizard completo aquí).
+    // Marcar contrato como signed.
     try {
       await admin
         .from("contracts")
@@ -477,6 +476,22 @@ export async function submitRemoteSignatureAction(input: {
         .eq("id", s.contract_id);
     } catch (e) {
       console.error("[remote-sign] mark signed failed:", e);
+    }
+
+    // Disparar TODOS los efectos post-firma (paridad con la firma presencial):
+    // wallet, instalación, mantenimientos, reservas de stock, sales_records,
+    // soft-delete del lead y notificación. Sin sesión → actorUserId null. No
+    // pedimos email de bienvenida porque justo abajo enviamos la copia firmada.
+    try {
+      const { runPostSignSideEffects } = await import("./post-sign");
+      await runPostSignSideEffects({
+        contractId: s.contract_id,
+        companyId: s.company_id,
+        actorUserId: null,
+        sendWelcomeEmail: false,
+      });
+    } catch (e) {
+      console.error("[remote-sign] post-sign side effects failed:", e);
     }
 
     // Enviar al cliente su copia firmada en PDF (envío de sistema, sin sesión).

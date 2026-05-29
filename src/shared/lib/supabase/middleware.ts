@@ -59,6 +59,7 @@ export async function updateSession(request: NextRequest) {
   //  · /login + recuperación de contraseña
   //  · /api/health para uptime checks
   //  · /m/[token] — confirmación pública de mantenimiento por cliente
+  //  · /i/[token] — confirmación pública de instalación por cliente
   //  · /firmar-contrato — firma remota de contrato
   const PUBLIC_PATHS = [
     "/login",
@@ -66,6 +67,7 @@ export async function updateSession(request: NextRequest) {
     "/restablecer-password",
     "/api/health",
     "/m/",
+    "/i/",
     "/firmar-contrato",
     "/baja", // baja de comunicaciones comerciales (link en emails de campaña)
     "/api/webhooks/", // webhooks externos (Resend, GoCardless) verifican su propia firma

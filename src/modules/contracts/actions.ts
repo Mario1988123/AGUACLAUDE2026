@@ -758,15 +758,15 @@ export async function markContractSigned(id: string) {
   // el firmado si el plan es renting/rental)
   const { data: ctxValidate } = await admin
     .from("contracts")
-    .select("customer_id, chosen_plan_type")
+    .select("customer_id, plan_type")
     .eq("id", id)
     .maybeSingle();
   const cv = ctxValidate as
-    | { customer_id: string | null; chosen_plan_type: string | null }
+    | { customer_id: string | null; plan_type: string | null }
     | null;
   if (
     cv?.customer_id &&
-    (cv.chosen_plan_type === "rental" || cv.chosen_plan_type === "renting")
+    (cv.plan_type === "rental" || cv.plan_type === "renting")
   ) {
     const { data: bk } = await admin
       .from("customer_bank_accounts")
@@ -797,16 +797,16 @@ export async function markContractSigned(id: string) {
   // de IBAN real (decisión usuario 2026-05-08).
   const { data: ctx } = await admin
     .from("contracts")
-    .select("customer_id, chosen_plan_type")
+    .select("customer_id, plan_type")
     .eq("id", id)
     .maybeSingle();
   const ctxRow = ctx as
-    | { customer_id: string | null; chosen_plan_type: string | null }
+    | { customer_id: string | null; plan_type: string | null }
     | null;
   let provisionalIban = false;
   if (
     ctxRow?.customer_id &&
-    (ctxRow.chosen_plan_type === "rental" || ctxRow.chosen_plan_type === "renting")
+    (ctxRow.plan_type === "rental" || ctxRow.plan_type === "renting")
   ) {
     const { data: bk } = await admin
       .from("customer_bank_accounts")

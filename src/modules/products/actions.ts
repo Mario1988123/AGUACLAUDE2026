@@ -383,6 +383,31 @@ export async function createProductAction(formData: FormData) {
   redirect(`/productos/${productId}` as never);
 }
 
+/**
+ * Wrapper Safe de createProductAction: captura los errores de validación
+ * SERVER-SIDE y los devuelve como dato `{ok:false,error}` (en producción
+ * Next.js redacta el mensaje de un Error lanzado, ver feedback_server_action_errors).
+ * El éxito hace redirect (lanza NEXT_REDIRECT), que dejamos pasar.
+ */
+export async function createProductSafeAction(
+  formData: FormData,
+): Promise<{ ok: false; error: string }> {
+  try {
+    await createProductAction(formData);
+    return { ok: false, error: "" }; // inalcanzable: createProductAction redirige en éxito
+  } catch (e) {
+    if (
+      e &&
+      typeof e === "object" &&
+      "digest" in e &&
+      String((e as { digest?: unknown }).digest).startsWith("NEXT_REDIRECT")
+    ) {
+      throw e;
+    }
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 export type ProductActionResult = { ok: true } | { ok: false; error: string };
 
 /**

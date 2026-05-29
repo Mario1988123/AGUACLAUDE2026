@@ -275,7 +275,7 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
           </MndtRltdInf>
         </DrctDbtTx>
         <DbtrAgt>
-          <FinInstnId/>
+          <FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId>
         </DbtrAgt>
         <Dbtr>
           <Nm>${esc(r.customer_name || "Cliente")}</Nm>
@@ -321,7 +321,7 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
         <Id><IBAN>${esc(cleanIban(cset.fiscal_iban))}</IBAN></Id>
       </CdtrAcct>
       <CdtrAgt>
-        <FinInstnId/>
+        <FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId>
       </CdtrAgt>
       <ChrgBr>SLEV</ChrgBr>
       <CdtrSchmeId>

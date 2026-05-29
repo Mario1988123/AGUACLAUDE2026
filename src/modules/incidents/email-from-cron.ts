@@ -66,15 +66,39 @@ export async function sendIncidentEmailFromCron(
       ? c.trade_name || c.legal_name || "Cliente"
       : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente";
 
-  // Plantilla
-  const { data: tpl } = await admin
+  // Plantilla: per-empresa; si no existe, caer al catálogo de sistema (igual
+  // que el resto de envíos) para que una empresa sin seed igualmente avise.
+  const { data: tplRow } = await admin
     .from("email_templates")
     .select("id, subject, body_html, kind")
     .eq("company_id", i.company_id)
     .eq("key", templateKey)
     .eq("is_active", true)
     .maybeSingle();
-  if (!tpl) return;
+  let tplId: string | null = null;
+  let tplSubject = "";
+  let tplBody = "";
+  let tplKind = "transactional";
+  if (tplRow) {
+    const tr = tplRow as {
+      id: string;
+      subject: string;
+      body_html: string;
+      kind: string;
+    };
+    tplId = tr.id;
+    tplSubject = tr.subject;
+    tplBody = tr.body_html;
+    tplKind = tr.kind;
+  } else {
+    const { getSystemTemplateByKey } = await import(
+      "@/modules/mailing/system-templates"
+    );
+    const sys = getSystemTemplateByKey(templateKey);
+    if (!sys) return;
+    tplSubject = sys.subject;
+    tplBody = sys.body_html;
+  }
 
   let technicianName = "Nuestro técnico";
   if (i.assigned_user_id) {
@@ -108,15 +132,26 @@ export async function sendIncidentEmailFromCron(
   }
 
   // Render simple {{var}}
-  const t = tpl as { id: string; subject: string; body_html: string; kind: string };
   function render(s: string): string {
     return s.replace(/\{\{(\w+)\}\}/g, (_m, key) =>
       variables[key] !== undefined ? String(variables[key]) : `{{${key}}}`,
     );
   }
 
-  const subject = render(t.subject);
-  const html = render(t.body_html);
+  const subject = render(tplSubject);
+  // Envolver en la plantilla HTML con marca + cabecera + pie legal de la
+  // empresa, igual que el resto de envíos (antes iba el cuerpo "pelado").
+  const { loadCompanyEmailContext } = await import(
+    "@/modules/mailing/company-context"
+  );
+  const ctx = await loadCompanyEmailContext(i.company_id, admin);
+  const { buildEmailHtml } = await import("@/modules/mailing/templates");
+  const html = buildEmailHtml({
+    body_html: render(tplBody),
+    company: ctx.company,
+    branding: ctx.branding,
+    kind: "transactional",
+  });
 
   const result = await sendViaSmtp({
     companyId: i.company_id,
@@ -133,9 +168,9 @@ export async function sendIncidentEmailFromCron(
 
   await admin.from("email_sends").insert({
     company_id: i.company_id,
-    template_id: t.id,
+    template_id: tplId,
     template_key: templateKey,
-    kind: t.kind,
+    kind: tplKind,
     to_email: c.email,
     to_name: customerName,
     subject,

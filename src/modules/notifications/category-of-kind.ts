@@ -56,8 +56,9 @@ export function categoryOfKind(kind: string): "alert" | "event" {
     // Leads — caducados (hay que reasignar)
     "lead.expired",
     "lead.unassigned_by_expiry",
-    // Stock — bajo (hay que reponer)
+    // Stock — bajo (hay que reponer) / faltó al cargar furgoneta
     "stock.low",
+    "loading_request.partial_delivery",
     // Verifactu — facturas rechazadas (hay que reintentar)
     "verifactu.failed",
     // Cobros — acciones legales (decidir)

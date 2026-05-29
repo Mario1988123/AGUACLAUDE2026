@@ -61,6 +61,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
   if (!hasAnyRole(session, EXPORT_ROLES)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  // El registro horario completo (geolocalización de TODA la plantilla, fin de
+  // inspección laboral RD 8/2019) es responsabilidad del empleador: solo lo
+  // descarga el admin de empresa (o superadmin). Un director no vuelca el GPS
+  // de todos los empleados.
+  if (
+    entity === "time-records" &&
+    !session.is_superadmin &&
+    !session.roles.includes("company_admin")
+  ) {
+    return NextResponse.json(
+      { error: "forbidden", message: "Solo el administrador puede exportar el registro horario." },
+      { status: 403 },
+    );
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
@@ -205,6 +219,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
         .select(
           "id, contract_id, concept, amount_cents, method, moment, status, created_at",
         )
+        .eq("company_id", session.company_id)
         .order("created_at", { ascending: false })
         .limit(10000);
       csv = toCsv(
@@ -391,6 +406,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
         .select(
           "id, contract_id, customer_id, concept, amount_cents, method, status, collected_at, validated_at",
         )
+        .eq("company_id", session.company_id)
         .order("collected_at", { ascending: false })
         .limit(10000);
       csv = toCsv(

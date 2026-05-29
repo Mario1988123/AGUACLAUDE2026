@@ -308,6 +308,19 @@ async function consumeToken(
   }
   if (t.used_at) return { ok: false, error: "Este enlace ya se ha utilizado" };
 
+  // Claim ATÓMICO del token: el UPDATE solo afecta si used_at SIGUE null.
+  // Si dos peticiones (doble clic) llegan a la vez, solo una verá filas
+  // afectadas; la otra recibe "ya utilizado" y no ejecuta la acción doble.
+  const { data: claimed } = await admin
+    .from("installation_confirmation_tokens")
+    .update({ used_at: new Date().toISOString(), used_action: action })
+    .eq("id", t.id)
+    .is("used_at", null)
+    .select("id");
+  if (!claimed || (claimed as unknown[]).length === 0) {
+    return { ok: false, error: "Este enlace ya se ha utilizado" };
+  }
+
   const { data: instRow } = await admin
     .from("installations")
     .select("id, company_id, scheduled_at")
@@ -319,11 +332,6 @@ async function consumeToken(
     company_id: string;
     scheduled_at: string | null;
   };
-
-  await admin
-    .from("installation_confirmation_tokens")
-    .update({ used_at: new Date().toISOString(), used_action: action })
-    .eq("id", t.id);
 
   return {
     ok: true,

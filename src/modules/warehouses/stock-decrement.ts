@@ -149,6 +149,7 @@ export async function decrementStockForInstallation(installationId: string): Pro
   if (list.length === 0) return { moved_total: 0, items: 0 };
 
   let total = 0;
+  const shortages: Array<{ product_id: string; needed: number; moved: number }> = [];
   for (const it of list) {
     const moved = await decrementStock({
       company_id: i.company_id,
@@ -162,6 +163,44 @@ export async function decrementStockForInstallation(installationId: string): Pro
       notes: "Auto-decrement on installation completion",
     });
     total += moved;
+    if (moved < it.quantity) {
+      shortages.push({ product_id: it.product_id, needed: it.quantity, moved });
+    }
+  }
+
+  // Faltó stock para cubrir la instalación: el inventario quedará descuadrado.
+  // Dejamos constancia (evento + aviso) para que admin/dir. técnico repongan.
+  if (shortages.length > 0) {
+    try {
+      await admin.from("events").insert({
+        company_id: i.company_id,
+        subject_type: "installation",
+        subject_id: i.id,
+        kind: "installation.stock_shortage",
+        payload: { shortages, warehouse_id: i.source_warehouse_id },
+        actor_user_id: i.installer_user_id,
+      });
+    } catch {
+      /* fail-soft */
+    }
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      await notifyByRoles(
+        i.company_id,
+        ["company_admin", "technical_director"],
+        {
+          kind: "installation.stock_shortage",
+          severity: "warning",
+          title: "Falta de stock en una instalación",
+          body: `El almacén/furgoneta no tenía stock suficiente para ${shortages.length} producto(s) de una instalación. Revisa el inventario.`,
+          subject_type: "installation",
+          subject_id: i.id,
+          action_url: `/instalaciones/${i.id}`,
+        },
+      );
+    } catch {
+      /* fail-soft */
+    }
   }
 
   // Marcar reservas asociadas al contrato como cumplidas (fail-soft).

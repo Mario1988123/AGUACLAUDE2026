@@ -28,6 +28,7 @@ export type NotificationSubjectType =
   | "invoice"
   | "free_trial"
   | "agenda"
+  | "loading_request"
   | "user";
 
 export interface NotifyInput {
