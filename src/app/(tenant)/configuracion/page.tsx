@@ -32,6 +32,7 @@ const SECTIONS = [
   { href: "/configuracion/festivos", label: "Calendario laboral", icon: "Calendar", desc: "Festivos nacionales y locales" },
   { href: "/configuracion/usuarios", label: "Usuarios", icon: "Users", desc: "Equipo, roles y permisos" },
   { href: "/configuracion/agenda", label: "Agenda", icon: "Calendar", desc: "Horario, tolerancias y tipos de evento" },
+  { href: "/configuracion/zonas", label: "Zonas y rutas", icon: "Route", desc: "Zonas por CP → días + límites de agenda para fechas al cliente" },
   { href: "/configuracion/almacenes", label: "Almacenes", icon: "Warehouse", desc: "Almacenes, furgonetas y stock" },
   { href: "/configuracion/google-maps", label: "Google Maps Tools", icon: "Map", desc: "Mapas, rutas IA, Street View, anti-fraude · consumo y caps" },
   { href: "/configuracion/modulos", label: "Módulos activos", icon: "Layers", desc: "Activar/desactivar módulos por empresa" },

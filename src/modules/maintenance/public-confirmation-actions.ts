@@ -2,6 +2,92 @@
 
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import {
+  computeOfferableSlots,
+  isSlotOfferable,
+  type EngineInput,
+  type OfferableResult,
+  type Slot,
+} from "@/modules/scheduling/availability";
+
+/** Resuelve el input del motor de fechas ofrecibles desde el token de mantenimiento. */
+async function engineInputForMaintenanceToken(
+  token: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+): Promise<EngineInput | null> {
+  const { data: tok } = await admin
+    .from("maintenance_confirmation_tokens")
+    .select("job_id, expires_at")
+    .eq("token", token)
+    .maybeSingle();
+  if (!tok) return null;
+  if (new Date((tok as { expires_at: string }).expires_at).getTime() < Date.now())
+    return null;
+  const jobId = (tok as { job_id: string }).job_id;
+  const { data: job } = await admin
+    .from("maintenance_jobs")
+    .select("id, company_id, customer_id, technician_user_id")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (!job) return null;
+  const j = job as {
+    id: string;
+    company_id: string;
+    customer_id: string | null;
+    technician_user_id: string | null;
+  };
+
+  let lat: number | null = null;
+  let lng: number | null = null;
+  let postalCode: string | null = null;
+  if (j.customer_id) {
+    const { data } = await admin
+      .from("addresses")
+      .select("latitude, longitude, postal_code")
+      .eq("customer_id", j.customer_id)
+      .eq("is_primary", true)
+      .maybeSingle();
+    if (data) {
+      lat = (data as { latitude: number | null }).latitude;
+      lng = (data as { longitude: number | null }).longitude;
+      postalCode = (data as { postal_code: string | null }).postal_code;
+    }
+  }
+
+  return {
+    companyId: j.company_id,
+    lat,
+    lng,
+    postalCode,
+    technicianUserId: j.technician_user_id,
+    excludeJobId: jobId,
+    jobTable: "maintenance_jobs",
+  };
+}
+
+/** Fechas/franjas ofrecibles al cliente para reagendar su mantenimiento. */
+export async function getMaintenanceOfferableSlots(
+  token: string,
+): Promise<OfferableResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const input = await engineInputForMaintenanceToken(token, admin);
+  if (!input)
+    return {
+      ok: false,
+      zonesConfigured: false,
+      coveredByZone: false,
+      slots: [],
+      weeks: 4,
+      error: "Enlace no válido",
+    };
+  return computeOfferableSlots(input);
+}
+
+function slotHour(slot: Slot): number {
+  return slot === "morning" ? 10 : 16;
+}
 
 interface TokenRow {
   id: string;
@@ -288,20 +374,28 @@ export async function customerReconfirmAction(
 
 export async function customerRescheduleAction(
   token: string,
-  newScheduledAt: string,
+  date: string,
+  slot: Slot,
 ): Promise<ActionResult> {
-  const dt = new Date(newScheduledAt);
-  if (isNaN(dt.getTime())) return { ok: false, message: "Fecha no válida" };
-  if (dt.getTime() < Date.now() + 86400_000) {
-    return {
-      ok: false,
-      message: "Elige al menos 24 horas más tarde para que podamos organizarlo.",
-    };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (slot !== "morning" && slot !== "afternoon")) {
+    return { ok: false, message: "Selección no válida" };
   }
-  const r = await consumeToken(token, "rescheduled");
-  if (!r.ok) return { ok: false, message: r.error };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Validar contra el motor ANTES de consumir el token.
+  const input = await engineInputForMaintenanceToken(token, admin);
+  if (!input) return { ok: false, message: "Enlace no válido o caducado" };
+  const offerable = await isSlotOfferable(input, date, slot);
+  if (!offerable) {
+    return {
+      ok: false,
+      message: "Esa fecha ya no está disponible. Vuelve a abrir el enlace y elige otra.",
+    };
+  }
+  const dt = new Date(`${date}T${String(slotHour(slot)).padStart(2, "0")}:00:00`);
+
+  const r = await consumeToken(token, "rescheduled");
+  if (!r.ok) return { ok: false, message: r.error };
   const nowIso = new Date().toISOString();
   // Cliente eligió día → preprogrammed con nueva fecha, admin tendrá
   // que validar técnico/disponibilidad. NO pasa a scheduled directamente.

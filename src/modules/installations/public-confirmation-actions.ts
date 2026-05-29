@@ -2,6 +2,108 @@
 
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import {
+  computeOfferableSlots,
+  isSlotOfferable,
+  type EngineInput,
+  type OfferableResult,
+  type Slot,
+} from "@/modules/scheduling/availability";
+
+/**
+ * Resuelve, a partir del token público, el input para el motor de fechas
+ * ofrecibles de una instalación: coordenadas + CP + técnico asignado.
+ */
+async function engineInputForInstallationToken(
+  token: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+): Promise<EngineInput | null> {
+  const { data: tok } = await admin
+    .from("installation_confirmation_tokens")
+    .select("installation_id, expires_at")
+    .eq("token", token)
+    .maybeSingle();
+  if (!tok) return null;
+  if (new Date((tok as { expires_at: string }).expires_at).getTime() < Date.now())
+    return null;
+  const installationId = (tok as { installation_id: string }).installation_id;
+  const { data: inst } = await admin
+    .from("installations")
+    .select("id, company_id, customer_id, address_id, installer_user_id")
+    .eq("id", installationId)
+    .maybeSingle();
+  if (!inst) return null;
+  const j = inst as {
+    id: string;
+    company_id: string;
+    customer_id: string | null;
+    address_id: string | null;
+    installer_user_id: string | null;
+  };
+
+  let lat: number | null = null;
+  let lng: number | null = null;
+  let postalCode: string | null = null;
+  if (j.address_id) {
+    const { data } = await admin
+      .from("addresses")
+      .select("latitude, longitude, postal_code")
+      .eq("id", j.address_id)
+      .maybeSingle();
+    if (data) {
+      lat = (data as { latitude: number | null }).latitude;
+      lng = (data as { longitude: number | null }).longitude;
+      postalCode = (data as { postal_code: string | null }).postal_code;
+    }
+  }
+  if ((lat == null || postalCode == null) && j.customer_id) {
+    const { data } = await admin
+      .from("addresses")
+      .select("latitude, longitude, postal_code")
+      .eq("customer_id", j.customer_id)
+      .eq("is_primary", true)
+      .maybeSingle();
+    if (data) {
+      lat = lat ?? (data as { latitude: number | null }).latitude;
+      lng = lng ?? (data as { longitude: number | null }).longitude;
+      postalCode = postalCode ?? (data as { postal_code: string | null }).postal_code;
+    }
+  }
+
+  return {
+    companyId: j.company_id,
+    lat,
+    lng,
+    postalCode,
+    technicianUserId: j.installer_user_id,
+    excludeJobId: installationId,
+    jobTable: "installations",
+  };
+}
+
+/** Fechas/franjas ofrecibles al cliente para reagendar su instalación. */
+export async function getInstallationOfferableSlots(
+  token: string,
+): Promise<OfferableResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const input = await engineInputForInstallationToken(token, admin);
+  if (!input)
+    return {
+      ok: false,
+      zonesConfigured: false,
+      coveredByZone: false,
+      slots: [],
+      weeks: 4,
+      error: "Enlace no válido",
+    };
+  return computeOfferableSlots(input);
+}
+
+function slotHour(slot: Slot): number {
+  return slot === "morning" ? 10 : 16;
+}
 
 interface TokenRow {
   id: string;
@@ -265,20 +367,28 @@ export async function customerConfirmInstallationAction(
 
 export async function customerRescheduleInstallationAction(
   token: string,
-  newScheduledAt: string,
+  date: string,
+  slot: Slot,
 ): Promise<ActionResult> {
-  const dt = new Date(newScheduledAt);
-  if (isNaN(dt.getTime())) return { ok: false, message: "Fecha no válida" };
-  if (dt.getTime() < Date.now() + 86400_000) {
-    return {
-      ok: false,
-      message: "Elige al menos 24 horas más tarde para que podamos organizarlo.",
-    };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || (slot !== "morning" && slot !== "afternoon")) {
+    return { ok: false, message: "Selección no válida" };
   }
-  const r = await consumeToken(token, "rescheduled");
-  if (!r.ok) return { ok: false, message: r.error };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Validar contra el motor ANTES de consumir el token (no fiarnos del cliente).
+  const input = await engineInputForInstallationToken(token, admin);
+  if (!input) return { ok: false, message: "Enlace no válido o caducado" };
+  const offerable = await isSlotOfferable(input, date, slot);
+  if (!offerable) {
+    return {
+      ok: false,
+      message: "Esa fecha ya no está disponible. Vuelve a abrir el enlace y elige otra.",
+    };
+  }
+  const dt = new Date(`${date}T${String(slotHour(slot)).padStart(2, "0")}:00:00`);
+
+  const r = await consumeToken(token, "rescheduled");
+  if (!r.ok) return { ok: false, message: r.error };
   await updateInstallationSafe(
     admin,
     r.installationId,
