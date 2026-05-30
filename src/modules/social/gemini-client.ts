@@ -21,7 +21,7 @@ import type {
 // Modelos válidos hoy: gemini-3.1-flash-image (primary), gemini-3-pro-image,
 // gemini-2.5-flash-image (older estable).
 const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image";
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`;
+const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 /** Coste estimado por imagen en céntimos. Ajustar cuando Google publique
  *  precio definitivo del 2.5 Flash Image. Hoy ~$0.039 → 4 cént. */
@@ -83,8 +83,10 @@ export async function generateImageWithGemini(
         },
       ],
       generationConfig: {
-        // El modelo de imagen devuelve image+text. Forzamos solo image.
-        responseModalities: ["IMAGE"],
+        // Gemini exige pedir TEXT+IMAGE aunque solo quieras la imagen:
+        // si pides solo ["IMAGE"] la API devuelve respuesta vacía sin error.
+        // El parser de abajo descarta el texto y se queda con la imagen.
+        responseModalities: ["TEXT", "IMAGE"],
       },
     };
 
