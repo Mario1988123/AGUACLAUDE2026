@@ -16,6 +16,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { PhoneCall } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
+import { EmptyState } from "@/shared/ui/layout";
 import { RoutePlannerButton } from "@/modules/routes/route-planner-button";
 import {
   AddressesClusterMap,
@@ -133,11 +134,12 @@ export default async function MiDiaPage({
       {needsCallbackCount > 0 && (
         <Link
           href={"/mantenimientos/por-confirmar" as never}
-          className="flex items-center justify-between gap-3 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 hover:bg-rose-100"
+          aria-label={`${needsCallbackCount} ${needsCallbackCount === 1 ? "cliente pidió" : "clientes pidieron"} que les llaméis — abrir cola`}
+          className="flex flex-col gap-3 rounded-2xl border-2 border-rose-300 bg-rose-50 p-4 transition-colors hover:bg-rose-100 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex items-center gap-3">
-            <PhoneCall className="h-5 w-5 text-rose-700" />
-            <div>
+          <div className="flex items-start gap-3">
+            <PhoneCall className="mt-0.5 h-5 w-5 shrink-0 text-rose-700" aria-hidden="true" />
+            <div className="min-w-0">
               <div className="font-bold text-rose-900">
                 {needsCallbackCount} cliente{needsCallbackCount === 1 ? "" : "s"} pidieron que les llaméis
               </div>
@@ -146,7 +148,7 @@ export default async function MiDiaPage({
               </p>
             </div>
           </div>
-          <span className="rounded-md bg-rose-200 px-2 py-1 text-xs font-bold text-rose-900">
+          <span className="self-start rounded-md bg-rose-200 px-2 py-1 text-xs font-bold text-rose-900 sm:self-center">
             Abrir cola →
           </span>
         </Link>
@@ -154,11 +156,12 @@ export default async function MiDiaPage({
       {pendingConfirmCount > 0 && (
         <Link
           href={"/mantenimientos/por-confirmar" as never}
-          className="flex items-center justify-between gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 hover:bg-amber-100"
+          aria-label={`${pendingConfirmCount} ${pendingConfirmCount === 1 ? "mantenimiento" : "mantenimientos"} por confirmar — abrir cola`}
+          className="flex flex-col gap-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 transition-colors hover:bg-amber-100 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex items-center gap-3">
-            <PhoneCall className="h-5 w-5 text-amber-700" />
-            <div>
+          <div className="flex items-start gap-3">
+            <PhoneCall className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden="true" />
+            <div className="min-w-0">
               <div className="font-bold text-amber-900">
                 {pendingConfirmCount} mantenimiento
                 {pendingConfirmCount === 1 ? "" : "s"} por confirmar
@@ -168,14 +171,14 @@ export default async function MiDiaPage({
               </p>
             </div>
           </div>
-          <span className="rounded-md bg-amber-200 px-2 py-1 text-xs font-bold text-amber-900">
+          <span className="self-start rounded-md bg-amber-200 px-2 py-1 text-xs font-bold text-amber-900 sm:self-center">
             Abrir cola →
           </span>
         </Link>
       )}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Mi día</h1>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Mi día</h1>
           <p className="mt-1 text-sm text-muted-foreground capitalize">
             {dateLabel} · Hola {session.full_name ?? session.email}
           </p>
@@ -249,14 +252,11 @@ export default async function MiDiaPage({
       </div>
 
       {items.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Calendar className="mx-auto h-10 w-10 text-muted-foreground" />
-            <p className="mt-3 text-sm text-muted-foreground">
-              No tienes nada programado para hoy. ¡Buen día!
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyState
+          icon={Calendar}
+          title="No tienes nada programado para hoy"
+          description="Si esperas una asignación, recarga la página en unos minutos. ¡Buen día!"
+        />
       ) : (
         <>
           {/* Mapa con todas las paradas del día geolocalizadas. Solo se
@@ -335,21 +335,23 @@ export default async function MiDiaPage({
                           </div>
                         )}
                         {it.customer_phone && (
-                          <div className="mt-2 flex gap-1.5">
+                          <div className="mt-2 flex flex-wrap gap-1.5">
                             <a
                               href={`tel:${it.customer_phone}`}
-                              className="inline-flex h-8 items-center gap-1 rounded-md bg-emerald-100 px-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-200"
+                              aria-label={`Llamar a ${it.title}`}
+                              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-emerald-100 px-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-200"
                             >
-                              <Phone className="h-3 w-3" />
+                              <Phone className="h-4 w-4" aria-hidden="true" />
                               Llamar
                             </a>
                             <a
                               href={`https://wa.me/${it.customer_phone.replace(/[^0-9+]/g, "")}`}
                               target="_blank"
                               rel="noopener"
-                              className="inline-flex h-8 items-center gap-1 rounded-md bg-[#25D366] px-2 text-xs font-semibold text-white hover:opacity-90"
+                              aria-label={`Abrir WhatsApp de ${it.title}`}
+                              className="inline-flex h-10 items-center gap-1.5 rounded-md bg-[#25D366] px-3 text-sm font-semibold text-white hover:opacity-90"
                             >
-                              <MessageCircle className="h-3 w-3" />
+                              <MessageCircle className="h-4 w-4" aria-hidden="true" />
                               WhatsApp
                             </a>
                           </div>

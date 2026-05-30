@@ -99,28 +99,26 @@ export default async function LeadDetailPage({
 
   return (
     <div className="space-y-5">
-      {/* Header: nombre + badge + meta + Volver */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-bold">{displayName}</h1>
-            <Badge variant={STATUS_VARIANT[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-            <span>{lead.party_kind === "company" ? "Empresa" : "Particular"}</span>
-            <span>·</span>
-            <span>Origen: {ORIGIN_LABEL[lead.origin]}</span>
-            {assignedName && (
-              <>
-                <span>·</span>
-                <span>
-                  Asignado a <strong className="text-foreground">{assignedName}</strong>
-                </span>
-              </>
-            )}
-          </div>
-        </div>
+      {/* Header: BackButton arriba, nombre + badge + meta debajo (orden lógico móvil) */}
+      <div className="space-y-2">
         <BackButton href="/leads" />
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="min-w-0 break-words text-2xl font-bold sm:text-3xl">{displayName}</h1>
+          <Badge variant={STATUS_VARIANT[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <span>{lead.party_kind === "company" ? "Empresa" : "Particular"}</span>
+          <span aria-hidden="true">·</span>
+          <span>Origen: {ORIGIN_LABEL[lead.origin]}</span>
+          {assignedName && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                Asignado a <strong className="text-foreground">{assignedName}</strong>
+              </span>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Seguimiento (decisión 2026-05-20) — solo si el lead NO está convertido */}
@@ -200,7 +198,7 @@ export default async function LeadDetailPage({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
             <DataRow label="Tipo" value={lead.party_kind === "company" ? "Empresa" : "Particular"} />
             {lead.party_kind === "company" ? (
               <>
@@ -283,9 +281,11 @@ export default async function LeadDetailPage({
 
 function DataRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div className="grid grid-cols-3 gap-2 text-sm">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="col-span-2 break-words font-medium">{value || "—"}</div>
+    <div className="flex flex-col gap-0.5 text-sm sm:grid sm:grid-cols-3 sm:gap-2">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground sm:text-sm sm:normal-case sm:tracking-normal">
+        {label}
+      </div>
+      <div className="break-words font-medium sm:col-span-2">{value || "—"}</div>
     </div>
   );
 }

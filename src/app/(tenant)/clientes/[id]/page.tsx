@@ -226,60 +226,66 @@ export default async function CustomerDetailPage({
         assigned={tagsAssigned}
       />
 
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-extrabold tracking-tight">{displayName}</h1>
-            {customer.is_active ? (
-              <Badge variant="success">Activo</Badge>
-            ) : (
-              <Badge variant="secondary">Inactivo</Badge>
-            )}
-            {isAtRisk && (
-              <Badge variant="destructive" title="Incidencias críticas o altas abiertas con contrato activo">
-                ⚠ En riesgo ({atRiskCount})
-              </Badge>
-            )}
+      {/* Cabecera reorganizada: BackButton arriba, título+badges, después acciones.
+          En móvil/tablet las acciones quedan debajo y se apilan limpias. */}
+      <div className="space-y-3">
+        <BackButton href="/clientes" />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="min-w-0 break-words text-2xl font-extrabold tracking-tight sm:text-3xl">
+                {displayName}
+              </h1>
+              {customer.is_active ? (
+                <Badge variant="success">Activo</Badge>
+              ) : (
+                <Badge variant="secondary">Inactivo</Badge>
+              )}
+              {isAtRisk && (
+                <Badge variant="destructive" title="Incidencias críticas o altas abiertas con contrato activo">
+                  ⚠ En riesgo ({atRiskCount})
+                </Badge>
+              )}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {customer.party_kind === "company" ? "Empresa" : "Particular"}
+              {customer.tax_id && ` · ${customer.tax_id}`}
+              {assignedName && (
+                <>
+                  {" · "}Asignado a <strong className="text-foreground">{assignedName}</strong>
+                </>
+              )}
+            </div>
           </div>
-          <div className="mt-1 text-sm text-muted-foreground">
-            {customer.party_kind === "company" ? "Empresa" : "Particular"}
-            {customer.tax_id && ` · ${customer.tax_id}`}
-            {assignedName && (
-              <>
-                {" · "}Asignado a <strong className="text-foreground">{assignedName}</strong>
-              </>
-            )}
+          <div className="flex flex-wrap gap-2 lg:shrink-0 lg:justify-end">
+            <Link
+              href={`/propuestas/nueva?customer_id=${id}` as never}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" /> Nueva propuesta
+            </Link>
+            <Link
+              href={`/propuestas/nueva?customer_id=${id}&direct=1` as never}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-500 px-3 text-sm font-bold text-white hover:bg-amber-600"
+              title="El cliente acepta de palabra — crea propuesta+contrato en un paso"
+            >
+              ⚡ Contrato directo
+            </Link>
+            <Link
+              href={`/calculadora-ahorro/nueva?customer_id=${id}` as never}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+              title="Calcular el ahorro vs su consumo actual"
+            >
+              📊 Calcular
+            </Link>
+            <Link
+              href={`/pruebas-gratuitas/nueva?customer_id=${id}` as never}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+              title="Entregar equipo en prueba sin contrato"
+            >
+              🎁 Prueba
+            </Link>
           </div>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Link
-            href={`/propuestas/nueva?customer_id=${id}` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white hover:bg-emerald-700 shadow-sm"
-          >
-            <Plus className="h-4 w-4" /> Nueva propuesta
-          </Link>
-          <Link
-            href={`/propuestas/nueva?customer_id=${id}&direct=1` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-amber-500 px-3 text-sm font-bold text-white hover:bg-amber-600"
-            title="El cliente acepta de palabra — crea propuesta+contrato en un paso"
-          >
-            ⚡ Contrato directo
-          </Link>
-          <Link
-            href={`/calculadora-ahorro/nueva?customer_id=${id}` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-            title="Calcular el ahorro vs su consumo actual"
-          >
-            📊 Calcular
-          </Link>
-          <Link
-            href={`/pruebas-gratuitas/nueva?customer_id=${id}` as never}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-            title="Entregar equipo en prueba sin contrato"
-          >
-            🎁 Prueba
-          </Link>
-          <BackButton href="/clientes" />
         </div>
       </div>
 
