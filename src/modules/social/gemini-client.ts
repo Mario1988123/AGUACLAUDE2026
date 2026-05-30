@@ -16,8 +16,12 @@ import type {
   ImageGenerationMetadata,
 } from "./image-types";
 
-const MODEL = "gemini-2.5-flash-image-preview";
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+// Nombre del modelo en GA (sin sufijo -preview, ese era el rename pre-lanzamiento).
+// Override opcional via env GEMINI_IMAGE_MODEL por si Google renombra otra vez.
+// Modelos válidos hoy: gemini-3.1-flash-image (primary), gemini-3-pro-image,
+// gemini-2.5-flash-image (older estable).
+const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image";
+const ENDPOINT = `https://generativelanguage.googleapis.com/v1/models/${MODEL}:generateContent`;
 
 /** Coste estimado por imagen en céntimos. Ajustar cuando Google publique
  *  precio definitivo del 2.5 Flash Image. Hoy ~$0.039 → 4 cént. */
