@@ -18,11 +18,17 @@ interface SidebarProps {
 }
 
 const COLLAPSED_KEY = "sidebar.collapsed";
+const LG_BREAKPOINT_PX = 1024;
 
 /**
- * Sidebar estilo DashStack — fondo blanco, item activo azul, minimizable
- * (escritorio) con preferencia persistida en localStorage. En tablet/móvil
- * se sigue mostrando como overlay con el botón hamburguesa.
+ * Sidebar estilo DashStack — fondo blanco, item activo azul.
+ *
+ * Comportamiento responsive:
+ *  - Móvil (<md, <768px): overlay con hamburguesa flotante.
+ *  - Tablet (md-lg, 768-1023px): sidebar permanente en modo icono (w-20),
+ *    no se puede expandir (los técnicos/comerciales tocan iconos, ahorran espacio).
+ *  - Desktop (>=lg, 1024+): sidebar permanente, el usuario puede expandir/colapsar
+ *    y la preferencia se persiste en localStorage.
  */
 export function Sidebar({
   userRoles,
@@ -36,14 +42,27 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
 
-  // Cargar preferencia inicial de localStorage
+  // Cargar preferencia inicial de localStorage + forzar collapsed en tablet.
+  // En tablet (md-lg) el sidebar siempre está en modo icono, regardless del estado guardado.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const v = window.localStorage.getItem(COLLAPSED_KEY);
-    if (v === "1") setCollapsed(true);
+    const apply = () => {
+      const isDesktop = window.innerWidth >= LG_BREAKPOINT_PX;
+      if (!isDesktop) {
+        setCollapsed(true);
+        return;
+      }
+      const v = window.localStorage.getItem(COLLAPSED_KEY);
+      setCollapsed(v === "1");
+    };
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
   }, []);
 
   function toggleCollapsed() {
+    // No permitir toggle en tablet: el sidebar tablet es siempre modo icono.
+    if (typeof window !== "undefined" && window.innerWidth < LG_BREAKPOINT_PX) return;
     setCollapsed((c) => {
       const next = !c;
       try {
@@ -189,16 +208,16 @@ export function Sidebar({
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg lg:hidden"
+        className="fixed left-4 top-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg md:hidden"
         aria-label="Abrir menú"
       >
         <Icons.Menu className="h-6 w-6" />
       </button>
 
-      <div className="hidden lg:block">{renderSidebar({ collapsed })}</div>
+      <div className="hidden md:block">{renderSidebar({ collapsed })}</div>
 
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 md:hidden">
           {/* Backdrop con animación de fade-in */}
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"

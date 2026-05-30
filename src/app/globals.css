@@ -187,13 +187,25 @@
 /* ============================================================================
  * Optimización táctil para tablet
  * Tap targets mínimos de 44px en escritorio, 56px en dispositivos táctiles.
+ * Quirúrgico: excluye links inline dentro de prose/texto + elementos pequeños
+ * marcados con [data-inline]/[data-compact] para evitar romper layouts.
  * ============================================================================ */
 @layer base {
-  button, a, [role="button"], input, select, textarea {
+  button:not([data-inline]),
+  a:not([data-inline]),
+  [role="button"]:not([data-inline]),
+  input:not([data-inline]),
+  select:not([data-inline]),
+  textarea:not([data-inline]) {
     min-height: 44px;
   }
   @media (pointer: coarse) {
-    button, a, [role="button"], input, select, textarea {
+    button:not([data-inline]):not([data-compact]),
+    a:not([data-inline]):not([data-compact]),
+    [role="button"]:not([data-inline]):not([data-compact]),
+    input:not([data-inline]),
+    select:not([data-inline]),
+    textarea:not([data-inline]) {
       min-height: 56px;
       font-size: 1rem;
     }
@@ -204,8 +216,41 @@
       min-height: auto;
     }
     /* Áreas táctiles más cómodas en filas de tabla */
-    table button, table a {
+    table button:not([data-compact]),
+    table a:not([data-compact]) {
       min-height: 48px;
     }
+  }
+}
+
+/* ============================================================================
+ * Reducción de movimiento — respeta la preferencia del sistema operativo.
+ * El usuario que activa "Reducir movimiento" en iOS/macOS/Windows ve
+ * animaciones casi instantáneas (no nulas, para no perder la pista visual
+ * del cambio).
+ * ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+ * Safe area iOS — respetar notch y home indicator para PWA fullscreen.
+ * Las páginas usan estas variables con env(safe-area-inset-*) cuando hace falta
+ * (ej. bottom-nav). Aquí solo aseguramos que el body no se pegue al borde.
+ * ============================================================================ */
+@supports (padding: env(safe-area-inset-top)) {
+  html {
+    /* Permite que componentes lean estos valores */
+    --safe-top: env(safe-area-inset-top);
+    --safe-right: env(safe-area-inset-right);
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-left: env(safe-area-inset-left);
   }
 }

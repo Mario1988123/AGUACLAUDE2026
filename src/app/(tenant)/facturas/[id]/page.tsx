@@ -152,63 +152,65 @@ export default async function InvoiceDetailPage({
             <CardTitle>Líneas</CardTitle>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Descripción</th>
-                  <th className="py-2 text-right">Cant.</th>
-                  <th className="py-2 text-right">Precio</th>
-                  <th className="py-2 text-right">Dto%</th>
-                  <th className="py-2 text-right">IVA%</th>
-                  <th className="py-2 text-right">Subtotal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {inv.lines.map((l, idx) => {
-                  const subtotal = l.unit_price_cents * l.quantity * (1 - l.discount_percent / 100);
-                  return (
-                    <tr key={l.id ?? idx}>
-                      <td className="py-2">{l.description}</td>
-                      <td className="py-2 text-right tabular-nums">{l.quantity}</td>
-                      <td className="py-2 text-right tabular-nums">{eur(l.unit_price_cents)}</td>
-                      <td className="py-2 text-right tabular-nums">{l.discount_percent}%</td>
-                      <td className="py-2 text-right tabular-nums">{l.tax_rate_percent}%</td>
-                      <td className="py-2 text-right tabular-nums">{eur(subtotal)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t">
-                  <td colSpan={5} className="py-2 text-right text-muted-foreground">
-                    Subtotal
-                  </td>
-                  <td className="py-2 text-right tabular-nums">{eur(inv.subtotal_cents)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={5} className="py-2 text-right text-muted-foreground">
-                    IVA
-                  </td>
-                  <td className="py-2 text-right tabular-nums">{eur(inv.tax_cents)}</td>
-                </tr>
-                <tr className="border-t font-bold">
-                  <td colSpan={5} className="py-3 text-right">
-                    Total
-                  </td>
-                  <td className="py-3 text-right tabular-nums text-lg">{eur(inv.total_cents)}</td>
-                </tr>
-                {inv.pending_cents > 0 && inv.status !== "draft" && (
+            <div className="-mx-2 overflow-x-auto px-2 sm:mx-0 sm:px-0">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <td colSpan={5} className="py-2 text-right text-red-600">
-                      Pendiente
-                    </td>
-                    <td className="py-2 text-right tabular-nums text-red-600 font-bold">
-                      {eur(inv.pending_cents)}
-                    </td>
+                    <th className="py-2 text-left">Descripción</th>
+                    <th className="py-2 text-right">Cant.</th>
+                    <th className="py-2 text-right">Precio</th>
+                    <th className="py-2 text-right">Dto%</th>
+                    <th className="py-2 text-right">IVA%</th>
+                    <th className="py-2 text-right">Subtotal</th>
                   </tr>
-                )}
-              </tfoot>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {inv.lines.map((l, idx) => {
+                    const subtotal = l.unit_price_cents * l.quantity * (1 - l.discount_percent / 100);
+                    return (
+                      <tr key={l.id ?? idx}>
+                        <td className="py-2">{l.description}</td>
+                        <td className="py-2 text-right tabular-nums">{l.quantity}</td>
+                        <td className="py-2 text-right tabular-nums">{eur(l.unit_price_cents)}</td>
+                        <td className="py-2 text-right tabular-nums">{l.discount_percent}%</td>
+                        <td className="py-2 text-right tabular-nums">{l.tax_rate_percent}%</td>
+                        <td className="py-2 text-right tabular-nums">{eur(subtotal)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t">
+                    <td colSpan={5} className="py-2 text-right text-muted-foreground">
+                      Subtotal
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{eur(inv.subtotal_cents)}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan={5} className="py-2 text-right text-muted-foreground">
+                      IVA
+                    </td>
+                    <td className="py-2 text-right tabular-nums">{eur(inv.tax_cents)}</td>
+                  </tr>
+                  <tr className="border-t font-bold">
+                    <td colSpan={5} className="py-3 text-right">
+                      Total
+                    </td>
+                    <td className="py-3 text-right tabular-nums text-lg">{eur(inv.total_cents)}</td>
+                  </tr>
+                  {inv.pending_cents > 0 && inv.status !== "draft" && (
+                    <tr>
+                      <td colSpan={5} className="py-2 text-right text-red-600">
+                        Pendiente
+                      </td>
+                      <td className="py-2 text-right tabular-nums text-red-600 font-bold">
+                        {eur(inv.pending_cents)}
+                      </td>
+                    </tr>
+                  )}
+                </tfoot>
+              </table>
+            </div>
           </CardContent>
         </Card>
 

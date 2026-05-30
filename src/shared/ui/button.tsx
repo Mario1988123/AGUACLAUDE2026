@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 
 const buttonVariants = cva(
@@ -32,12 +33,56 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /**
+   * Si true muestra un spinner a la izquierda del contenido y desactiva el botón.
+   * Útil para acciones async sin tener que gestionar el estado de UI manualmente.
+   * No usar junto con asChild (Slot solo acepta un hijo).
+   */
+  loading?: boolean;
+  /** Texto que reemplaza al hijo mientras loading=true (opcional). */
+  loadingText?: string;
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-    return <Comp ref={ref} className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      loading = false,
+      loadingText,
+      disabled,
+      children,
+      ...props
+    },
+    ref,
+  ) => {
+    if (asChild) {
+      // Slot solo acepta un hijo y no aplica loading state — delega al consumidor.
+      return (
+        <Slot
+          ref={ref}
+          className={cn(buttonVariants({ variant, size, className }))}
+          {...props}
+        >
+          {children as React.ReactElement}
+        </Slot>
+      );
+    }
+    return (
+      <button
+        ref={ref}
+        className={cn(buttonVariants({ variant, size, className }))}
+        disabled={disabled || loading}
+        aria-busy={loading || undefined}
+        data-loading={loading || undefined}
+        {...props}
+      >
+        {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+        {loading && loadingText ? loadingText : children}
+      </button>
+    );
   },
 );
 Button.displayName = "Button";

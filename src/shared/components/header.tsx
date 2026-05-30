@@ -64,8 +64,10 @@ export function Header({
   }, []);
 
   return (
-    <header className="flex h-20 items-center justify-between gap-4 border-b bg-card px-6 lg:px-8">
-      <div className="ml-16 flex flex-1 items-center gap-4 lg:ml-0">
+    <header className="flex h-20 items-center justify-between gap-3 border-b bg-card px-3 sm:px-4 md:px-6 lg:px-8">
+      {/* En móvil (<md) hay hamburguesa flotante en left-4 → reservamos ml-16 solo ahí.
+          En tablet (md-lg) y desktop el sidebar es permanente, no hace falta margen. */}
+      <div className="ml-16 flex flex-1 items-center gap-4 md:ml-0">
         <GlobalSearchTrigger />
       </div>
 
