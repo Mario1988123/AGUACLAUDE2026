@@ -17,7 +17,44 @@
  * Gemini 2.5 Flash Image que entiende español nativamente.
  */
 
-import type { ImageVisualSettings, PostForPromptBuilder } from "./image-types";
+import type {
+  ImageOverrides,
+  ImageStyle,
+  ImageVisualSettings,
+  PostForPromptBuilder,
+} from "./image-types";
+
+/**
+ * Mezcla defaults + overrides. Para cada campo:
+ *   - si el override viene con valor (incluido string vacío explícito), gana
+ *   - si no, queda el default.
+ * Para arrays, override REEMPLAZA (no concatena) para que el admin pueda
+ * limitar elementos prohibidos puntualmente.
+ */
+function mergeVisualSettings(
+  defaults: ImageVisualSettings,
+  overrides: ImageOverrides | null | undefined,
+): ImageVisualSettings {
+  if (!overrides) return defaults;
+  return {
+    ...defaults,
+    image_style: (overrides.image_style ?? defaults.image_style) as ImageStyle | null,
+    brand_palette_primary:
+      overrides.brand_palette_primary ?? defaults.brand_palette_primary,
+    brand_palette_secondary:
+      overrides.brand_palette_secondary ?? defaults.brand_palette_secondary,
+    brand_palette_accent:
+      overrides.brand_palette_accent ?? defaults.brand_palette_accent,
+    brand_visual_keywords:
+      overrides.brand_visual_keywords ?? defaults.brand_visual_keywords,
+    brand_location_hint:
+      overrides.brand_location_hint ?? defaults.brand_location_hint,
+    forbidden_visual_elements:
+      overrides.forbidden_visual_elements ?? defaults.forbidden_visual_elements,
+    preferred_visual_elements:
+      overrides.preferred_visual_elements ?? defaults.preferred_visual_elements,
+  };
+}
 
 const STYLE_GUIDES: Record<string, string> = {
   photoreal:
@@ -70,13 +107,18 @@ const GLOBAL_HARD_RULES = [
 
 /**
  * Construye el prompt final que se envía al proveedor IA.
+ *
+ * @param overrides — overrides puntuales por imagen (de social_posts.image_overrides).
+ *                    Si vienen, ganan a los defaults de social_settings.
  */
 export function buildEnrichedImagePrompt(
   post: PostForPromptBuilder,
-  settings: ImageVisualSettings,
+  rawSettings: ImageVisualSettings,
   companyName: string,
+  overrides?: ImageOverrides | null,
 ): string {
   const sections: string[] = [];
+  const settings = mergeVisualSettings(rawSettings, overrides);
 
   // ── Sección 1: contexto del negocio ────────────────────────────────────────
   sections.push(
@@ -143,6 +185,25 @@ export function buildEnrichedImagePrompt(
   sections.push(
     `# Reglas duras (cumplir SIEMPRE)\n- ${allForbidden.join("\n- ")}\n`,
   );
+
+  // ── Sección 5b: productos del catálogo a destacar ──────────────────────────
+  // Solo si el post viene con product_refs cargados desde DB.
+  const products = post.product_refs ?? [];
+  if (products.length > 0) {
+    const productLines = products
+      .map((p) => {
+        const desc = p.description ? ` — ${p.description.slice(0, 200)}` : "";
+        const hasPhoto = p.main_image_url ? " (foto adjunta como referencia visual)" : "";
+        return `- "${p.name}"${desc}${hasPhoto}`;
+      })
+      .join("\n");
+    sections.push(
+      `# Productos a destacar en la imagen\n` +
+        `Se adjuntan ${products.length === 1 ? "el siguiente producto" : "los siguientes productos"} del catálogo de la empresa. ` +
+        `Si hay fotos adjuntas como referencia visual, RESPETA el diseño industrial real del producto (forma, color, proporción, color del display). ` +
+        `Integra el producto en la escena de forma natural, no como un catálogo recortado.\n${productLines}\n`,
+    );
+  }
 
   // ── Sección 6: instrucción final al modelo ────────────────────────────────
   sections.push(

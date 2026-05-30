@@ -8,6 +8,8 @@ import { getSocialPost } from "@/modules/social/actions";
 import { PostStatusButtons } from "@/modules/social/post-status-buttons";
 import { SocialImageGeneratorCard } from "@/modules/social/image-generator-card";
 import { getSocialImageSettings } from "@/modules/social/image-settings-actions";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import type { ImageOverrides } from "@/modules/social/image-types";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +69,31 @@ export default async function SocialPostDetailPage({
   const post = await getSocialPost(id);
   if (!post) notFound();
   const imageSettings = await getSocialImageSettings().catch(() => null);
+
+  // Cargar fiscal_logo_url para saber si el overlay de logo está disponible.
+  // Defensivo: si la query falla (columna no existe en algún entorno), tratamos
+  // como sin logo y el modal lo gestiona en UI.
+  let hasFiscalLogo = false;
+  try {
+    if (session.company_id) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      const { data: cs } = await admin
+        .from("company_settings")
+        .select("fiscal_logo_url")
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      hasFiscalLogo = !!(cs as { fiscal_logo_url?: string | null } | null)
+        ?.fiscal_logo_url;
+    }
+  } catch {
+    /* sin logo */
+  }
+
+  const postX = post as typeof post & {
+    image_overrides?: ImageOverrides | null;
+    product_ids?: string[] | null;
+  };
 
   return (
     <div className="space-y-6">
@@ -164,27 +191,39 @@ export default async function SocialPostDetailPage({
           <CardTitle className="text-base">Imagen</CardTitle>
         </CardHeader>
         <CardContent>
-          <SocialImageGeneratorCard
-            postId={post.id}
-            topic={post.topic}
-            baseImagePrompt={post.image_prompt ?? null}
-            imageFormat={post.image_format ?? null}
-            imageAltText={post.image_alt_text ?? null}
-            currentImageUrl={post.image_url ?? null}
-            generatedAt={
-              (post as { image_generated_at?: string | null })
-                .image_generated_at ?? null
-            }
-            generationCostCents={
-              (post as { image_generation_cost_cents?: number | null })
-                .image_generation_cost_cents ?? null
-            }
-            imagesUsedThisMonth={imageSettings?.images_used_this_month ?? 0}
-            monthlyBudgetCents={
-              imageSettings?.monthly_image_budget_cents ?? 500
-            }
-            providerConfigured={imageSettings?.image_provider === "gemini"}
-          />
+          {imageSettings && (
+            <SocialImageGeneratorCard
+              postId={post.id}
+              topic={post.topic}
+              baseImagePrompt={post.image_prompt ?? null}
+              imageFormat={post.image_format ?? null}
+              imageAltText={post.image_alt_text ?? null}
+              currentImageUrl={post.image_url ?? null}
+              generatedAt={
+                (post as { image_generated_at?: string | null })
+                  .image_generated_at ?? null
+              }
+              generationCostCents={
+                (post as { image_generation_cost_cents?: number | null })
+                  .image_generation_cost_cents ?? null
+              }
+              imagesUsedThisMonth={imageSettings.images_used_this_month ?? 0}
+              monthlyBudgetCents={
+                imageSettings.monthly_image_budget_cents ?? 500
+              }
+              providerConfigured={imageSettings.image_provider === "gemini"}
+              defaults={imageSettings}
+              initialOverrides={postX.image_overrides ?? null}
+              initialProductIds={postX.product_ids ?? []}
+              hasFiscalLogo={hasFiscalLogo}
+            />
+          )}
+          {!imageSettings && (
+            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+              No se pudo cargar la configuración de imagen IA.
+              Ve a <code>/configuracion/rrss</code> y guarda al menos una vez.
+            </div>
+          )}
         </CardContent>
       </Card>
 

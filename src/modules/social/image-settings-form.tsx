@@ -1,14 +1,39 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
-import { Palette, X, Plus, Save, Sparkles } from "lucide-react";
+import { Palette, X, Plus, Save, Sparkles, Type, ImageIcon } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
+import { Switch } from "@/shared/ui/switch";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/shared/ui/select";
 import { notify } from "@/shared/hooks/use-toast";
 import { saveSocialImageSettingsAction } from "./image-settings-actions";
-import type { ImageProvider, ImageStyle, ImageVisualSettings } from "./image-types";
+import type {
+  ImageProvider,
+  ImageStyle,
+  ImageVisualSettings,
+  OverlayPosition,
+  WatermarkPosition,
+} from "./image-types";
+
+const LOGO_POSITIONS: Array<{ value: OverlayPosition; label: string }> = [
+  { value: "top-left", label: "Arriba · izquierda" },
+  { value: "top-right", label: "Arriba · derecha" },
+  { value: "bottom-left", label: "Abajo · izquierda" },
+  { value: "bottom-right", label: "Abajo · derecha" },
+];
+const TEXT_POSITIONS: Array<{ value: WatermarkPosition; label: string }> = [
+  ...LOGO_POSITIONS,
+  { value: "bottom-center", label: "Abajo · centro" },
+];
 
 const STYLES: Array<{ value: ImageStyle; label: string; desc: string }> = [
   { value: "editorial", label: "Editorial", desc: "Limpio tipo revista. Composición minimal, iluminación natural." },
@@ -58,6 +83,28 @@ export function SocialImageSettingsForm({
   const [newForb, setNewForb] = useState("");
   const [newPref, setNewPref] = useState("");
   const [pending, startTransition] = useTransition();
+  // Defaults marca de agua
+  const [logoEnabled, setLogoEnabled] = useState<boolean>(
+    initial.logo_overlay_enabled_default ?? true,
+  );
+  const [logoPos, setLogoPos] = useState<OverlayPosition>(
+    initial.logo_position_default ?? "bottom-right",
+  );
+  const [logoSize, setLogoSize] = useState<number>(
+    initial.logo_size_pct_default ?? 12,
+  );
+  const [wmEnabled, setWmEnabled] = useState<boolean>(
+    initial.watermark_text_enabled_default ?? false,
+  );
+  const [wmText, setWmText] = useState<string>(
+    initial.watermark_text_default ?? "",
+  );
+  const [wmPos, setWmPos] = useState<WatermarkPosition>(
+    initial.watermark_text_position_default ?? "bottom-center",
+  );
+  const [wmColor, setWmColor] = useState<string>(
+    initial.watermark_text_color_default ?? "#FFFFFF",
+  );
 
   function addForb() {
     const v = newForb.trim();
@@ -88,6 +135,13 @@ export function SocialImageSettingsForm({
         forbidden_visual_elements: forbidden,
         preferred_visual_elements: preferred,
         monthly_image_budget_cents: budgetCents,
+        logo_overlay_enabled_default: logoEnabled,
+        logo_position_default: logoPos,
+        logo_size_pct_default: logoSize,
+        watermark_text_enabled_default: wmEnabled,
+        watermark_text_default: wmText || null,
+        watermark_text_position_default: wmPos,
+        watermark_text_color_default: wmColor || "#FFFFFF",
       });
       if (!r.ok) {
         notify.error("Error", r.error);
@@ -348,6 +402,122 @@ export function SocialImageSettingsForm({
           )}
         </div>
       </div>
+
+      {/* ── Marca de agua por defecto (logo + texto sobre la imagen IA) ── */}
+      <fieldset className="space-y-3 rounded-xl border bg-card p-4">
+        <legend className="px-2 text-sm font-bold uppercase text-muted-foreground">
+          Marca de agua (logo + texto) por defecto
+        </legend>
+        <p className="text-xs text-muted-foreground">
+          Estos valores son <strong>por defecto</strong>: cada imagen puede
+          cambiarlos uno a uno desde el modal &quot;Generar imagen IA&quot;.
+          El logo se lee de los datos fiscales —{" "}
+          <a href="/configuracion/fiscal" className="text-primary underline">
+            súbelo en /configuracion/fiscal
+          </a>.
+        </p>
+
+        <div className="flex items-center justify-between rounded-xl border bg-background p-3">
+          <div className="flex items-center gap-2 text-sm">
+            <ImageIcon className="h-4 w-4" aria-hidden="true" />
+            <span>Pegar logo en cada imagen generada</span>
+          </div>
+          <Switch checked={logoEnabled} onCheckedChange={setLogoEnabled} />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Posición del logo</Label>
+            <Select
+              value={logoPos}
+              onValueChange={(v) => setLogoPos(v as OverlayPosition)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {LOGO_POSITIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tamaño logo ({logoSize}% del ancho)</Label>
+            <input
+              type="range"
+              min={5}
+              max={30}
+              step={1}
+              value={logoSize}
+              onChange={(e) => setLogoSize(Number(e.target.value))}
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        <hr className="border-border" />
+
+        <div className="flex items-center justify-between rounded-xl border bg-background p-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Type className="h-4 w-4" aria-hidden="true" />
+            <span>Sobreimprimir texto en cada imagen</span>
+          </div>
+          <Switch checked={wmEnabled} onCheckedChange={setWmEnabled} />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">Texto a sobreimprimir</Label>
+          <Input
+            value={wmText}
+            onChange={(e) => setWmText(e.target.value)}
+            placeholder="Ej.: AguaPura Canarias · 900 123 456"
+            maxLength={80}
+          />
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Posición texto</Label>
+            <Select
+              value={wmPos}
+              onValueChange={(v) => setWmPos(v as WatermarkPosition)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TEXT_POSITIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Color texto</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={wmColor || "#FFFFFF"}
+                onChange={(e) => setWmColor(e.target.value.toUpperCase())}
+                className="h-9 w-12 cursor-pointer rounded border bg-background"
+                aria-label="Color texto marca de agua"
+              />
+              <Input
+                value={wmColor}
+                onChange={(e) => setWmColor(e.target.value)}
+                placeholder="#FFFFFF"
+                className="font-mono text-xs"
+                maxLength={7}
+              />
+            </div>
+          </div>
+        </div>
+      </fieldset>
 
       <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-end">
         <Button

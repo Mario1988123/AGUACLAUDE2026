@@ -5,23 +5,39 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
 import { buildEnrichedImagePrompt } from "./image-prompt-builder";
-import { generateImageWithGemini } from "./gemini-client";
+import {
+  generateImageWithGemini,
+  type GeminiReferenceImage,
+} from "./gemini-client";
+import { applyOverlay } from "./image-overlay";
 import type {
-  ImageVisualSettings,
-  PostForPromptBuilder,
+  ImageOverrides,
   ImageProvider,
   ImageStyle,
+  ImageVisualSettings,
+  OverlayPosition,
+  PostForPromptBuilder,
+  ProductReference,
+  ResolvedOverlaySettings,
+  WatermarkPosition,
 } from "./image-types";
 
 const BUCKET = "social-images";
+const COST_PER_IMAGE_CENTS = 4;
+const MAX_PRODUCTS_PER_POST = 4; // tope sano para no inflar el prompt ni Gemini
 
 /**
  * Construye el prompt enriquecido SIN llamar a la IA. Útil para que el
  * panel muestre al admin lo que se va a mandar ANTES de gastar imagen.
+ *
+ * Acepta overrides y product_ids opcionales para previsualizar exactamente
+ * lo mismo que se enviaría al pulsar "Generar".
  */
 export async function previewEnrichedPromptAction(
   postId: string,
   promptOverride?: string,
+  overrides?: ImageOverrides | null,
+  productIds?: string[] | null,
 ): Promise<{ ok: true; prompt: string } | { ok: false; error: string }> {
   try {
     const session = await requireSession();
@@ -29,23 +45,24 @@ export async function previewEnrichedPromptAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
-    const { post, settings, companyName, err } = await loadContext(
+    const ctx = await loadContext(
       admin,
       postId,
       session.company_id,
+      productIds ?? null,
     );
-    if (err) return { ok: false, error: err };
+    if (ctx.err) return { ok: false, error: ctx.err };
 
-    // Si el admin escribió override sobre el image_prompt base, lo usamos
-    // como punto de partida (Capa 5 del plan: editar prompt antes de enviar).
     const postForBuilder: PostForPromptBuilder = {
-      ...post!,
-      image_prompt: promptOverride?.trim() || post!.image_prompt,
+      ...ctx.post!,
+      image_prompt: promptOverride?.trim() || ctx.post!.image_prompt,
+      product_refs: ctx.products,
     };
     const prompt = buildEnrichedImagePrompt(
       postForBuilder,
-      settings!,
-      companyName,
+      ctx.settings!,
+      ctx.companyName,
+      overrides ?? null,
     );
     return { ok: true, prompt };
   } catch (e) {
@@ -55,13 +72,22 @@ export async function previewEnrichedPromptAction(
 
 /**
  * Genera la imagen del post llamando al proveedor IA configurado, sube a
- * Storage y persiste image_url + metadata + coste en social_posts. Cap
- * mensual aplicado: si la empresa alcanzó el budget, devuelve error claro
- * SIN llamar al proveedor (cero coste).
+ * Storage y persiste image_url + metadata + coste en social_posts.
+ *
+ * Pipeline:
+ *   1) Cargar contexto (post, settings, productos seleccionados, logo).
+ *   2) Validar cap mensual (sin llamar al proveedor).
+ *   3) Descargar fotos de productos (paralelo) para enviar como referencia.
+ *   4) Construir prompt enriquecido (defaults + overrides + productos).
+ *   5) Llamar Gemini.
+ *   6) Aplicar overlay (logo + texto) si está habilitado.
+ *   7) Subir bytes a Storage y persistir todo.
  */
 export async function generatePostImageAction(
   postId: string,
   promptOverride?: string,
+  overrides?: ImageOverrides | null,
+  productIds?: string[] | null,
 ): Promise<
   | {
       ok: true;
@@ -70,6 +96,8 @@ export async function generatePostImageAction(
       cost_cents: number;
       images_used: number;
       budget_cents: number;
+      overlay_applied: boolean;
+      overlay_warning?: string;
     }
   | { ok: false; error: string }
 > {
@@ -85,14 +113,18 @@ export async function generatePostImageAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
-    const { post, settings, companyName, err } = await loadContext(
+    // Validar tope de productos seleccionados.
+    const safeProductIds = (productIds ?? []).slice(0, MAX_PRODUCTS_PER_POST);
+
+    const ctx = await loadContext(
       admin,
       postId,
       session.company_id,
+      safeProductIds,
     );
-    if (err) return { ok: false, error: err };
+    if (ctx.err) return { ok: false, error: ctx.err };
 
-    if (settings!.image_provider === "none") {
+    if (ctx.settings!.image_provider === "none") {
       return {
         ok: false,
         error:
@@ -100,13 +132,13 @@ export async function generatePostImageAction(
       };
     }
 
-    // Reset mensual del contador (si el periodo cambió).
+    // ── Cap mensual ──────────────────────────────────────────────────────────
     const today = new Date();
-    const periodStart = settings!.images_used_period_start
-      ? new Date(settings!.images_used_period_start)
+    const periodStart = ctx.settings!.images_used_period_start
+      ? new Date(ctx.settings!.images_used_period_start)
       : null;
-    let imagesUsed = settings!.images_used_this_month ?? 0;
-    let currentPeriodStart = settings!.images_used_period_start;
+    let imagesUsed = ctx.settings!.images_used_this_month ?? 0;
+    let currentPeriodStart = ctx.settings!.images_used_period_start;
     if (
       !periodStart ||
       periodStart.getUTCFullYear() !== today.getUTCFullYear() ||
@@ -119,12 +151,8 @@ export async function generatePostImageAction(
         .toISOString()
         .slice(0, 10);
     }
-
-    // Cap mensual: 1 imagen Gemini ≈ 4 céntimos → con 500 céntimos (default)
-    // son ~125 imágenes/mes. Si el admin sube el budget, sube el cap.
-    const budgetCents = settings!.monthly_image_budget_cents ?? 500;
-    const costPerImage = 4;
-    if ((imagesUsed + 1) * costPerImage > budgetCents) {
+    const budgetCents = ctx.settings!.monthly_image_budget_cents ?? 500;
+    if ((imagesUsed + 1) * COST_PER_IMAGE_CENTS > budgetCents) {
       return {
         ok: false,
         error: `Alcanzaste el presupuesto mensual de imágenes IA (${
@@ -133,19 +161,24 @@ export async function generatePostImageAction(
       };
     }
 
-    // Construir prompt enriquecido (admin puede haber editado el base).
+    // ── Descargar fotos de productos en paralelo ─────────────────────────────
+    const referenceImages = await downloadProductPhotos(ctx.products);
+
+    // ── Construir prompt enriquecido (con overrides + productos) ─────────────
     const postForBuilder: PostForPromptBuilder = {
-      ...post!,
-      image_prompt: promptOverride?.trim() || post!.image_prompt,
+      ...ctx.post!,
+      image_prompt: promptOverride?.trim() || ctx.post!.image_prompt,
+      product_refs: ctx.products,
     };
     const finalPrompt = buildEnrichedImagePrompt(
       postForBuilder,
-      settings!,
-      companyName,
+      ctx.settings!,
+      ctx.companyName,
+      overrides ?? null,
     );
 
-    // Generar imagen.
-    const gen = await generateImageWithGemini(finalPrompt);
+    // ── Llamar a Gemini ──────────────────────────────────────────────────────
+    const gen = await generateImageWithGemini(finalPrompt, referenceImages);
     if (!gen.ok || !gen.image_bytes) {
       return {
         ok: false,
@@ -153,7 +186,20 @@ export async function generatePostImageAction(
       };
     }
 
-    // Subir a Storage.
+    // ── Aplicar overlay (logo + texto) si toca ───────────────────────────────
+    const resolvedOverlay = resolveOverlaySettings(
+      ctx.settings!,
+      overrides ?? null,
+      ctx.fiscalLogoUrl,
+    );
+    const overlay = await applyOverlay(gen.image_bytes, resolvedOverlay);
+    const finalBytes = overlay.ok && overlay.bytes ? overlay.bytes : gen.image_bytes;
+    const overlayApplied =
+      overlay.ok &&
+      !!overlay.bytes &&
+      (resolvedOverlay.logo_enabled || resolvedOverlay.watermark_text_enabled);
+
+    // ── Subir a Storage ──────────────────────────────────────────────────────
     const bucketReady = await ensureBucket(admin, BUCKET);
     if (!bucketReady) {
       return {
@@ -161,12 +207,13 @@ export async function generatePostImageAction(
         error: "No se pudo crear el bucket de Storage social-images.",
       };
     }
-    const ext = (gen.mime_type ?? "image/png").includes("jpeg") ? "jpg" : "png";
+    const finalMime = overlay.ok && overlay.bytes ? "image/png" : gen.mime_type ?? "image/png";
+    const ext = finalMime.includes("jpeg") ? "jpg" : "png";
     const objectPath = `${session.company_id}/${postId}-${Date.now()}.${ext}`;
     const { error: upErr } = await admin.storage
       .from(BUCKET)
-      .upload(objectPath, gen.image_bytes, {
-        contentType: gen.mime_type ?? "image/png",
+      .upload(objectPath, finalBytes, {
+        contentType: finalMime,
         upsert: true,
       });
     if (upErr) {
@@ -178,15 +225,22 @@ export async function generatePostImageAction(
     const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(objectPath);
     const imageUrl = pub.publicUrl;
 
-    // Persistir en post + actualizar contador del cap.
+    // ── Persistir post + overrides + product_ids + metadata ──────────────────
+    const enrichedMetadata = {
+      ...gen.metadata,
+      overlay_applied: overlayApplied,
+      product_ids: safeProductIds,
+    };
     await admin
       .from("social_posts")
       .update({
         image_url: imageUrl,
         image_prompt_final: finalPrompt,
-        image_generation_metadata: gen.metadata,
-        image_generation_cost_cents: costPerImage,
+        image_generation_metadata: enrichedMetadata,
+        image_generation_cost_cents: COST_PER_IMAGE_CENTS,
         image_generated_at: new Date().toISOString(),
+        image_overrides: overrides ?? null,
+        product_ids: safeProductIds,
         updated_at: new Date().toISOString(),
       })
       .eq("id", postId);
@@ -204,27 +258,50 @@ export async function generatePostImageAction(
       ok: true,
       image_url: imageUrl,
       prompt_used: finalPrompt,
-      cost_cents: costPerImage,
+      cost_cents: COST_PER_IMAGE_CENTS,
       images_used: imagesUsed + 1,
       budget_cents: budgetCents,
+      overlay_applied: overlayApplied,
+      overlay_warning: overlay.warning,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
 
-/** Carga post + settings + nombre empresa + valida pertenencia. */
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers internos
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface LoadedContext {
+  post: (PostForPromptBuilder & { company_id: string }) | null;
+  settings: ImageVisualSettings | null;
+  companyName: string;
+  fiscalLogoUrl: string | null;
+  products: ProductReference[];
+  err?: string;
+}
+
+/**
+ * Carga post + settings + nombre empresa + logo + productos seleccionados.
+ * Defensive: si una columna nueva aún no existe en BD (migración no aplicada),
+ * el campo cae a un valor sensible.
+ */
 async function loadContext(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   postId: string,
   companyId: string,
-): Promise<{
-  post: PostForPromptBuilder | null;
-  settings: ImageVisualSettings | null;
-  companyName: string;
-  err?: string;
-}> {
+  productIds: string[] | null,
+): Promise<LoadedContext> {
+  const empty: LoadedContext = {
+    post: null,
+    settings: null,
+    companyName: "",
+    fiscalLogoUrl: null,
+    products: [],
+  };
+
   const { data: postData } = await admin
     .from("social_posts")
     .select(
@@ -232,11 +309,9 @@ async function loadContext(
     )
     .eq("id", postId)
     .maybeSingle();
-  if (!postData) {
-    return { post: null, settings: null, companyName: "", err: "Post no encontrado" };
-  }
+  if (!postData) return { ...empty, err: "Post no encontrado" };
   if ((postData as { company_id: string }).company_id !== companyId) {
-    return { post: null, settings: null, companyName: "", err: "Post de otra empresa" };
+    return { ...empty, err: "Post de otra empresa" };
   }
   const post = postData as PostForPromptBuilder & { company_id: string };
 
@@ -246,7 +321,10 @@ async function loadContext(
       `image_provider, image_style, brand_palette_primary,
        brand_palette_secondary, brand_palette_accent, brand_visual_keywords,
        brand_location_hint, forbidden_visual_elements, preferred_visual_elements,
-       monthly_image_budget_cents, images_used_this_month, images_used_period_start`,
+       monthly_image_budget_cents, images_used_this_month, images_used_period_start,
+       logo_overlay_enabled_default, logo_position_default, logo_size_pct_default,
+       watermark_text_enabled_default, watermark_text_default,
+       watermark_text_position_default, watermark_text_color_default`,
     )
     .eq("company_id", companyId)
     .maybeSingle();
@@ -268,20 +346,41 @@ async function loadContext(
     images_used_this_month: (s?.images_used_this_month as number | null) ?? 0,
     images_used_period_start:
       (s?.images_used_period_start as string | null) ?? null,
+    logo_overlay_enabled_default:
+      (s?.logo_overlay_enabled_default as boolean | null) ?? true,
+    logo_position_default:
+      ((s?.logo_position_default as OverlayPosition | null) ??
+        "bottom-right") as OverlayPosition,
+    logo_size_pct_default: (s?.logo_size_pct_default as number | null) ?? 12,
+    watermark_text_enabled_default:
+      (s?.watermark_text_enabled_default as boolean | null) ?? false,
+    watermark_text_default: (s?.watermark_text_default as string | null) ?? null,
+    watermark_text_position_default:
+      ((s?.watermark_text_position_default as WatermarkPosition | null) ??
+        "bottom-center") as WatermarkPosition,
+    watermark_text_color_default:
+      (s?.watermark_text_color_default as string | null) ?? "#FFFFFF",
   };
 
-  // Nombre comercial de la empresa para el prompt.
+  // Nombre comercial + logo de empresa (vivien en company_settings, módulo fiscal).
   let companyName = "tu empresa";
+  let fiscalLogoUrl: string | null = null;
   try {
     const { data: cs } = await admin
       .from("company_settings")
-      .select("fiscal_trade_name, fiscal_legal_name")
+      .select("fiscal_trade_name, fiscal_legal_name, fiscal_logo_url")
       .eq("company_id", companyId)
       .maybeSingle();
+    const csRow = cs as
+      | {
+          fiscal_trade_name?: string | null;
+          fiscal_legal_name?: string | null;
+          fiscal_logo_url?: string | null;
+        }
+      | null;
     companyName =
-      (cs as { fiscal_trade_name?: string | null } | null)?.fiscal_trade_name ||
-      (cs as { fiscal_legal_name?: string | null } | null)?.fiscal_legal_name ||
-      companyName;
+      csRow?.fiscal_trade_name || csRow?.fiscal_legal_name || companyName;
+    fiscalLogoUrl = csRow?.fiscal_logo_url ?? null;
     if (companyName === "tu empresa") {
       const { data: c } = await admin
         .from("companies")
@@ -294,5 +393,80 @@ async function loadContext(
     /* fallback al genérico */
   }
 
-  return { post, settings, companyName };
+  // Cargar productos seleccionados (si los hay) con foto.
+  let products: ProductReference[] = [];
+  if (productIds && productIds.length > 0) {
+    try {
+      const { data: prodRows } = await admin
+        .from("products")
+        .select("id, name, description, main_image_url")
+        .eq("company_id", companyId) // seguridad: nunca productos de otra empresa
+        .in("id", productIds.slice(0, MAX_PRODUCTS_PER_POST));
+      products = ((prodRows as ProductReference[] | null) ?? []).map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description ?? null,
+        main_image_url: p.main_image_url ?? null,
+      }));
+    } catch {
+      /* productos opcionales — si falla la query, seguimos sin ellos */
+    }
+  }
+
+  return { post, settings, companyName, fiscalLogoUrl, products };
+}
+
+/**
+ * Descarga fotos de los productos para enviarlas a Gemini como referencia
+ * visual. Tolerante: si una falla, sigue con las demás. Limita a JPG/PNG/WebP.
+ */
+async function downloadProductPhotos(
+  products: ProductReference[],
+): Promise<GeminiReferenceImage[]> {
+  const photoUrls = products
+    .map((p) => p.main_image_url)
+    .filter((u): u is string => !!u);
+  if (photoUrls.length === 0) return [];
+
+  const results = await Promise.allSettled(
+    photoUrls.map(async (url): Promise<GeminiReferenceImage> => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const ct = res.headers.get("content-type") ?? "image/jpeg";
+      const mime = ct.startsWith("image/") ? ct.split(";")[0]!.trim() : "image/jpeg";
+      const data = Buffer.from(await res.arrayBuffer());
+      return { data, mimeType: mime };
+    }),
+  );
+  const fulfilled: GeminiReferenceImage[] = [];
+  for (const r of results) {
+    if (r.status === "fulfilled") fulfilled.push(r.value);
+  }
+  return fulfilled;
+}
+
+/** Mezcla defaults + overrides + logo URL real → settings resueltos de overlay. */
+function resolveOverlaySettings(
+  defaults: ImageVisualSettings,
+  overrides: ImageOverrides | null,
+  logoUrl: string | null,
+): ResolvedOverlaySettings {
+  const logoEnabled =
+    overrides?.logo_overlay_enabled ?? defaults.logo_overlay_enabled_default;
+  const wmEnabled =
+    overrides?.watermark_text_enabled ?? defaults.watermark_text_enabled_default;
+  const wmText = overrides?.watermark_text ?? defaults.watermark_text_default;
+  return {
+    logo_enabled: logoEnabled && !!logoUrl,
+    logo_url: logoUrl,
+    logo_position: (overrides?.logo_position ??
+      defaults.logo_position_default) as OverlayPosition,
+    logo_size_pct: overrides?.logo_size_pct ?? defaults.logo_size_pct_default,
+    watermark_text_enabled: wmEnabled && !!wmText && wmText.trim().length > 0,
+    watermark_text: wmText ?? null,
+    watermark_text_position: (overrides?.watermark_text_position ??
+      defaults.watermark_text_position_default) as WatermarkPosition,
+    watermark_text_color:
+      overrides?.watermark_text_color ?? defaults.watermark_text_color_default,
+  };
 }

@@ -54,8 +54,15 @@ interface GeminiResponse {
   };
 }
 
+/** Imagen de referencia que se manda a Gemini junto al prompt textual. */
+export interface GeminiReferenceImage {
+  data: Buffer;
+  mimeType: string; // "image/jpeg" | "image/png" | "image/webp"
+}
+
 export async function generateImageWithGemini(
   finalPrompt: string,
+  referenceImages?: GeminiReferenceImage[],
 ): Promise<ImageGenerationResult> {
   const apiKey = process.env.GOOGLE_GENAI_API_KEY;
   if (!apiKey) {
@@ -76,12 +83,22 @@ export async function generateImageWithGemini(
   }
 
   try {
+    // Construir parts: imágenes de referencia PRIMERO, prompt textual al final
+    // (convención multimodal recomendada por Google).
+    const refs = referenceImages ?? [];
+    const parts: Array<
+      | { text: string }
+      | { inlineData: { mimeType: string; data: string } }
+    > = refs.map((img) => ({
+      inlineData: {
+        mimeType: img.mimeType,
+        data: img.data.toString("base64"),
+      },
+    }));
+    parts.push({ text: finalPrompt });
+
     const body = {
-      contents: [
-        {
-          parts: [{ text: finalPrompt }],
-        },
-      ],
+      contents: [{ parts }],
       generationConfig: {
         // Gemini exige pedir TEXT+IMAGE aunque solo quieras la imagen:
         // si pides solo ["IMAGE"] la API devuelve respuesta vacía sin error.
@@ -157,6 +174,7 @@ export async function generateImageWithGemini(
       dimensions: "1024x1024", // gemini-2.5-flash-image devuelve 1024 por defecto
       cost_cents: COST_PER_IMAGE_CENTS,
       generated_at: new Date().toISOString(),
+      reference_images_count: (referenceImages ?? []).length,
     };
 
     return {

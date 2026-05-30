@@ -1,16 +1,11 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
-import { Sparkles, RefreshCcw, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { useState } from "react";
+import { Sparkles, RefreshCcw } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import { Textarea } from "@/shared/ui/textarea";
-import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
-import { notify } from "@/shared/hooks/use-toast";
-import {
-  generatePostImageAction,
-  previewEnrichedPromptAction,
-} from "./image-generation-actions";
+import { ImageGeneratorModal } from "./image-generator-modal";
+import type { ImageOverrides, ImageVisualSettings } from "./image-types";
 
 interface Props {
   postId: string;
@@ -24,12 +19,17 @@ interface Props {
   imagesUsedThisMonth: number;
   monthlyBudgetCents: number;
   providerConfigured: boolean;
+  // Nuevo: defaults completos + estado guardado del post
+  defaults: ImageVisualSettings;
+  initialOverrides: ImageOverrides | null;
+  initialProductIds: string[];
+  hasFiscalLogo: boolean;
 }
 
 /**
- * Tarjeta de imagen del post: muestra la imagen actual (si existe), permite
- * editar el prompt base, previsualizar el prompt enriquecido (combinado con
- * los settings de marca) antes de gastar, y generar/regenerar.
+ * Tarjeta de imagen del post: muestra la imagen actual (si existe) y un botón
+ * que abre el modal de generación con todas las opciones (estilo, marca,
+ * productos, preview). Toda la lógica pesada vive en image-generator-modal.
  */
 export function SocialImageGeneratorCard({
   postId,
@@ -43,57 +43,16 @@ export function SocialImageGeneratorCard({
   imagesUsedThisMonth,
   monthlyBudgetCents,
   providerConfigured,
+  defaults,
+  initialOverrides,
+  initialProductIds,
+  hasFiscalLogo,
 }: Props) {
-  const reactId = useId();
-  const promptId = `${reactId}-prompt`;
-  const promptHelpId = `${reactId}-prompt-help`;
-  const [promptOverride, setPromptOverride] = useState(baseImagePrompt ?? "");
-  const [showPreview, setShowPreview] = useState(false);
-  const [enrichedPreview, setEnrichedPreview] = useState<string | null>(null);
-  const [pendingPreview, startPreview] = useTransition();
-  const [pendingGen, startGen] = useTransition();
-
-  const used = imagesUsedThisMonth ?? 0;
+  const [open, setOpen] = useState(false);
   const budgetEur = (monthlyBudgetCents ?? 500) / 100;
-  const usedEur = (used * 4) / 100;
+  const usedEur = ((imagesUsedThisMonth ?? 0) * 4) / 100;
   const remainingEur = budgetEur - usedEur;
   const capReached = remainingEur < 0.04;
-
-  function previewPrompt() {
-    startPreview(async () => {
-      const r = await previewEnrichedPromptAction(postId, promptOverride);
-      if (!r.ok) {
-        notify.error("Error", r.error);
-        return;
-      }
-      setEnrichedPreview(r.prompt);
-      setShowPreview(true);
-    });
-  }
-
-  function generate() {
-    if (capReached) {
-      notify.warning(
-        "Tope mensual alcanzado",
-        "Sube el presupuesto en /configuracion/rrss o espera al próximo mes.",
-      );
-      return;
-    }
-    startGen(async () => {
-      const r = await generatePostImageAction(postId, promptOverride);
-      if (!r.ok) {
-        notify.error("Error generando imagen", r.error);
-        return;
-      }
-      notify.success(
-        "Imagen generada",
-        `Coste ${(r.cost_cents / 100).toFixed(2)} € · ${r.images_used} usadas este mes`,
-      );
-      // Recarga para mostrar la imagen nueva
-      location.reload();
-    });
-  }
-
   const formatLabel = imageFormat ?? "1080x1080";
 
   return (
@@ -128,80 +87,23 @@ export function SocialImageGeneratorCard({
         {imageAltText && (
           <Badge variant="outline">Alt: {imageAltText.slice(0, 50)}…</Badge>
         )}
-      </div>
-
-      {/* Prompt base editable */}
-      <div className="space-y-2">
-        <Label htmlFor={promptId} className="text-xs font-bold uppercase text-muted-foreground">
-          Prompt base (puedes editar antes de generar)
-        </Label>
-        <Textarea
-          id={promptId}
-          value={promptOverride}
-          onChange={(e) => setPromptOverride(e.target.value)}
-          rows={5}
-          placeholder="Ej.: Foto editorial cuadrada de grifo cromado con cal, fondo de azulejo claro…"
-          className="font-mono text-xs"
-          aria-describedby={promptHelpId}
-        />
-        <p id={promptHelpId} className="text-[11px] text-muted-foreground">
-          Esto es la IDEA visual base. Antes de enviar a la IA se combinará
-          con el estilo, paleta y restricciones de marca (configurados en
-          /configuracion/rrss).
-        </p>
-      </div>
-
-      {/* Preview del prompt enriquecido — secundario, link-style */}
-      <div className="space-y-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={previewPrompt}
-          loading={pendingPreview}
-          loadingText="Construyendo…"
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <Eye className="h-4 w-4" aria-hidden="true" />
-          {enrichedPreview ? "Recalcular vista previa" : "Ver prompt enriquecido completo"}
-        </Button>
-        {enrichedPreview && (
-          <div className="rounded-xl border bg-muted/40">
-            <button
-              type="button"
-              onClick={() => setShowPreview((v) => !v)}
-              aria-expanded={showPreview}
-              aria-controls={`${reactId}-pre`}
-              className="flex w-full items-center justify-between p-2 text-xs font-bold uppercase text-muted-foreground"
-            >
-              <span className="truncate text-left">
-                Prompt completo ({enrichedPreview.length} chars · ~
-                {Math.round(enrichedPreview.length / 4)} tokens)
-              </span>
-              {showPreview ? (
-                <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
-              ) : (
-                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-              )}
-            </button>
-            {showPreview && (
-              <pre
-                id={`${reactId}-pre`}
-                className="max-h-64 overflow-auto whitespace-pre-wrap border-t p-3 text-xs font-mono md:max-h-96"
-              >
-                {enrichedPreview}
-              </pre>
-            )}
-          </div>
+        {initialProductIds.length > 0 && (
+          <Badge variant="secondary">
+            {initialProductIds.length} producto
+            {initialProductIds.length === 1 ? "" : "s"} vinculado
+            {initialProductIds.length === 1 ? "" : "s"}
+          </Badge>
         )}
       </div>
 
-      {/* Generar — CTA primaria, móvil full-width, consumo arriba */}
+      {/* Estado consumo + CTA */}
       <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-xs text-muted-foreground sm:max-w-[60%]">
           {providerConfigured ? (
             <>
-              Consumo mes: <strong className="tabular-nums">{used}</strong> imágenes (
+              Consumo mes:{" "}
+              <strong className="tabular-nums">{imagesUsedThisMonth}</strong>{" "}
+              imágenes (
               <span className="tabular-nums">{usedEur.toFixed(2)} €</span>) /{" "}
               <span className="tabular-nums">{budgetEur.toFixed(2)} €</span>.
               {capReached && (
@@ -217,9 +119,7 @@ export function SocialImageGeneratorCard({
           )}
         </div>
         <Button
-          onClick={generate}
-          loading={pendingGen}
-          loadingText={currentImageUrl ? "Regenerando…" : "Generando…"}
+          onClick={() => setOpen(true)}
           disabled={!providerConfigured || capReached}
           variant={currentImageUrl ? "outline" : "default"}
           size="lg"
@@ -228,16 +128,34 @@ export function SocialImageGeneratorCard({
           {currentImageUrl ? (
             <>
               <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-              Regenerar imagen
+              Regenerar imagen IA
             </>
           ) : (
             <>
               <Sparkles className="h-4 w-4" aria-hidden="true" />
-              Generar imagen con IA
+              Generar imagen IA
             </>
           )}
         </Button>
       </div>
+
+      <ImageGeneratorModal
+        open={open}
+        onOpenChange={setOpen}
+        postId={postId}
+        baseImagePrompt={baseImagePrompt}
+        defaults={defaults}
+        initialOverrides={initialOverrides}
+        initialProductIds={initialProductIds}
+        capReached={capReached}
+        imagesUsed={imagesUsedThisMonth}
+        monthlyBudgetCents={monthlyBudgetCents}
+        hasFiscalLogo={hasFiscalLogo}
+        onGenerated={() => {
+          // Recarga la página para mostrar la imagen nueva.
+          if (typeof window !== "undefined") window.location.reload();
+        }}
+      />
     </div>
   );
 }

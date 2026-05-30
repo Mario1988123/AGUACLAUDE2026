@@ -5,7 +5,13 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
-import type { ImageProvider, ImageStyle, ImageVisualSettings } from "./image-types";
+import type {
+  ImageProvider,
+  ImageStyle,
+  ImageVisualSettings,
+  OverlayPosition,
+  WatermarkPosition,
+} from "./image-types";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -27,7 +33,10 @@ export async function getSocialImageSettings(): Promise<ImageVisualSettings> {
       `image_provider, image_style, brand_palette_primary,
        brand_palette_secondary, brand_palette_accent, brand_visual_keywords,
        brand_location_hint, forbidden_visual_elements, preferred_visual_elements,
-       monthly_image_budget_cents, images_used_this_month, images_used_period_start`,
+       monthly_image_budget_cents, images_used_this_month, images_used_period_start,
+       logo_overlay_enabled_default, logo_position_default, logo_size_pct_default,
+       watermark_text_enabled_default, watermark_text_default,
+       watermark_text_position_default, watermark_text_color_default`,
     )
     .eq("company_id", session.company_id)
     .maybeSingle();
@@ -50,6 +59,20 @@ export async function getSocialImageSettings(): Promise<ImageVisualSettings> {
     images_used_this_month: (s?.images_used_this_month as number | null) ?? 0,
     images_used_period_start:
       (s?.images_used_period_start as string | null) ?? null,
+    logo_overlay_enabled_default:
+      (s?.logo_overlay_enabled_default as boolean | null) ?? true,
+    logo_position_default:
+      ((s?.logo_position_default as OverlayPosition | null) ??
+        "bottom-right") as OverlayPosition,
+    logo_size_pct_default: (s?.logo_size_pct_default as number | null) ?? 12,
+    watermark_text_enabled_default:
+      (s?.watermark_text_enabled_default as boolean | null) ?? false,
+    watermark_text_default: (s?.watermark_text_default as string | null) ?? null,
+    watermark_text_position_default:
+      ((s?.watermark_text_position_default as WatermarkPosition | null) ??
+        "bottom-center") as WatermarkPosition,
+    watermark_text_color_default:
+      (s?.watermark_text_color_default as string | null) ?? "#FFFFFF",
   };
 }
 
@@ -62,6 +85,20 @@ const colorHexNullable = z
     "Color debe ser hex como #4880FF",
   )
   .transform((v) => (v && !v.startsWith("#") ? `#${v}` : v));
+
+const overlayPositionEnum = z.enum([
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+]);
+const watermarkPositionEnum = z.enum([
+  "top-left",
+  "top-right",
+  "bottom-left",
+  "bottom-right",
+  "bottom-center",
+]);
 
 const saveSchema = z.object({
   image_provider: z.enum(["none", "gemini"]),
@@ -76,6 +113,14 @@ const saveSchema = z.object({
   forbidden_visual_elements: z.array(z.string().trim().min(1).max(120)).nullish(),
   preferred_visual_elements: z.array(z.string().trim().min(1).max(120)).nullish(),
   monthly_image_budget_cents: z.number().int().min(0).max(50000),
+  // Defaults de marca de agua (opcionales — si vienen undefined, no se tocan)
+  logo_overlay_enabled_default: z.boolean().nullish(),
+  logo_position_default: overlayPositionEnum.nullish(),
+  logo_size_pct_default: z.number().int().min(5).max(30).nullish(),
+  watermark_text_enabled_default: z.boolean().nullish(),
+  watermark_text_default: z.string().trim().max(80).nullish(),
+  watermark_text_position_default: watermarkPositionEnum.nullish(),
+  watermark_text_color_default: colorHexNullable,
 });
 
 export async function saveSocialImageSettingsAction(
@@ -87,7 +132,9 @@ export async function saveSocialImageSettingsAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
-    const payload = {
+    // Sólo añadimos al payload las columnas nuevas si vienen definidas — para
+    // evitar romper si la migración aún no se aplicó en algún entorno.
+    const payload: Record<string, unknown> = {
       image_provider: parsed.image_provider,
       image_style: parsed.image_style ?? "editorial",
       brand_palette_primary: parsed.brand_palette_primary,
@@ -99,6 +146,25 @@ export async function saveSocialImageSettingsAction(
       preferred_visual_elements: parsed.preferred_visual_elements ?? [],
       monthly_image_budget_cents: parsed.monthly_image_budget_cents,
     };
+    if (parsed.logo_overlay_enabled_default !== undefined && parsed.logo_overlay_enabled_default !== null) {
+      payload.logo_overlay_enabled_default = parsed.logo_overlay_enabled_default;
+    }
+    if (parsed.logo_position_default) payload.logo_position_default = parsed.logo_position_default;
+    if (parsed.logo_size_pct_default !== undefined && parsed.logo_size_pct_default !== null) {
+      payload.logo_size_pct_default = parsed.logo_size_pct_default;
+    }
+    if (parsed.watermark_text_enabled_default !== undefined && parsed.watermark_text_enabled_default !== null) {
+      payload.watermark_text_enabled_default = parsed.watermark_text_enabled_default;
+    }
+    if (parsed.watermark_text_default !== undefined) {
+      payload.watermark_text_default = parsed.watermark_text_default || null;
+    }
+    if (parsed.watermark_text_position_default) {
+      payload.watermark_text_position_default = parsed.watermark_text_position_default;
+    }
+    if (parsed.watermark_text_color_default) {
+      payload.watermark_text_color_default = parsed.watermark_text_color_default;
+    }
 
     const { data: existing } = await admin
       .from("social_settings")
