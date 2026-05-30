@@ -204,7 +204,7 @@ export default async function WalletPage({
           </p>
         </form>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 grid-cols-2 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             label="Sin cobrar (acumulado)"
             value={formatCents(summary.pending_cents)}

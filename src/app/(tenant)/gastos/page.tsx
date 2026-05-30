@@ -86,7 +86,7 @@ export default async function ExpensesPage({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Pendientes"
           value={`${summary.pending_count} · ${eur(summary.pending_amount_cents)}`}

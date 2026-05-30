@@ -174,7 +174,7 @@ export default async function MantenimientosPage({
       )}
 
       {/* KPIs */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Completados este mes</div>
           <div className="mt-1 text-3xl font-extrabold tabular-nums">{completedThisMonth}</div>

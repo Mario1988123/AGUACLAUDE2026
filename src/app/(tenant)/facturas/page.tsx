@@ -136,7 +136,7 @@ export default async function InvoicesPage({
           )
           .reduce((s, i) => s + (i.pending_cents ?? i.total_cents ?? 0), 0);
         return (
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
             <div className="rounded-xl border bg-card p-4">
               <div className="text-xs uppercase text-muted-foreground">Facturado YTD</div>
               <div className="mt-1 text-2xl font-extrabold tabular-nums">{eur(totalYTD)}</div>

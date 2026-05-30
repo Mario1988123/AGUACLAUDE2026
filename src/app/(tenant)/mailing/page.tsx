@@ -176,7 +176,7 @@ export default async function MailingPage({
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Hoy" value={String(kpis.sent_today)} />
         <KpiCard label="Última semana" value={String(kpis.sent_week)} />
         <KpiCard label="Último mes" value={String(kpis.sent_month)} />
