@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { Sparkles, RefreshCcw, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Textarea } from "@/shared/ui/textarea";
+import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
@@ -43,6 +44,9 @@ export function SocialImageGeneratorCard({
   monthlyBudgetCents,
   providerConfigured,
 }: Props) {
+  const reactId = useId();
+  const promptId = `${reactId}-prompt`;
+  const promptHelpId = `${reactId}-prompt-help`;
   const [promptOverride, setPromptOverride] = useState(baseImagePrompt ?? "");
   const [showPreview, setShowPreview] = useState(false);
   const [enrichedPreview, setEnrichedPreview] = useState<string | null>(null);
@@ -128,58 +132,63 @@ export function SocialImageGeneratorCard({
 
       {/* Prompt base editable */}
       <div className="space-y-2">
-        <label className="text-xs font-bold uppercase text-muted-foreground">
+        <Label htmlFor={promptId} className="text-xs font-bold uppercase text-muted-foreground">
           Prompt base (puedes editar antes de generar)
-        </label>
+        </Label>
         <Textarea
+          id={promptId}
           value={promptOverride}
           onChange={(e) => setPromptOverride(e.target.value)}
           rows={5}
           placeholder="Ej.: Foto editorial cuadrada de grifo cromado con cal, fondo de azulejo claro…"
           className="font-mono text-xs"
+          aria-describedby={promptHelpId}
         />
-        <p className="text-[11px] text-muted-foreground">
+        <p id={promptHelpId} className="text-[11px] text-muted-foreground">
           Esto es la IDEA visual base. Antes de enviar a la IA se combinará
           con el estilo, paleta y restricciones de marca (configurados en
           /configuracion/rrss).
         </p>
       </div>
 
-      {/* Preview del prompt enriquecido */}
+      {/* Preview del prompt enriquecido — secundario, link-style */}
       <div className="space-y-2">
         <Button
           type="button"
           size="sm"
-          variant="outline"
+          variant="ghost"
           onClick={previewPrompt}
-          disabled={pendingPreview}
+          loading={pendingPreview}
+          loadingText="Construyendo…"
+          className="text-muted-foreground hover:text-foreground"
         >
-          <Eye className="h-4 w-4" />
-          {pendingPreview
-            ? "Construyendo…"
-            : enrichedPreview
-              ? "Recalcular vista previa"
-              : "Ver prompt enriquecido completo"}
+          <Eye className="h-4 w-4" aria-hidden="true" />
+          {enrichedPreview ? "Recalcular vista previa" : "Ver prompt enriquecido completo"}
         </Button>
         {enrichedPreview && (
           <div className="rounded-xl border bg-muted/40">
             <button
               type="button"
               onClick={() => setShowPreview((v) => !v)}
+              aria-expanded={showPreview}
+              aria-controls={`${reactId}-pre`}
               className="flex w-full items-center justify-between p-2 text-xs font-bold uppercase text-muted-foreground"
             >
-              <span>
+              <span className="truncate text-left">
                 Prompt completo ({enrichedPreview.length} chars · ~
                 {Math.round(enrichedPreview.length / 4)} tokens)
               </span>
               {showPreview ? (
-                <ChevronUp className="h-4 w-4" />
+                <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
               ) : (
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
               )}
             </button>
             {showPreview && (
-              <pre className="max-h-96 overflow-auto whitespace-pre-wrap border-t p-3 text-xs font-mono">
+              <pre
+                id={`${reactId}-pre`}
+                className="max-h-64 overflow-auto whitespace-pre-wrap border-t p-3 text-xs font-mono md:max-h-96"
+              >
                 {enrichedPreview}
               </pre>
             )}
@@ -187,13 +196,14 @@ export function SocialImageGeneratorCard({
         )}
       </div>
 
-      {/* Generar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
-        <div className="text-xs text-muted-foreground">
+      {/* Generar — CTA primaria, móvil full-width, consumo arriba */}
+      <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-xs text-muted-foreground sm:max-w-[60%]">
           {providerConfigured ? (
             <>
-              Consumo mes: <strong>{used}</strong> imágenes (
-              {usedEur.toFixed(2)} €) / {budgetEur.toFixed(2)} €.
+              Consumo mes: <strong className="tabular-nums">{used}</strong> imágenes (
+              <span className="tabular-nums">{usedEur.toFixed(2)} €</span>) /{" "}
+              <span className="tabular-nums">{budgetEur.toFixed(2)} €</span>.
               {capReached && (
                 <span className="ml-1 font-bold text-rose-700">
                   Tope alcanzado.
@@ -208,18 +218,22 @@ export function SocialImageGeneratorCard({
         </div>
         <Button
           onClick={generate}
-          disabled={pendingGen || !providerConfigured || capReached}
+          loading={pendingGen}
+          loadingText={currentImageUrl ? "Regenerando…" : "Generando…"}
+          disabled={!providerConfigured || capReached}
           variant={currentImageUrl ? "outline" : "default"}
+          size="lg"
+          className="w-full sm:w-auto"
         >
           {currentImageUrl ? (
             <>
-              <RefreshCcw className="h-4 w-4" />
-              {pendingGen ? "Regenerando…" : "Regenerar imagen"}
+              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+              Regenerar imagen
             </>
           ) : (
             <>
-              <Sparkles className="h-4 w-4" />
-              {pendingGen ? "Generando…" : "Generar imagen con IA"}
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              Generar imagen con IA
             </>
           )}
         </Button>
