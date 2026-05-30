@@ -30,6 +30,9 @@ export const STORAGE_BUCKETS = {
   expenses: { public: false },
   /** Firmas digitalizadas del albarán de prueba gratuita. Privadas. */
   "free-trial-signatures": { public: false },
+  /** Imágenes generadas por IA para posts de RRSS. Públicas (URL directa
+   *  en preview del panel y en publicación). */
+  "social-images": { public: true },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;

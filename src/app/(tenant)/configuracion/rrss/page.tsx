@@ -4,6 +4,8 @@ import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getSocialSettings } from "@/modules/social/settings-actions";
 import { SocialSettingsForm } from "@/modules/social/settings-form";
+import { getSocialImageSettings } from "@/modules/social/image-settings-actions";
+import { SocialImageSettingsForm } from "@/modules/social/image-settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,7 @@ export default async function SocialConfigPage() {
   }
   const settings = await getSocialSettings();
   if (!settings) redirect("/dashboard");
+  const imageSettings = await getSocialImageSettings().catch(() => null);
 
   return (
     <div className="space-y-6">
@@ -38,6 +41,17 @@ export default async function SocialConfigPage() {
           <SocialSettingsForm initial={settings} />
         </CardContent>
       </Card>
+
+      {imageSettings && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Generación de imagen con IA</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SocialImageSettingsForm initial={imageSettings} />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

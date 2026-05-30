@@ -6,6 +6,8 @@ import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getSocialPost } from "@/modules/social/actions";
 import { PostStatusButtons } from "@/modules/social/post-status-buttons";
+import { SocialImageGeneratorCard } from "@/modules/social/image-generator-card";
+import { getSocialImageSettings } from "@/modules/social/image-settings-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +66,7 @@ export default async function SocialPostDetailPage({
   const { id } = await params;
   const post = await getSocialPost(id);
   if (!post) notFound();
+  const imageSettings = await getSocialImageSettings().catch(() => null);
 
   return (
     <div className="space-y-6">
@@ -156,59 +159,34 @@ export default async function SocialPostDetailPage({
         </CardContent>
       </Card>
 
-      {(post.image_prompt || post.image_alt_text) && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Imagen</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {post.image_format && (
-              <div>
-                <span className="text-xs text-muted-foreground">Formato:</span>{" "}
-                <strong>{post.image_format}</strong>
-              </div>
-            )}
-            {post.image_prompt && (
-              <div>
-                <div className="text-xs font-bold uppercase text-muted-foreground">
-                  Prompt
-                </div>
-                <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 p-3 text-sm font-sans">
-                  {post.image_prompt}
-                </pre>
-              </div>
-            )}
-            {post.image_prompt_alt && (
-              <div>
-                <div className="text-xs font-bold uppercase text-muted-foreground">
-                  Prompt alternativo
-                </div>
-                <pre className="whitespace-pre-wrap rounded-xl bg-muted/40 p-3 text-sm font-sans">
-                  {post.image_prompt_alt}
-                </pre>
-              </div>
-            )}
-            {post.image_alt_text && (
-              <div>
-                <div className="text-xs font-bold uppercase text-muted-foreground">
-                  Texto alternativo (accesibilidad)
-                </div>
-                <p>{post.image_alt_text}</p>
-              </div>
-            )}
-            {post.image_url && (
-              <div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={post.image_url}
-                  alt={post.image_alt_text ?? post.topic}
-                  className="max-w-full rounded-xl border"
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Imagen</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SocialImageGeneratorCard
+            postId={post.id}
+            topic={post.topic}
+            baseImagePrompt={post.image_prompt ?? null}
+            imageFormat={post.image_format ?? null}
+            imageAltText={post.image_alt_text ?? null}
+            currentImageUrl={post.image_url ?? null}
+            generatedAt={
+              (post as { image_generated_at?: string | null })
+                .image_generated_at ?? null
+            }
+            generationCostCents={
+              (post as { image_generation_cost_cents?: number | null })
+                .image_generation_cost_cents ?? null
+            }
+            imagesUsedThisMonth={imageSettings?.images_used_this_month ?? 0}
+            monthlyBudgetCents={
+              imageSettings?.monthly_image_budget_cents ?? 500
+            }
+            providerConfigured={imageSettings?.image_provider === "gemini"}
+          />
+        </CardContent>
+      </Card>
 
       {(post.seo_title || post.seo_meta_description) && (
         <Card>
