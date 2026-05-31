@@ -29,10 +29,10 @@ export default async function MailingPreviewPage() {
     ? await loadCompanyEmailContext(session.company_id, admin).catch(() => null)
     : null;
   const company = ctx?.company ?? {
-    legal_name: "AguaClaude Demo SL",
+    legal_name: "Hidromanager Demo SL",
     tax_id: "B12345678",
     address: "Calle Falsa 123, 28012 Madrid",
-    email: "info@aguaclaude.es",
+    email: "info@hidromanager.es",
     phone: "900 100 200",
   };
   const branding = ctx?.branding ?? null;

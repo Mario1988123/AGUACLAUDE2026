@@ -13,15 +13,15 @@ const nunito = Nunito_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "AguaClaude CRM",
-  description: "CRM multi-tenant para empresas de tratamiento de agua",
-  applicationName: "AguaClaude",
+  title: "Hidromanager CRM",
+  description: "Hidromanager — CRM para empresas de tratamiento de agua",
+  applicationName: "Hidromanager",
   formatDetection: { telephone: true },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AguaClaude",
+    title: "Hidromanager",
   },
   icons: {
     icon: [{ url: "/icons/icon.svg", type: "image/svg+xml" }],
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#4880FF",
+  themeColor: "#0B4F8A",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

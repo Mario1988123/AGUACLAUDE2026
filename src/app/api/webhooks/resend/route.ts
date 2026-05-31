@@ -73,24 +73,31 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
   const secret = process.env.RESEND_WEBHOOK_SECRET;
-  if (secret) {
-    const svixId = req.headers.get("svix-id");
-    const svixTs = req.headers.get("svix-timestamp");
-    const svixSig = req.headers.get("svix-signature");
-    if (!svixId || !svixTs || !svixSig) {
-      return NextResponse.json(
-        { error: "missing svix headers" },
-        { status: 401 },
-      );
-    }
-    // Anti-replay: timestamp dentro de 5min (Svix recomienda)
-    const tsMs = parseInt(svixTs, 10) * 1000;
-    if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 5 * 60 * 1000) {
-      return NextResponse.json({ error: "timestamp out of window" }, { status: 401 });
-    }
-    if (!verifySvixSignature(rawBody, svixId, svixTs, svixSig, secret)) {
-      return NextResponse.json({ error: "invalid signature" }, { status: 401 });
-    }
+  // SEGURIDAD (fail-closed): sin secret no se acepta el webhook. Antes
+  // hacía fail-open: si la variable se perdía cualquiera podía marcar
+  // emails como bounced/complained y cortar comunicaciones comerciales.
+  if (!secret) {
+    return NextResponse.json(
+      { error: "webhook secret not configured" },
+      { status: 500 },
+    );
+  }
+  const svixId = req.headers.get("svix-id");
+  const svixTs = req.headers.get("svix-timestamp");
+  const svixSig = req.headers.get("svix-signature");
+  if (!svixId || !svixTs || !svixSig) {
+    return NextResponse.json(
+      { error: "missing svix headers" },
+      { status: 401 },
+    );
+  }
+  // Anti-replay: timestamp dentro de 5min (Svix recomienda)
+  const tsMs = parseInt(svixTs, 10) * 1000;
+  if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 5 * 60 * 1000) {
+    return NextResponse.json({ error: "timestamp out of window" }, { status: 401 });
+  }
+  if (!verifySvixSignature(rawBody, svixId, svixTs, svixSig, secret)) {
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
   let body: ResendEvent;

@@ -1,8 +1,8 @@
 {
-  "name": "aguaclaude2026",
+  "name": "hidromanager",
   "version": "0.1.0",
   "private": true,
-  "description": "CRM multi-tenant SaaS para empresas de tratamiento de agua",
+  "description": "Hidromanager — CRM SaaS multi-tenant para empresas de tratamiento de agua",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

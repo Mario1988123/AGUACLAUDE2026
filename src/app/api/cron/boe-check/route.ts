@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
   for (const url of feeds) {
     try {
       const res = await fetch(url, {
-        headers: { "User-Agent": "AguaClaude-BOE-Check/1.0" },
+        headers: { "User-Agent": "Hidromanager-BOE-Check/1.0" },
       });
       if (!res.ok) continue;
       const xml = await res.text();

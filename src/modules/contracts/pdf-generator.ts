@@ -22,7 +22,7 @@ const PAGE_H = 842;
 const MARGIN = 45;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 
-// Paleta marca AguaClaude (teal)
+// Paleta marca Hidromanager (azul agua + petróleo)
 const TEAL = rgb(20 / 255, 169 / 255, 173 / 255);
 const TEAL_DARK = rgb(15 / 255, 130 / 255, 133 / 255);
 const TEAL_LIGHT = rgb(0.91, 0.97, 0.97);

@@ -1,4 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#4880FF"/>
-  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="Nunito Sans, Arial, sans-serif" font-size="320" font-weight="900" fill="#ffffff">A</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hidromanager">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#0B4F8A"/>
+    </linearGradient>
+    <linearGradient id="drop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E0F4FF"/>
+      <stop offset="1" stop-color="#7DD3FC"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M256 88 C 168 200 132 268 132 320 a 124 124 0 0 0 248 0 C 380 268 344 200 256 88 Z" fill="url(#drop)"/>
+  <path d="M168 332 q 28 -22 56 0 t 56 0 t 56 0" stroke="#0B4F8A" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.55"/>
+  <text x="256" y="298" text-anchor="middle" font-family="Nunito Sans, Arial, sans-serif" font-size="200" font-weight="900" fill="#0B4F8A" letter-spacing="-6">H</text>
 </svg>

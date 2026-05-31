@@ -24,13 +24,17 @@ export async function exportCustomerDataAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // SEGURIDAD: cliente debe pertenecer a la empresa del solicitante.
+    // Antes faltaba el .eq("company_id", ...) y permitía IDOR cross-tenant.
     const { data: customer } = await admin
       .from("customers")
       .select("*")
       .eq("id", customerId)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     if (!customer) return { ok: false, error: "Cliente no encontrado" };
 
+    const companyId = session.company_id;
     const [
       addresses,
       banks,
@@ -42,20 +46,21 @@ export async function exportCustomerDataAction(
       events,
       consents,
     ] = await Promise.all([
-      admin.from("addresses").select("*").eq("customer_id", customerId),
-      admin.from("customer_bank_accounts").select("*").eq("customer_id", customerId),
-      admin.from("contracts").select("*").eq("customer_id", customerId),
-      admin.from("installations").select("*").eq("customer_id", customerId),
-      admin.from("maintenance_jobs").select("*").eq("customer_id", customerId),
-      admin.from("proposals").select("*").eq("customer_id", customerId),
-      admin.from("incidents").select("*").eq("customer_id", customerId),
+      admin.from("addresses").select("*").eq("customer_id", customerId).eq("company_id", companyId),
+      admin.from("customer_bank_accounts").select("*").eq("customer_id", customerId).eq("company_id", companyId),
+      admin.from("contracts").select("*").eq("customer_id", customerId).eq("company_id", companyId),
+      admin.from("installations").select("*").eq("customer_id", customerId).eq("company_id", companyId),
+      admin.from("maintenance_jobs").select("*").eq("customer_id", customerId).eq("company_id", companyId),
+      admin.from("proposals").select("*").eq("customer_id", customerId).eq("company_id", companyId),
+      admin.from("incidents").select("*").eq("customer_id", customerId).eq("company_id", companyId),
       admin
         .from("events")
         .select("*")
+        .eq("company_id", companyId)
         .eq("subject_type", "customer")
         .eq("subject_id", customerId)
         .order("created_at", { ascending: false }),
-      admin.from("customer_consents").select("*").eq("customer_id", customerId),
+      admin.from("customer_consents").select("*").eq("customer_id", customerId).eq("company_id", companyId),
     ]);
 
     // Registrar el export como evento (auditoría)

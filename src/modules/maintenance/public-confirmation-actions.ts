@@ -252,7 +252,7 @@ export async function getPublicJobView(
         customer_name: customerName,
         customer_address: customerAddress,
         technician_name: technicianName,
-        company_name: co.name ?? "AguaClaude",
+        company_name: co.name ?? "Hidromanager",
         company_phone: co.phone,
         status: j.status,
       },

@@ -653,7 +653,7 @@ export async function sendTransactionalEmail(
   const fromEmail =
     userSettings?.from_email ?? cfg?.fromEmail ?? ctx.company.email ?? "";
   const fromName =
-    userSettings?.from_name ?? cfg?.fromName ?? ctx.company.legal_name ?? "AGUACLAUDE";
+    userSettings?.from_name ?? cfg?.fromName ?? ctx.company.legal_name ?? "Hidromanager";
 
   // Renderizar
   const baseVars = {

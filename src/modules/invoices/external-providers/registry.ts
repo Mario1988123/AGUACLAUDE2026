@@ -5,7 +5,7 @@ import type { ProviderId, ProviderMeta, ExternalInvoicingClient } from "./types"
  *
  * Conclusión de la investigación (project_facturacion_integrations.md):
  *  · **Verifacti** y **Invopop** son los únicos diseñados como "tubería API"
- *    multi-tenant para CRMs/ISVs — caso EXACTO de AGUA_CLAUDE.
+ *    multi-tenant para CRMs/ISVs — caso EXACTO de Hidromanager.
  *  · Holded / Quipu / Odoo son útiles solo si la empresa YA usa esa plataforma
  *    (requieren cuenta de pago suya, API key con acceso total).
  *  · Factura.com, Anfix, Sage, Factusol → descartados (sin API útil para España,

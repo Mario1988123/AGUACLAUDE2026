@@ -40,7 +40,7 @@ export const EMAIL_PROVIDERS: EmailProvider[] = [
     steps: [
       "Activa la verificación en 2 pasos en myaccount.google.com/security",
       "Crea una contraseña de aplicación en myaccount.google.com/apppasswords",
-      "Asigna un nombre descriptivo (\"AguaClaude CRM\") y copia los 16 caracteres",
+      "Asigna un nombre descriptivo (\"Hidromanager CRM\") y copia los 16 caracteres",
       "Pulsa \"Usar esta configuración\" y pega los 16 caracteres como contraseña",
       "El email remitente debe ser tu misma dirección de Gmail",
     ],

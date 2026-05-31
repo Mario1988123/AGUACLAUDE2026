@@ -35,7 +35,7 @@ export async function sendAllTemplatesTestAction(
     const sampleVars = getSampleVars({
       customer_email: toEmail,
       company_name: ctx.company.legal_name,
-      company_email: ctx.company.email ?? "info@aguaclaude.es",
+      company_email: ctx.company.email ?? "info@hidromanager.es",
       company_phone: ctx.company.phone ?? "900 100 200",
     });
 

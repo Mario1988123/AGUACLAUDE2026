@@ -316,7 +316,7 @@ async function sendMaintenanceReminder(
     to_name: customerName,
     customer_id: job.customer_id,
     from_email: (company as { name: string | null } | null)?.name ?? "",
-    from_name: (company as { name: string | null } | null)?.name ?? "AguaClaude",
+    from_name: (company as { name: string | null } | null)?.name ?? "Hidromanager",
     subject,
     body_html: fullHtml,
     kind: "transactional",

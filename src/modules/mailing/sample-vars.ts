@@ -14,8 +14,8 @@ export function getSampleVars(
     customer_email: "mario.ortigueira@gmail.com",
     customer_phone: "612 345 678",
     // Empresa
-    company_name: "AguaClaude Demo SL",
-    company_email: "info@aguaclaude.es",
+    company_name: "Hidromanager Demo SL",
+    company_email: "info@hidromanager.es",
     company_phone: "900 100 200",
     // Cita / instalación / mantenimiento
     appointment_date: new Date(Date.now() + 14 * 86400_000).toISOString(),

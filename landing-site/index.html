@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Hidromanager — CRM para empresas de tratamiento de agua</title>
+<meta name="description" content="Hidromanager es el CRM todo-en-uno para empresas de tratamiento de agua. Leads, contratos, instalaciones, mantenimientos, facturación, agenda inteligente y firma digital, en español." />
+<meta name="theme-color" content="#0B4F8A" />
+<meta property="og:title" content="Hidromanager — CRM para tratamiento de agua" />
+<meta property="og:description" content="Gestiona leads, contratos, instalaciones y mantenimientos en un único sitio. Facturación con Verifactu, firma digital, agenda inteligente, calculadora de ahorro y mucho más." />
+<meta property="og:image" content="/assets/og-cover.svg" />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://hidromanager.es" />
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+<link rel="canonical" href="https://hidromanager.es/" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<header class="nav">
+  <a class="brand" href="/">
+    <img src="/assets/logo.svg" alt="Hidromanager" />
+  </a>
+  <nav>
+    <a href="#features">Funciones</a>
+    <a href="#demo">Demo</a>
+    <a href="#flujos">Flujos</a>
+    <a href="#planes">Planes</a>
+    <a href="#contacto">Contacto</a>
+  </nav>
+  <a class="btn btn-primary" href="https://crm.hidromanager.es">Entrar al CRM</a>
+</header>
+
+<section class="hero">
+  <div class="hero-grid">
+    <div>
+      <span class="pill">CRM SaaS · multi-empresa · 100 % en español</span>
+      <h1>El CRM hecho para empresas de <span class="hl">tratamiento&nbsp;de&nbsp;agua</span>.</h1>
+      <p class="lead">
+        Comerciales, técnicos, administración y dirección — todos en la misma herramienta.
+        Leads, propuestas, contratos, instalaciones, mantenimientos, facturas, cobros y agenda inteligente.
+        Pensado para osmosis, descalcificadores, prefiltros y filtros bajo encimera.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary btn-lg" href="https://crm.hidromanager.es">Probar Hidromanager</a>
+        <a class="btn btn-ghost btn-lg" href="#demo">Ver demo</a>
+      </div>
+      <ul class="trust">
+        <li>✓ Cumple RGPD y Verifactu</li>
+        <li>✓ Firma digital con DocuSign</li>
+        <li>✓ Datos en la UE (Supabase)</li>
+        <li>✓ App móvil instalable (PWA)</li>
+      </ul>
+    </div>
+
+    <!-- Mockup interactivo del dashboard -->
+    <div class="mockup">
+      <div class="mockup-bar">
+        <span></span><span></span><span></span>
+        <em>crm.hidromanager.es</em>
+      </div>
+      <div class="mockup-app" id="mockup-app">
+        <aside class="mock-side">
+          <div class="mock-brand"><span class="dot"></span>Hidromanager</div>
+          <div class="mock-section">Inicio</div>
+          <a class="mock-link active">📊 Panel</a>
+          <a class="mock-link">📅 Agenda</a>
+          <div class="mock-section">Comercial</div>
+          <a class="mock-link">🌱 Leads</a>
+          <a class="mock-link">📝 Propuestas</a>
+          <a class="mock-link">📑 Contratos</a>
+          <div class="mock-section">Operaciones</div>
+          <a class="mock-link">🔧 Instalaciones</a>
+          <a class="mock-link">🛠️ Mantenimientos</a>
+          <a class="mock-link">⚠️ Incidencias</a>
+          <div class="mock-section">Cobros</div>
+          <a class="mock-link">💶 Facturas</a>
+          <a class="mock-link">👛 Wallet</a>
+        </aside>
+        <main class="mock-main" id="mock-main">
+          <!-- contenido dinámico -->
+        </main>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="logos">
+  <p>Construido sobre tecnología empresarial</p>
+  <div class="logos-row">
+    <span>Next.js 15</span><span>Supabase</span><span>Vercel</span><span>Resend</span><span>GoCardless SEPA</span><span>Verifactu AEAT</span><span>Twilio</span>
+  </div>
+</section>
+
+<section id="features" class="features">
+  <h2>Todo lo que necesita tu empresa, en un solo CRM</h2>
+  <p class="section-lead">Más de 25 módulos integrados. Diseñado en España para el sector del tratamiento de agua.</p>
+
+  <div class="feature-grid">
+    <article class="feature">
+      <div class="ficon">🌱</div>
+      <h3>Captación de leads</h3>
+      <p>Formulario web, llamadas, campañas. Temperatura visual, alertas de leads sin contactar, citas y pruebas gratuitas.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">📝</div>
+      <h3>Propuestas digitales</h3>
+      <p>PDF profesional con tu marca, líneas de producto, descuentos, validez, firma rápida. Auto-expiran a los 30 días.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">📑</div>
+      <h3>Contratos y firma</h3>
+      <p>Tres modalidades: contado, alquiler y renting con financiera. Firma digital con DocuSign o firma manual con foto del DNI.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🔧</div>
+      <h3>Instalaciones</h3>
+      <p>Agenda inteligente con zonas y rutas, mi-día con mapa, fotos antes/después, firma de conformidad del cliente.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🛠️</div>
+      <h3>Mantenimientos</h3>
+      <p>Calendario por equipo, recordatorios automáticos al cliente, confirmación pública por SMS/email, trazabilidad de piezas.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">💶</div>
+      <h3>Facturación + Verifactu</h3>
+      <p>Series, IVA, recargo, IRPF. Envío a la AEAT cumpliendo RD 1007/2023. Integración opcional con Verifacti, Invopop u Holded.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🏦</div>
+      <h3>Cobros y SEPA</h3>
+      <p>Domiciliación con GoCardless, mandatos, gestión de impagos, recordatorios automáticos al cliente, conciliación.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">📦</div>
+      <h3>Almacén inteligente</h3>
+      <p>Stock por ubicación, compras y CMP, reservas para órdenes, alertas predictivas, auto-carga de furgonetas técnicas.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">📈</div>
+      <h3>Calculadora de ahorro</h3>
+      <p>Compara tu equipo con el coste real del agua envasada. Scraper mensual de Mercadona y Carrefour. Wizard de 9 pasos.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🚐</div>
+      <h3>Rutas y mapa</h3>
+      <p>Google Maps con auto-geocode CP↔calle, vista equipo del día, sugerencias cercanas, deep link a Google Maps.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">📣</div>
+      <h3>Marketing RRSS + IA</h3>
+      <p>Plantillas de campañas, generación de imágenes con Gemini 2.5, overlay automático del logo y texto de marca.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">✉️</div>
+      <h3>Email + WhatsApp</h3>
+      <p>Resend o tu propio SMTP, editor visual de plantillas, tracking de aperturas y clics, retención de 6 meses.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🎯</div>
+      <h3>Objetivos y comisiones</h3>
+      <p>Cierre por ciclos puntos→€, cascada de objetivos por equipo, ranking de satisfacción NPS, export CSV/PDF.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">⚠️</div>
+      <h3>Incidencias y SLA</h3>
+      <p>Apertura desde ficha cliente, asignación a técnico, prioridad, SLA, ranking de resolución, alertas de plazos.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🛡️</div>
+      <h3>Multi-empresa + RLS</h3>
+      <p>Cada empresa cliente ve solo sus datos. Roles 1/2/3 (admin/director/técnico), permisos finos, herencia por equipo.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">📱</div>
+      <h3>App móvil PWA</h3>
+      <p>Instalable como app nativa. Modo offline para técnicos. Notificaciones push de citas y alertas.</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🔔</div>
+      <h3>Alertas inteligentes</h3>
+      <p>Cada módulo tiene un panel «Smart Alerts» que detecta clientes en riesgo de churn, leads fríos, facturas vencidas...</p>
+    </article>
+    <article class="feature">
+      <div class="ficon">🔒</div>
+      <h3>RGPD y consentimientos</h3>
+      <p>Registro de consentimientos por canal, export y borrado del cliente, audit log de accesos.</p>
+    </article>
+  </div>
+</section>
+
+<section id="demo" class="demo">
+  <div class="demo-inner">
+    <div>
+      <span class="pill pill-dark">Demo interactiva</span>
+      <h2>Echa un vistazo desde dentro.</h2>
+      <p>Pasa por las pantallas reales del CRM: panel, agenda, leads, contratos, instalaciones, facturación. Datos de prueba — sin registrarte.</p>
+      <ul class="demo-list">
+        <li>📊 Panel con KPIs y alertas</li>
+        <li>📅 Agenda con vista zonas + rutas</li>
+        <li>📑 Contrato firmado en 30 segundos</li>
+        <li>💶 Factura Verifactu con QR</li>
+      </ul>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="https://crm.hidromanager.es">Abrir el CRM real</a>
+      </div>
+    </div>
+
+    <!-- Slider de capturas mock -->
+    <div class="slider">
+      <div class="slides" id="slides">
+        <div class="slide" data-label="Panel">
+          <div class="kpi-row">
+            <div class="kpi"><span>Leads activos</span><strong>128</strong><em class="up">+12 %</em></div>
+            <div class="kpi"><span>Contratos mes</span><strong>34</strong><em class="up">+5 %</em></div>
+            <div class="kpi"><span>Facturado</span><strong>56.420 €</strong><em class="up">+8 %</em></div>
+            <div class="kpi"><span>NPS</span><strong>72</strong><em class="up">+3</em></div>
+          </div>
+          <div class="chart-row">
+            <svg viewBox="0 0 400 140" class="chart">
+              <polyline fill="none" stroke="#0EA5E9" stroke-width="3" points="0,110 40,90 80,95 120,70 160,80 200,55 240,40 280,50 320,30 360,38 400,20"/>
+              <polyline fill="rgba(14,165,233,.15)" stroke="none" points="0,110 40,90 80,95 120,70 160,80 200,55 240,40 280,50 320,30 360,38 400,20 400,140 0,140"/>
+            </svg>
+          </div>
+          <div class="alerts">
+            <div class="alert">🟠 3 leads sin contactar en 24 h</div>
+            <div class="alert">🔴 1 factura vencida +30 días</div>
+            <div class="alert">🟢 5 mantenimientos confirmados</div>
+          </div>
+        </div>
+
+        <div class="slide" data-label="Agenda">
+          <div class="agenda">
+            <div class="ahead"><strong>Martes 02 jun</strong><span>Equipo Madrid</span></div>
+            <div class="aslot ok"><strong>09:00</strong> Instalación · Ósmosis AquaPro 5 · Juan García</div>
+            <div class="aslot ok"><strong>10:30</strong> Mantenimiento · Cambio filtros · Laura Martín</div>
+            <div class="aslot warn"><strong>12:00</strong> Sin técnico asignado</div>
+            <div class="aslot ok"><strong>16:00</strong> Visita comercial · Lead caliente</div>
+            <div class="aslot ok"><strong>18:00</strong> Recogida equipo · Cancelación</div>
+          </div>
+        </div>
+
+        <div class="slide" data-label="Lead">
+          <div class="lead-card">
+            <header><strong>Pilar Rodríguez</strong><span class="badge hot">🔥 Caliente</span></header>
+            <div class="row"><span>📞</span> 612 345 678</div>
+            <div class="row"><span>✉️</span> pilar.r@correo.es</div>
+            <div class="row"><span>📍</span> Calle del Agua 7, Móstoles</div>
+            <div class="timeline">
+              <div class="tl ok">Llamada 28 may · interesada en ósmosis</div>
+              <div class="tl ok">Email enviado 29 may · catálogo</div>
+              <div class="tl ok">Visita programada 02 jun · 16:00</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide" data-label="Contrato">
+          <div class="contract">
+            <header><strong>Contrato CTR-2026-0042</strong><span class="badge ok">✓ Firmado</span></header>
+            <div class="row"><span>Cliente</span><strong>Mario Ortigueira</strong></div>
+            <div class="row"><span>Modalidad</span><strong>Alquiler 24 meses</strong></div>
+            <div class="row"><span>Producto</span><strong>Ósmosis AquaPro 5 + filtros</strong></div>
+            <div class="row"><span>Cuota</span><strong>39,90 € / mes</strong></div>
+            <div class="row"><span>SEPA</span><strong>ES89 0182 ···· ···· 0123</strong></div>
+            <div class="signbox">✓ Firmado digitalmente el 28 may 2026</div>
+          </div>
+        </div>
+
+        <div class="slide" data-label="Factura">
+          <div class="invoice">
+            <header><strong>F2026/0042</strong><span class="badge ok">Verifactu OK</span></header>
+            <div class="rowi"><span>Cliente</span><span>Mario Ortigueira</span></div>
+            <div class="rowi"><span>Base</span><span>103,30 €</span></div>
+            <div class="rowi"><span>IVA 21 %</span><span>21,70 €</span></div>
+            <div class="rowi total"><span>Total</span><span>125,00 €</span></div>
+            <div class="qr">
+              <svg viewBox="0 0 64 64" width="64" height="64"><rect width="64" height="64" fill="#fff"/><g fill="#0B4F8A"><rect x="4" y="4" width="14" height="14"/><rect x="46" y="4" width="14" height="14"/><rect x="4" y="46" width="14" height="14"/><rect x="22" y="22" width="6" height="6"/><rect x="34" y="22" width="6" height="6"/><rect x="22" y="34" width="6" height="6"/><rect x="40" y="40" width="6" height="6"/><rect x="48" y="46" width="6" height="6"/></g></svg>
+              <span>QR Verifactu</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="slider-tabs" id="sliderTabs"></div>
+    </div>
+  </div>
+</section>
+
+<section id="flujos" class="flow">
+  <h2>Un flujo limpio, de la primera llamada al cobro.</h2>
+  <div class="flow-grid">
+    <div class="step"><span>1</span><h4>Lead</h4><p>Llega por web, llamada o referencia. Se asigna a un comercial.</p></div>
+    <div class="step"><span>2</span><h4>Propuesta</h4><p>PDF a medida. El cliente la lee, la firma o pide cambios.</p></div>
+    <div class="step"><span>3</span><h4>Contrato</h4><p>Modalidad (contado/alquiler/renting). Firma digital o manual.</p></div>
+    <div class="step"><span>4</span><h4>Instalación</h4><p>Agenda óptima, fotos, conformidad del cliente.</p></div>
+    <div class="step"><span>5</span><h4>Mantenimiento</h4><p>Recordatorios automáticos, parte digital, NPS.</p></div>
+    <div class="step"><span>6</span><h4>Facturación</h4><p>Verifactu, SEPA, recordatorios de impago automáticos.</p></div>
+  </div>
+</section>
+
+<section id="planes" class="planes">
+  <h2>Planes pensados para empresas reales.</h2>
+  <p class="section-lead">Sin trucos. Sin coste por usuario añadido. Sin lock-in.</p>
+  <div class="plan-grid">
+    <div class="plan">
+      <h3>Starter</h3>
+      <p class="price"><strong>39</strong> €/mes</p>
+      <ul>
+        <li>Hasta 3 usuarios</li>
+        <li>Leads, contratos, mantenimientos</li>
+        <li>Facturación básica</li>
+        <li>Soporte email</li>
+      </ul>
+      <a class="btn btn-ghost" href="#contacto">Empezar</a>
+    </div>
+    <div class="plan plan-feat">
+      <span class="ribbon">Más elegido</span>
+      <h3>Pro</h3>
+      <p class="price"><strong>89</strong> €/mes</p>
+      <ul>
+        <li>Usuarios ilimitados</li>
+        <li>Todo lo del Starter</li>
+        <li>Verifactu AEAT + SEPA GoCardless</li>
+        <li>Almacén, rutas, RRSS IA</li>
+        <li>Firma digital DocuSign</li>
+        <li>Soporte prioritario</li>
+      </ul>
+      <a class="btn btn-primary" href="#contacto">Hablemos</a>
+    </div>
+    <div class="plan">
+      <h3>Enterprise</h3>
+      <p class="price"><strong>A medida</strong></p>
+      <ul>
+        <li>Multi-empresa con holding</li>
+        <li>SLA contractual</li>
+        <li>Conectores ERP</li>
+        <li>Onboarding asistido</li>
+      </ul>
+      <a class="btn btn-ghost" href="#contacto">Contactar</a>
+    </div>
+  </div>
+</section>
+
+<section id="contacto" class="contact">
+  <div class="contact-inner">
+    <div>
+      <h2>¿Empezamos?</h2>
+      <p>Cuéntanos cuántos comerciales y técnicos sois y te montamos una demo personalizada con tus datos reales.</p>
+      <ul class="contact-list">
+        <li>✉️ <a href="mailto:hola@hidromanager.es">hola@hidromanager.es</a></li>
+        <li>📞 +34 900 100 200</li>
+        <li>📍 España · datos alojados en la UE</li>
+      </ul>
+    </div>
+    <form class="contact-form" onsubmit="event.preventDefault(); document.getElementById('cf-ok').style.display='block'; this.reset();">
+      <label>Nombre<input required name="nombre" /></label>
+      <label>Empresa<input required name="empresa" /></label>
+      <label>Email<input required type="email" name="email" /></label>
+      <label>Teléfono<input name="telefono" /></label>
+      <label>¿Qué buscas?<textarea rows="3" name="mensaje"></textarea></label>
+      <button class="btn btn-primary btn-lg" type="submit">Solicitar demo</button>
+      <div id="cf-ok" class="ok-msg" style="display:none">✓ Recibido. Te contactamos en menos de 24 h hábiles.</div>
+      <small>Tus datos se tratan según la <a href="#privacidad">Política de privacidad</a> RGPD.</small>
+    </form>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="foot">
+    <div>
+      <img src="/assets/logo-white.svg" alt="Hidromanager" />
+      <p>Hidromanager · CRM para empresas de tratamiento de agua.</p>
+    </div>
+    <div>
+      <strong>Producto</strong>
+      <a href="#features">Funciones</a>
+      <a href="#planes">Planes</a>
+      <a href="https://crm.hidromanager.es">Entrar al CRM</a>
+    </div>
+    <div>
+      <strong>Empresa</strong>
+      <a href="#contacto">Contacto</a>
+      <a href="#privacidad">Privacidad</a>
+      <a href="#aviso">Aviso legal</a>
+    </div>
+  </div>
+  <small>© 2026 Hidromanager · Todos los derechos reservados.</small>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

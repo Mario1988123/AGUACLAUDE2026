@@ -23,6 +23,19 @@ const signatureSchema = z.object({
   context: z.enum(["previous_damage", "countertop_drilling", "work_report"]).default("work_report"),
 });
 
+// SEGURIDAD: solo aceptamos imágenes razonables. Antes se confiaba en el
+// mime del data URL, lo que permitía subir SVG (vector con <script>) y
+// servirlo por URL firmada → XSS en Supabase Storage.
+const ALLOWED_PHOTO_MIME = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+const ALLOWED_SIGNATURE_MIME = new Set(["image/png", "image/jpeg", "image/webp"]);
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
+
 function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mime: string; ext: string } {
   const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
   if (!match) throw new Error("dataURL inválido");
@@ -32,11 +45,33 @@ function dataUrlToBuffer(dataUrl: string): { buffer: Buffer; mime: string; ext: 
   return { buffer, mime, ext };
 }
 
+async function assertInstallationOwnership(
+  installationId: string,
+  companyId: string,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data } = await admin
+    .from("installations")
+    .select("id")
+    .eq("id", installationId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (!data) throw new Error("Instalación no encontrada o no pertenece a tu empresa");
+}
+
 export async function uploadInstallationPhoto(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const parsed = parseOrFriendly(uploadSchema, input, "Foto instalación");
+  await assertInstallationOwnership(parsed.installation_id, session.company_id);
   const { buffer, mime, ext } = dataUrlToBuffer(parsed.data_url);
+  if (!ALLOWED_PHOTO_MIME.has(mime)) {
+    throw new Error("Formato no soportado. Usa JPG, PNG, WEBP o HEIC.");
+  }
+  if (buffer.byteLength > MAX_UPLOAD_BYTES) {
+    throw new Error("Imagen demasiado grande (máx. 8 MB).");
+  }
 
   const path = `${session.company_id}/installations/${parsed.installation_id}/${Date.now()}-${parsed.category}.${ext}`;
 
@@ -63,7 +98,14 @@ export async function uploadInstallationSignature(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const parsed = parseOrFriendly(signatureSchema, input, "Firma instalación");
+  await assertInstallationOwnership(parsed.installation_id, session.company_id);
   const { buffer, mime, ext } = dataUrlToBuffer(parsed.data_url);
+  if (!ALLOWED_SIGNATURE_MIME.has(mime)) {
+    throw new Error("Formato de firma no soportado.");
+  }
+  if (buffer.byteLength > MAX_UPLOAD_BYTES) {
+    throw new Error("Firma demasiado grande.");
+  }
 
   const path = `${session.company_id}/installations/${parsed.installation_id}/signature-${parsed.context}-${Date.now()}.${ext}`;
 

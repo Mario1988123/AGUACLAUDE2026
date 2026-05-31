@@ -87,7 +87,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-8 shadow-sm">
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold">AGUACLAUDE2026</h1>
+          <img src="/brand/logo.svg" alt="Hidromanager" className="mx-auto h-12 w-auto" />
           <p className="text-sm text-muted-foreground">Inicia sesión para continuar</p>
         </div>
         <Suspense fallback={<div className="h-32 animate-pulse rounded bg-muted" />}>
