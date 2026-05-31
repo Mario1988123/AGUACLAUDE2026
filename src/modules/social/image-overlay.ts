@@ -10,11 +10,7 @@
  */
 
 import sharp from "sharp";
-import type {
-  OverlayPosition,
-  ResolvedOverlaySettings,
-  WatermarkPosition,
-} from "./image-types";
+import type { OverlayPosition, ResolvedOverlaySettings } from "./image-types";
 
 export interface OverlayResult {
   ok: boolean;
@@ -92,22 +88,42 @@ export async function applyOverlay(
 
     // ── TEXTO MARCA DE AGUA ───────────────────────────────────────────────────
     if (needsText && resolved.watermark_text) {
-      const text = resolved.watermark_text.trim();
-      const fontSize = Math.max(20, Math.round(W * 0.035)); // ~36px en 1024
-      const color = sanitizeHex(resolved.watermark_text_color, "#FFFFFF");
-      const outline = autoContrastOutline(color);
-      // Generamos un SVG del tamaño completo de la imagen y colocamos el texto
-      // en la posición pedida — composite lo aplica encima directamente.
-      const svg = buildTextSvg({
-        text,
-        position: resolved.watermark_text_position,
-        canvasW: W,
-        canvasH: H,
-        fontSize,
-        color,
-        outline,
-      });
-      composites.push({ input: Buffer.from(svg), top: 0, left: 0 });
+      try {
+        const textImg = await renderWatermarkText(
+          resolved.watermark_text.trim(),
+          resolved.watermark_text_color,
+          W,
+        );
+        if (textImg) {
+          const padding = Math.round(W * 0.03);
+          const { top, left } = positionToCoords(
+            // bottom-center es válido aquí — calculamos coords ad-hoc
+            resolved.watermark_text_position === "bottom-center"
+              ? "bottom-right" // posición ignorada, recalculamos abajo
+              : resolved.watermark_text_position,
+            W,
+            H,
+            textImg.width,
+            textImg.height,
+            padding,
+          );
+          let finalLeft = left;
+          let finalTop = top;
+          if (resolved.watermark_text_position === "bottom-center") {
+            finalLeft = Math.round((W - textImg.width) / 2);
+            finalTop = H - textImg.height - padding;
+          }
+          composites.push({
+            input: textImg.buffer,
+            top: finalTop,
+            left: finalLeft,
+          });
+        }
+      } catch (e) {
+        warning = `Error pintando texto: ${
+          e instanceof Error ? e.message : "desconocido"
+        }. Imagen generada sin texto.`;
+      }
     }
 
     const out = await base.composite(composites).png().toBuffer();
@@ -164,16 +180,6 @@ function sanitizeHex(value: string | null | undefined, fallback: string): string
   return fallback;
 }
 
-/** Contorno de contraste automático sobre el color del texto. */
-function autoContrastOutline(hex: string): string {
-  // luminancia aproximada (0..255) — si > 140 el texto es claro → contorno oscuro.
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-  return lum > 140 ? "#000000" : "#FFFFFF";
-}
-
 function escapeXml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -183,64 +189,89 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function buildTextSvg(opts: {
-  text: string;
-  position: WatermarkPosition;
-  canvasW: number;
-  canvasH: number;
-  fontSize: number;
-  color: string;
-  outline: string;
-}): string {
-  const { text, position, canvasW, canvasH, fontSize, color, outline } = opts;
-  const padding = Math.round(canvasW * 0.04);
-  // Posicionamiento por anclas SVG. y es la BASELINE, no el top, así que sumamos fontSize cuando va arriba.
-  let x: number;
-  let y: number;
-  let anchor: "start" | "middle" | "end";
-  switch (position) {
-    case "top-left":
-      x = padding;
-      y = padding + fontSize;
-      anchor = "start";
-      break;
-    case "top-right":
-      x = canvasW - padding;
-      y = padding + fontSize;
-      anchor = "end";
-      break;
-    case "bottom-left":
-      x = padding;
-      y = canvasH - padding;
-      anchor = "start";
-      break;
-    case "bottom-right":
-      x = canvasW - padding;
-      y = canvasH - padding;
-      anchor = "end";
-      break;
-    case "bottom-center":
-    default:
-      x = canvasW / 2;
-      y = canvasH - padding;
-      anchor = "middle";
-      break;
-  }
+/**
+ * Renderiza el texto con la API nativa de sharp ({ text: ... }) que usa Pango
+ * bajo el capó — mucho más fiable que SVG en entornos serverless como Vercel
+ * (donde el matching de fuentes en SVG es quisquilloso). Sobre el texto pinta
+ * un panel rectangular semi-transparente para garantizar legibilidad sobre
+ * cualquier imagen (claro u oscura).
+ *
+ * Devuelve un PNG con el texto sobre el panel, y sus dimensiones para que
+ * el composite del caller lo posicione donde toca.
+ */
+async function renderWatermarkText(
+  text: string,
+  colorRaw: string,
+  canvasWidth: number,
+): Promise<{ buffer: Buffer; width: number; height: number } | null> {
+  if (!text) return null;
+  const fontSize = Math.max(22, Math.round(canvasWidth * 0.035)); // ~36px en 1024
+  const color = sanitizeHex(colorRaw, "#FFFFFF");
+  const panelColor = panelColorFor(color);
+  const maxTextWidth = Math.round(canvasWidth * 0.9);
+  // Markup Pango: <span> con color + size. size es en milésimas de punto
+  // (1pt = 1024 unidades aprox), pero pasamos px directos vía font.
   const escapedText = escapeXml(text);
-  // Tipografía sans-serif del sistema (libvips/fontconfig resuelve a la
-  // disponible en el contenedor — DejaVu Sans en Vercel funciona bien).
-  return `<svg width="${canvasW}" height="${canvasH}" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .wm {
-      font-family: -apple-system, "Segoe UI", "DejaVu Sans", Arial, sans-serif;
-      font-weight: 700;
-      font-size: ${fontSize}px;
-      paint-order: stroke;
-      stroke: ${outline};
-      stroke-width: ${Math.max(2, Math.round(fontSize / 12))}px;
-      stroke-linejoin: round;
-    }
-  </style>
-  <text x="${x}" y="${y}" class="wm" fill="${color}" text-anchor="${anchor}">${escapedText}</text>
-</svg>`;
+  const markup = `<span foreground="${color}" weight="bold">${escapedText}</span>`;
+
+  // Renderiza el texto. Pango respeta fontconfig → en Vercel resuelve a
+  // DejaVu Sans / Noto Sans (siempre disponibles en el contenedor).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const textBuf = await (sharp as any)({
+    text: {
+      text: markup,
+      font: `sans-serif ${fontSize}px`,
+      rgba: true,
+      width: maxTextWidth,
+      wrap: "word",
+    },
+  })
+    .png()
+    .toBuffer();
+
+  const textMeta = await sharp(textBuf).metadata();
+  const tW = textMeta.width ?? Math.round(text.length * fontSize * 0.5);
+  const tH = textMeta.height ?? fontSize;
+
+  // Panel de fondo: ancho del texto + padding, alto del texto + padding.
+  const padX = Math.round(fontSize * 0.6);
+  const padY = Math.round(fontSize * 0.35);
+  const panelW = tW + padX * 2;
+  const panelH = tH + padY * 2;
+  const panel = await sharp({
+    create: {
+      width: panelW,
+      height: panelH,
+      channels: 4,
+      background: panelColor,
+    },
+  })
+    .png()
+    .toBuffer();
+
+  const composed = await sharp(panel)
+    .composite([{ input: textBuf, top: padY, left: padX }])
+    .png()
+    .toBuffer();
+
+  return { buffer: composed, width: panelW, height: panelH };
+}
+
+/**
+ * Color del panel de fondo bajo el texto. Si el texto es claro → panel negro
+ * 45%; si es oscuro → panel blanco 65%. Garantiza contraste siempre.
+ */
+function panelColorFor(textHex: string): {
+  r: number;
+  g: number;
+  b: number;
+  alpha: number;
+} {
+  const r = parseInt(textHex.slice(1, 3), 16);
+  const g = parseInt(textHex.slice(3, 5), 16);
+  const b = parseInt(textHex.slice(5, 7), 16);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 140
+    ? { r: 0, g: 0, b: 0, alpha: 0.45 } // texto claro → panel oscuro
+    : { r: 255, g: 255, b: 255, alpha: 0.65 }; // texto oscuro → panel claro
 }

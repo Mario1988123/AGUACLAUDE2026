@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Sparkles, RefreshCcw } from "lucide-react";
+import { useState, useTransition } from "react";
+import {
+  Sparkles,
+  RefreshCcw,
+  Eye,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
+import { notify } from "@/shared/hooks/use-toast";
 import { ImageGeneratorModal } from "./image-generator-modal";
+import { previewEnrichedPromptAction } from "./image-generation-actions";
 import type { ImageOverrides, ImageVisualSettings } from "./image-types";
 
 interface Props {
@@ -49,11 +57,31 @@ export function SocialImageGeneratorCard({
   hasFiscalLogo,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [enrichedPreview, setEnrichedPreview] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [pendingPreview, startPreview] = useTransition();
   const budgetEur = (monthlyBudgetCents ?? 500) / 100;
   const usedEur = ((imagesUsedThisMonth ?? 0) * 4) / 100;
   const remainingEur = budgetEur - usedEur;
   const capReached = remainingEur < 0.04;
   const formatLabel = imageFormat ?? "1080x1080";
+
+  function previewPrompt() {
+    startPreview(async () => {
+      const r = await previewEnrichedPromptAction(
+        postId,
+        baseImagePrompt ?? undefined,
+        initialOverrides,
+        initialProductIds,
+      );
+      if (!r.ok) {
+        notify.error("Error", r.error);
+        return;
+      }
+      setEnrichedPreview(r.prompt);
+      setShowPreview(true);
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -93,6 +121,49 @@ export function SocialImageGeneratorCard({
             {initialProductIds.length === 1 ? "" : "s"} vinculado
             {initialProductIds.length === 1 ? "" : "s"}
           </Badge>
+        )}
+      </div>
+
+      {/* Vista previa rápida del prompt enriquecido (sin abrir el modal) */}
+      <div className="space-y-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={previewPrompt}
+          loading={pendingPreview}
+          loadingText="Construyendo…"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <Eye className="h-4 w-4" aria-hidden="true" />
+          {enrichedPreview
+            ? "Recalcular prompt enriquecido"
+            : "Ver prompt enriquecido completo"}
+        </Button>
+        {enrichedPreview && (
+          <div className="rounded-xl border bg-muted/40">
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              aria-expanded={showPreview}
+              className="flex w-full items-center justify-between p-2 text-xs font-bold uppercase text-muted-foreground"
+            >
+              <span className="truncate text-left">
+                Prompt completo ({enrichedPreview.length} chars · ~
+                {Math.round(enrichedPreview.length / 4)} tokens)
+              </span>
+              {showPreview ? (
+                <ChevronUp className="h-4 w-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+              )}
+            </button>
+            {showPreview && (
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t p-3 text-xs font-mono md:max-h-96">
+                {enrichedPreview}
+              </pre>
+            )}
+          </div>
         )}
       </div>
 
