@@ -37,6 +37,7 @@ const SECTIONS = [
   { href: "/configuracion/almacenes", label: "Almacenes", icon: "Warehouse", desc: "Almacenes, furgonetas y stock" },
   { href: "/configuracion/google-maps", label: "Google Maps Tools", icon: "Map", desc: "Mapas, rutas IA, Street View, anti-fraude · consumo y caps" },
   { href: "/configuracion/modulos", label: "Módulos activos", icon: "Layers", desc: "Activar/desactivar módulos por empresa" },
+  { href: "/configuracion/menu-movil", label: "Menú móvil", icon: "SlidersHorizontal", desc: "Elige qué iconos aparecen en la barra inferior del móvil (preferencia personal)" },
 ];
 
 export default async function ConfiguracionPage() {
@@ -55,7 +56,7 @@ export default async function ConfiguracionPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {SECTIONS.map((s) => {
           const Icon =
             (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[

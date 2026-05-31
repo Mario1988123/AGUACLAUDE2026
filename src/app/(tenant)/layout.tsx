@@ -14,7 +14,6 @@ import { getMyModuleOverrides } from "@/modules/tenant/users/permissions-actions
 import { getStepsForRoles } from "@/modules/onboarding/steps";
 import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
-import { ReportErrorButton } from "@/modules/error-reports/report-button";
 import { redirect } from "next/navigation";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -117,6 +116,21 @@ export default async function TenantLayout({ children }: { children: React.React
     : (session.roles.find((r) => ROLE_LABEL[r]) ?? null);
   const roleLabel = primaryRole ? (ROLE_LABEL[primaryRole] ?? primaryRole) : null;
 
+  // Módulos accesibles para este usuario (misma lógica que el sidebar):
+  // se usan en el BottomNav como pool de opciones que el usuario puede pinear
+  // desde /configuracion/menu-movil.
+  const ALWAYS_ON_GROUPS = new Set<string>(["main", "personal", "system"]);
+  const availableBottomNavItems = MODULES.filter((m) => {
+    const ov = moduleOverrides?.[m.key];
+    if (ov === false) return false;
+    if (ov === true) return true;
+    if (!ALWAYS_ON_GROUPS.has(m.group) && !activeModuleKeys.includes(m.key)) return false;
+    if (m.rolesAllowed && m.rolesAllowed.length > 0) {
+      return m.rolesAllowed.some((r) => session.roles.includes(r));
+    }
+    return true;
+  }).map((m) => ({ key: m.key, label: m.label, icon: m.icon, href: m.href }));
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar
@@ -140,10 +154,9 @@ export default async function TenantLayout({ children }: { children: React.React
           <BottomNavSpacer />
         </main>
       </div>
-      <BottomNav unreadCount={unread} />
+      <BottomNav unreadCount={unread} availableItems={availableBottomNavItems} />
       <OnboardingTour steps={onboardingSteps} enabled={!seenOnboarding} />
       <ShiftReminders enabled={activeModuleKeys.includes("time_tracking")} />
-      <ReportErrorButton />
     </div>
   );
 }

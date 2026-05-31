@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Plus, Download } from "lucide-react";
 import { listLeads } from "@/modules/leads/actions";
 import { Button } from "@/shared/ui/button";
 import {
@@ -81,22 +82,29 @@ export default async function LeadsPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">Leads</h1>
           <p className="text-sm text-muted-foreground">{leads.length} resultados</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isUpperLevel && <ImportLeadsButton />}
           <Link
             href={"/api/export/leads" as never}
             prefetch={false}
+            aria-label="Exportar leads a CSV"
             className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
           >
-            ⬇ Exportar CSV
+            <Download className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Exportar CSV</span>
+            <span className="sm:hidden">CSV</span>
           </Link>
           <Button asChild>
-            <Link href={"/leads/nuevo" as never}>+ Nuevo lead</Link>
+            <Link href={"/leads/nuevo" as never} aria-label="Crear nuevo lead">
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Nuevo lead</span>
+              <span className="sm:hidden">Nuevo</span>
+            </Link>
           </Button>
         </div>
       </div>
@@ -136,18 +144,24 @@ export default async function LeadsPage({
         baseQuery={baseQuery}
       />
 
-      <form className="flex flex-wrap gap-2 rounded-lg border bg-card p-4">
+      <form
+        role="search"
+        aria-label="Filtrar leads"
+        className="flex flex-wrap gap-2 rounded-lg border bg-card p-3 sm:p-4"
+      >
         {scope === "mine" && <input type="hidden" name="scope" value="mine" />}
         <input
           name="q"
           defaultValue={sp.q ?? ""}
           placeholder="Buscar por nombre, email, teléfono..."
-          className="flex h-11 flex-1 min-w-60 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          aria-label="Buscar leads"
+          className="flex h-11 w-full flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:min-w-[14rem]"
         />
         <select
           name="status"
           defaultValue={status ?? ""}
-          className="flex h-11 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          aria-label="Filtrar por estado"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
         >
           <option value="">Todos los estados</option>
           {LEAD_STATUS.map((s) => (
@@ -160,7 +174,8 @@ export default async function LeadsPage({
           <select
             name="assigned"
             defaultValue={assignedFilter ?? ""}
-            className="flex h-11 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            aria-label="Filtrar por comercial asignado"
+            className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
           >
             <option value="">Cualquier comercial</option>
             <option value="unassigned">⚠ Sin asignar</option>
@@ -171,7 +186,7 @@ export default async function LeadsPage({
             ))}
           </select>
         )}
-        <Button type="submit" variant="outline">
+        <Button type="submit" variant="outline" className="w-full sm:w-auto">
           Filtrar
         </Button>
       </form>

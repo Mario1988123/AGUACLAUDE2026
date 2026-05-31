@@ -40,11 +40,16 @@ export function GlobalSearchTrigger() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        aria-label="Buscar en el CRM"
         className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm text-muted-foreground hover:bg-muted"
       >
-        <Search className="h-4 w-4" />
-        <span className="hidden sm:inline">Buscar...</span>
-        <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-xs sm:inline">⌘K</kbd>
+        <Search className="h-4 w-4" aria-hidden="true" />
+        {/* En móvil y tablet vertical no mostramos el texto ni el atajo ⌘K:
+            en móvil sería ruido y en tablet táctil no existe ⌘. */}
+        <span className="hidden md:inline">Buscar...</span>
+        <kbd className="hidden rounded bg-muted px-1.5 py-0.5 font-mono text-xs lg:inline">
+          ⌘K
+        </kbd>
       </button>
       <SearchDialog open={open} onClose={() => setOpen(false)} />
     </>
