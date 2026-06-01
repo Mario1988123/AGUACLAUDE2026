@@ -57,11 +57,13 @@ import {
   previewEnrichedPromptAction,
 } from "./image-generation-actions";
 import { listProducts } from "@/modules/products/actions";
+import { OverlayCanvas } from "./overlay-canvas";
 import type {
   ImageOverrides,
   ImageStyle,
   ImageVisualSettings,
   OverlayPosition,
+  ResolvedOverlaySettings,
   WatermarkPosition,
 } from "./image-types";
 
@@ -132,6 +134,12 @@ export function ImageGeneratorModal({
   const [pendingPreview, startPreview] = useTransition();
   const [pendingGen, startGen] = useTransition();
   const [activeTab, setActiveTab] = useState("estilo");
+  // Cuando la imagen se ha generado y queda pendiente de overlay editor:
+  const [generated, setGenerated] = useState<{
+    image_url: string;
+    logo_url: string | null;
+    resolved_overlay: ResolvedOverlaySettings;
+  } | null>(null);
 
   // Resetea estado interno cuando se reabre con post distinto.
   useEffect(() => {
@@ -141,6 +149,7 @@ export function ImageGeneratorModal({
       setProductIds(initialProductIds);
       setEnrichedPreview(null);
       setActiveTab("estilo");
+      setGenerated(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, postId]);
@@ -213,16 +222,55 @@ export function ImageGeneratorModal({
       }
       notify.success(
         "Imagen generada",
-        `Coste ${(r.cost_cents / 100).toFixed(2)} € · ${r.images_used} usadas este mes${
-          r.overlay_applied ? " · logo/texto aplicado" : ""
-        }`,
+        `Coste ${(r.cost_cents / 100).toFixed(2)} € · ${r.images_used} usadas este mes`,
       );
-      if (r.overlay_warning) {
-        notify.warning("Aviso de marca de agua", r.overlay_warning);
-      }
-      onOpenChange(false);
-      onGenerated();
+      // Pasamos al editor de overlay (Canvas en cliente).
+      setGenerated({
+        image_url: r.image_url,
+        logo_url: r.logo_url,
+        resolved_overlay: r.resolved_overlay,
+      });
     });
+  }
+
+  function handleEditorSaved() {
+    setGenerated(null);
+    onOpenChange(false);
+    onGenerated();
+  }
+  function handleEditorSkipped() {
+    // El usuario decide NO aplicar overlay. La imagen raw ya está guardada.
+    setGenerated(null);
+    onOpenChange(false);
+    onGenerated();
+  }
+
+  // Si hay imagen generada → mostrar SOLO el editor de overlay (canvas).
+  if (generated) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5" aria-hidden="true" />
+              Ajustar logo y texto
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Mueve, activa o desactiva el logo y el texto. La vista previa
+              muestra exactamente cómo quedará la imagen final.
+            </DialogDescription>
+          </DialogHeader>
+          <OverlayCanvas
+            postId={postId}
+            imageUrl={generated.image_url}
+            logoUrl={generated.logo_url}
+            initialOverlay={generated.resolved_overlay}
+            onSaved={handleEditorSaved}
+            onSkip={handleEditorSkipped}
+          />
+        </DialogContent>
+      </Dialog>
+    );
   }
 
   return (

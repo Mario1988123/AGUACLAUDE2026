@@ -9,7 +9,10 @@ import {
   generateImageWithGemini,
   type GeminiReferenceImage,
 } from "./gemini-client";
-import { applyOverlay } from "./image-overlay";
+// NOTA: image-overlay.ts (sharp + Pango) ya NO se usa. El overlay (logo + texto)
+// se aplica ahora en el cliente con HTML5 Canvas (overlay-canvas.tsx), porque
+// en Vercel/Lambda no hay fuentes instaladas y Pango devolvía cuadrados (□□□).
+// El archivo se mantiene por si en el futuro se necesita un fallback server.
 import type {
   ImageOverrides,
   ImageProvider,
@@ -96,8 +99,10 @@ export async function generatePostImageAction(
       cost_cents: number;
       images_used: number;
       budget_cents: number;
-      overlay_applied: boolean;
-      overlay_warning?: string;
+      /** URL pública del logo de la empresa para que el cliente lo dibuje en canvas. */
+      logo_url: string | null;
+      /** Settings de overlay resueltos (defaults + overrides). El cliente los aplica. */
+      resolved_overlay: ResolvedOverlaySettings;
     }
   | { ok: false; error: string }
 > {
@@ -186,20 +191,16 @@ export async function generatePostImageAction(
       };
     }
 
-    // ── Aplicar overlay (logo + texto) si toca ───────────────────────────────
+    // ── Settings de overlay (los devolvemos al cliente; NO se aplican aquí) ──
     const resolvedOverlay = resolveOverlaySettings(
       ctx.settings!,
       overrides ?? null,
       ctx.fiscalLogoUrl,
     );
-    const overlay = await applyOverlay(gen.image_bytes, resolvedOverlay);
-    const finalBytes = overlay.ok && overlay.bytes ? overlay.bytes : gen.image_bytes;
-    const overlayApplied =
-      overlay.ok &&
-      !!overlay.bytes &&
-      (resolvedOverlay.logo_enabled || resolvedOverlay.watermark_text_enabled);
 
-    // ── Subir a Storage ──────────────────────────────────────────────────────
+    // ── Subir imagen "raw" (sin overlay) a Storage ───────────────────────────
+    // El cliente añadirá logo/texto en su canvas y luego llamará a
+    // saveFinalPostImageAction con el PNG ya compuesto.
     const bucketReady = await ensureBucket(admin, BUCKET);
     if (!bucketReady) {
       return {
@@ -207,12 +208,12 @@ export async function generatePostImageAction(
         error: "No se pudo crear el bucket de Storage social-images.",
       };
     }
-    const finalMime = overlay.ok && overlay.bytes ? "image/png" : gen.mime_type ?? "image/png";
+    const finalMime = gen.mime_type ?? "image/png";
     const ext = finalMime.includes("jpeg") ? "jpg" : "png";
     const objectPath = `${session.company_id}/${postId}-${Date.now()}.${ext}`;
     const { error: upErr } = await admin.storage
       .from(BUCKET)
-      .upload(objectPath, finalBytes, {
+      .upload(objectPath, gen.image_bytes, {
         contentType: finalMime,
         upsert: true,
       });
@@ -228,7 +229,7 @@ export async function generatePostImageAction(
     // ── Persistir post + overrides + product_ids + metadata ──────────────────
     const enrichedMetadata = {
       ...gen.metadata,
-      overlay_applied: overlayApplied,
+      overlay_applied: false, // el cliente lo marcará a true cuando guarde la final
       product_ids: safeProductIds,
     };
     await admin
@@ -261,8 +262,8 @@ export async function generatePostImageAction(
       cost_cents: COST_PER_IMAGE_CENTS,
       images_used: imagesUsed + 1,
       budget_cents: budgetCents,
-      overlay_applied: overlayApplied,
-      overlay_warning: overlay.warning,
+      logo_url: ctx.fiscalLogoUrl,
+      resolved_overlay: resolvedOverlay,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
@@ -469,4 +470,106 @@ function resolveOverlaySettings(
     watermark_text_color:
       overrides?.watermark_text_color ?? defaults.watermark_text_color_default,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// saveFinalPostImageAction
+//
+// El cliente compone la imagen final (imagen IA + logo + texto) en un canvas
+// y la manda aquí como dataURL "data:image/png;base64,...". La subimos a
+// Storage sustituyendo la imagen "raw" anterior y marcamos overlay_applied=true.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MAX_PNG_BYTES = 8 * 1024 * 1024; // 8 MB de imagen final
+
+export async function saveFinalPostImageAction(
+  postId: string,
+  pngDataUrl: string,
+  flags: { logo_applied: boolean; text_applied: boolean },
+): Promise<{ ok: true; image_url: string } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const allowed =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("commercial_director");
+    if (!allowed) return { ok: false, error: "Sin permisos" };
+
+    // Validar formato dataURL
+    const m = pngDataUrl.match(/^data:image\/png;base64,(.+)$/);
+    if (!m) return { ok: false, error: "Formato de imagen inválido (debe ser PNG)" };
+    const buf = Buffer.from(m[1]!, "base64");
+    if (buf.byteLength > MAX_PNG_BYTES) {
+      return { ok: false, error: "Imagen demasiado grande (máx. 8 MB)" };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // Verificar que el post pertenece a la empresa (anti-IDOR).
+    const { data: postRow } = await admin
+      .from("social_posts")
+      .select("id, company_id, image_url, image_generation_metadata")
+      .eq("id", postId)
+      .maybeSingle();
+    if (!postRow) return { ok: false, error: "Post no encontrado" };
+    if ((postRow as { company_id: string }).company_id !== session.company_id) {
+      return { ok: false, error: "Post de otra empresa" };
+    }
+
+    const bucketReady = await ensureBucket(admin, BUCKET);
+    if (!bucketReady) {
+      return { ok: false, error: "No se pudo preparar el bucket social-images" };
+    }
+
+    const objectPath = `${session.company_id}/${postId}-final-${Date.now()}.png`;
+    const { error: upErr } = await admin.storage
+      .from(BUCKET)
+      .upload(objectPath, buf, {
+        contentType: "image/png",
+        upsert: true,
+      });
+    if (upErr) {
+      return { ok: false, error: `Fallo subiendo imagen final: ${upErr.message}` };
+    }
+    const { data: pub } = admin.storage.from(BUCKET).getPublicUrl(objectPath);
+    const imageUrl = pub.publicUrl;
+
+    // Borrar la imagen raw previa (best-effort).
+    try {
+      const prevUrl = (postRow as { image_url?: string }).image_url ?? "";
+      const prevKey = prevUrl.split(`/${BUCKET}/`)[1] ?? "";
+      if (prevKey && !prevKey.endsWith("-final-" + objectPath.split("-final-")[1])) {
+        await admin.storage.from(BUCKET).remove([prevKey]);
+      }
+    } catch {
+      /* best-effort */
+    }
+
+    const prevMeta =
+      ((postRow as { image_generation_metadata?: Record<string, unknown> })
+        .image_generation_metadata as Record<string, unknown> | null) ?? {};
+    const newMeta = {
+      ...prevMeta,
+      overlay_applied: flags.logo_applied || flags.text_applied,
+      overlay_logo_applied: flags.logo_applied,
+      overlay_text_applied: flags.text_applied,
+    };
+
+    await admin
+      .from("social_posts")
+      .update({
+        image_url: imageUrl,
+        image_generation_metadata: newMeta,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", postId)
+      .eq("company_id", session.company_id);
+
+    revalidatePath(`/rrss/posts/${postId}`);
+    return { ok: true, image_url: imageUrl };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
