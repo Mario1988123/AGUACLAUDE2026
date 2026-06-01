@@ -106,7 +106,7 @@ export const EMAIL_PROVIDERS: EmailProvider[] = [
     steps: [
       "Entra en appleid.apple.com → Inicia sesión",
       "Sección \"Seguridad\" → \"Contraseñas específicas de app\" → Generar contraseña",
-      "Asigna un nombre (\"AguaClaude CRM\") y copia los caracteres generados",
+      "Asigna un nombre (\"Hidromanager CRM\") y copia los caracteres generados",
       "Pulsa \"Usar esta configuración\" y pega esa contraseña",
     ],
     warnings: [

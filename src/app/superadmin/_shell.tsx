@@ -126,10 +126,13 @@ function SidebarPanel({
         )}
       >
         {compact ? (
-          <span className="text-primary text-xl font-extrabold">A</span>
+          <img src="/brand/favicon.svg" alt="Hidromanager" className="h-7 w-7" />
         ) : (
           <>
-            <span className="text-sm tracking-tight">AGUACLAUDE · Admin</span>
+            <span className="flex items-center gap-2 text-sm tracking-tight">
+              <img src="/brand/favicon.svg" alt="Hidromanager" className="h-6 w-6" />
+              <span className="font-semibold">Hidromanager · Admin</span>
+            </span>
             {onClose && (
               <button
                 type="button"

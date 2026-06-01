@@ -193,7 +193,7 @@ async function reverseNominatim(
       {
         headers: {
           Accept: "application/json",
-          "User-Agent": "AguaClaude-CRM/1.0 (contact@aguaclaude.local)",
+          "User-Agent": "Hidromanager-CRM/1.0 (contact@hidromanager.es)",
           "Accept-Language": "es-ES,es",
         },
         next: { revalidate: 60 },
@@ -273,7 +273,7 @@ async function forwardNominatim(
       {
         headers: {
           Accept: "application/json",
-          "User-Agent": "AguaClaude-CRM/1.0 (contact@aguaclaude.local)",
+          "User-Agent": "Hidromanager-CRM/1.0 (contact@hidromanager.es)",
         },
         next: { revalidate: 60 },
       },

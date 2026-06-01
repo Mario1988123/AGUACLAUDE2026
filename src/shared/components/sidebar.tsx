@@ -126,17 +126,14 @@ export function Sidebar({
         >
           <Link
             href="/"
-            className="text-2xl font-extrabold tracking-tight"
+            className="flex items-center"
             prefetch={false}
-            aria-label="AguaClaude"
+            aria-label="Hidromanager"
           >
             {isCollapsed ? (
-              <span className="text-primary">A</span>
+              <img src="/brand/favicon.svg" alt="Hidromanager" className="h-9 w-9" />
             ) : (
-              <>
-                <span className="text-primary">Agua</span>
-                <span className="text-foreground">Claude</span>
-              </>
+              <img src="/brand/logo.svg" alt="Hidromanager" className="h-9 w-auto" />
             )}
           </Link>
           {opts.onMobileClose && !isCollapsed && (

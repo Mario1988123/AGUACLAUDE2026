@@ -172,9 +172,9 @@ export function buildRegistroFacturacionAltaXml(
       }
     </Encadenamiento>
     <SistemaInformatico>
-      <NombreRazon>AGUACLAUDE CRM</NombreRazon>
+      <NombreRazon>Hidromanager CRM</NombreRazon>
       <NIF>${escapeXml(input.issuer_nif)}</NIF>
-      <NombreSistemaInformatico>AGUACLAUDE</NombreSistemaInformatico>
+      <NombreSistemaInformatico>Hidromanager</NombreSistemaInformatico>
       <IdSistemaInformatico>01</IdSistemaInformatico>
       <Version>1.0</Version>
       <NumeroInstalacion>0001</NumeroInstalacion>
