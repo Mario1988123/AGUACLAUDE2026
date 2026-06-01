@@ -100,15 +100,40 @@ export default async function SocialPostsKanbanPage() {
                       href={`/rrss/posts/${p.id}` as never}
                       className="block rounded-lg border bg-card p-2 text-xs hover:border-primary"
                     >
-                      <div className="font-bold line-clamp-2">{p.topic}</div>
-                      <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
-                        <span>{CHANNEL_LABEL[p.channel] ?? p.channel}</span>
-                        <span>
-                          {new Date(p.scheduled_at).toLocaleDateString("es-ES", {
-                            day: "2-digit",
-                            month: "2-digit",
-                          })}
-                        </span>
+                      <div className="flex gap-2">
+                        {p.image_url ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={p.image_url}
+                            alt=""
+                            className="h-12 w-12 flex-shrink-0 rounded border object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div
+                            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded border border-dashed bg-muted/40 text-[9px] text-muted-foreground"
+                            title="Sin imagen"
+                          >
+                            Sin foto
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold line-clamp-2">{p.topic}</div>
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                            <span>{CHANNEL_LABEL[p.channel] ?? p.channel}</span>
+                            <span>
+                              {new Date(p.scheduled_at).toLocaleDateString(
+                                "es-ES",
+                                { day: "2-digit", month: "2-digit" },
+                              )}
+                            </span>
+                          </div>
+                          {p.image_url ? (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
+                              ✓ Imagen lista
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </Link>
                   ))

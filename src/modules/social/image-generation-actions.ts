@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import sharp from "sharp";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
@@ -254,6 +255,12 @@ export async function generatePostImageAction(
       })
       .eq("company_id", session.company_id);
 
+    // Convertimos el logo a dataURL PNG. Cubre tres problemas a la vez:
+    //   1) CORS al cargarlo en canvas (las dataURL no necesitan CORS)
+    //   2) SVG (canvas tiene problemas con SVG vía Image; sharp lo rasteriza)
+    //   3) Tamaño/optimización (sharp limita ancho razonable)
+    const logoDataUrl = await fetchLogoAsDataUrl(ctx.fiscalLogoUrl);
+
     revalidatePath(`/rrss/posts/${postId}`);
     return {
       ok: true,
@@ -262,11 +269,36 @@ export async function generatePostImageAction(
       cost_cents: COST_PER_IMAGE_CENTS,
       images_used: imagesUsed + 1,
       budget_cents: budgetCents,
-      logo_url: ctx.fiscalLogoUrl,
+      logo_url: logoDataUrl,
       resolved_overlay: resolvedOverlay,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Descarga el logo de empresa, lo rasteriza a PNG con sharp y lo devuelve
+ * como data URL listo para meter en `<img>` o canvas SIN problemas de CORS
+ * ni de formato SVG. Si falla en cualquier paso → devuelve null y el editor
+ * mostrará el toggle de logo deshabilitado.
+ *
+ * Límite de ancho 600 px: suficiente para overlay de hasta 30 % del ancho
+ * de la imagen IA (1024 px). Mantiene aspect ratio.
+ */
+async function fetchLogoAsDataUrl(url: string | null): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const png = await sharp(buf, { density: 300 })
+      .resize({ width: 600, withoutEnlargement: true })
+      .png()
+      .toBuffer();
+    return `data:image/png;base64,${png.toString("base64")}`;
+  } catch {
+    return null;
   }
 }
 
