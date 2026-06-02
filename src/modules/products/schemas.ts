@@ -12,7 +12,16 @@ export const KIND_LABEL: Record<(typeof PRODUCT_KIND)[number], string> = {
 export const productCreateSchema = z.object({
   name: z.string().min(2, "Nombre obligatorio"),
   kind: z.enum(PRODUCT_KIND).default("equipment"),
-  category_id: z.string().uuid().optional(),
+  // El FormData manda string vacío "" cuando no hay categoría elegida —
+  // .uuid() rechaza "" con "Invalid uuid". Preprocess que normaliza "" → undefined
+  // y permite uuid válido o null/undefined. La regla "Zod nullish no optional"
+  // de memoria aplica aquí.
+  category_id: z
+    .preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.string().uuid().optional(),
+    )
+    .optional(),
   internal_reference: z.string().optional().default(""),
   supplier_reference: z.string().optional().default(""),
   short_description: z.string().optional().default(""),
