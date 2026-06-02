@@ -102,6 +102,10 @@ export interface InstallationRow {
   preferred_slot?: string | null;
   /** Fechas concretas preferidas por el cliente (ISO date strings). */
   preferred_dates?: string[] | null;
+  /** Avisos operativos calculados en memoria sobre la fila. Cubre:
+   *  retrasada, en curso >4h, sin técnico, incidencia abierta. Se muestra
+   *  como badge "⚠ N" en la tabla y como modal en la ficha. */
+  alerts?: string[];
 }
 
 export async function listInstallations(filters?: {
@@ -149,7 +153,113 @@ export async function listInstallations(filters?: {
     Omit<InstallationRow, "customer_name"> & { free_trial_id?: string | null }
   >);
   const enriched = await attachContractAndAddress(supabase, withNames);
-  return attachOpenIncidents(supabase, enriched);
+  const withIncidents = await attachOpenIncidents(supabase, enriched);
+  return computeOperationalAlerts(withIncidents);
+}
+
+/**
+ * Alertas operativas de una instalación concreta (para mostrar como
+ * modal emergente al abrir la ficha). Devuelve la lista de avisos en
+ * formato string legible.
+ */
+export async function getInstallationAlerts(
+  installationId: string,
+): Promise<string[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data } = await supabase
+    .from("installations")
+    .select(
+      "id, reference_code, status, kind, installer_user_id, customer_id, scheduled_at, started_at, completed_at, created_at, contract_id, address_id, free_trial_id",
+    )
+    .eq("id", installationId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!data) return [];
+
+  // Comprobar incidencia abierta (vía installation_incidents o incidents)
+  let hasOpenIncident = false;
+  try {
+    const { data: ii } = await supabase
+      .from("installation_incidents")
+      .select("id")
+      .eq("installation_id", installationId)
+      .is("resolved_at", null)
+      .limit(1);
+    if (((ii as unknown[] | null) ?? []).length > 0) hasOpenIncident = true;
+  } catch {
+    /* tabla opcional */
+  }
+  if (!hasOpenIncident) {
+    try {
+      const { data: g } = await supabase
+        .from("incidents")
+        .select("id")
+        .eq("installation_id", installationId)
+        .in("status", ["open", "assigned", "in_progress"])
+        .limit(1);
+      if (((g as unknown[] | null) ?? []).length > 0) hasOpenIncident = true;
+    } catch {
+      /* */
+    }
+  }
+
+  const row: InstallationRow = {
+    id: data.id,
+    reference_code: data.reference_code,
+    status: data.status,
+    kind: data.kind,
+    installer_user_id: data.installer_user_id,
+    customer_id: data.customer_id,
+    customer_name: null,
+    scheduled_at: data.scheduled_at,
+    started_at: data.started_at,
+    completed_at: data.completed_at,
+    created_at: data.created_at,
+    contract_id: data.contract_id,
+    address_id: data.address_id,
+    has_open_incident: hasOpenIncident,
+  };
+  const [computed] = computeOperationalAlerts([row]);
+  return computed?.alerts ?? [];
+}
+
+/**
+ * Calcula alertas operativas en memoria sobre la fila ya cargada (sin
+ * queries extra). 4 tipos: retrasada (scheduled_at pasada), en curso >4h
+ * (started_at antiguo), sin técnico asignado (installer_user_id null en
+ * estados activos) e incidencia abierta (ya viene en has_open_incident).
+ *
+ * Devuelve la misma fila con `alerts: string[]` añadido.
+ */
+function computeOperationalAlerts(rows: InstallationRow[]): InstallationRow[] {
+  const now = Date.now();
+  const FOUR_HOURS = 4 * 3600_000;
+  return rows.map((r) => {
+    const alerts: string[] = [];
+    const sched = r.scheduled_at ? new Date(r.scheduled_at).getTime() : null;
+    const started = r.started_at ? new Date(r.started_at).getTime() : null;
+    const isActiveScheduled = r.status === "scheduled";
+    const isInProgress = r.status === "in_progress";
+    const isClosed =
+      r.status === "completed" || r.status === "cancelled";
+
+    if (isActiveScheduled && sched != null && sched < now) {
+      alerts.push("Retrasada");
+    }
+    if (isInProgress && started != null && now - started > FOUR_HOURS) {
+      alerts.push("En curso > 4h");
+    }
+    if (!isClosed && !r.installer_user_id) {
+      alerts.push("Sin técnico asignado");
+    }
+    if (r.has_open_incident) {
+      alerts.push("Incidencia abierta");
+    }
+    return alerts.length > 0 ? { ...r, alerts } : { ...r, alerts: [] };
+  });
 }
 
 /**

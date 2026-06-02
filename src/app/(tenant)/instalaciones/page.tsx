@@ -440,6 +440,14 @@ export default async function InstalacionesPage({
                                 >
                                   {i.customer_name ?? "—"}
                                 </Link>
+                                {i.alerts && i.alerts.length > 0 && (
+                                  <span
+                                    className="inline-flex h-5 items-center rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-800"
+                                    title={i.alerts.join(" · ")}
+                                  >
+                                    ⚠ {i.alerts.length}
+                                  </span>
+                                )}
                                 {i.plan_type === "rental" && (
                                   <Badge variant="secondary" className="gap-1 text-[10px]">
                                     <Home className="h-3 w-3" /> Alquiler
@@ -506,6 +514,14 @@ export default async function InstalacionesPage({
                       >
                         {i.customer_name ?? "—"}
                       </Link>
+                      {i.alerts && i.alerts.length > 0 && (
+                        <span
+                          className="inline-flex h-5 items-center rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-800"
+                          title={i.alerts.join(" · ")}
+                        >
+                          ⚠ {i.alerts.length}
+                        </span>
+                      )}
                       {i.plan_type === "rental" && (
                         <Badge variant="secondary" className="gap-1 text-[10px]">
                           <Home className="h-3 w-3" /> Alquiler

@@ -6,7 +6,9 @@ import {
   getInstallationItems,
   getInstallationPhotos,
   getInstallationSignatures,
+  getInstallationAlerts,
 } from "@/modules/installations/actions";
+import { InstallationAlertsModal } from "@/modules/installations/alerts-modal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/installations/constants";
@@ -327,8 +329,16 @@ export default async function InstallationDetailPage({
     ? await getTechPrepByContract(i.contract_id).catch(() => null)
     : null;
 
+  // Avisos operativos: retrasada / en curso >4h / sin técnico /
+  // incidencia abierta. Se calculan a partir del estado de la
+  // instalación y se muestran como modal emergente al cargar la ficha.
+  const installationAlerts = await getInstallationAlerts(id).catch(() => []);
+
   return (
     <div className="space-y-6">
+      {/* Modal emergente con avisos operativos (mismo patrón que ficha
+          cliente). Si no hay nada que avisar, no renderiza nada. */}
+      <InstallationAlertsModal installationId={id} alerts={installationAlerts} />
       <SubjectNotificationToast subjectType="installation" subjectId={id} />
       <div className="flex items-start justify-between">
         <div>
