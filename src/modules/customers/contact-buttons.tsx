@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Phone, MessageCircle, Mail } from "lucide-react";
+import { Phone, MessageCircle } from "lucide-react";
 import { logCustomerContactSafeAction } from "./actions";
 import { notify } from "@/shared/hooks/use-toast";
 import { MessageTemplateButton } from "@/modules/messaging/template-button";
@@ -55,20 +55,20 @@ export function CustomerContactButtons({
           <MessageCircle className="h-4 w-4" /> WhatsApp
         </button>
       )}
-      {email && (
-        <button
-          type="button"
-          onClick={() => handle("email", `mailto:${email}`)}
-          className="inline-flex h-12 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-semibold hover:bg-muted"
-        >
-          <Mail className="h-4 w-4" /> Email
-        </button>
-      )}
+      {/* Antes había un botón Email separado con mailto: que abría el
+          cliente nativo del usuario (Outlook, Apple Mail…). El cliente
+          no quería eso — quería enviar desde el CRM con plantillas. El
+          envío real lo hace el MessageTemplateButton de abajo, que abre
+          un modal interno con plantillas + envío vía Resend. Por eso
+          aquí solo dejamos ese, con etiqueta "Email" para que se vea
+          claro que es la acción principal de envío. */}
       <MessageTemplateButton
         recipientName={recipientName ?? null}
         commercialName={commercialName ?? null}
         phone={phone}
         email={email}
+        customerId={customerId}
+        triggerLabel={email ? "Email" : "Plantillas"}
       />
     </div>
   );

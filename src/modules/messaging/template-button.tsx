@@ -26,6 +26,9 @@ interface Props {
   leadId?: string | null;
   /** Plantillas a usar. Si no se pasa, usa MESSAGE_TEMPLATES hardcoded fallback */
   templates?: MessageTemplate[];
+  /** Etiqueta del botón disparador. Default "Plantillas". Usa "Email" en
+   *  fichas donde es la acción principal de envío desde el CRM. */
+  triggerLabel?: string;
 }
 
 export function MessageTemplateButton({
@@ -38,6 +41,7 @@ export function MessageTemplateButton({
   customerId,
   leadId,
   templates,
+  triggerLabel,
 }: Props) {
   const list = templates && templates.length > 0 ? templates : MESSAGE_TEMPLATES;
   const [open, setOpen] = useState(false);
@@ -94,7 +98,8 @@ export function MessageTemplateButton({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <MessageSquare className="h-4 w-4" /> Plantillas
+          <MessageSquare className="h-4 w-4" />
+          {triggerLabel ?? "Plantillas"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">

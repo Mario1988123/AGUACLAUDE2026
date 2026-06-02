@@ -68,17 +68,40 @@ export async function sendProposalByEmailAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // OJO con el esquema: en `proposals` el plan elegido se llama
+  // `chosen_plan_type` y `chosen_duration_months` (no `plan_type` /
+  // `duration_months` — esos están en la tabla `proposal_payment_options`).
+  // El bug "Propuesta no encontrada" estaba causado por pedir columnas
+  // inexistentes en este SELECT.
   const { data: prop } = await admin
     .from("proposals")
     .select(
-      `id, reference_code, plan_type, total_cash_cents, monthly_cents,
-       duration_months, validity_until, customer_id, lead_id, company_id`,
+      `id, reference_code, chosen_plan_type, chosen_duration_months,
+       total_cash_cents, validity_until, customer_id, lead_id, company_id`,
     )
     .eq("id", proposalId)
     .maybeSingle();
   if (!prop) return { ok: false, error: "Propuesta no encontrada" };
   if (prop.company_id !== session.company_id) {
     return { ok: false, error: "Propuesta de otra empresa" };
+  }
+
+  // Para propuestas mensuales (alquiler/renting) leemos la opción de pago
+  // que coincide con el plan/duración elegidos para sacar monthly_cents.
+  let monthlyCents: number | null = null;
+  if (
+    prop.chosen_plan_type === "rental" ||
+    prop.chosen_plan_type === "renting"
+  ) {
+    const { data: opt } = await admin
+      .from("proposal_payment_options")
+      .select("monthly_cents, total_cents")
+      .eq("proposal_id", proposalId)
+      .eq("plan_type", prop.chosen_plan_type)
+      .eq("duration_months", prop.chosen_duration_months ?? 0)
+      .maybeSingle();
+    monthlyCents =
+      (opt as { monthly_cents: number | null } | null)?.monthly_cents ?? null;
   }
 
   // Resolver email + nombre del destinatario (customer o lead)
@@ -137,7 +160,12 @@ export async function sendProposalByEmailAction(
     lead_id: prop.lead_id,
     variables: {
       proposal_reference: prop.reference_code ?? "—",
-      proposal_total: formatProposalTotal(prop),
+      proposal_total: formatProposalTotal({
+        plan_type: prop.chosen_plan_type,
+        total_cash_cents: prop.total_cash_cents,
+        monthly_cents: monthlyCents,
+        duration_months: prop.chosen_duration_months,
+      }),
       proposal_validity: prop.validity_until ?? "",
     },
     attachments: [
