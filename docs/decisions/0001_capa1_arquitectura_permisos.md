@@ -223,12 +223,16 @@ Mapeo rol → departamento:
 
 **Multi-departamento (decisión 1.2):** un usuario con varios roles pertenece a todos los departamentos correspondientes. Ejemplo: usuario con roles `commercial_director` + `installer` → departamentos `["sales", "tech"]`. Ve la agenda completa de ambos departamentos cuando aplica scope `department`.
 
-**Una empresa = UN admin (decisión 1.12):** la tabla `user_roles` tiene un constraint único parcial:
-```sql
-create unique index uniq_company_admin_per_company
-  on user_roles (company_id)
-  where role_key = 'company_admin';
-```
+**Una empresa = N admins (revertida 2026-06-02):** originalmente la
+decisión 1.12 imponía "1 admin por empresa" con un índice único parcial.
+Se revirtió por petición de negocio: empresas con un admin "jefe" y otra
+persona de oficina con los mismos permisos. Ver migración
+`20260602100000_allow_multiple_company_admins.sql`. Reglas que quedan
+en código:
+- Nadie puede eliminarse a sí mismo.
+- Siempre tiene que quedar al menos un company_admin activo.
+- Cualquier admin puede revocar a cualquier otro (modelo "varias llaves
+  maestras").
 
 ## 8. Equipos / asignaciones
 

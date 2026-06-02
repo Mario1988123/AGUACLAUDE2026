@@ -103,19 +103,9 @@ export async function inviteUserAction(
   };
   const parsed = parseOrFriendly(userInviteSchema, raw, "Invitar usuario");
 
-  // Validar que no se intenta crear un segundo company_admin
-  if (parsed.roles.includes("company_admin")) {
-    const supabase = await createClient();
-    const { count } = await supabase
-      .from("user_roles")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", session.company_id!)
-      .eq("role_key", "company_admin")
-      .is("revoked_at", null);
-    if ((count ?? 0) > 0) {
-      throw new Error("Esta empresa ya tiene un company_admin (decisión 1.12)");
-    }
-  }
+  // (Antes aquí había una validación "1 admin por empresa" — decisión 1.12.
+  //  Revertida 2026-06-02: ahora una empresa puede tener N company_admin.
+  //  Ver migración 20260602100000_allow_multiple_company_admins.sql)
 
   // Validar límite de usuarios
   const supabase = await createClient();

@@ -333,7 +333,7 @@ export async function createCompanyAdminAction(
 
   const admin = createAdminClient();
 
-  // Verificar que la empresa existe y aún no tiene admin
+  // Verificar que la empresa existe
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data: company, error: cErr } = await supabase
@@ -343,15 +343,10 @@ export async function createCompanyAdminAction(
     .single();
   if (cErr || !company) throw new Error("Empresa no encontrada");
 
-  const { count: existingAdminCount } = await supabase
-    .from("user_roles")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", input.company_id)
-    .eq("role_key", "company_admin")
-    .is("revoked_at", null);
-  if ((existingAdminCount ?? 0) > 0) {
-    throw new Error("Esta empresa ya tiene un administrador (decisión 1.12)");
-  }
+  // (Antes aquí había una validación "1 admin por empresa" — decisión 1.12.
+  //  Revertida 2026-06-02: una empresa puede tener N company_admin. El
+  //  superadmin puede usar esta acción tanto para el primer admin como
+  //  para añadir más después.)
 
   const tempPassword = generateTempPassword();
 
