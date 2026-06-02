@@ -157,6 +157,14 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
                         >
                           {c.display_name}
                         </Link>
+                        {c.alerts.length > 0 && (
+                          <span
+                            className="ml-1.5 inline-flex h-5 items-center gap-0.5 rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-800 align-middle"
+                            title={c.alerts.join(" · ")}
+                          >
+                            ⚠ {c.alerts.length}
+                          </span>
+                        )}
                         {isCompany && c.contact_name && (
                           <div className="text-xs text-muted-foreground">{c.contact_name}</div>
                         )}
@@ -311,12 +319,22 @@ function CustomerCard({
           {isCompany ? <Building2 className="h-5 w-5" /> : <Home className="h-5 w-5" />}
         </span>
         <div className="min-w-0 flex-1">
-          <Link
-            href={`/clientes/${c.id}` as never}
-            className="font-bold hover:underline block truncate"
-          >
-            {c.display_name}
-          </Link>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href={`/clientes/${c.id}` as never}
+              className="font-bold hover:underline truncate"
+            >
+              {c.display_name}
+            </Link>
+            {c.alerts.length > 0 && (
+              <span
+                className="inline-flex h-5 shrink-0 items-center rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-800"
+                title={c.alerts.join(" · ")}
+              >
+                ⚠ {c.alerts.length}
+              </span>
+            )}
+          </div>
           {isCompany && c.contact_name && (
             <div className="text-xs text-muted-foreground truncate">{c.contact_name}</div>
           )}

@@ -18,7 +18,12 @@ import { getCustomerConsents } from "@/modules/customers/consents-actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
-import { listContractsByCustomer, listInstallationsByCustomer } from "@/modules/customers/actions";
+import {
+  listContractsByCustomer,
+  listInstallationsByCustomer,
+  getCustomerAlertsDetail,
+} from "@/modules/customers/actions";
+import { CustomerAlertsModal } from "@/modules/customers/alerts-modal";
 import { CustomerContractsCard } from "@/modules/customers/contracts-card";
 import { CustomerInstallationsCard } from "@/modules/customers/installations-card";
 import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
@@ -127,6 +132,9 @@ export default async function CustomerDetailPage({
   const ownProductsForEquipment = ((prodList ?? []) as Array<{ id: string; name: string }>);
   const customerProposals = await listProposalsByCustomer(id).catch(() => []);
   const contracts = await listContractsByCustomer(id).catch(() => []);
+  // Avisos abiertos del cliente (mantenimiento vencido, incidencias…).
+  // Se muestran como modal emergente al cargar la ficha.
+  const customerAlerts = await getCustomerAlertsDetail(id).catch(() => []);
   const installations = await listInstallationsByCustomer(id).catch(() => []);
   const customerConsents = await getCustomerConsents(id).catch(() => []);
   const kpis = await getCustomerKPIs(id).catch(() => null);
@@ -200,6 +208,11 @@ export default async function CustomerDetailPage({
 
   return (
     <div className="space-y-6">
+      {/* Modal automático con avisos abiertos del cliente. Se muestra al
+          cargar la ficha si hay avisos (1 vez por día por sesión). Si no
+          hay avisos, no renderiza nada. */}
+      <CustomerAlertsModal customerId={id} alerts={customerAlerts} />
+
       {fromProposal && pendingFromProposal && (
         <FromProposalBanner proposalId={fromProposal} pending={pendingFromProposal} />
       )}

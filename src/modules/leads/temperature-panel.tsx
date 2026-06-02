@@ -98,9 +98,12 @@ export function LeadsTemperaturePanel({
     },
   ];
 
+  // Versión compacta 2026-06-02: una sola fila de chips clicables en lugar
+  // de 4 cards 2x2 (ocupaba 25% de la pantalla en móvil). Mantiene la
+  // funcionalidad de filtro al hacer click y el estado activo (anillo).
   const base = baseQuery ? `${baseQuery}&` : "";
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="flex flex-wrap gap-2">
       {cards.map((c) => {
         const Icon = c.icon;
         const active = activeTemp === c.key;
@@ -112,18 +115,15 @@ export function LeadsTemperaturePanel({
           <Link
             key={c.key}
             href={href as never}
-            className={`rounded-xl border-2 p-3 transition ${c.cls} ${
-              active ? "ring-2 ring-primary ring-offset-2" : "hover:opacity-90"
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold transition ${c.cls} ${
+              active ? "ring-2 ring-primary ring-offset-1" : "hover:opacity-90"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <Icon className={`h-5 w-5 ${c.iconCls}`} />
-              <span className="text-2xl font-extrabold tabular-nums">
-                {c.count}
-              </span>
-            </div>
-            <div className="mt-1 text-sm font-bold">{c.label}</div>
-            <div className="text-[11px] opacity-80">{c.hint}</div>
+            <Icon className={`h-4 w-4 ${c.iconCls}`} aria-hidden="true" />
+            <span>{c.label}</span>
+            <span className="rounded-full bg-white/60 px-1.5 text-xs font-extrabold tabular-nums">
+              {c.count}
+            </span>
           </Link>
         );
       })}

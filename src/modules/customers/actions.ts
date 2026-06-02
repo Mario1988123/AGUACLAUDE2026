@@ -115,22 +115,61 @@ export async function listCustomers(
       lng: number | null;
     }
   >();
+
+  // Avisos por cliente. Calculados con queries agregadas defensivas (si
+  // alguna tabla no existe aún en el cache de PostgREST, queda vacío).
+  const alertsMap = new Map<string, string[]>();
+
   if (baseRows.length > 0) {
     const ids = baseRows.map((c) => c.id);
-    const [addrsRes, equipRes] = await Promise.all([
-      supabase
-        .from("addresses")
-        .select("customer_id, street, city, province, latitude, longitude, is_primary")
-        .in("customer_id", ids)
-        .order("is_primary", { ascending: false }),
-      supabase
-        .from("customer_equipment")
-        .select(
-          "customer_id, product_id, external_equipment_model_id, products(name), external_equipment_models(brand, model)",
-        )
-        .in("customer_id", ids)
-        .eq("is_active", true),
-    ]);
+    const nowIso = new Date().toISOString();
+    const [addrsRes, equipRes, overdueMaintRes, openIncidentsRes] =
+      await Promise.all([
+        supabase
+          .from("addresses")
+          .select(
+            "customer_id, street, city, province, latitude, longitude, is_primary",
+          )
+          .in("customer_id", ids)
+          .order("is_primary", { ascending: false }),
+        supabase
+          .from("customer_equipment")
+          .select(
+            "customer_id, product_id, external_equipment_model_id, products(name), external_equipment_models(brand, model)",
+          )
+          .in("customer_id", ids)
+          .eq("is_active", true),
+        // Mantenimientos vencidos: scheduled_at < now Y aún no completados.
+        // Defensive: try/catch envuelve toda la sección below; aquí solo el query.
+        supabase
+          .from("maintenance_jobs")
+          .select("customer_id")
+          .in("customer_id", ids)
+          .lt("scheduled_at", nowIso)
+          .is("completed_at", null),
+        // Incidencias abiertas (no resueltas / cerradas).
+        supabase
+          .from("incidents")
+          .select("customer_id, status")
+          .in("customer_id", ids)
+          .not("status", "in", "(resolved,closed,cancelled)"),
+      ]);
+    // Marcar avisos
+    for (const r of ((overdueMaintRes.data as Array<{
+      customer_id: string;
+    }> | null) ?? [])) {
+      const list = alertsMap.get(r.customer_id) ?? [];
+      if (!list.includes("Mantenimiento vencido")) list.push("Mantenimiento vencido");
+      alertsMap.set(r.customer_id, list);
+    }
+    for (const r of ((openIncidentsRes.data as Array<{
+      customer_id: string;
+      status: string;
+    }> | null) ?? [])) {
+      const list = alertsMap.get(r.customer_id) ?? [];
+      if (!list.includes("Incidencia abierta")) list.push("Incidencia abierta");
+      alertsMap.set(r.customer_id, list);
+    }
     for (const a of ((addrsRes.data as Array<{
       customer_id: string;
       street: string | null;
@@ -197,8 +236,102 @@ export async function listCustomers(
       address_lng: addr?.lng ?? null,
       equipment_summary: equipmentSummary,
       equipment_count: eq?.count ?? 0,
+      alerts: alertsMap.get(c.id) ?? [],
     };
   });
+}
+
+/**
+ * Lista detallada de avisos abiertos para un cliente concreto.
+ * Se usa en el modal emergente que aparece al entrar en la ficha.
+ *
+ * Cada aviso tiene un title (corto) y un detail (con datos: fecha,
+ * descripción) para que el comercial sepa de un vistazo qué pasa.
+ */
+export interface CustomerAlertDetail {
+  kind:
+    | "maintenance_overdue"
+    | "incident_open"
+    | "unpaid_invoice"
+    | "missing_rgpd";
+  title: string;
+  detail: string;
+  /** Para hacer link directo al sub-recurso si procede. */
+  href?: string;
+}
+
+export async function getCustomerAlertsDetail(
+  customerId: string,
+): Promise<CustomerAlertDetail[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  const supabase = await createClient();
+  const nowIso = new Date().toISOString();
+
+  const alerts: CustomerAlertDetail[] = [];
+
+  // Mantenimientos vencidos
+  try {
+    const { data: overdueMaint } = await supabase
+      .from("maintenance_jobs")
+      .select("id, scheduled_at, title")
+      .eq("customer_id", customerId)
+      .lt("scheduled_at", nowIso)
+      .is("completed_at", null)
+      .limit(5);
+    for (const m of ((overdueMaint as Array<{
+      id: string;
+      scheduled_at: string;
+      title?: string | null;
+    }> | null) ?? [])) {
+      const date = new Date(m.scheduled_at).toLocaleDateString("es-ES");
+      alerts.push({
+        kind: "maintenance_overdue",
+        title: "Mantenimiento vencido",
+        detail: `${m.title ?? "Mantenimiento"} · programado ${date}`,
+        href: `/mantenimientos/${m.id}`,
+      });
+    }
+  } catch {
+    /* defensive */
+  }
+
+  // Incidencias abiertas (no resueltas / cerradas)
+  try {
+    const { data: openIncidents } = await supabase
+      .from("incidents")
+      .select("id, title, priority, status, created_at")
+      .eq("customer_id", customerId)
+      .not("status", "in", "(resolved,closed,cancelled)")
+      .limit(5);
+    for (const i of ((openIncidents as Array<{
+      id: string;
+      title: string;
+      priority: string;
+      status: string;
+      created_at: string;
+    }> | null) ?? [])) {
+      const date = new Date(i.created_at).toLocaleDateString("es-ES");
+      const prio =
+        i.priority === "critical"
+          ? "🔴 Crítica"
+          : i.priority === "high"
+            ? "🟠 Alta"
+            : i.priority === "medium"
+              ? "🟡 Media"
+              : "Normal";
+      alerts.push({
+        kind: "incident_open",
+        title: "Incidencia abierta",
+        detail: `${prio} · ${i.title} · desde ${date}`,
+        href: `/incidencias/${i.id}`,
+      });
+    }
+  } catch {
+    /* defensive */
+  }
+
+  return alerts;
 }
 
 export async function getCustomer(id: string): Promise<CustomerDetail> {

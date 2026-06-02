@@ -19,6 +19,9 @@ export interface CustomerListItem {
   /** Equipos instalados — primer producto + cantidad total. */
   equipment_summary: string | null;
   equipment_count: number;
+  /** Avisos abiertos (mantenimiento vencido, incidencia, etc.). Lista
+   *  legible para mostrar como badge en la tabla y en el modal de ficha. */
+  alerts: string[];
 }
 
 export interface CustomerDetail {

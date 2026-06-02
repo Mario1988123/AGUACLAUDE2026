@@ -10,7 +10,9 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { SelectableLeadsTable } from "@/modules/leads/selectable-list";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { ImportLeadsButton } from "@/modules/leads/import-form";
-import { LeadSmartAlerts, getLeadAlerts } from "@/modules/leads/smart-alerts";
+// LeadSmartAlerts y getLeadAlerts ya no se usan aquí (2026-06-02). Se
+// mantienen exportados desde el módulo por si se usan en un panel global
+// del dashboard.
 import { LeadsTemperaturePanel } from "@/modules/leads/temperature-panel";
 
 export const dynamic = "force-dynamic";
@@ -24,12 +26,16 @@ export default async function LeadsPage({
     scope?: string;
     assigned?: string;
     temp?: string;
+    sort?: string;
   }>;
 }) {
   const sp = await searchParams;
   const tempFilter = (["hot", "warm", "cold", "lost"].includes(sp.temp ?? "")
     ? sp.temp
     : undefined) as "hot" | "warm" | "cold" | "lost" | undefined;
+  const sortBy = (["recent", "oldest", "name"].includes(sp.sort ?? "")
+    ? sp.sort
+    : "recent") as "recent" | "oldest" | "name";
   const session = await requireSession();
   const status = LEAD_STATUS.includes(sp.status as never) ? (sp.status as never) : undefined;
   const isUpperLevel =
@@ -40,7 +46,7 @@ export default async function LeadsPage({
     session.roles.includes("technical_director");
   const scope = isUpperLevel ? (sp.scope === "mine" ? "mine" : "all") : "mine";
   const assignedFilter = isUpperLevel && sp.assigned ? sp.assigned : undefined;
-  const [leadsAll, team, alerts] = await Promise.all([
+  const [leadsAll, team] = await Promise.all([
     listLeads({
       status,
       q: sp.q,
@@ -48,9 +54,6 @@ export default async function LeadsPage({
       assigned_user_id: assignedFilter as string | "unassigned" | undefined,
     }),
     isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
-    isUpperLevel
-      ? getLeadAlerts(scope === "mine" ? session.user_id : null).catch(() => null)
-      : Promise.resolve(null),
   ]);
 
   // Filtro temperatura client-side (los datos ya están cargados)
@@ -68,9 +71,24 @@ export default async function LeadsPage({
     const ageH = (Date.now() - new Date(l.created_at).getTime()) / 3600000;
     return ageH < 24 ? "warm" : "cold";
   }
-  const leads = tempFilter
+  const leadsFiltered = tempFilter
     ? leadsAll.filter((l) => classify(l) === tempFilter)
     : leadsAll;
+
+  // Orden 2026-06-02. "oldest" = más antiguos primero (los que más días
+  // llevan en cartera, candidatos a caducar / abandono).
+  const leads = [...leadsFiltered].sort((a, b) => {
+    if (sortBy === "oldest") {
+      return (
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    }
+    if (sortBy === "name") {
+      return (a.display_name ?? "").localeCompare(b.display_name ?? "");
+    }
+    // "recent" (default): más nuevos primero
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   // baseQuery sin el param "temp" (para construir URLs del panel)
   const baseParams = new URLSearchParams();
@@ -136,7 +154,11 @@ export default async function LeadsPage({
         </div>
       )}
 
-      {isUpperLevel && alerts && <LeadSmartAlerts alerts={alerts} />}
+      {/* El "Pulso del pipeline" (LeadSmartAlerts) se eliminó 2026-06-02:
+          ocupaba demasiado, sus métricas ya están reflejadas en la tabla
+          (colores por urgencia) y en el TemperaturePanel compacto.
+          getLeadAlerts() sigue disponible si en el futuro se quiere un
+          panel global de alertas en el dashboard. */}
 
       <LeadsTemperaturePanel
         leads={leadsAll.map((l) => ({ status: l.status as never, created_at: l.created_at }))}
@@ -186,6 +208,16 @@ export default async function LeadsPage({
             ))}
           </select>
         )}
+        <select
+          name="sort"
+          defaultValue={sortBy}
+          aria-label="Ordenar leads"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+        >
+          <option value="recent">Más recientes primero</option>
+          <option value="oldest">Más antiguos primero (días)</option>
+          <option value="name">Por nombre A-Z</option>
+        </select>
         <Button type="submit" variant="outline" className="w-full sm:w-auto">
           Filtrar
         </Button>
