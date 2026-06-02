@@ -400,20 +400,29 @@ export interface CompanyAdminInfo {
   last_login_at: string | null;
 }
 
-/** Devuelve el admin actual de la empresa (o null si aún no hay). */
+/**
+ * Devuelve el admin principal (el más antiguo) de la empresa, o null si
+ * no hay ninguno. Antes usaba .maybeSingle() asumiendo 1 admin/empresa
+ * (decisión 1.12). Tras revertir a N admins (2026-06-02), eso fallaba con
+ * "más de una fila" cuando había 2+ admins — la empresa salía como "sin
+ * admin activo" en el panel superadmin. Ahora coge el primero por fecha
+ * de asignación.
+ */
 export async function getCompanyAdmin(companyId: string): Promise<CompanyAdminInfo | null> {
   await ensureSuperadmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: roleRow } = await supabase
+  const { data: roleRows } = await supabase
     .from("user_roles")
-    .select("user_id")
+    .select("user_id, assigned_at")
     .eq("company_id", companyId)
     .eq("role_key", "company_admin")
     .is("revoked_at", null)
-    .maybeSingle();
-  if (!roleRow) return null;
-  const userId = (roleRow as { user_id: string }).user_id;
+    .order("assigned_at", { ascending: true })
+    .limit(1);
+  const first = ((roleRows ?? []) as Array<{ user_id: string }>)[0];
+  if (!first) return null;
+  const userId = first.user_id;
 
   const { data: profile } = await supabase
     .from("user_profiles")

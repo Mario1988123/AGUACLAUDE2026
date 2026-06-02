@@ -19,6 +19,10 @@ export async function markPasswordChangedAction(): Promise<void> {
     .update({
       must_change_password: false,
       activated_at: new Date().toISOString(),
+      // Pasar de "invited" → "active" cuando el usuario establece su
+      // contraseña por primera vez. Antes solo se tocaba activated_at y
+      // el status quedaba siempre "invited" en el listado de usuarios.
+      status: "active",
     })
     .eq("user_id", session.user_id);
   if (error) {
