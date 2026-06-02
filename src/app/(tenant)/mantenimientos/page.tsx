@@ -290,9 +290,19 @@ export default async function MantenimientosPage({
                 <li key={j.id} className="rounded-xl border bg-card p-3 text-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/mantenimientos/${j.id}`} className="font-medium text-primary hover:underline truncate block">
-                        {j.customer_name ?? "—"}
-                      </Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link href={`/mantenimientos/${j.id}`} className="font-medium text-primary hover:underline truncate">
+                          {j.customer_name ?? "—"}
+                        </Link>
+                        {j.alerts && j.alerts.length > 0 && (
+                          <span
+                            className="inline-flex h-5 items-center rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-800"
+                            title={j.alerts.join(" · ")}
+                          >
+                            ⚠ {j.alerts.length}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {j.scheduled_at ? new Date(j.scheduled_at).toLocaleString("es-ES") : "—"}
                       </div>
@@ -349,9 +359,19 @@ export default async function MantenimientosPage({
                 {jobs.map((j) => (
                   <tr key={j.id} className="hover:bg-muted/50">
                     <td className="py-2">
-                      <Link href={`/mantenimientos/${j.id}`} className="text-primary hover:underline">
-                        {j.customer_name ?? "—"}
-                      </Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link href={`/mantenimientos/${j.id}`} className="text-primary hover:underline">
+                          {j.customer_name ?? "—"}
+                        </Link>
+                        {j.alerts && j.alerts.length > 0 && (
+                          <span
+                            className="inline-flex h-5 items-center rounded-full bg-red-100 px-1.5 text-[10px] font-bold text-red-800"
+                            title={j.alerts.join(" · ")}
+                          >
+                            ⚠ {j.alerts.length}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 text-xs text-muted-foreground">
                       {j.scheduled_at ? new Date(j.scheduled_at).toLocaleString("es-ES") : "—"}

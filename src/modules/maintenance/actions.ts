@@ -8,6 +8,7 @@ import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { computeMaintenanceJobAlerts } from "./alerts";
 
 export interface MaintenanceRow {
   id: string;
@@ -21,7 +22,11 @@ export interface MaintenanceRow {
   completed_at: string | null;
   is_charged: boolean;
   charge_cents: number | null;
+  /** Avisos operativos por fila (mismo patrón que instalaciones / clientes).
+   *  Frases cortas listas para pintar en el badge ⚠ N o el modal de ficha. */
+  alerts: string[];
 }
+
 
 export async function getMaintenance(id: string) {
   await requireSession();
@@ -30,7 +35,7 @@ export async function getMaintenance(id: string) {
   const { data, error } = await supabase
     .from("maintenance_jobs")
     .select(
-      "id, status, kind, customer_id, customer_equipment_id, contract_id, technician_user_id, scheduled_at, started_at, completed_at, duration_seconds, is_charged, charge_cents, notes",
+      "id, status, kind, customer_id, customer_equipment_id, contract_id, technician_user_id, scheduled_at, started_at, completed_at, duration_seconds, is_charged, charge_cents, notes, customer_called_at, confirmed_at",
     )
     .eq("id", id)
     .single();
@@ -50,6 +55,8 @@ export async function getMaintenance(id: string) {
     is_charged: boolean;
     charge_cents: number | null;
     notes: string | null;
+    customer_called_at: string | null;
+    confirmed_at: string | null;
   };
 }
 
@@ -347,7 +354,7 @@ export async function listMaintenance(filters?: {
   let query = supabase
     .from("maintenance_jobs")
     .select(
-      "id, status, kind, customer_id, technician_user_id, scheduled_at, completed_at, is_charged, charge_cents",
+      "id, status, kind, customer_id, technician_user_id, scheduled_at, started_at, completed_at, is_charged, charge_cents, customer_called_at, confirmed_at",
     )
     .order("scheduled_at", { ascending: true, nullsFirst: false })
     .limit(200);
@@ -370,7 +377,11 @@ export async function listMaintenance(filters?: {
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as Array<
-    Omit<MaintenanceRow, "customer_name" | "technician_name">
+    Omit<MaintenanceRow, "customer_name" | "technician_name" | "alerts"> & {
+      started_at?: string | null;
+      customer_called_at?: string | null;
+      confirmed_at?: string | null;
+    }
   >;
   const ids = Array.from(new Set(rows.map((r) => r.customer_id)));
   const techIds = Array.from(
@@ -416,13 +427,32 @@ export async function listMaintenance(filters?: {
       if (t.full_name) techMap.set(t.user_id, t.full_name);
     }
   }
-  return rows.map((r) => ({
-    ...r,
-    customer_name: nameMap.get(r.customer_id) ?? null,
-    technician_name: r.technician_user_id
-      ? techMap.get(r.technician_user_id) ?? null
-      : null,
-  }));
+  return rows.map((r) => {
+    const alerts = computeMaintenanceJobAlerts({
+      status: r.status,
+      scheduled_at: r.scheduled_at,
+      started_at: r.started_at ?? null,
+      technician_user_id: r.technician_user_id,
+      customer_called_at: r.customer_called_at ?? null,
+      confirmed_at: r.confirmed_at ?? null,
+    });
+    return {
+      id: r.id,
+      status: r.status,
+      kind: r.kind,
+      customer_id: r.customer_id,
+      technician_user_id: r.technician_user_id,
+      scheduled_at: r.scheduled_at,
+      completed_at: r.completed_at,
+      is_charged: r.is_charged,
+      charge_cents: r.charge_cents,
+      customer_name: nameMap.get(r.customer_id) ?? null,
+      technician_name: r.technician_user_id
+        ? techMap.get(r.technician_user_id) ?? null
+        : null,
+      alerts,
+    };
+  });
 }
 
 export async function createMaintenanceAction(input: unknown) {

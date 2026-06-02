@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMaintenance } from "@/modules/maintenance/actions";
+import { computeMaintenanceJobAlerts } from "@/modules/maintenance/alerts";
+import { MaintenanceAlertsModal } from "@/modules/maintenance/alerts-modal";
 import { listProducts } from "@/modules/products/actions";
 import { STATUS_LABEL, STATUS_VARIANT, KIND_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -64,6 +66,18 @@ export default async function MaintenanceDetailPage({
   // para ofrecer renovación al cliente tras la última visita del contrato.
   const maintenancePlans = await listMaintenancePlans().catch(() => []);
 
+  // Avisos operativos del mantenimiento — patrón badge+modal idéntico al
+  // de clientes / instalaciones. Se calculan a partir de columnas del job
+  // (retraso, sin técnico, en curso >4h, propuesta sin confirmar, etc.).
+  const jobAlerts = computeMaintenanceJobAlerts({
+    status: job.status,
+    scheduled_at: job.scheduled_at,
+    started_at: job.started_at,
+    technician_user_id: job.technician_user_id,
+    customer_called_at: job.customer_called_at,
+    confirmed_at: job.confirmed_at,
+  });
+
   // Items reemplazados ya registrados (si completado)
   const { data: replaced } = await supabase
     .from("maintenance_items_replaced")
@@ -77,14 +91,25 @@ export default async function MaintenanceDetailPage({
 
   return (
     <div className="space-y-6">
+      {/* Modal auto-abrir con avisos operativos al entrar a la ficha */}
+      <MaintenanceAlertsModal maintenanceId={id} alerts={jobAlerts} />
+
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">Mantenimiento</h1>
             <Badge variant={STATUS_VARIANT[job.status] ?? "default"}>
               {STATUS_LABEL[job.status] ?? job.status}
             </Badge>
             <Badge variant="outline">{KIND_LABEL[job.kind] ?? job.kind}</Badge>
+            {jobAlerts.length > 0 && (
+              <span
+                className="inline-flex h-6 items-center rounded-full bg-red-100 px-2 text-xs font-bold text-red-800"
+                title={jobAlerts.join(" · ")}
+              >
+                ⚠ {jobAlerts.length} aviso{jobAlerts.length === 1 ? "" : "s"}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Cliente: <strong>{customerName}</strong>
