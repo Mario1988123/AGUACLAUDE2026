@@ -6,6 +6,7 @@ import { ShieldAlert, KeyRound } from "lucide-react";
 import { createClient } from "@/shared/lib/supabase/client";
 import { notify } from "@/shared/hooks/use-toast";
 import { markPasswordChangedAction } from "@/modules/auth/password-actions";
+import { PasswordInput } from "@/shared/components/password-input";
 
 export default function RestablecerPasswordPage() {
   // Next 15 exige Suspense alrededor de useSearchParams para SSG.
@@ -86,23 +87,19 @@ function RestablecerPasswordInner() {
             </p>
           )}
         </div>
-        <input
-          type="password"
+        <PasswordInput
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Nueva contraseña"
           autoComplete="new-password"
-          className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2"
         />
-        <input
-          type="password"
+        <PasswordInput
           required
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           placeholder="Repite la contraseña"
           autoComplete="new-password"
-          className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2"
         />
         <button
           type="submit"

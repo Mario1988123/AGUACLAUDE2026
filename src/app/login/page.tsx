@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/client";
 import { notify } from "@/shared/hooks/use-toast";
+import { PasswordInput } from "@/shared/components/password-input";
 
 const loginSchema = z.object({
   email: z.string().email("Email no válido"),
@@ -62,12 +63,10 @@ function LoginForm() {
         <label htmlFor="password" className="text-sm font-medium">
           Contraseña
         </label>
-        <input
+        <PasswordInput
           {...register("password")}
           id="password"
-          type="password"
           autoComplete="current-password"
-          className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
         {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>
