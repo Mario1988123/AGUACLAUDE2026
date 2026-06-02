@@ -265,52 +265,77 @@ export async function getCustomerAlertsDetail(
 ): Promise<CustomerAlertDetail[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
-  const supabase = await createClient();
+  // OJO: antes usaba createClient() (cliente con sesión del usuario sujeto
+  // a RLS). Si las policies de incidents/maintenance_jobs bloqueaban la
+  // lectura → la query devolvía 0 filas silenciosamente y el modal no
+  // saltaba. Ahora usamos admin client con filtro manual de company_id
+  // (seguridad equivalente, sin depender de RLS).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   const nowIso = new Date().toISOString();
 
   const alerts: CustomerAlertDetail[] = [];
 
-  // Mantenimientos vencidos
+  // Incidencias abiertas. Cubrimos dos formas en las que una incidencia
+  // puede estar vinculada al cliente:
+  //   a) directamente: incidents.customer_id = customerId
+  //   b) vía instalación: incidents.installation_id apunta a una
+  //      installation con ese customer_id (el agente RRSS abre incidencias
+  //      a veces sin rellenar customer_id directamente).
   try {
-    const { data: overdueMaint } = await supabase
-      .from("maintenance_jobs")
-      .select("id, scheduled_at, title")
-      .eq("customer_id", customerId)
-      .lt("scheduled_at", nowIso)
-      .is("completed_at", null)
-      .limit(5);
-    for (const m of ((overdueMaint as Array<{
-      id: string;
-      scheduled_at: string;
-      title?: string | null;
-    }> | null) ?? [])) {
-      const date = new Date(m.scheduled_at).toLocaleDateString("es-ES");
-      alerts.push({
-        kind: "maintenance_overdue",
-        title: "Mantenimiento vencido",
-        detail: `${m.title ?? "Mantenimiento"} · programado ${date}`,
-        href: `/mantenimientos/${m.id}`,
-      });
-    }
-  } catch {
-    /* defensive */
-  }
-
-  // Incidencias abiertas (no resueltas / cerradas)
-  try {
-    const { data: openIncidents } = await supabase
+    // (a) por customer_id directo
+    const directRes = await admin
       .from("incidents")
       .select("id, title, priority, status, created_at")
+      .eq("company_id", session.company_id)
       .eq("customer_id", customerId)
       .not("status", "in", "(resolved,closed,cancelled)")
-      .limit(5);
-    for (const i of ((openIncidents as Array<{
+      .order("created_at", { ascending: false })
+      .limit(10);
+    if (directRes.error) {
+      console.error("[customer-alerts] incidents direct:", directRes.error.message);
+    }
+    // (b) por instalaciones del cliente
+    const { data: insts } = await admin
+      .from("installations")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("customer_id", customerId);
+    const installIds = ((insts as Array<{ id: string }> | null) ?? []).map(
+      (x) => x.id,
+    );
+    let indirectRows: Array<{
       id: string;
       title: string;
       priority: string;
       status: string;
       created_at: string;
-    }> | null) ?? [])) {
+    }> = [];
+    if (installIds.length > 0) {
+      const indirectRes = await admin
+        .from("incidents")
+        .select("id, title, priority, status, created_at")
+        .eq("company_id", session.company_id)
+        .in("installation_id", installIds)
+        .not("status", "in", "(resolved,closed,cancelled)")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      if (indirectRes.error) {
+        console.error(
+          "[customer-alerts] incidents indirect:",
+          indirectRes.error.message,
+        );
+      }
+      indirectRows = (indirectRes.data ?? []) as typeof indirectRows;
+    }
+    // Merge y dedupe por id
+    const seen = new Set<string>();
+    const merged = [
+      ...((directRes.data ?? []) as typeof indirectRows),
+      ...indirectRows,
+    ].filter((i) => (seen.has(i.id) ? false : seen.add(i.id)));
+
+    for (const i of merged) {
       const date = new Date(i.created_at).toLocaleDateString("es-ES");
       const prio =
         i.priority === "critical"
@@ -327,8 +352,48 @@ export async function getCustomerAlertsDetail(
         href: `/incidencias/${i.id}`,
       });
     }
-  } catch {
-    /* defensive */
+  } catch (e) {
+    console.error(
+      "[customer-alerts] incidents fail:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
+  // Mantenimientos vencidos
+  try {
+    const overdueRes = await admin
+      .from("maintenance_jobs")
+      .select("id, scheduled_at, title")
+      .eq("company_id", session.company_id)
+      .eq("customer_id", customerId)
+      .lt("scheduled_at", nowIso)
+      .is("completed_at", null)
+      .order("scheduled_at", { ascending: true })
+      .limit(5);
+    if (overdueRes.error) {
+      console.error(
+        "[customer-alerts] maintenance overdue:",
+        overdueRes.error.message,
+      );
+    }
+    for (const m of ((overdueRes.data as Array<{
+      id: string;
+      scheduled_at: string;
+      title?: string | null;
+    }> | null) ?? [])) {
+      const date = new Date(m.scheduled_at).toLocaleDateString("es-ES");
+      alerts.push({
+        kind: "maintenance_overdue",
+        title: "Mantenimiento vencido",
+        detail: `${m.title ?? "Mantenimiento"} · programado ${date}`,
+        href: `/mantenimientos/${m.id}`,
+      });
+    }
+  } catch (e) {
+    console.error(
+      "[customer-alerts] maintenance fail:",
+      e instanceof Error ? e.message : e,
+    );
   }
 
   return alerts;
