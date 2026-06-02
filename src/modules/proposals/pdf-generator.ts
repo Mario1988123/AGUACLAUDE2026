@@ -40,32 +40,41 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
     getProposalItems(proposalId),
   ]);
 
+  // Los datos fiscales de la empresa NO viven en `companies` (esa tabla es
+  // del SaaS: name/slug/plan/etc.). Viven en `company_settings` con prefijo
+  // `fiscal_*` (migración 20260503300000). Antes el PDF leía columnas que
+  // no existen (companies.legal_name/trade_name/tax_id +
+  // company_settings.contact_email/contact_phone/fiscal_address) y todo
+  // salía como "—".
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const [{ data: company }, { data: companySettings }] = await Promise.all([
     supabase
       .from("companies")
-      .select("legal_name, trade_name, tax_id")
+      .select("name")
       .eq("id", session.company_id)
       .single(),
     supabase
       .from("company_settings")
-      .select("contact_email, contact_phone, fiscal_address, fiscal_postal_code, fiscal_city")
+      .select(
+        "fiscal_legal_name, fiscal_tax_id, fiscal_email, fiscal_phone, fiscal_street, fiscal_postal_code, fiscal_city",
+      )
       .eq("company_id", session.company_id)
       .maybeSingle(),
   ]);
-  const co = (company ?? {}) as {
-    legal_name?: string | null;
-    trade_name?: string | null;
-    tax_id?: string | null;
-  };
+  const co = (company ?? {}) as { name?: string | null };
   const cs = (companySettings ?? {}) as {
-    contact_email?: string | null;
-    contact_phone?: string | null;
-    fiscal_address?: string | null;
+    fiscal_legal_name?: string | null;
+    fiscal_tax_id?: string | null;
+    fiscal_email?: string | null;
+    fiscal_phone?: string | null;
+    fiscal_street?: string | null;
     fiscal_postal_code?: string | null;
     fiscal_city?: string | null;
   };
+  // Nombre comercial visible: razón social fiscal si existe; si no, nombre
+  // SaaS de la empresa; si no, "Empresa".
+  const companyDisplayName = cs.fiscal_legal_name || co.name || "Empresa";
 
   // Resolver datos completos del destinatario (cliente o lead)
   let recipientRow: {
@@ -118,7 +127,7 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
 
   // Portada (pinta sobre página 1, luego añade nueva página para el contenido)
   drawCoverPage(doc, {
-    companyName: co.trade_name || co.legal_name || "Empresa",
+    companyName: companyDisplayName,
     documentTitle: "Propuesta comercial",
     documentRef: proposal.reference_code ?? null,
     recipientName: recipientRow ? partyName(recipientRow) : proposal.customer_or_lead_name,
@@ -128,9 +137,9 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
   });
 
   drawDashHeader(doc, {
-    companyName: co.trade_name || co.legal_name || "Empresa",
-    companyPhone: cs.contact_phone ?? null,
-    companyEmail: cs.contact_email ?? null,
+    companyName: companyDisplayName,
+    companyPhone: cs.fiscal_phone ?? null,
+    companyEmail: cs.fiscal_email ?? null,
     title: "PROPUESTA",
     refCode: proposal.reference_code ?? null,
     dateLabel: fmtDateLong(proposal.created_at ?? today),
@@ -142,13 +151,15 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
     {
       title: "LA EMPRESA",
       rows: [
-        ["Nombre", co.trade_name || co.legal_name || "—"],
-        ["CIF", co.tax_id || "—"],
+        ["Nombre", companyDisplayName],
+        ["CIF", cs.fiscal_tax_id || "—"],
         [
           "Dirección",
-          [cs.fiscal_address, cs.fiscal_postal_code, cs.fiscal_city].filter(Boolean).join(", ") || "—",
+          [cs.fiscal_street, cs.fiscal_postal_code, cs.fiscal_city]
+            .filter(Boolean)
+            .join(", ") || "—",
         ],
-        ["Teléfono", cs.contact_phone || "—"],
+        ["Teléfono", cs.fiscal_phone || "—"],
       ],
     },
     {
@@ -162,9 +173,11 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
     },
   );
 
-  // Tiles destacando totales
-  const tiles = [
-    { label: "VERSIÓN", value: `v${proposal.version_number}` },
+  // Tiles destacando totales. La tile "VERSIÓN v1" se eliminó (decisión
+  // 2026-06-02): no aporta info al cliente en la versión inicial. Si en
+  // el futuro hay versionado real visible, se reintegra condicionado a
+  // version_number >= 2.
+  const tiles: Array<{ label: string; value: string; sub?: string }> = [
     {
       label: "TOTAL CONTADO",
       value: fmtEur(proposal.total_cash_cents),
@@ -215,7 +228,7 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
 
   const ref = proposal.reference_code ?? `#${proposal.id.slice(0, 8)}`;
   const footer = [
-    co.trade_name || co.legal_name || "Empresa",
+    companyDisplayName,
     `Propuesta ${ref}`,
     `Generada el ${fmtDateShort(today)}`,
     proposal.sent_at ? `Enviada el ${fmtDateShort(proposal.sent_at)}` : "Borrador",
