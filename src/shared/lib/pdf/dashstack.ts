@@ -313,7 +313,8 @@ export function drawDashHeader(
     title: string; // "CONTRATO DE ALQUILER"
     refCode: string | null; // "#00111"
     dateLabel: string; // "1 de mayo de 2026"
-    statusBadge: { label: string; tone: "success" | "warning" | "draft" };
+    /** Si null, no se pinta chip. */
+    statusBadge: { label: string; tone: "success" | "warning" | "draft" } | null;
   },
 ): void {
   const top = PAGE_H - MARGIN;
@@ -356,30 +357,35 @@ export function drawDashHeader(
     color: TEAL,
   });
 
-  // Bubble badge superpuesto al título (esq. sup. derecha del texto)
-  const bubbleBg =
-    opts.statusBadge.tone === "success"
-      ? SUCCESS_BG
-      : opts.statusBadge.tone === "warning"
-        ? WARN_BG
-        : DRAFT_BG;
-  const bubbleTxt =
-    opts.statusBadge.tone === "success"
-      ? SUCCESS_TXT
-      : opts.statusBadge.tone === "warning"
-        ? WARN_TXT
-        : DRAFT_TXT;
-  const bw = d.bold.widthOfTextAtSize(opts.statusBadge.label, 9) + 16;
-  const bx = PAGE_W - MARGIN - bw + 4;
-  const by = top + 4;
-  d.page.drawRectangle({ x: bx, y: by - 14, width: bw, height: 18, color: bubbleBg, borderColor: bubbleBg });
-  d.page.drawText(opts.statusBadge.label, {
-    x: bx + 8,
-    y: by - 10,
-    size: 9,
-    font: d.bold,
-    color: bubbleTxt,
-  });
+  // Bubble badge: separado del título (encima del propio título, no
+  // superpuesto). Solo se pinta si hay algo que mostrar.
+  if (opts.statusBadge) {
+    const bubbleBg =
+      opts.statusBadge.tone === "success"
+        ? SUCCESS_BG
+        : opts.statusBadge.tone === "warning"
+          ? WARN_BG
+          : DRAFT_BG;
+    const bubbleTxt =
+      opts.statusBadge.tone === "success"
+        ? SUCCESS_TXT
+        : opts.statusBadge.tone === "warning"
+          ? WARN_TXT
+          : DRAFT_TXT;
+    const bw = d.bold.widthOfTextAtSize(opts.statusBadge.label, 9) + 16;
+    const bx = PAGE_W - MARGIN - bw;
+    // top + 18 → claramente POR ENCIMA del título (que está en top - 10),
+    // sin solapar. Antes estaba en top + 4 superpuesto.
+    const by = top + 18;
+    d.page.drawRectangle({ x: bx, y: by - 14, width: bw, height: 18, color: bubbleBg, borderColor: bubbleBg });
+    d.page.drawText(opts.statusBadge.label, {
+      x: bx + 8,
+      y: by - 10,
+      size: 9,
+      font: d.bold,
+      color: bubbleTxt,
+    });
+  }
 
   // Ref + fecha (debajo del título)
   if (opts.refCode) {
@@ -413,9 +419,24 @@ export function drawTwoPartyCards(
   const cardW = (PAGE_W - MARGIN * 2 - 16) / 2;
   const padding = 14;
   const lineH = 16;
+  const extraLineH = 11; // alto por línea extra cuando hay wrap
   const headerH = 32;
-  const maxRows = Math.max(left.rows.length, right.rows.length);
-  const cardH = headerH + padding + maxRows * lineH + padding;
+  const valueWidth = cardW - padding * 2 - 70;
+
+  // Pre-cálculo: cuántas líneas reales ocupa cada fila (con wrap, máx 2)
+  function rowsHeight(rows: Array<[string, string | null]>): number {
+    let h = 0;
+    for (const r of rows) {
+      const lines = Math.min(
+        wrap(d.font, r[1] ?? "—", 9, valueWidth).length,
+        2,
+      );
+      h += lineH + (lines > 1 ? extraLineH * (lines - 1) : 0);
+    }
+    return h;
+  }
+  const innerH = Math.max(rowsHeight(left.rows), rowsHeight(right.rows));
+  const cardH = headerH + padding + innerH + padding;
   ensure(d, cardH + 10);
   const top = d.cursorY;
 
@@ -441,8 +462,9 @@ export function drawTwoPartyCards(
       thickness: 1,
       color: TEAL,
     });
-    side.rows.forEach((r, i) => {
-      const y = top - headerH - padding - i * lineH;
+    // Y acumulado: incrementa por cada fila sumando líneas reales del wrap.
+    let y = top - headerH - padding;
+    for (const r of side.rows) {
       d.page.drawText(`${r[0]}:`, {
         x: x + padding,
         y,
@@ -451,17 +473,19 @@ export function drawTwoPartyCards(
         color: MUTED,
       });
       const value = r[1] ?? "—";
-      const lines = wrap(d.font, value, 9, cardW - padding * 2 - 70);
-      lines.slice(0, 2).forEach((ln, j) => {
+      const lines = wrap(d.font, value, 9, valueWidth).slice(0, 2);
+      lines.forEach((ln, j) => {
         d.page.drawText(ln, {
           x: x + padding + 70,
-          y: y - j * 11,
+          y: y - j * extraLineH,
           size: 9,
           font: d.bold,
           color: TEXT,
         });
       });
-    });
+      // Bajar Y según número de líneas usadas (1 línea = lineH, 2 = lineH + extraLineH)
+      y -= lineH + (lines.length > 1 ? extraLineH * (lines.length - 1) : 0);
+    }
   }
   card(MARGIN, left);
   card(MARGIN + cardW + 16, right);
@@ -852,12 +876,14 @@ export function watermarkFromContractStatus(
 export function watermarkFromProposalStatus(status: string): {
   label: string;
   tone: "success" | "warning" | "draft";
-} {
+} | null {
+  // Decisión 2026-06-02: el chip solo aparece cuando hay algo accionable o
+  // un estado destacable. En 'draft' y 'sent' (flujo normal de venta) NO
+  // se pinta, porque tapaba el título y no aportaba nada útil al cliente.
   if (status === "accepted") return { label: "ACEPTADA", tone: "success" };
-  if (status === "sent") return { label: "ENVIADA", tone: "warning" };
   if (status === "pending_approval")
     return { label: "PENDIENTE APROBACIÓN", tone: "warning" };
   if (status === "rejected") return { label: "RECHAZADA", tone: "draft" };
   if (status === "expired") return { label: "EXPIRADA", tone: "draft" };
-  return { label: "BORRADOR", tone: "draft" };
+  return null;
 }
