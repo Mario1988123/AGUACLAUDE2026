@@ -345,19 +345,29 @@ export async function deleteUserPermanentlyAction(userId: string): Promise<void>
     throw new Error("Ese usuario no pertenece a tu empresa");
   }
 
-  // No permitir eliminar al único company_admin de la empresa
-  const { data: rolesData } = await admin
+  // No permitir eliminar al último company_admin activo de la empresa.
+  // Antes: bloqueaba cualquier eliminación de admin (regla 1 admin por
+  // empresa). Ahora con N admins → solo bloquea si dejaría 0 admins activos.
+  const { data: targetRolesData } = await admin
     .from("user_roles")
     .select("role_key")
     .eq("user_id", userId)
     .is("revoked_at", null);
-  const isAdmin = ((rolesData ?? []) as { role_key: string }[]).some(
+  const targetIsAdmin = ((targetRolesData ?? []) as { role_key: string }[]).some(
     (r) => r.role_key === "company_admin",
   );
-  if (isAdmin) {
-    throw new Error(
-      "No se puede eliminar al admin de la empresa. Asigna otro admin antes.",
-    );
+  if (targetIsAdmin && p?.company_id) {
+    const { count: activeAdmins } = await admin
+      .from("user_roles")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", p.company_id)
+      .eq("role_key", "company_admin")
+      .is("revoked_at", null);
+    if ((activeAdmins ?? 0) <= 1) {
+      throw new Error(
+        "No se puede eliminar al último admin de la empresa. Crea o asigna otro admin antes.",
+      );
+    }
   }
 
   // Delete en auth.users dispara CASCADE de user_profiles/user_roles y
