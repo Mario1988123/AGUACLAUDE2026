@@ -51,10 +51,6 @@ export default async function ConfigClientesPage() {
             clientes mirando: <strong>DNI/CIF</strong> (exacto), <strong>email</strong> (exacto en
             minúsculas), <strong>teléfono principal</strong> (normalizado +34).
           </p>
-          <p>
-            Los leads ya convertidos NO aparecen como duplicados (decisión
-            2026-05-07).
-          </p>
         </CardContent>
       </Card>
       <Card>
