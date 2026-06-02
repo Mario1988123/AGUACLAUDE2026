@@ -30,17 +30,13 @@ interface Props {
 export function CustomerAlertsModal({ customerId, alerts }: Props) {
   const [open, setOpen] = useState(false);
 
-  // Abrir automáticamente al cargar, solo una vez por día por cliente
-  // (sessionStorage). Si Mario quiere que aparezca SIEMPRE, basta con
-  // borrar el bloque de sessionStorage.
+  // Abrir automáticamente al cargar SIEMPRE que haya avisos. Decisión
+  // 2026-06-02: la versión inicial usaba sessionStorage "1 vez al día"
+  // pero quedaba bloqueado tras la primera visita. Si en el futuro se
+  // vuelve molesto, añadir un toggle "no volver a mostrar" en el footer
+  // del modal.
   useEffect(() => {
     if (alerts.length === 0) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const storageKey = `customer-alerts-seen:${customerId}:${todayKey}`;
-    if (typeof window !== "undefined" && window.sessionStorage) {
-      if (window.sessionStorage.getItem(storageKey)) return;
-      window.sessionStorage.setItem(storageKey, "1");
-    }
     setOpen(true);
   }, [customerId, alerts.length]);
 

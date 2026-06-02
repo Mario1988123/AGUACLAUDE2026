@@ -3,6 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Tag, Check } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/shared/ui/dialog";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { toggleCustomerTagAction, type CustomerTag } from "./tags-actions";
@@ -23,6 +30,14 @@ interface Props {
   assigned: CustomerTag[];
 }
 
+/**
+ * Selector de etiquetas compacto: un solo chip en la cabecera del cliente
+ * (no ocupa fila propia). Al hacer click se abre un modal con el catálogo
+ * completo y se marcan/desmarcan. La fila principal del cliente queda limpia.
+ *
+ * Decisión 2026-06-02: la versión inline (flex-wrap con todo el catálogo
+ * desplegado) ocupaba demasiado espacio vertical y empujaba el scroll.
+ */
 export function CustomerTagsSelector({ customerId, catalog, assigned }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -45,48 +60,75 @@ export function CustomerTagsSelector({ customerId, catalog, assigned }: Props) {
     });
   }
 
+  // Si no hay catálogo ni asignadas → mostrar chip mini que lleva a config.
   if (catalog.length === 0 && assigned.length === 0) {
     return (
-      <div className="text-xs text-muted-foreground">
-        Aún no hay etiquetas creadas. Crea el catálogo en{" "}
-        <a href="/configuracion/clientes" className="underline">
-          /configuracion/clientes
-        </a>
-        .
-      </div>
+      <a
+        href="/configuracion/clientes"
+        className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-muted-foreground/40 px-2 text-xs text-muted-foreground hover:bg-muted"
+        title="Crear catálogo de etiquetas en /configuracion/clientes"
+      >
+        <Tag className="h-3 w-3" /> Sin etiquetas
+      </a>
     );
   }
 
+  // Texto del chip principal: nombre de la 1ª etiqueta + " +N" si hay más,
+  // o "+ Etiqueta" si no hay ninguna asignada.
+  const first = assigned[0];
+  const extra = assigned.length - 1;
+
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {assigned.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => toggle(t)}
-          disabled={pending}
-          className={`inline-flex items-center gap-1 rounded-md border-2 px-2 py-0.5 text-xs font-semibold ${COLOR_CLASSES[t.color] ?? COLOR_CLASSES.slate} hover:opacity-80`}
-          title="Quitar etiqueta"
-        >
-          <Tag className="h-3 w-3" />
-          {t.label}
-        </button>
-      ))}
-      {catalog.length > 0 && (
-        <>
-          {!open ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setOpen(true)}
-              disabled={pending}
-              className="h-7 px-2 text-xs"
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex h-7 max-w-[240px] items-center gap-1 rounded-full border px-2 text-xs font-semibold hover:bg-muted"
+        title="Editar etiquetas"
+      >
+        <Tag className="h-3 w-3 shrink-0" />
+        {first ? (
+          <>
+            <span
+              className={`truncate rounded px-1.5 ${COLOR_CLASSES[first.color] ?? COLOR_CLASSES.slate}`}
             >
-              + Etiqueta
-            </Button>
-          ) : (
-            <div className="flex flex-wrap items-center gap-1 rounded-md border bg-card p-2">
-              {catalog.map((t) => {
+              {first.label}
+            </span>
+            {extra > 0 && (
+              <span className="text-muted-foreground">+{extra}</span>
+            )}
+          </>
+        ) : (
+          <span className="text-muted-foreground">+ Etiqueta</span>
+        )}
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-4 w-4" /> Etiquetas del cliente
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Marca o desmarca para asignar etiquetas. El catálogo se gestiona
+              en{" "}
+              <a
+                href="/configuracion/clientes"
+                className="text-primary underline"
+              >
+                /configuracion/clientes
+              </a>
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap gap-1.5 py-2">
+            {catalog.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Aún no hay etiquetas en el catálogo.
+              </p>
+            ) : (
+              catalog.map((t) => {
                 const isOn = assignedIds.has(t.id);
                 return (
                   <button
@@ -94,7 +136,7 @@ export function CustomerTagsSelector({ customerId, catalog, assigned }: Props) {
                     type="button"
                     onClick={() => toggle(t)}
                     disabled={pending}
-                    className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
+                    className={`inline-flex items-center gap-1 rounded-md border-2 px-2 py-1 text-xs font-semibold transition ${
                       isOn
                         ? COLOR_CLASSES[t.color] ?? COLOR_CLASSES.slate
                         : "border-border bg-card text-muted-foreground hover:bg-muted"
@@ -104,19 +146,22 @@ export function CustomerTagsSelector({ customerId, catalog, assigned }: Props) {
                     {t.label}
                   </button>
                 );
-              })}
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setOpen(false)}
-                className="h-7 px-2 text-xs"
-              >
-                Cerrar
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+              })
+            )}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setOpen(false)}
+            >
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

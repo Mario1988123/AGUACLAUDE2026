@@ -233,12 +233,6 @@ export default async function CustomerDetailPage({
       )}
       {kpis && <CustomerKPIHeader kpis={kpis} />}
 
-      <CustomerTagsSelector
-        customerId={id}
-        catalog={tagsCatalog}
-        assigned={tagsAssigned}
-      />
-
       {/* Cabecera reorganizada: BackButton arriba, título+badges, después acciones.
           En móvil/tablet las acciones quedan debajo y se apilan limpias. */}
       <div className="space-y-3">
@@ -259,6 +253,12 @@ export default async function CustomerDetailPage({
                   ⚠ En riesgo ({atRiskCount})
                 </Badge>
               )}
+              {/* Tags compactos al lado de los badges. Ya no ocupan fila propia. */}
+              <CustomerTagsSelector
+                customerId={id}
+                catalog={tagsCatalog}
+                assigned={tagsAssigned}
+              />
             </div>
             <div className="text-sm text-muted-foreground">
               {customer.party_kind === "company" ? "Empresa" : "Particular"}
@@ -417,22 +417,30 @@ export default async function CustomerDetailPage({
         </Card>
 
         {/* Domiciliación GoCardless: sólo se muestra si la empresa lo
-            tiene configurado y habilitado. Si no lo usa, se oculta para
-            no confundir al usuario (regla 2026-05-19). */}
-        {gcSettings.configured && gcSettings.enabled && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Domiciliación GoCardless ({mandates.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CustomerMandatesPanel
-                customerId={id}
-                mandates={mandates}
-                configured
-              />
-            </CardContent>
-          </Card>
-        )}
+            tiene configurado, habilitado, Y el cliente tiene al menos un
+            contrato de ALQUILER activo (única modalidad con cuotas que se
+            cobran por SEPA). En renting cobra la financiera, en contado
+            es pago único — no aplica domiciliación. Decisión 2026-06-02. */}
+        {gcSettings.configured &&
+          gcSettings.enabled &&
+          contracts.some(
+            (k) =>
+              (k.status === "active" || k.status === "signed") &&
+              (k as { plan_type?: string }).plan_type === "rental",
+          ) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Domiciliación GoCardless ({mandates.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CustomerMandatesPanel
+                  customerId={id}
+                  mandates={mandates}
+                  configured
+                />
+              </CardContent>
+            </Card>
+          )}
 
         <Card className="lg:col-span-2">
           <CardHeader>

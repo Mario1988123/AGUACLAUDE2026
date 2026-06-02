@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Wrench } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
+import { formatDateTimeES } from "@/shared/lib/format-date";
 
 interface Row {
   id: string;
@@ -31,8 +32,11 @@ const STATUS_VARIANT: Record<
   cancelled: "destructive",
 };
 
+// Antes usaba new Date(d).toLocaleString("es-ES") que en SSR (Vercel UTC)
+// mostraba hora UTC en vez de Madrid (ej: 20:35 en vez de 22:35 en CEST).
+// El helper formatDateTimeES fuerza timeZone "Europe/Madrid".
 function fmt(d: string | null) {
-  return d ? new Date(d).toLocaleString("es-ES") : "—";
+  return formatDateTimeES(d);
 }
 
 export function CustomerInstallationsCard({ installations }: { installations: Row[] }) {
