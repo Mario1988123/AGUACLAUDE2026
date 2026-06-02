@@ -38,10 +38,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CustomerKPIHeader, getCustomerKPIs } from "@/modules/customers/kpi-header";
 import { CustomerRGPDPanel } from "@/modules/customers/rgpd-panel";
-import {
-  MaintenanceHistoryCard,
-  getCustomerMaintenanceHistory,
-} from "@/modules/customers/maintenance-history-card";
+import { getCustomerMaintenanceHistory } from "@/modules/customers/maintenance-history-card";
+import { MaintenanceByEquipmentCard } from "@/modules/customers/maintenance-by-equipment-card";
 import { CustomerTagsSelector } from "@/modules/customers/tags-selector";
 import {
   listCustomerTags,
@@ -569,7 +567,16 @@ export default async function CustomerDetailPage({
         <CustomerRGPDPanel customerId={id} customerName={displayName} />
       )}
 
-      <MaintenanceHistoryCard rows={maintenanceHistory} />
+      {/* Mantenimientos AGRUPADOS POR EQUIPO (2026-06-02). Antes era una
+          lista plana sin diferenciar a qué equipo correspondía cada
+          mantenimiento. Ahora la card agrupa por customer_equipment_id,
+          muestra próximo programado (o VENCIDO si pasó), último
+          completado y histórico colapsable + botón "Programar" por equipo. */}
+      <MaintenanceByEquipmentCard
+        customerId={id}
+        equipment={equipment}
+        history={maintenanceHistory}
+      />
 
       <Card>
         <CardHeader>

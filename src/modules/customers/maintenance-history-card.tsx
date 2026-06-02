@@ -5,6 +5,9 @@ import { Wrench } from "lucide-react";
 
 export interface MaintenanceHistoryRow {
   id: string;
+  /** Equipo al que pertenece el mantenimiento. Permite agrupar en la
+   *  card "Mantenimientos por equipo". null si no estaba vinculado. */
+  customer_equipment_id: string | null;
   completed_at: string;
   technician_name: string | null;
   kind: string;
@@ -117,13 +120,16 @@ export async function getCustomerMaintenanceHistory(
   try {
     const { data: jobs } = await admin
       .from("maintenance_jobs")
-      .select("id, completed_at, kind, charge_cents, is_charged, nps_score, technician_user_id")
+      .select(
+        "id, customer_equipment_id, completed_at, kind, charge_cents, is_charged, nps_score, technician_user_id",
+      )
       .eq("customer_id", customerId)
       .eq("status", "completed")
       .order("completed_at", { ascending: false })
       .limit(50);
     type J = {
       id: string;
+      customer_equipment_id: string | null;
       completed_at: string;
       kind: string;
       charge_cents: number | null;
@@ -183,6 +189,7 @@ export async function getCustomerMaintenanceHistory(
     }
     return list.map((j) => ({
       id: j.id,
+      customer_equipment_id: j.customer_equipment_id,
       completed_at: j.completed_at,
       kind: j.kind,
       charge_cents: j.charge_cents,

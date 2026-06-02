@@ -359,15 +359,20 @@ export async function getCustomerAlertsDetail(
     );
   }
 
-  // Mantenimientos vencidos
+  // Mantenimientos vencidos.
+  // OJO: la tabla maintenance_jobs NO tiene columna "title". Las columnas
+  // reales son kind/status/scheduled_at/completed_at/notes. La versión
+  // anterior pedía "title" → query fallaba en PostgREST y el modal no
+  // mostraba el aviso.
   try {
     const overdueRes = await admin
       .from("maintenance_jobs")
-      .select("id, scheduled_at, title")
+      .select("id, scheduled_at, kind, notes")
       .eq("company_id", session.company_id)
       .eq("customer_id", customerId)
       .lt("scheduled_at", nowIso)
       .is("completed_at", null)
+      .neq("status", "cancelled")
       .order("scheduled_at", { ascending: true })
       .limit(5);
     if (overdueRes.error) {
@@ -376,16 +381,23 @@ export async function getCustomerAlertsDetail(
         overdueRes.error.message,
       );
     }
+    const KIND_LABEL: Record<string, string> = {
+      contracted: "Mantenimiento contratado",
+      one_off: "Mantenimiento puntual",
+      warranty: "Mantenimiento en garantía",
+    };
     for (const m of ((overdueRes.data as Array<{
       id: string;
       scheduled_at: string;
-      title?: string | null;
+      kind: string;
+      notes: string | null;
     }> | null) ?? [])) {
       const date = new Date(m.scheduled_at).toLocaleDateString("es-ES");
+      const label = KIND_LABEL[m.kind] ?? "Mantenimiento";
       alerts.push({
         kind: "maintenance_overdue",
         title: "Mantenimiento vencido",
-        detail: `${m.title ?? "Mantenimiento"} · programado ${date}`,
+        detail: `${label} · programado ${date}${m.notes ? ` · ${m.notes.slice(0, 60)}` : ""}`,
         href: `/mantenimientos/${m.id}`,
       });
     }
