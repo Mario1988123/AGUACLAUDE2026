@@ -4,37 +4,56 @@
  * Server actions para enviar documentos del CRM por email al cliente:
  * propuesta, contrato, factura. Cada uno carga su PDF, lo adjunta y
  * usa la plantilla transaccional correspondiente.
+ *
+ * Histórico: el helper anterior fetcheaba `/api/pdf/...` por HTTP. Eso
+ * fallaba en producción porque (a) la baseUrl caía a VERCEL_URL (preview)
+ * o no resolvía bien, y (b) los endpoints requieren sesión y el fetch
+ * interno no pasa cookies. Ahora invocamos los generadores directamente.
  */
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { sendTransactionalEmail } from "./actions";
+import { generateProposalPdf } from "@/modules/proposals/pdf-generator";
+import { generateContractPdf } from "@/modules/contracts/pdf-generator";
+import { generateSavingsPdf } from "@/modules/savings/pdf-generator";
 
-async function fetchPdfAsBase64(internalUrl: string): Promise<string | null> {
-  // Llamada interna al endpoint /api/pdf/... — Vercel runtime lo permite.
-  // Necesitamos URL absoluta con host.
-  try {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      process.env.VERCEL_URL ?? // ej. "aguaclaude2026.vercel.app"
-      "http://localhost:3000";
-    const url = baseUrl.startsWith("http")
-      ? `${baseUrl}${internalUrl}`
-      : `https://${baseUrl}${internalUrl}`;
-    const res = await fetch(url, {
-      headers: { Accept: "application/pdf" },
-      cache: "no-store",
+function bytesToBase64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
+}
+
+/**
+ * Calcula el total que verá el cliente en el email según el plan de la
+ * propuesta. Antes se enviaba `total_cash_cents ?? 0` sin formatear, lo
+ * que daba "0€" cuando la propuesta era de alquiler/renting (sin total
+ * contado pero con cuota × meses). Devuelve string formateado en EUR.
+ */
+function formatProposalTotal(p: {
+  plan_type?: string | null;
+  total_cash_cents?: number | null;
+  monthly_cents?: number | null;
+  duration_months?: number | null;
+}): string {
+  const fmt = (cents: number) =>
+    (cents / 100).toLocaleString("es-ES", {
+      style: "currency",
+      currency: "EUR",
     });
-    if (!res.ok) {
-      console.error(`[send-doc] fetch PDF ${url} → ${res.status}`);
-      return null;
-    }
-    const buf = Buffer.from(await res.arrayBuffer());
-    return buf.toString("base64");
-  } catch (e) {
-    console.error("[send-doc] fetch PDF failed:", e);
-    return null;
+  if (p.plan_type === "cash" || p.plan_type === "contado") {
+    return fmt(p.total_cash_cents ?? 0);
   }
+  if (p.plan_type === "rental" || p.plan_type === "renting") {
+    const monthly = p.monthly_cents ?? 0;
+    const months = p.duration_months ?? 0;
+    if (monthly && months) {
+      return `${fmt(monthly)} × ${months} meses = ${fmt(monthly * months)}`;
+    }
+    if (monthly) return `${fmt(monthly)}/mes`;
+  }
+  // Fallback: contado si existe, sino mensual.
+  if (p.total_cash_cents && p.total_cash_cents > 0) return fmt(p.total_cash_cents);
+  if (p.monthly_cents && p.monthly_cents > 0) return `${fmt(p.monthly_cents)}/mes`;
+  return "—";
 }
 
 // =====================================================================
@@ -52,7 +71,8 @@ export async function sendProposalByEmailAction(
   const { data: prop } = await admin
     .from("proposals")
     .select(
-      `id, reference_code, total_cash_cents, validity_until, customer_id, lead_id, company_id`,
+      `id, reference_code, plan_type, total_cash_cents, monthly_cents,
+       duration_months, validity_until, customer_id, lead_id, company_id`,
     )
     .eq("id", proposalId)
     .maybeSingle();
@@ -89,8 +109,25 @@ export async function sendProposalByEmailAction(
     };
   }
 
-  // PDF de la propuesta
-  const pdfBase64 = await fetchPdfAsBase64(`/api/pdf/proposal/${proposalId}`);
+  // Generar PDF de la propuesta directamente (sin fetch HTTP).
+  let pdfBase64: string | null = null;
+  try {
+    const bytes = await generateProposalPdf(proposalId);
+    pdfBase64 = bytesToBase64(bytes);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `No se pudo generar el PDF de la propuesta: ${
+        e instanceof Error ? e.message : "Error desconocido"
+      }`,
+    };
+  }
+  if (!pdfBase64) {
+    return {
+      ok: false,
+      error: "No se pudo adjuntar el PDF. Inténtalo de nuevo en unos segundos.",
+    };
+  }
 
   return sendTransactionalEmail({
     template_key: "proposal_sent",
@@ -100,17 +137,15 @@ export async function sendProposalByEmailAction(
     lead_id: prop.lead_id,
     variables: {
       proposal_reference: prop.reference_code ?? "—",
-      proposal_total: prop.total_cash_cents ?? 0,
+      proposal_total: formatProposalTotal(prop),
       proposal_validity: prop.validity_until ?? "",
     },
-    attachments: pdfBase64
-      ? [
-          {
-            filename: `propuesta-${prop.reference_code ?? proposalId.slice(0, 8)}.pdf`,
-            content_base64: pdfBase64,
-          },
-        ]
-      : undefined,
+    attachments: [
+      {
+        filename: `propuesta-${prop.reference_code ?? proposalId.slice(0, 8)}.pdf`,
+        content_base64: pdfBase64,
+      },
+    ],
     related_subject_type: "proposal",
     related_subject_id: proposalId,
   });
@@ -160,7 +195,24 @@ export async function sendContractByEmailAction(
       )
       .join(", ") || "tu equipo";
 
-  const pdfBase64 = await fetchPdfAsBase64(`/api/pdf/contract/${contractId}`);
+  let pdfBase64: string | null = null;
+  try {
+    const bytes = await generateContractPdf(contractId);
+    pdfBase64 = bytesToBase64(bytes);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `No se pudo generar el PDF del contrato: ${
+        e instanceof Error ? e.message : "Error desconocido"
+      }`,
+    };
+  }
+  if (!pdfBase64) {
+    return {
+      ok: false,
+      error: "No se pudo adjuntar el PDF. Inténtalo de nuevo en unos segundos.",
+    };
+  }
 
   return sendTransactionalEmail({
     template_key: "contract_signed",
@@ -171,14 +223,12 @@ export async function sendContractByEmailAction(
       contract_reference: c.reference_code ?? "—",
       equipment_summary: equipmentSummary,
     },
-    attachments: pdfBase64
-      ? [
-          {
-            filename: `contrato-${c.reference_code ?? contractId.slice(0, 8)}.pdf`,
-            content_base64: pdfBase64,
-          },
-        ]
-      : undefined,
+    attachments: [
+      {
+        filename: `contrato-${c.reference_code ?? contractId.slice(0, 8)}.pdf`,
+        content_base64: pdfBase64,
+      },
+    ],
     related_subject_type: "contract",
     related_subject_id: contractId,
   });
@@ -226,9 +276,16 @@ export async function sendInvoiceByEmailAction(
     return { ok: false, error: "Sin email del cliente en la factura" };
   }
 
-  const pdfBase64 = await fetchPdfAsBase64(
-    `/api/pdf/invoice-verifactu/${invoiceId}`,
-  );
+  // Factura: el endpoint hace mucha carga de datos auxiliares, así que
+  // mantenemos el fetch HTTP con baseUrl forzada al dominio real para
+  // evitar el bug de Vercel preview.
+  const pdfBase64 = await fetchInvoicePdfAsBase64(invoiceId);
+  if (!pdfBase64) {
+    return {
+      ok: false,
+      error: "No se pudo generar el PDF de la factura. Inténtalo de nuevo.",
+    };
+  }
 
   return sendTransactionalEmail({
     template_key: "invoice_sent",
@@ -241,17 +298,39 @@ export async function sendInvoiceByEmailAction(
       invoice_total: inv.total_cents ?? 0,
       invoice_due: inv.due_at ?? "",
     },
-    attachments: pdfBase64
-      ? [
-          {
-            filename: `factura-${inv.reference_code ?? invoiceId.slice(0, 8)}.pdf`,
-            content_base64: pdfBase64,
-          },
-        ]
-      : undefined,
+    attachments: [
+      {
+        filename: `factura-${inv.reference_code ?? invoiceId.slice(0, 8)}.pdf`,
+        content_base64: pdfBase64,
+      },
+    ],
     related_subject_type: "invoice",
     related_subject_id: invoiceId,
   });
+}
+
+async function fetchInvoicePdfAsBase64(
+  invoiceId: string,
+): Promise<string | null> {
+  try {
+    const raw =
+      process.env.NEXT_PUBLIC_SITE_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+    // Protección: si VERCEL_URL apunta a aguaclaude2026.vercel.app, sustituir.
+    const baseUrl = raw.includes(".vercel.app")
+      ? "https://crm.hidromanager.es"
+      : raw;
+    const url = `${baseUrl}/api/pdf/invoice-verifactu/${invoiceId}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/pdf" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer()).toString("base64");
+  } catch {
+    return null;
+  }
 }
 
 // =====================================================================
@@ -302,7 +381,18 @@ export async function sendSavingsByEmailAction(
     return { ok: false, error: "El cliente/lead no tiene email registrado" };
   }
 
-  const pdfBase64 = await fetchPdfAsBase64(`/api/pdf/savings/${savingsId}`);
+  let pdfBase64: string | null = null;
+  try {
+    const bytes = await generateSavingsPdf(savingsId);
+    pdfBase64 = bytesToBase64(bytes);
+  } catch (e) {
+    return {
+      ok: false,
+      error: `No se pudo generar el PDF: ${
+        e instanceof Error ? e.message : "Error desconocido"
+      }`,
+    };
+  }
 
   const r = await sendTransactionalEmail({
     template_key: "savings_proposal_sent",

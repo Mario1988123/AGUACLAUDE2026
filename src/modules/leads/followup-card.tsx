@@ -2,9 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Clock } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Button } from "@/shared/ui/button";
+import { CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { notify } from "@/shared/hooks/use-toast";
 import { logLeadContactSafeAction } from "./actions";
 
@@ -14,8 +12,12 @@ interface Props {
 }
 
 /**
- * Card de seguimiento del lead. Calcula días desde el último contacto
- * y permite registrar uno nuevo con un click.
+ * Indicador de seguimiento del lead — versión compacta inline.
+ *
+ * Se sustituyó la Card grande original por una banda fina horizontal con la
+ * info esencial y un botón discreto. El botón "Contactado" de cambio de
+ * estado vive aparte en LeadStatusActions (es otra cosa: marca el status
+ * del lead como "contacted", esto solo registra timestamp de contacto).
  */
 export function LeadFollowupCard({ leadId, lastContactAt }: Props) {
   const [pending, startTransition] = useTransition();
@@ -23,9 +25,7 @@ export function LeadFollowupCard({ leadId, lastContactAt }: Props) {
 
   const lastMs = lastContactAt ? new Date(lastContactAt).getTime() : null;
   const daysSince =
-    lastMs != null
-      ? Math.floor((Date.now() - lastMs) / 86400000)
-      : null;
+    lastMs != null ? Math.floor((Date.now() - lastMs) / 86400000) : null;
 
   function logContact() {
     startTransition(async () => {
@@ -39,54 +39,52 @@ export function LeadFollowupCard({ leadId, lastContactAt }: Props) {
     });
   }
 
-  let urgency = "border-blue-200 bg-blue-50 text-blue-900";
+  // Tono + texto según urgencia
+  let tone =
+    "border-blue-200 bg-blue-50/60 text-blue-900";
   let label = "Sin contactar todavía";
-  let icon = <Clock className="h-5 w-5 text-blue-700" />;
+  let Icon = Clock;
   if (daysSince != null) {
-    if (daysSince <= 1) {
-      urgency = "border-emerald-200 bg-emerald-50 text-emerald-900";
-      icon = <CheckCircle2 className="h-5 w-5 text-emerald-700" />;
+    if (daysSince === 0) {
+      tone = "border-emerald-200 bg-emerald-50/60 text-emerald-900";
+      Icon = CheckCircle2;
       label = "Contactado hoy";
-      if (daysSince === 1) label = "Contactado ayer";
+    } else if (daysSince === 1) {
+      tone = "border-emerald-200 bg-emerald-50/60 text-emerald-900";
+      Icon = CheckCircle2;
+      label = "Contactado ayer";
     } else if (daysSince <= 7) {
-      urgency = "border-blue-200 bg-blue-50 text-blue-900";
-      label = `Hace ${daysSince} días`;
+      tone = "border-blue-200 bg-blue-50/60 text-blue-900";
+      label = `Último contacto hace ${daysSince} días`;
     } else if (daysSince <= 14) {
-      urgency = "border-amber-200 bg-amber-50 text-amber-900";
+      tone = "border-amber-200 bg-amber-50/60 text-amber-900";
+      Icon = AlertTriangle;
       label = `Sin contacto ${daysSince}d — toca seguimiento`;
     } else {
-      urgency = "border-red-300 bg-red-50 text-red-900";
-      label = `Sin contacto ${daysSince}d — URGENTE`;
+      tone = "border-red-300 bg-red-50/60 text-red-900";
+      Icon = AlertTriangle;
+      label = `Sin contacto ${daysSince}d — urgente`;
     }
   }
 
   return (
-    <Card className={`border-2 ${urgency}`}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          {icon}
-          Seguimiento
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-sm font-bold">{label}</p>
-        {lastContactAt && (
-          <p className="text-xs opacity-80">
-            Último:{" "}
-            {new Date(lastContactAt).toLocaleString("es-ES")}
-          </p>
-        )}
-        <Button
-          onClick={logContact}
-          disabled={pending}
-          variant="success"
-          size="sm"
-          className="w-full gap-1.5"
-        >
-          <CheckCircle2 className="h-4 w-4" />
-          {pending ? "Registrando…" : "He contactado ahora"}
-        </Button>
-      </CardContent>
-    </Card>
+    <div
+      className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm ${tone}`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span className="truncate font-semibold">{label}</span>
+      </div>
+      <button
+        type="button"
+        onClick={logContact}
+        disabled={pending}
+        className="inline-flex h-8 items-center gap-1 rounded-md bg-current/10 px-2 text-xs font-bold hover:bg-current/20 disabled:opacity-50"
+        title="Registra un nuevo contacto en el timeline"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {pending ? "Registrando…" : "Marcar contacto"}
+      </button>
+    </div>
   );
 }

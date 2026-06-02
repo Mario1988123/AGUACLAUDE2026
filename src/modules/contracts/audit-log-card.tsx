@@ -18,6 +18,10 @@ function formatValue(field: string, value: string | null): string {
     const n = parseInt(value, 10);
     if (Number.isFinite(n)) return `${(n / 100).toFixed(2)}€`;
   }
+  if (field.endsWith("_months") || field === "duration_months") {
+    const n = parseInt(value, 10);
+    if (Number.isFinite(n)) return `${n} ${n === 1 ? "mes" : "meses"}`;
+  }
   return value;
 }
 

@@ -247,6 +247,33 @@ export function ProposalCreateForm({
     if (newPlan === "cash") setDuration(null);
   }
 
+  /**
+   * Al cambiar la duración del renting, recalculamos la cuota mensual de
+   * cada item para que coincida con el precio asignado a esa duración en
+   * el plan del producto (cada producto puede tener tarifas distintas por
+   * duración: ej. 29,90 €/mes a 48 meses vs 39,90 €/mes a 12 meses).
+   * Si el producto no tiene precio para la nueva duración, se mantiene
+   * el actual (no machacamos un precio manual con 0).
+   */
+  function changeDuration(newDuration: number) {
+    setDuration(newDuration);
+    if (planType !== "renting") return;
+    setItems((prev) =>
+      prev.map((it) => {
+        const prod = products.find((p) => p.id === it.product_id);
+        if (!prod) return it;
+        const plan = prod.plans.find(
+          (pl) =>
+            pl.plan_type === "renting" && pl.duration_months === newDuration,
+        );
+        if (!plan) return it;
+        const picked = pickPrice(plan, destinatario);
+        const newPrice = picked.monthly_cents ?? it.unit_price_cents;
+        return { ...it, unit_price_cents: newPrice };
+      }),
+    );
+  }
+
   const approvalNeeded = items.some((it) => {
     const prod = products.find((p) => p.id === it.product_id);
     if (!prod) return false;
@@ -366,7 +393,7 @@ export function ProposalCreateForm({
             type="number"
             min={1}
             value={duration ?? 48}
-            onChange={(e) => setDuration(Number(e.target.value) || 48)}
+            onChange={(e) => changeDuration(Number(e.target.value) || 48)}
             className="max-w-[200px]"
           />
           <p className="text-xs text-muted-foreground">Por defecto 48 meses, modificable.</p>
@@ -386,7 +413,7 @@ export function ProposalCreateForm({
                 <button
                   key={m}
                   type="button"
-                  onClick={() => setDuration(m)}
+                  onClick={() => changeDuration(m)}
                   className={`rounded-xl border-2 px-4 py-2 font-bold ${
                     duration === m
                       ? "border-primary bg-primary text-primary-foreground"

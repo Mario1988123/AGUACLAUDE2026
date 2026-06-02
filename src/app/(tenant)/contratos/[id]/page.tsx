@@ -223,10 +223,15 @@ export default async function ContractDetailPage({
   // Financiera: SOLO renting (alquiler usa SEPA directo al cliente).
   const showFinancierAssign =
     canAssignFinancier && contract.plan_type === "renting";
-  // SEPA: rental y renting (cuando se cobran cuotas mensuales).
-  const showSepaPanel =
+  // SEPA: SOLO rental. En renting cobra la financiera al cliente, no la empresa,
+  // así que el mandato SEPA no aplica (decisión de negocio 2026-06-02).
+  const showSepaPanel = canAssignFinancier && contract.plan_type === "rental";
+  // Pago de instalación inicial en renting: si hay cargo aparte (downpayment /
+  // cuota inicial), se cobra al contado, transferencia, bizum o tarjeta.
+  const showInstallPaymentPanel =
     canAssignFinancier &&
-    (contract.plan_type === "rental" || contract.plan_type === "renting");
+    contract.plan_type === "renting" &&
+    (contract.total_cash_cents ?? 0) > 0;
   let financiersForAssign: Awaited<ReturnType<typeof listFinanciers>> = [];
   let customerPartyKind: "individual" | "company" | null = null;
   let customerIsAutonomo = false;
@@ -769,6 +774,67 @@ export default async function ContractDetailPage({
               companyIban={fiscal?.fiscal_iban ?? null}
               canEdit={canAssignFinancier}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {showInstallPaymentPanel && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pago de la instalación inicial</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <p className="text-muted-foreground">
+              En el renting, las cuotas mensuales las cobra la financiera
+              directamente al cliente (no la empresa). Pero los gastos de
+              instalación se cobran aparte, al contado, con uno de estos
+              métodos:
+            </p>
+            <div className="grid gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <div className="text-2xl">💶</div>
+                <div className="mt-1 text-xs font-bold">Contado</div>
+                <div className="text-[10px] text-muted-foreground">
+                  Efectivo en mano
+                </div>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <div className="text-2xl">🏦</div>
+                <div className="mt-1 text-xs font-bold">Transferencia</div>
+                <div className="text-[10px] text-muted-foreground">
+                  Al IBAN de la empresa
+                </div>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <div className="text-2xl">📱</div>
+                <div className="mt-1 text-xs font-bold">Bizum</div>
+                <div className="text-[10px] text-muted-foreground">
+                  Pago instantáneo
+                </div>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center">
+                <div className="text-2xl">💳</div>
+                <div className="mt-1 text-xs font-bold">Tarjeta</div>
+                <div className="text-[10px] text-muted-foreground">
+                  TPV / Stripe
+                </div>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              <strong>Importe:</strong>{" "}
+              {((contract.total_cash_cents ?? 0) / 100).toLocaleString("es-ES", {
+                style: "currency",
+                currency: "EUR",
+              })}
+              . El comercial lo gestiona al firmar o el admin lo registra en{" "}
+              <Link
+                href={`/wallet?contract_id=${contract.id}` as never}
+                className="font-bold text-primary hover:underline"
+              >
+                Wallet
+              </Link>
+              .
+            </p>
           </CardContent>
         </Card>
       )}

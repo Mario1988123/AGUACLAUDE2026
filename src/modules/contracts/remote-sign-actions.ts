@@ -135,11 +135,11 @@ export async function sendContractForRemoteSignAction(
       if (error) return { ok: false, error: error.message };
     }
 
-    // URL absoluta — leemos NEXT_PUBLIC_APP_URL o vercel host.
-    const base =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
-    const signUrl = `${base}/firmar-contrato/${token}`;
+    // URL absoluta del CRM real. Antes podía caer a aguaclaude2026.vercel.app
+    // (preview) y el cliente se topaba con el login de Vercel. El helper
+    // siteBaseUrl() detecta ese caso y lo sustituye por crm.hidromanager.es.
+    const { siteBaseUrl } = await import("@/shared/lib/site-url");
+    const signUrl = `${siteBaseUrl()}/firmar-contrato/${token}`;
 
     // Enviar email vía sendTransactionalEmail con plantilla
     // 'contract_send_remote_sign' (fallback system-templates).
@@ -287,7 +287,7 @@ export async function getContractByRemoteToken(
         company_name:
           cset?.fiscal_trade_name || cset?.fiscal_legal_name || "la empresa",
         company_logo_url: cset?.fiscal_logo_url ?? null,
-        pdf_url: `/api/pdf/contract/${cc.id}?token=${token}`,
+        pdf_url: `/api/pdf/contract/public/${token}`,
       },
     };
   } catch (e) {
