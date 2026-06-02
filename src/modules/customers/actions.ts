@@ -251,6 +251,7 @@ export async function listCustomers(
 export interface CustomerAlertDetail {
   kind:
     | "maintenance_overdue"
+    | "maintenance_upcoming"
     | "incident_open"
     | "unpaid_invoice"
     | "missing_rgpd";
@@ -359,45 +360,54 @@ export async function getCustomerAlertsDetail(
     );
   }
 
-  // Mantenimientos vencidos.
+  // Mantenimientos: vencidos + próximos (en los siguientes 14 días).
   // OJO: la tabla maintenance_jobs NO tiene columna "title". Las columnas
-  // reales son kind/status/scheduled_at/completed_at/notes. La versión
-  // anterior pedía "title" → query fallaba en PostgREST y el modal no
-  // mostraba el aviso.
+  // reales son kind/status/scheduled_at/completed_at/notes.
   try {
-    const overdueRes = await admin
+    const in14d = new Date(Date.now() + 14 * 86400_000).toISOString();
+    const maintRes = await admin
       .from("maintenance_jobs")
       .select("id, scheduled_at, kind, notes")
       .eq("company_id", session.company_id)
       .eq("customer_id", customerId)
-      .lt("scheduled_at", nowIso)
       .is("completed_at", null)
+      .lte("scheduled_at", in14d)
       .neq("status", "cancelled")
       .order("scheduled_at", { ascending: true })
-      .limit(5);
-    if (overdueRes.error) {
-      console.error(
-        "[customer-alerts] maintenance overdue:",
-        overdueRes.error.message,
-      );
+      .limit(10);
+    if (maintRes.error) {
+      console.error("[customer-alerts] maintenance:", maintRes.error.message);
     }
     const KIND_LABEL: Record<string, string> = {
       contracted: "Mantenimiento contratado",
       one_off: "Mantenimiento puntual",
       warranty: "Mantenimiento en garantía",
     };
-    for (const m of ((overdueRes.data as Array<{
+    for (const m of ((maintRes.data as Array<{
       id: string;
       scheduled_at: string;
       kind: string;
       notes: string | null;
     }> | null) ?? [])) {
-      const date = new Date(m.scheduled_at).toLocaleDateString("es-ES");
+      const schedule = new Date(m.scheduled_at);
+      const isOverdue = schedule.getTime() < Date.now();
+      const date = schedule.toLocaleDateString("es-ES");
       const label = KIND_LABEL[m.kind] ?? "Mantenimiento";
+      const daysDiff = Math.round(
+        (schedule.getTime() - Date.now()) / 86400_000,
+      );
+      let detail: string;
+      if (isOverdue) {
+        detail = `${label} · estaba programado ${date} (${Math.abs(daysDiff)} días vencido)`;
+      } else {
+        const dayWord = daysDiff === 1 ? "día" : "días";
+        detail = `${label} · programado ${date} (en ${daysDiff} ${dayWord})`;
+      }
+      if (m.notes) detail += ` · ${m.notes.slice(0, 60)}`;
       alerts.push({
-        kind: "maintenance_overdue",
-        title: "Mantenimiento vencido",
-        detail: `${label} · programado ${date}${m.notes ? ` · ${m.notes.slice(0, 60)}` : ""}`,
+        kind: isOverdue ? "maintenance_overdue" : "maintenance_upcoming",
+        title: isOverdue ? "Mantenimiento vencido" : "Mantenimiento próximo",
+        detail,
         href: `/mantenimientos/${m.id}`,
       });
     }

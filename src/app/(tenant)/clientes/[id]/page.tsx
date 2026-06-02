@@ -557,6 +557,15 @@ export default async function CustomerDetailPage({
         </Card>
       </div>
 
+      {/* Mantenimientos por equipo (2026-06-02). Movido aquí, justo
+          después de Instalaciones — antes de los bloques RGPD que son
+          más administrativos. Más útil tener cerca lo operativo. */}
+      <MaintenanceByEquipmentCard
+        customerId={id}
+        equipment={equipment}
+        history={maintenanceHistory}
+      />
+
       <CustomerConsentsCard customerId={id} consents={customerConsents} />
 
       {/* RGPD unificado (decisión 2026-05-24): antes había dos tarjetas
@@ -566,17 +575,6 @@ export default async function CustomerDetailPage({
       {(session.is_superadmin || session.roles.includes("company_admin")) && (
         <CustomerRGPDPanel customerId={id} customerName={displayName} />
       )}
-
-      {/* Mantenimientos AGRUPADOS POR EQUIPO (2026-06-02). Antes era una
-          lista plana sin diferenciar a qué equipo correspondía cada
-          mantenimiento. Ahora la card agrupa por customer_equipment_id,
-          muestra próximo programado (o VENCIDO si pasó), último
-          completado y histórico colapsable + botón "Programar" por equipo. */}
-      <MaintenanceByEquipmentCard
-        customerId={id}
-        equipment={equipment}
-        history={maintenanceHistory}
-      />
 
       <Card>
         <CardHeader>

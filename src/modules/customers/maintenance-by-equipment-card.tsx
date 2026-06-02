@@ -183,39 +183,75 @@ export function MaintenanceByEquipmentCard({
                   )}
                 </div>
 
-                {/* Histórico completo del equipo (colapsable) */}
+                {/* Histórico completo del equipo (colapsable). Cada
+                    fila muestra fecha + tipo + técnico + importe + NPS +
+                    contrato vinculado + piezas + notas. El objetivo es
+                    ver qué se hizo en cada uno sin tener que abrir la
+                    ficha del mantenimiento. */}
                 {equipHistory.length > 1 && (
                   <details className="text-xs">
                     <summary className="cursor-pointer font-semibold text-primary hover:underline">
                       Ver histórico completo ({equipHistory.length})
                     </summary>
-                    <ul className="mt-2 space-y-1.5 border-l-2 border-muted pl-3">
+                    <ul className="mt-2 space-y-2 border-l-2 border-muted pl-3">
                       {equipHistory.map((h) => (
-                        <li key={h.id} className="flex flex-wrap gap-2">
-                          <Link
-                            href={`/mantenimientos/${h.id}` as never}
-                            className="font-semibold text-primary hover:underline"
-                          >
-                            {formatDateES(h.completed_at)}
-                          </Link>
-                          <span className="text-muted-foreground">
-                            {KIND_LABEL[h.kind] ?? h.kind}
-                          </span>
-                          {h.technician_name && (
+                        <li key={h.id} className="space-y-0.5">
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/mantenimientos/${h.id}` as never}
+                              className="font-semibold text-primary hover:underline"
+                            >
+                              {formatDateES(h.completed_at)}
+                            </Link>
                             <span className="text-muted-foreground">
-                              · {h.technician_name}
+                              {KIND_LABEL[h.kind] ?? h.kind}
                             </span>
-                          )}
-                          {h.is_charged && h.charge_cents != null && (
-                            <span className="font-semibold tabular-nums">
-                              · {eur(h.charge_cents)}
-                            </span>
-                          )}
+                            {h.technician_name && (
+                              <span className="text-muted-foreground">
+                                · {h.technician_name}
+                              </span>
+                            )}
+                            {h.is_charged && h.charge_cents != null && (
+                              <span className="font-semibold tabular-nums">
+                                · {eur(h.charge_cents)}
+                              </span>
+                            )}
+                            {h.nps_score != null && (
+                              <span className="text-muted-foreground">
+                                · NPS {h.nps_score}/5
+                              </span>
+                            )}
+                            {h.contract_id && (
+                              <Link
+                                href={`/contratos/${h.contract_id}` as never}
+                                className="text-blue-700 hover:underline"
+                                title="Mantenimiento vinculado a un contrato"
+                              >
+                                · 📑 Contrato
+                              </Link>
+                            )}
+                          </div>
                           {h.replaced_items.length > 0 && (
-                            <span className="text-muted-foreground">
-                              · {h.replaced_items.length}{" "}
-                              {h.replaced_items.length === 1 ? "pieza" : "piezas"}
-                            </span>
+                            <div className="flex flex-wrap gap-1 pl-2 text-[11px]">
+                              {h.replaced_items.map((it, idx) => (
+                                <span
+                                  key={idx}
+                                  className="rounded-md bg-muted px-1.5 py-0.5"
+                                >
+                                  <strong>{it.quantity}×</strong>{" "}
+                                  {it.product_name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {h.notes && (
+                            <div className="pl-2 text-[11px] italic text-muted-foreground">
+                              &ldquo;
+                              {h.notes.length > 140
+                                ? `${h.notes.slice(0, 140)}…`
+                                : h.notes}
+                              &rdquo;
+                            </div>
                           )}
                         </li>
                       ))}
