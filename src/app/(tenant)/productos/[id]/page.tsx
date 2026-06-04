@@ -22,6 +22,11 @@ import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
+import { isProductEditor } from "@/modules/products/permissions";
+import { listProductShares } from "@/modules/products/share-actions";
+import { ShareDatasheetPanel } from "@/modules/products/share-panel";
+import { getCriticalAttributesState } from "@/modules/products/critical-attrs-actions";
+import { CriticalAttributesBanner } from "@/modules/products/critical-attrs-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -42,23 +47,37 @@ export default async function ProductDetailPage({
   } catch {
     notFound();
   }
-  const [pricingPlans, attributes, attrValues, categories, stockSummary, salesHistory, session, priceHistory] =
-    await Promise.all([
-      listPricingPlans(id),
-      listAttributes((product as { category_id: string | null }).category_id),
-      listProductAttributeValues(id),
-      listCategories().catch(() => []),
-      getProductStockSummary(id).catch(() => ({ total: 0, by_warehouse: [] })),
-      getProductSalesHistory(id, 90).catch(() => []),
-      requireSession(),
-      listPriceHistory(id).catch(() => []),
-    ]);
+  const [
+    pricingPlans,
+    attributes,
+    attrValues,
+    categories,
+    stockSummary,
+    salesHistory,
+    session,
+    priceHistory,
+    shares,
+    criticalState,
+  ] = await Promise.all([
+    listPricingPlans(id),
+    listAttributes((product as { category_id: string | null }).category_id),
+    listProductAttributeValues(id),
+    listCategories().catch(() => []),
+    getProductStockSummary(id).catch(() => ({ total: 0, by_warehouse: [] })),
+    getProductSalesHistory(id, 90).catch(() => []),
+    requireSession(),
+    listPriceHistory(id).catch(() => []),
+    listProductShares(id).catch(() => []),
+    getCriticalAttributesState(id).catch(() => ({ isDismissed: true, missing: [] })),
+  ]);
   // El coste real es CMP calculado desde las compras y SOLO lo ve el admin
   // (incluido director comercial). Los niveles 3 nunca lo ven.
   const canSeeCost =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
+  const canEdit = isProductEditor(session);
+  const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
   // Etiqueta de stock al lado del título.
   // - Comerciales (level 3): solo "Hay stock" / "Sin stock", sin cantidad.
@@ -102,26 +121,28 @@ export default async function ProductDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <ProductEditButton
-            productId={product.id}
-            initial={{
-              name: product.name,
-              category_id: (product as { category_id: string | null }).category_id,
-              internal_reference: product.internal_reference ?? null,
-              supplier_reference: product.supplier_reference ?? null,
-              short_description: product.short_description ?? null,
-              long_description: product.long_description ?? null,
-              dim_width_mm: product.dim_width_mm ?? null,
-              dim_height_mm: product.dim_height_mm ?? null,
-              dim_depth_mm: product.dim_depth_mm ?? null,
-              weight_grams: product.weight_grams ?? null,
-              stock_managed: product.stock_managed ?? false,
-              stock_min: product.stock_min ?? 0,
-              show_in_calculator:
-                (product as { show_in_calculator?: boolean }).show_in_calculator ?? false,
-            }}
-            categories={categories}
-          />
+          {canEdit && (
+            <ProductEditButton
+              productId={product.id}
+              initial={{
+                name: product.name,
+                category_id: (product as { category_id: string | null }).category_id,
+                internal_reference: product.internal_reference ?? null,
+                supplier_reference: product.supplier_reference ?? null,
+                short_description: product.short_description ?? null,
+                long_description: product.long_description ?? null,
+                dim_width_mm: product.dim_width_mm ?? null,
+                dim_height_mm: product.dim_height_mm ?? null,
+                dim_depth_mm: product.dim_depth_mm ?? null,
+                weight_grams: product.weight_grams ?? null,
+                stock_managed: product.stock_managed ?? false,
+                stock_min: product.stock_min ?? 0,
+                show_in_calculator:
+                  (product as { show_in_calculator?: boolean }).show_in_calculator ?? false,
+              }}
+              categories={categories}
+            />
+          )}
           <a
             href={`/api/pdf/product-datasheet/${product.id}`}
             target="_blank"
@@ -133,6 +154,23 @@ export default async function ProductDetailPage({
           <BackButton href="/productos" />
         </div>
       </div>
+
+      {canEdit && !criticalState.isDismissed && criticalState.missing.length > 0 && (
+        <CriticalAttributesBanner
+          productId={product.id}
+          missing={criticalState.missing}
+        />
+      )}
+
+      {canEdit && (
+        <CollapsibleCard title="📤 Compartir ficha técnica" defaultOpen={false}>
+          <ShareDatasheetPanel
+            productId={product.id}
+            initialShares={shares}
+            publicBaseUrl={publicBaseUrl}
+          />
+        </CollapsibleCard>
+      )}
 
       <CollapsibleCard title="Foto principal">
         <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />
