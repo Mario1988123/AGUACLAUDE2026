@@ -36,6 +36,19 @@ export function NewCompanyForm() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
+    // El input pide euros (ej. "199,50"). Convertimos a céntimos para BD.
+    const eurosRaw = String(fd.get("monthly_cost_euros") ?? "").trim();
+    if (eurosRaw) {
+      const n = Number(eurosRaw.replace(",", "."));
+      if (!Number.isNaN(n) && n >= 0) {
+        fd.set("monthly_cost_cents", String(Math.round(n * 100)));
+      } else {
+        fd.set("monthly_cost_cents", "0");
+      }
+    } else {
+      fd.set("monthly_cost_cents", "0");
+    }
+    fd.delete("monthly_cost_euros");
     startTransition(async () => {
       try {
         await createCompanyAction(fd);
@@ -133,13 +146,14 @@ export function NewCompanyForm() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="monthly_cost_cents">Coste mensual (céntimos)</Label>
+          <Label htmlFor="monthly_cost_euros">Coste mensual (€)</Label>
           <Input
-            id="monthly_cost_cents"
-            name="monthly_cost_cents"
-            type="number"
-            min={0}
-            defaultValue={0}
+            id="monthly_cost_euros"
+            name="monthly_cost_euros"
+            type="text"
+            inputMode="decimal"
+            placeholder="199,50"
+            defaultValue=""
           />
         </div>
         <div className="space-y-2 sm:col-span-3">
