@@ -27,6 +27,15 @@ import { listProductShares } from "@/modules/products/share-actions";
 import { ShareDatasheetPanel } from "@/modules/products/share-panel";
 import { getCriticalAttributesState } from "@/modules/products/critical-attrs-actions";
 import { CriticalAttributesBanner } from "@/modules/products/critical-attrs-banner";
+import { listFilterAssignmentsByProduct } from "@/modules/products/filter-assignments-actions";
+import { listProductFilters } from "@/modules/products/filters-actions";
+import { ProductFiltersPanel } from "@/modules/products/product-filters-panel";
+import { listProductDocuments } from "@/modules/products/documents-actions";
+import {
+  listProductCertifications,
+  listCertificationsCatalog,
+} from "@/modules/products/certifications-actions";
+import { DocsAndCertsPanel } from "@/modules/products/docs-and-certs-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +79,14 @@ export default async function ProductDetailPage({
     listProductShares(id).catch(() => []),
     getCriticalAttributesState(id).catch(() => ({ isDismissed: true, missing: [] })),
   ]);
+  const [filterAssignments, availableFilters, documents, productCerts, certCatalog] =
+    await Promise.all([
+      listFilterAssignmentsByProduct(id).catch(() => []),
+      listProductFilters({ active_only: true }).catch(() => []),
+      listProductDocuments(id).catch(() => []),
+      listProductCertifications(id).catch(() => []),
+      listCertificationsCatalog().catch(() => []),
+    ]);
   // El coste real es CMP calculado desde las compras y SOLO lo ve el admin
   // (incluido director comercial). Los niveles 3 nunca lo ven.
   const canSeeCost =
@@ -171,6 +188,38 @@ export default async function ProductDetailPage({
           />
         </CollapsibleCard>
       )}
+
+      <CollapsibleCard
+        title={`🔁 Filtros y recambios (${filterAssignments.length})`}
+        defaultOpen={false}
+      >
+        <ProductFiltersPanel
+          productId={product.id}
+          productName={product.name}
+          initial={filterAssignments}
+          availableFilters={availableFilters.map((f) => ({
+            id: f.id,
+            name: f.name,
+            filter_type: f.filter_type,
+            lifespan_months: f.lifespan_months,
+            internal_reference: f.internal_reference,
+          }))}
+          canEdit={canEdit}
+        />
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title={`📁 Documentos y certificaciones (${documents.length}/${productCerts.length})`}
+        defaultOpen={false}
+      >
+        <DocsAndCertsPanel
+          productId={product.id}
+          initialDocuments={documents}
+          initialCertifications={productCerts}
+          catalog={certCatalog}
+          canEdit={canEdit}
+        />
+      </CollapsibleCard>
 
       <CollapsibleCard title="Foto principal">
         <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />

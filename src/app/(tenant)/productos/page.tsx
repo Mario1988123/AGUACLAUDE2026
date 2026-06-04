@@ -105,6 +105,9 @@ export default async function ProductsPage({
               📄 Catálogo PDF
             </a>
           </Button>
+          <Button variant="outline" asChild>
+            <Link href={"/productos/filtros" as never}>🔁 Filtros y recambios</Link>
+          </Button>
           {canEdit && (
             <>
               <Button variant="outline" asChild>

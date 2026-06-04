@@ -7,6 +7,8 @@ import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { ShowInCalculatorToggle } from "@/modules/products/edit-form";
 import { ProductBulkToolbar, ProductCheckbox } from "@/modules/products/bulk-toolbar";
+import { CatalogModal } from "@/modules/products/catalog-modal";
+import { Button } from "@/shared/ui/button";
 
 export interface ProductListItem {
   id: string;
@@ -84,6 +86,7 @@ export function ProductsListClient({
   canEdit = canBulk,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
   const toggle = (id: string) => {
     setSelectedIds((s) => {
@@ -109,11 +112,27 @@ export function ProductsListClient({
   return (
     <div className="space-y-3">
       {canBulk && selectedIds.size > 0 && (
-        <ProductBulkToolbar
-          selectedIds={Array.from(selectedIds)}
-          onClear={() => setSelectedIds(new Set())}
-          categories={categories}
-        />
+        <>
+          <ProductBulkToolbar
+            selectedIds={Array.from(selectedIds)}
+            onClear={() => setSelectedIds(new Set())}
+            categories={categories}
+          />
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCatalogOpen(true)}
+            >
+              📔 Generar catálogo con la selección ({selectedIds.size})
+            </Button>
+          </div>
+          <CatalogModal
+            open={catalogOpen}
+            onClose={() => setCatalogOpen(false)}
+            productIds={Array.from(selectedIds)}
+          />
+        </>
       )}
 
       {viewMode === "grid" ? (
