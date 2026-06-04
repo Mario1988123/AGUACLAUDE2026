@@ -4,6 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CloneCategoryButton, CreateCategoryForm } from "@/modules/products/categories-panel";
 import { ImportSuggestedAttributesButton } from "@/modules/products/import-attributes-button";
+import { TagsCatalogManager } from "@/modules/products/tags-catalog-manager";
+import { listTagsCatalog } from "@/modules/products/tags-actions";
+import { isProductEditor } from "@/modules/products/permissions";
+import { requireSession } from "@/shared/lib/auth/session";
 import { AttributesConfig } from "@/modules/config/products/attributes-config";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { listUnits } from "@/modules/config/units/actions";
@@ -13,11 +17,14 @@ import { BackButton } from "@/shared/components/back-button";
 export const dynamic = "force-dynamic";
 
 export default async function ConfiguracionProductosPage() {
-  const [local, globals, attributes, units] = await Promise.all([
+  const session = await requireSession();
+  const canEdit = isProductEditor(session);
+  const [local, globals, attributes, units, tagsCatalog] = await Promise.all([
     listCategories(),
     listGlobalCategories(),
     listAttributes(),
     listUnits(),
+    listTagsCatalog().catch(() => []),
   ]);
   const clonedIds = new Set(local.map((c) => c.cloned_from_global_id).filter(Boolean));
 
@@ -133,6 +140,15 @@ export default async function ConfiguracionProductosPage() {
             categories={local}
             units={units.map((u) => ({ code: u.code, label: u.label }))}
           />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tags del catálogo ({tagsCatalog.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TagsCatalogManager initial={tagsCatalog} canEdit={canEdit} />
         </CardContent>
       </Card>
     </div>

@@ -56,15 +56,15 @@ export function ShareDatasheetPanel({
     startTransition(async () => {
       const r = await createProductDatasheetShareAction({ productId });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo crear el enlace público", r.error);
         return;
       }
       setShares((curr) => [r.share, ...curr]);
       try {
         await navigator.clipboard.writeText(r.public_url);
-        notify.success("URL creada y copiada", "Ya puedes pegarla donde quieras.");
+        notify.success("Enlace creado y copiado", "Ya puedes pegarlo donde quieras.");
       } catch {
-        notify.success("URL creada", r.public_url);
+        notify.success("Enlace creado", r.public_url);
       }
     });
   }
@@ -74,7 +74,7 @@ export function ShareDatasheetPanel({
     startTransition(async () => {
       const r = await revokeProductShareAction(shareId);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo revocar el enlace", r.error);
         return;
       }
       setShares((curr) => curr.filter((s) => s.id !== shareId));
@@ -86,7 +86,7 @@ export function ShareDatasheetPanel({
     const url = buildPublicUrl(publicBaseUrl, token);
     navigator.clipboard
       .writeText(url)
-      .then(() => notify.success("URL copiada", url))
+      .then(() => notify.success("Enlace copiado", url))
       .catch(() => notify.error("No se pudo copiar", url));
   }
 
@@ -129,7 +129,7 @@ export function ShareDatasheetPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={handleCreateShare} disabled={pending}>
-          {pending ? "Creando..." : "Crear URL pública"}
+          {pending ? "Creando..." : "Crear enlace público"}
         </Button>
         <Button
           variant="outline"

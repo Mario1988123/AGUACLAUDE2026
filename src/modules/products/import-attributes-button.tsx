@@ -55,7 +55,7 @@ export function ImportSuggestedAttributesButton({
     startTransition(async () => {
       const r = await importGlobalAttributesForCategoryAction(categoryId);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudieron precargar los atributos", r.error);
         return;
       }
       if (r.inserted === 0 && r.skipped > 0) {

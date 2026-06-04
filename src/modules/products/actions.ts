@@ -422,6 +422,13 @@ export type ProductActionResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Actualiza datos generales y costes admin de un producto. Solo admin.
+ *
+ * También acepta los campos nuevos de Fase 1 (Plan Productos v2):
+ *   tags, marketing_claim, youtube_url, qr_target_url, barcode_ean13,
+ *   country_of_origin, manufacturer_name, manufacturer_model,
+ *   warranty_months_general/electronics/body, discontinued_at,
+ *   replaced_by_product_id, installation_diagram_url,
+ *   datasheet_color_accent.
  */
 export async function updateProductAction(
   productId: string,
@@ -446,6 +453,22 @@ export async function updateProductAction(
     show_in_calculator?: boolean;
     installation_manual_url?: string | null;
     installation_notes?: string | null;
+    // Campos nuevos Fase 1
+    tags?: string[] | null;
+    marketing_claim?: string | null;
+    youtube_url?: string | null;
+    qr_target_url?: string | null;
+    barcode_ean13?: string | null;
+    country_of_origin?: string | null;
+    manufacturer_name?: string | null;
+    manufacturer_model?: string | null;
+    warranty_months_general?: number | null;
+    warranty_months_electronics?: number | null;
+    warranty_months_body?: number | null;
+    discontinued_at?: string | null;
+    replaced_by_product_id?: string | null;
+    installation_diagram_url?: string | null;
+    datasheet_color_accent?: string | null;
   },
 ): Promise<ProductActionResult> {
   try {
@@ -481,6 +504,22 @@ export async function updateProductAction(
         "stock_max",
         "lead_time_days",
         "default_supplier_name",
+        // Fase 1 Plan Productos v2
+        "tags",
+        "marketing_claim",
+        "youtube_url",
+        "qr_target_url",
+        "barcode_ean13",
+        "country_of_origin",
+        "manufacturer_name",
+        "manufacturer_model",
+        "warranty_months_general",
+        "warranty_months_electronics",
+        "warranty_months_body",
+        "discontinued_at",
+        "replaced_by_product_id",
+        "installation_diagram_url",
+        "datasheet_color_accent",
       ];
       const re = new RegExp(`(${newCols.join("|")})`, "i");
       if (re.test(error.message ?? "") || (error as { code?: string }).code === "42703") {

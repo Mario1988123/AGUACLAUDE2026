@@ -12,12 +12,30 @@ import {
   deleteProductFilterAction,
   type ProductFilterItem,
 } from "./filters-actions";
+import { setFilterStockAction } from "./filter-stock-actions";
 import { FILTER_TYPE_LABEL, type FilterType } from "./filters-constants";
 
 interface Props {
   filters: ProductFilterItem[];
+  /** Stock total por filtro (sumado de todos los almacenes) — opcional. */
+  stockByFilter?: Record<string, number>;
   /** Solo admin escribe; nivel 2-3 ve listado pero no crea/edita. */
   canEdit: boolean;
+}
+
+/** Convierte céntimos a string en euros (ej. 1500 → "15,00"). */
+function centsToEurString(c: number | null | undefined): string {
+  if (c == null) return "";
+  return (c / 100).toFixed(2).replace(".", ",");
+}
+
+/** Convierte un input de euros (ej. "15,50" o "15.50") a céntimos. */
+function eurStringToCents(s: string): number | null {
+  const trimmed = s.trim().replace(",", ".");
+  if (!trimmed) return null;
+  const n = Number(trimmed);
+  if (Number.isNaN(n) || n < 0) return null;
+  return Math.round(n * 100);
 }
 
 const FILTER_TYPES: FilterType[] = [
@@ -43,12 +61,16 @@ function eur(c: number | null): string {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(c / 100);
 }
 
-export function FiltersListClient({ filters, canEdit }: Props) {
+export function FiltersListClient({ filters, stockByFilter = {}, canEdit }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [state, setState] = useState<EditState>({ open: false, filter: {} });
   const [typeFilter, setTypeFilter] = useState<FilterType | "">("");
   const [search, setSearch] = useState("");
+  // Estado local para edición de precio en € (string editable durante el modal)
+  const [priceInputEur, setPriceInputEur] = useState<string>("");
+  // Stock por filtro — copia local para edición optimista
+  const [localStock, setLocalStock] = useState<Record<string, number>>(stockByFilter);
 
   const visible = filters.filter((f) => {
     if (typeFilter && f.filter_type !== typeFilter) return false;
@@ -62,6 +84,7 @@ export function FiltersListClient({ filters, canEdit }: Props) {
   });
 
   function openCreate() {
+    setPriceInputEur("");
     setState({
       open: true,
       filter: {
@@ -75,17 +98,46 @@ export function FiltersListClient({ filters, canEdit }: Props) {
   }
 
   function openEdit(f: ProductFilterItem) {
+    setPriceInputEur(centsToEurString(f.sale_price_cents));
     setState({ open: true, filter: { ...f } });
   }
 
   function close() {
+    setPriceInputEur("");
     setState({ open: false, filter: {} });
+  }
+
+  function handleStockChange(filterId: string, newQty: number) {
+    if (Number.isNaN(newQty) || newQty < 0) return;
+    const prev = localStock[filterId] ?? 0;
+    if (prev === newQty) return;
+    setLocalStock((s) => ({ ...s, [filterId]: newQty }));
+    startTransition(async () => {
+      const r = await setFilterStockAction({
+        filterId,
+        quantity: newQty,
+      });
+      if (!r.ok) {
+        notify.error("No se pudo guardar el stock", r.error);
+        // Revertir
+        setLocalStock((s) => ({ ...s, [filterId]: prev }));
+        return;
+      }
+      notify.success("Stock actualizado");
+    });
   }
 
   function save() {
     const f = state.filter;
     if (!f.name?.trim()) {
       notify.error("El nombre es obligatorio");
+      return;
+    }
+    // Convertir precio en euros a céntimos antes de guardar
+    const priceCents =
+      priceInputEur.trim() === "" ? null : eurStringToCents(priceInputEur);
+    if (priceInputEur.trim() !== "" && priceCents == null) {
+      notify.error("Precio no válido", "Usa números (por ejemplo 15,50).");
       return;
     }
     startTransition(async () => {
@@ -101,7 +153,7 @@ export function FiltersListClient({ filters, canEdit }: Props) {
         connection_inches: f.connection_inches ?? null,
         capacity_liters: f.capacity_liters ?? null,
         lifespan_months: f.lifespan_months ?? null,
-        sale_price_cents: f.sale_price_cents ?? null,
+        sale_price_cents: priceCents,
         stock_managed: f.stock_managed ?? true,
         stock_min: f.stock_min ?? 0,
         stock_max: f.stock_max ?? null,
@@ -111,7 +163,7 @@ export function FiltersListClient({ filters, canEdit }: Props) {
         notes: f.notes ?? null,
       });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo guardar el filtro", r.error);
         return;
       }
       notify.success(f.id ? "Filtro actualizado" : "Filtro creado");
@@ -125,7 +177,7 @@ export function FiltersListClient({ filters, canEdit }: Props) {
     startTransition(async () => {
       const r = await deleteProductFilterAction(id);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo borrar el filtro", r.error);
         return;
       }
       notify.success("Filtro borrado");
@@ -177,6 +229,7 @@ export function FiltersListClient({ filters, canEdit }: Props) {
               <th className="px-4 py-3 text-left">Tamaño</th>
               <th className="px-4 py-3 text-left">Vida útil</th>
               <th className="px-4 py-3 text-right">PVP</th>
+              <th className="px-4 py-3 text-left">Stock actual</th>
               <th className="px-4 py-3 text-left">Stock mín</th>
               <th className="px-4 py-3 text-left">En equipos</th>
               <th className="px-4 py-3 text-left">Estado</th>
@@ -187,7 +240,7 @@ export function FiltersListClient({ filters, canEdit }: Props) {
             {visible.length === 0 ? (
               <tr>
                 <td
-                  colSpan={canEdit ? 10 : 9}
+                  colSpan={canEdit ? 11 : 10}
                   className="p-8 text-center text-muted-foreground"
                 >
                   Sin filtros que coincidan.
@@ -222,6 +275,23 @@ export function FiltersListClient({ filters, canEdit }: Props) {
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums text-xs">
                     {eur(f.sale_price_cents)}
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {canEdit ? (
+                      <Input
+                        type="number"
+                        min="0"
+                        defaultValue={localStock[f.id] ?? 0}
+                        onBlur={(e) =>
+                          handleStockChange(f.id, Number(e.target.value))
+                        }
+                        className="h-9 w-20 text-right"
+                      />
+                    ) : (
+                      <span className="tabular-nums">
+                        {localStock[f.id] ?? 0}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-xs">{f.stock_min}</td>
                   <td className="px-4 py-3 text-xs">
@@ -416,20 +486,18 @@ export function FiltersListClient({ filters, canEdit }: Props) {
                 />
               </div>
               <div className="space-y-1">
-                <Label>Precio venta (céntimos)</Label>
+                <Label>Precio venta (€)</Label>
                 <Input
-                  type="number"
-                  value={state.filter.sale_price_cents ?? ""}
-                  onChange={(e) =>
-                    setState((s) => ({
-                      ...s,
-                      filter: {
-                        ...s.filter,
-                        sale_price_cents: e.target.value === "" ? null : Number(e.target.value),
-                      },
-                    }))
-                  }
+                  type="text"
+                  inputMode="decimal"
+                  value={priceInputEur}
+                  onChange={(e) => setPriceInputEur(e.target.value)}
+                  placeholder="15,50"
                 />
+                <p className="text-[11px] text-muted-foreground">
+                  Pon el precio en euros (ej. 15,50). Se guarda con dos
+                  decimales.
+                </p>
               </div>
               <div className="space-y-1">
                 <Label>Stock mínimo</Label>

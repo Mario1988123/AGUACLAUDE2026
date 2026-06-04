@@ -33,6 +33,9 @@ export const STORAGE_BUCKETS = {
   /** Imágenes generadas por IA para posts de RRSS. Públicas (URL directa
    *  en preview del panel y en publicación). */
   "social-images": { public: true },
+  /** Documentos adjuntos al producto (manuales, certificados, fichas del
+   *  fabricante, etc.). Privados — se sirven con URL firmada. */
+  "product-documents": { public: false },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;

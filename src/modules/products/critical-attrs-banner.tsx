@@ -29,7 +29,7 @@ export function CriticalAttributesBanner({ productId, missing }: Props) {
     startTransition(async () => {
       const r = await dismissCriticalAttributesAlertAction(productId);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo descartar el aviso", r.error);
         return;
       }
       setDismissed(true);

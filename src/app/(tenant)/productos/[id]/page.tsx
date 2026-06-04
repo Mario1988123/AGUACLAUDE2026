@@ -36,6 +36,8 @@ import {
   listCertificationsCatalog,
 } from "@/modules/products/certifications-actions";
 import { DocsAndCertsPanel } from "@/modules/products/docs-and-certs-panel";
+import { ExtendedFieldsPanel } from "@/modules/products/extended-fields-panel";
+import { listTagsCatalog } from "@/modules/products/tags-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -79,14 +81,35 @@ export default async function ProductDetailPage({
     listProductShares(id).catch(() => []),
     getCriticalAttributesState(id).catch(() => ({ isDismissed: true, missing: [] })),
   ]);
-  const [filterAssignments, availableFilters, documents, productCerts, certCatalog] =
+  const [filterAssignments, availableFilters, documents, productCerts, certCatalog, tagsCatalog] =
     await Promise.all([
       listFilterAssignmentsByProduct(id).catch(() => []),
       listProductFilters({ active_only: true }).catch(() => []),
       listProductDocuments(id).catch(() => []),
       listProductCertifications(id).catch(() => []),
       listCertificationsCatalog().catch(() => []),
+      listTagsCatalog().catch(() => []),
     ]);
+  const extendedFieldsInitial = {
+    tags: ((product as { tags?: string[] | null }).tags) ?? null,
+    marketing_claim: (product as { marketing_claim?: string | null }).marketing_claim ?? null,
+    youtube_url: (product as { youtube_url?: string | null }).youtube_url ?? null,
+    qr_target_url: (product as { qr_target_url?: string | null }).qr_target_url ?? null,
+    barcode_ean13: (product as { barcode_ean13?: string | null }).barcode_ean13 ?? null,
+    country_of_origin: (product as { country_of_origin?: string | null }).country_of_origin ?? null,
+    manufacturer_name: (product as { manufacturer_name?: string | null }).manufacturer_name ?? null,
+    manufacturer_model: (product as { manufacturer_model?: string | null }).manufacturer_model ?? null,
+    warranty_months_general: (product as { warranty_months_general?: number | null }).warranty_months_general ?? null,
+    warranty_months_electronics: (product as { warranty_months_electronics?: number | null }).warranty_months_electronics ?? null,
+    warranty_months_body: (product as { warranty_months_body?: number | null }).warranty_months_body ?? null,
+    discontinued_at: (product as { discontinued_at?: string | null }).discontinued_at ?? null,
+    replaced_by_product_id: (product as { replaced_by_product_id?: string | null }).replaced_by_product_id ?? null,
+    installation_diagram_url: (product as { installation_diagram_url?: string | null }).installation_diagram_url ?? null,
+    datasheet_color_accent: (product as { datasheet_color_accent?: string | null }).datasheet_color_accent ?? null,
+  };
+  const otherProducts = categories.length > 0
+    ? [] // listado opcional para "reemplazado por" — se podrá rellenar más adelante
+    : [];
   // El coste real es CMP calculado desde las compras y SOLO lo ve el admin
   // (incluido director comercial). Los niveles 3 nunca lo ven.
   const canSeeCost =
@@ -185,6 +208,23 @@ export default async function ProductDetailPage({
             productId={product.id}
             initialShares={shares}
             publicBaseUrl={publicBaseUrl}
+          />
+        </CollapsibleCard>
+      )}
+
+      {canEdit && (
+        <CollapsibleCard
+          title="🪪 Datos extendidos (marca, claim, garantías, tags...)"
+          defaultOpen={false}
+        >
+          <ExtendedFieldsPanel
+            productId={product.id}
+            initial={extendedFieldsInitial}
+            tagSuggestions={tagsCatalog.map((t) => ({
+              name: t.name,
+              color_hex: t.color_hex,
+            }))}
+            otherProducts={otherProducts}
           />
         </CollapsibleCard>
       )}

@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { ensureBucket } from "@/shared/lib/supabase/storage-buckets";
 import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
@@ -115,23 +116,11 @@ export async function deleteProductDocumentAction(
 
 // =============================================================================
 // Subida de archivo: server action que recibe FormData con un File.
-// Usa createAdminClient para escribir directamente en Storage; el bucket
-// product-documents se crea si no existe (igual que el patrón ensureBucket).
+// Usa el helper centralizado ensureBucket() del registro STORAGE_BUCKETS
+// (regla feedback_storage_buckets: todos los buckets pasan por el mismo sitio).
 // =============================================================================
 
 const BUCKET = "product-documents";
-
-async function ensureBucket(): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  const { data: list } = await admin.storage.listBuckets();
-  const has = ((list ?? []) as Array<{ name: string }>).some(
-    (b) => b.name === BUCKET,
-  );
-  if (!has) {
-    await admin.storage.createBucket(BUCKET, { public: false });
-  }
-}
 
 export async function uploadProductDocumentAction(
   formData: FormData,
@@ -155,13 +144,19 @@ export async function uploadProductDocumentAction(
       return { ok: false, error: "Archivo demasiado grande (máx 25 MB)" };
     }
 
-    await ensureBucket();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const bucketReady = await ensureBucket(admin, BUCKET);
+    if (!bucketReady) {
+      return {
+        ok: false,
+        error: "No se pudo preparar el almacén de documentos. Reintenta o avisa al técnico.",
+      };
+    }
 
     const safeName = file.name.replace(/[^a-z0-9.-]+/gi, "_").slice(0, 80);
     const storagePath = `${session.company_id}/${productId}/${Date.now()}-${safeName}`;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
     const buf = new Uint8Array(await file.arrayBuffer());
     const { error: upErr } = await admin.storage
       .from(BUCKET)

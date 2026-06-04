@@ -79,7 +79,7 @@ export function DocsAndCertsPanel({
     startTransition(async () => {
       const r = await uploadProductDocumentAction(fd);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo subir el documento", r.error);
         return;
       }
       notify.success("Documento subido");
@@ -95,7 +95,7 @@ export function DocsAndCertsPanel({
     startTransition(async () => {
       const r = await deleteProductDocumentAction(id, productId);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo borrar el documento", r.error);
         return;
       }
       setDocs((d) => d.filter((x) => x.id !== id));
@@ -107,7 +107,7 @@ export function DocsAndCertsPanel({
     startTransition(async () => {
       const r = await getProductDocumentUrlAction(id);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo abrir el documento", r.error);
         return;
       }
       window.open(r.url, "_blank", "noopener,noreferrer");
@@ -130,7 +130,7 @@ export function DocsAndCertsPanel({
         issuerName: certIssuer.trim() || null,
       });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo añadir la certificación", r.error);
         return;
       }
       notify.success("Certificación añadida");
@@ -148,7 +148,7 @@ export function DocsAndCertsPanel({
     startTransition(async () => {
       const r = await removeProductCertificationAction(id, productId);
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo quitar la certificación", r.error);
         return;
       }
       setCerts((c) => c.filter((x) => x.id !== id));

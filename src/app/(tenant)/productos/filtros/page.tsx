@@ -4,15 +4,21 @@ import { isProductEditor } from "@/modules/products/permissions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { BackButton } from "@/shared/components/back-button";
 import { getFilterStockPredictions } from "@/modules/products/filter-stock-predictions";
+import { listFilterStock } from "@/modules/products/filter-stock-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function FiltersPage() {
   const session = await requireSession();
   const canEdit = isProductEditor(session);
-  const [filters, predictions] = await Promise.all([
+  const [filters, predictions, stockSummary] = await Promise.all([
     listProductFilters({ active_only: false }),
     getFilterStockPredictions().catch(() => []),
+    listFilterStock().catch(() => ({
+      total_by_filter: {} as Record<string, number>,
+      by_filter_and_warehouse: [],
+      warehouses: [],
+    })),
   ]);
 
   const critical = predictions.filter((p) => p.severity === "critical");
@@ -63,7 +69,11 @@ export default async function FiltersPage() {
         </div>
       )}
 
-      <FiltersListClient filters={filters} canEdit={canEdit} />
+      <FiltersListClient
+        filters={filters}
+        stockByFilter={stockSummary.total_by_filter}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

@@ -88,7 +88,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
         noExpiry,
       });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo crear el catálogo", r.error);
         return;
       }
       setPublicUrl(r.public_url);
@@ -109,7 +109,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
       return;
     }
     if (!shareId) {
-      notify.error("Crea primero la URL pública");
+      notify.error("Crea primero el enlace público");
       return;
     }
     startTransition(async () => {
@@ -266,7 +266,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
                 Cancelar
               </Button>
               <Button onClick={handleCreate} disabled={pending}>
-                {pending ? "Creando..." : "Crear URL pública"}
+                {pending ? "Creando..." : "Crear enlace público"}
               </Button>
             </div>
           </div>
@@ -276,7 +276,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
         {mode === "preview" && publicUrl && (
           <div className="space-y-4">
             <div className="rounded-xl border bg-green-50 p-4 text-sm text-green-900">
-              ✓ URL pública creada y copiada al portapapeles.
+              ✓ Enlace público creado y copiado al portapapeles.
             </div>
             <div className="rounded-xl border bg-card p-3">
               <div className="mb-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">

@@ -73,7 +73,7 @@ export function ProductFiltersPanel({
         replacementPeriodMonths: newPeriod ? Number(newPeriod) : null,
       });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo asignar el filtro", r.error);
         return;
       }
       notify.success("Filtro asignado");
@@ -94,7 +94,7 @@ export function ProductFiltersPanel({
         ...patch,
       });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo actualizar la asignación", r.error);
         return;
       }
       setAssignments((curr) =>
@@ -122,7 +122,7 @@ export function ProductFiltersPanel({
     startTransition(async () => {
       const r = await removeFilterAssignmentAction({ assignmentId, productId });
       if (!r.ok) {
-        notify.error("Error", r.error);
+        notify.error("No se pudo quitar el filtro", r.error);
         return;
       }
       setAssignments((curr) => curr.filter((a) => a.id !== assignmentId));
