@@ -3,6 +3,7 @@ import { listAttributes } from "@/modules/products/attributes-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CloneCategoryButton, CreateCategoryForm } from "@/modules/products/categories-panel";
+import { ImportSuggestedAttributesButton } from "@/modules/products/import-attributes-button";
 import { AttributesConfig } from "@/modules/config/products/attributes-config";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { listUnits } from "@/modules/config/units/actions";
@@ -46,19 +47,28 @@ export default async function ConfiguracionProductosPage() {
             ) : (
               <ul className="divide-y">
                 {local.map((c) => (
-                  <li key={c.id} className="flex items-center justify-between py-3">
-                    <div>
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">{c.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {KIND_LABEL[c.default_kind]}
                         {c.cloned_from_global_id && " · Precargada del catálogo"}
                       </div>
                     </div>
-                    {c.is_active ? (
-                      <Badge variant="success">Activa</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactiva</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <ImportSuggestedAttributesButton
+                        categoryId={c.id}
+                        isCloned={Boolean(c.cloned_from_global_id)}
+                      />
+                      {c.is_active ? (
+                        <Badge variant="success">Activa</Badge>
+                      ) : (
+                        <Badge variant="secondary">Inactiva</Badge>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>

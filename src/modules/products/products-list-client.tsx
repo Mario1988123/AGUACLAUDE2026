@@ -18,6 +18,7 @@ export interface ProductListItem {
   is_active: boolean;
   show_in_calculator: boolean;
   photo_url?: string | null;
+  tags?: string[];
 }
 
 interface Props {
@@ -26,6 +27,44 @@ interface Props {
   viewMode: "list" | "grid";
   /** Solo admin/dir comercial puede hacer bulk. */
   canBulk: boolean;
+  /** Mapa tag-name -> color HEX para pintar chips. Default '#4880FF'. */
+  tagColors?: Record<string, string>;
+  /** Si false (nivel 2 y 3): ocultar lápices de edición y toggle de calculadora. */
+  canEdit?: boolean;
+}
+
+function TagChip({ name, color }: { name: string; color: string }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none"
+      style={{
+        backgroundColor: `${color}1A`,
+        borderColor: `${color}55`,
+        color,
+      }}
+    >
+      {name}
+    </span>
+  );
+}
+
+function TagsCell({
+  tags,
+  tagColors,
+}: {
+  tags?: string[];
+  tagColors: Record<string, string>;
+}) {
+  if (!tags || tags.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1">
+      {tags.map((t) => (
+        <TagChip key={t} name={t} color={tagColors[t] ?? "#4880FF"} />
+      ))}
+    </div>
+  );
 }
 
 function formatCents(cents: number | null) {
@@ -41,6 +80,8 @@ export function ProductsListClient({
   categories,
   viewMode,
   canBulk,
+  tagColors = {},
+  canEdit = canBulk,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -121,6 +162,11 @@ export function ProductsListClient({
                         {p.category_name}
                       </div>
                     )}
+                    {p.tags && p.tags.length > 0 && (
+                      <div className="mt-1.5">
+                        <TagsCell tags={p.tags} tagColors={tagColors} />
+                      </div>
+                    )}
                     <div className="mt-auto flex items-center justify-between pt-2">
                       <span className="text-base font-extrabold tabular-nums">
                         {formatCents(p.cash_price_cents)}
@@ -178,6 +224,11 @@ export function ProductsListClient({
                           Ref: {p.internal_reference}
                         </div>
                       )}
+                      {p.tags && p.tags.length > 0 && (
+                        <div className="mt-1.5">
+                          <TagsCell tags={p.tags} tagColors={tagColors} />
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="font-bold tabular-nums">
@@ -195,10 +246,16 @@ export function ProductsListClient({
                     </div>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
-                    <ShowInCalculatorToggle
-                      productId={p.id}
-                      value={p.show_in_calculator}
-                    />
+                    {canEdit ? (
+                      <ShowInCalculatorToggle
+                        productId={p.id}
+                        value={p.show_in_calculator}
+                      />
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground">
+                        {p.show_in_calculator ? "En calculadora" : ""}
+                      </span>
+                    )}
                     <div className="flex items-center gap-1">
                       <Link
                         href={`/productos/${p.id}` as never}
@@ -207,13 +264,15 @@ export function ProductsListClient({
                       >
                         <Eye className="h-4 w-4" />
                       </Link>
-                      <Link
-                        href={`/productos/${p.id}?edit=1` as never}
-                        title="Editar"
-                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Link>
+                      {canEdit && (
+                        <Link
+                          href={`/productos/${p.id}?edit=1` as never}
+                          title="Editar"
+                          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -237,6 +296,7 @@ export function ProductsListClient({
                   <th className="px-4 py-3 text-left">Producto</th>
                   <th className="px-4 py-3 text-left">Tipo</th>
                   <th className="px-4 py-3 text-left">Categoría</th>
+                  <th className="px-4 py-3 text-left">Tags</th>
                   <th className="px-4 py-3 text-left">Ref.</th>
                   <th className="px-4 py-3 text-right">Precio contado</th>
                   <th className="px-4 py-3 text-left">Calculadora</th>
@@ -248,7 +308,7 @@ export function ProductsListClient({
                 {products.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={canBulk ? 9 : 8}
+                      colSpan={canBulk ? 10 : 9}
                       className="p-8 text-center text-muted-foreground"
                     >
                       Sin productos con esos filtros.
@@ -279,6 +339,9 @@ export function ProductsListClient({
                       <td className="px-4 py-3 text-xs">
                         {p.category_name ?? "—"}
                       </td>
+                      <td className="px-4 py-3">
+                        <TagsCell tags={p.tags} tagColors={tagColors} />
+                      </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {p.internal_reference ?? "—"}
                       </td>
@@ -286,10 +349,16 @@ export function ProductsListClient({
                         {formatCents(p.cash_price_cents)}
                       </td>
                       <td className="px-4 py-3">
-                        <ShowInCalculatorToggle
-                          productId={p.id}
-                          value={p.show_in_calculator}
-                        />
+                        {canEdit ? (
+                          <ShowInCalculatorToggle
+                            productId={p.id}
+                            value={p.show_in_calculator}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            {p.show_in_calculator ? "Sí" : "No"}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {p.is_active ? (
@@ -307,13 +376,15 @@ export function ProductsListClient({
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
-                          <Link
-                            href={`/productos/${p.id}?edit=1` as never}
-                            title="Editar"
-                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Link>
+                          {canEdit && (
+                            <Link
+                              href={`/productos/${p.id}?edit=1` as never}
+                              title="Editar"
+                              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-amber-100 hover:text-amber-700"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Link>
+                          )}
                         </div>
                       </td>
                     </tr>

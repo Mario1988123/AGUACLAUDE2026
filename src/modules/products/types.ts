@@ -13,6 +13,8 @@ export interface ProductListItem {
   main_image_url: string | null;
   cash_price_cents: number | null;
   show_in_calculator: boolean;
+  /** Tags libres del producto. Vacío si la migración 20260604100000 no se aplicó. */
+  tags: string[];
 }
 
 export interface ProductDetail {

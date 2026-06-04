@@ -18,12 +18,15 @@ export async function listProducts(filters?: {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  // Defensivo: si la migración show_in_calculator no está aplicada, hacemos
-  // un select sin esa columna y ponemos false por defecto.
-  async function runQuery(includeShowInCalc: boolean) {
-    const cols = includeShowInCalc
-      ? "id, name, kind, category_id, internal_reference, is_active, main_image_url, show_in_calculator"
-      : "id, name, kind, category_id, internal_reference, is_active, main_image_url";
+  // Defensivo: si la migración show_in_calculator (o tags) no está aplicada,
+  // hacemos un select sin esa columna y ponemos valor por defecto.
+  async function runQuery(includeShowInCalc: boolean, includeTags: boolean) {
+    const base =
+      "id, name, kind, category_id, internal_reference, is_active, main_image_url";
+    const cols =
+      base +
+      (includeShowInCalc ? ", show_in_calculator" : "") +
+      (includeTags ? ", tags" : "");
     let q = supabase.from("products").select(cols).is("deleted_at", null).order("name");
     if (filters?.kind) q = q.eq("kind", filters.kind);
     if (filters?.category_id) q = q.eq("category_id", filters.category_id);
@@ -34,9 +37,14 @@ export async function listProducts(filters?: {
     }
     return q;
   }
-  let { data: products, error } = await runQuery(true);
+  let { data: products, error } = await runQuery(true, true);
+  if (error && /\btags\b/i.test(error.message ?? "")) {
+    const fb = await runQuery(true, false);
+    products = fb.data;
+    error = fb.error;
+  }
   if (error && /show_in_calculator/i.test(error.message ?? "")) {
-    const fb = await runQuery(false);
+    const fb = await runQuery(false, false);
     products = fb.data;
     error = fb.error;
   }
@@ -50,6 +58,7 @@ export async function listProducts(filters?: {
     is_active: boolean;
     main_image_url: string | null;
     show_in_calculator?: boolean;
+    tags?: string[] | null;
   }>;
   if (rows.length === 0) return [];
 
@@ -79,6 +88,7 @@ export async function listProducts(filters?: {
   return rows.map((p) => ({
     ...p,
     show_in_calculator: p.show_in_calculator ?? false,
+    tags: Array.isArray(p.tags) ? p.tags : [],
     category_name: p.category_id ? cats.get(p.category_id) ?? null : null,
     cash_price_cents: cashPrices.get(p.id) ?? null,
   }));
