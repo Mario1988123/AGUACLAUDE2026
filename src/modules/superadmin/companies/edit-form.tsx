@@ -21,6 +21,21 @@ interface CompanyEditFormProps {
   };
 }
 
+/** Convierte céntimos a euros como string (ej. 19950 → "199,50"). */
+function centsToEur(c: number | null | undefined): string {
+  if (c == null) return "";
+  return (c / 100).toFixed(2).replace(".", ",");
+}
+
+/** Convierte un input de euros ("199,50" o "199.50") a céntimos. */
+function eurToCents(s: string): number | null {
+  const trimmed = s.trim().replace(",", ".");
+  if (!trimmed) return 0;
+  const n = Number(trimmed);
+  if (Number.isNaN(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
 export function CompanyEditForm({ company }: CompanyEditFormProps) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState<{
@@ -40,11 +55,25 @@ export function CompanyEditForm({ company }: CompanyEditFormProps) {
     billing_email: company.billing_email ?? "",
     primary_color: company.primary_color ?? "#2563eb",
   });
+  // Estado local del campo de coste mostrado en EUROS al usuario.
+  const [costInputEur, setCostInputEur] = useState<string>(
+    centsToEur(company.monthly_cost_cents),
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Convertir euros tecleados a céntimos antes de enviar a la action.
+    const cents = eurToCents(costInputEur);
+    if (cents === null) {
+      notify.error(
+        "Coste no válido",
+        "Usa números con coma o punto decimal (ej. 199,50).",
+      );
+      return;
+    }
+    const payload = { ...form, monthly_cost_cents: cents };
     startTransition(async () => {
-      const r = await updateCompanySafeAction(company.id, form);
+      const r = await updateCompanySafeAction(company.id, payload);
       if (!r.ok) {
         notify.error("No se pudo actualizar", r.error);
         return;
@@ -102,12 +131,13 @@ export function CompanyEditForm({ company }: CompanyEditFormProps) {
           />
         </div>
         <div className="space-y-2">
-          <Label>Coste/mes (cts)</Label>
+          <Label>Coste/mes (€)</Label>
           <Input
-            type="number"
-            min={0}
-            value={form.monthly_cost_cents}
-            onChange={(e) => setForm({ ...form, monthly_cost_cents: Number(e.target.value) })}
+            type="text"
+            inputMode="decimal"
+            placeholder="199,50"
+            value={costInputEur}
+            onChange={(e) => setCostInputEur(e.target.value)}
           />
         </div>
       </div>
