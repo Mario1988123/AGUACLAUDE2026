@@ -53,3 +53,6 @@ legacy_reference/
 tmp/
 
 .vercel
+
+# graphify knowledge graphs (local, no commitear)
+graphify-out/

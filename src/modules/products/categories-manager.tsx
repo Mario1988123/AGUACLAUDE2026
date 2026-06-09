@@ -10,7 +10,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { updateCategoryAction, deleteCategoryAction } from "./actions";
 import { ImportSuggestedAttributesButton } from "./import-attributes-button";
-import { AttrForm } from "@/modules/config/products/attributes-config";
+import { AttrForm } from "./attr-form";
 import { KIND_LABEL, PRODUCT_KIND } from "./schemas";
 import type { CategoryItem, ProductKind } from "./types";
 import type { ProductAttribute } from "./attributes-actions";
