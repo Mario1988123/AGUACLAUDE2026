@@ -8,7 +8,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createProductSafeAction } from "./actions";
-import { KIND_LABEL, PRODUCT_KIND } from "./schemas";
+import { KIND_LABEL, PRODUCT_KIND, PRODUCT_ROLES, ROLE_LABEL, ROLE_HELP, type ProductRole } from "./schemas";
 import { listAttributes, type ProductAttribute } from "./attributes-actions";
 import type { CategoryItem } from "./types";
 
@@ -44,6 +44,11 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
   const [cashTotal, setCashTotal] = useState("");
   const [cashMin, setCashMin] = useState("");
   const [cashAbsMin, setCashAbsMin] = useState("");
+  // Roles (Fase B): por defecto vendible suelto (igual que el comportamiento actual).
+  const [roles, setRoles] = useState<string[]>(["sellable_standalone"]);
+  function toggleRole(r: ProductRole) {
+    setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  }
 
   function validateStep1(): boolean {
     if (!name.trim()) {
@@ -116,6 +121,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
     fd.set("cash_total_cents", eurToCents(cashTotal));
     fd.set("cash_min_authorized_cents", eurToCents(cashMin));
     fd.set("cash_absolute_min_cents", eurToCents(cashAbsMin));
+    fd.set("roles", JSON.stringify(roles));
 
     // Atributos por categoría: serializar como JSON respetando el data_type
     if (categoryAttrs.length > 0) {
@@ -346,6 +352,34 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
               Mínimo comercial: precio que el comercial puede vender sin pedir aprobación.
               Mínimo absoluto: precio mínimo con aprobación de director/admin.
             </p>
+          </div>
+
+          <div className="space-y-2 rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-4">
+            <Label className="text-sm font-bold text-emerald-900">
+              🧩 ¿Cómo se usa este producto?
+            </Label>
+            <p className="text-[11px] text-emerald-800">
+              Marca todo lo que aplique. Se puede cambiar después desde la ficha.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PRODUCT_ROLES.map((r) => (
+                <label
+                  key={r}
+                  className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-card p-2 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={roles.includes(r)}
+                    onChange={() => toggleRole(r)}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">{ROLE_LABEL[r]}</span>
+                    <span className="block text-[11px] text-muted-foreground">{ROLE_HELP[r]}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
       )}

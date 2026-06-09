@@ -68,12 +68,39 @@ export async function listAttributes(categoryId?: string | null): Promise<Produc
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  let q = supabase
+
+  // Atributos EXTRA asignados a esta categoría vía tabla puente
+  // (product_attribute_categories). Un atributo puede aplicar a varias
+  // categorías además de su categoría principal. Defensivo: si la tabla
+  // (migración 20260609100000) aún no está, seguimos sin ella.
+  let extraAttrIds: string[] = [];
+  if (categoryId) {
+    const { data: bridge, error: bErr } = await supabase
+      .from("product_attribute_categories")
+      .select("attribute_id")
+      .eq("category_id", categoryId);
+    if (!bErr) {
+      extraAttrIds = ((bridge ?? []) as Array<{ attribute_id: string }>).map(
+        (r) => r.attribute_id,
+      );
+    }
+  }
+
+  const select =
+    "id, category_id, key, name, data_type, unit, enum_values, is_required, sort_order";
+  if (!categoryId) {
+    const { data } = await supabase.from("product_attributes").select(select).order("sort_order");
+    return (data ?? []) as ProductAttribute[];
+  }
+
+  // category_id = X  OR  category_id IS NULL  OR  id IN (extra de la puente)
+  const orParts = [`category_id.eq.${categoryId}`, "category_id.is.null"];
+  if (extraAttrIds.length > 0) orParts.push(`id.in.(${extraAttrIds.join(",")})`);
+  const { data } = await supabase
     .from("product_attributes")
-    .select("id, category_id, key, name, data_type, unit, enum_values, is_required, sort_order")
+    .select(select)
+    .or(orParts.join(","))
     .order("sort_order");
-  if (categoryId) q = q.or(`category_id.eq.${categoryId},category_id.is.null`);
-  const { data } = await q;
   return (data ?? []) as ProductAttribute[];
 }
 
@@ -124,7 +151,7 @@ export async function listProductAttributeValues(productId: string): Promise<Pro
   });
 }
 
-export async function upsertAttributeAction(input: unknown) {
+export async function upsertAttributeAction(input: unknown): Promise<string | undefined> {
   const session = await ensureAdmin();
   const parsed = parseOrFriendly(attributeUpsertSchema, input, "Atributo producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -140,12 +167,94 @@ export async function upsertAttributeAction(input: unknown) {
     is_required: parsed.is_required,
     sort_order: parsed.sort_order,
   };
+  let id = parsed.id;
   if (parsed.id) {
     await admin.from("product_attributes").update(payload).eq("id", parsed.id);
   } else {
-    await admin.from("product_attributes").insert(payload);
+    const { data } = await admin
+      .from("product_attributes")
+      .insert(payload)
+      .select("id")
+      .single();
+    id = (data as { id: string } | null)?.id;
   }
   revalidatePath("/configuracion/productos");
+  return id;
+}
+
+/**
+ * Categorías EXTRA (además de la principal) a las que aplica un atributo,
+ * leídas de la tabla puente product_attribute_categories. Defensivo: si la
+ * migración 20260609100000 no está aplicada, devuelve [].
+ */
+export async function listAttributeExtraCategories(attributeId: string): Promise<string[]> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data, error } = await supabase
+    .from("product_attribute_categories")
+    .select("category_id")
+    .eq("attribute_id", attributeId);
+  if (error) return [];
+  return ((data ?? []) as Array<{ category_id: string }>).map((r) => r.category_id);
+}
+
+/** Todas las vinculaciones atributo↔categoría extra de la empresa. Defensivo. */
+export async function listAttributeCategoryLinks(): Promise<
+  Array<{ attribute_id: string; category_id: string }>
+> {
+  await requireSession();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data, error } = await supabase
+    .from("product_attribute_categories")
+    .select("attribute_id, category_id");
+  if (error) return [];
+  return (data ?? []) as Array<{ attribute_id: string; category_id: string }>;
+}
+
+/**
+ * Fija el conjunto de categorías EXTRA de un atributo (reemplaza las suyas,
+ * no toca las de otros atributos). Solo admin. Defensivo si la tabla no existe.
+ */
+export async function setAttributeExtraCategoriesAction(
+  attributeId: string,
+  categoryIds: string[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await ensureAdmin();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // Borrar las vinculaciones EXTRA actuales de ESTE atributo (solo las suyas).
+    const del = await admin
+      .from("product_attribute_categories")
+      .delete()
+      .eq("attribute_id", attributeId);
+    if (del.error) {
+      // Tabla aún no existe → no rompemos; lo dejamos como no-op.
+      if (/(does not exist|schema cache|Could not find|relation)/i.test(del.error.message ?? "")) {
+        return { ok: true };
+      }
+      return { ok: false, error: del.error.message };
+    }
+
+    const clean = Array.from(new Set(categoryIds.filter(Boolean)));
+    if (clean.length > 0) {
+      const rows = clean.map((category_id) => ({
+        attribute_id: attributeId,
+        category_id,
+        company_id: session.company_id,
+      }));
+      const ins = await admin.from("product_attribute_categories").insert(rows);
+      if (ins.error) return { ok: false, error: ins.error.message };
+    }
+    revalidatePath("/configuracion/productos");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 export async function setProductAttributeValue(input: unknown) {
@@ -230,10 +339,10 @@ export async function deleteProductAttributeValueSafeAction(
 
 export async function upsertAttributeSafeAction(
   input: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; id?: string } | { ok: false; error: string }> {
   try {
-    await upsertAttributeAction(input);
-    return { ok: true };
+    const id = await upsertAttributeAction(input);
+    return { ok: true, id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }

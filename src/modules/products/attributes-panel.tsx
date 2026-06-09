@@ -210,13 +210,13 @@ function AddValueForm({
   if (available.length === 0) {
     return (
       <div className="space-y-2 rounded-xl border border-dashed border-border bg-muted/30 p-4 text-center text-sm">
-        <p>Ya has asignado todos los atributos disponibles.</p>
+        <p>Esta categoría aún no define más características que rellenar.</p>
         <p className="text-xs text-muted-foreground">
-          Crea más atributos en{" "}
+          Para añadir nuevas (caudal, micras, color…) entra en{" "}
           <a href="/configuracion/productos" className="text-primary hover:underline">
             Configuración → Productos
           </a>
-          .
+          , abre la categoría y pulsa «Nueva característica para esta categoría».
         </p>
         <Button variant="outline" size="sm" onClick={onDone}>
           Cerrar

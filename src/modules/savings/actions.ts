@@ -505,7 +505,12 @@ export interface WizardExtra {
   name: string;
   category_id: string | null;
   category_name: string | null;
-  extra_role: "tap" | "cooler";
+  /**
+   * "tap"/"cooler": extras clásicos definidos por categoría del configurador.
+   * "addon": producto marcado con el rol `configurator_extra` (Plan FIX 2026-06-09),
+   * extra genérico seleccionable en cualquier equipo del configurador.
+   */
+  extra_role: "tap" | "cooler" | "addon";
   // Atributos descriptivos (vías para grifo, etc.)
   attributes: Record<string, string | number | null>;
   pricing: WizardProduct["pricing"];
@@ -621,7 +626,7 @@ export async function listWizardExtras(filters: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const attrsList = ((attrsRes.data as any[]) ?? []);
 
-  return products
+  const baseExtras: WizardExtra[] = products
     .map((p) => {
       const cat = p.product_categories;
       const productPlans = plansList.filter(
@@ -637,7 +642,7 @@ export async function listWizardExtras(filters: {
         name: p.name,
         category_id: cat?.id ?? null,
         category_name: cat?.name ?? null,
-        extra_role: (cat?.extra_role ?? "tap") as "tap" | "cooler",
+        extra_role: (cat?.extra_role ?? "tap") as "tap" | "cooler" | "addon",
         attributes: attrs,
         pricing: productPlans.map((pl) => ({
           plan_type: pl.plan_type,
@@ -650,6 +655,89 @@ export async function listWizardExtras(filters: {
       };
     })
     .filter((e) => e.pricing.length > 0);
+
+  // Extras GENÉRICOS: productos marcados con el rol `configurator_extra`
+  // (Plan FIX 2026-06-09). Se ofrecen como extras seleccionables en cualquier
+  // equipo del configurador. Defensivo: si la columna `roles` no existe aún,
+  // este bloque no aporta nada y no rompe el listado clásico tap/cooler.
+  const addonExtras = await listConfiguratorAddonExtras(
+    supabase,
+    session.company_id,
+    filters.plan_type,
+  );
+
+  // Merge deduplicando por id (los clásicos tap/cooler tienen prioridad).
+  const seen = new Set(baseExtras.map((e) => e.id));
+  for (const a of addonExtras) {
+    if (!seen.has(a.id)) {
+      baseExtras.push(a);
+      seen.add(a.id);
+    }
+  }
+  return baseExtras;
+}
+
+/**
+ * Productos con el rol `configurator_extra` → extras genéricos del configurador.
+ * Defensivo: cualquier fallo (columna roles ausente, etc.) devuelve [].
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function listConfiguratorAddonExtras(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  companyId: string,
+  planType: "cash" | "rental" | "renting",
+): Promise<WizardExtra[]> {
+  try {
+    const { data: rows, error } = await supabase
+      .from("products")
+      .select("id, name, category_id, product_categories(id, name)")
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .eq("is_active", true)
+      .contains("roles", ["configurator_extra"]);
+    if (error) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const products = ((rows as any[]) ?? []);
+    if (products.length === 0) return [];
+
+    const ids = products.map((p) => p.id);
+    const { data: plans } = await supabase
+      .from("product_pricing_plans")
+      .select(
+        "product_id, plan_type, duration_months, monthly_price_cents, total_price_cents, is_active",
+      )
+      .in("product_id", ids)
+      .eq("is_active", true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const plansList = ((plans as any[]) ?? []);
+
+    return products
+      .map((p) => {
+        const cat = p.product_categories;
+        return {
+          id: p.id,
+          name: p.name,
+          category_id: cat?.id ?? null,
+          category_name: cat?.name ?? null,
+          extra_role: "addon" as const,
+          attributes: {},
+          pricing: plansList
+            .filter((pl) => pl.product_id === p.id && pl.plan_type === planType)
+            .map((pl) => ({
+              plan_type: pl.plan_type,
+              duration_months: pl.duration_months,
+              monthly_cents: pl.monthly_price_cents,
+              total_cents: pl.total_price_cents,
+              deposit_cents: null,
+            })),
+          install_cents: null,
+        };
+      })
+      .filter((e) => e.pricing.length > 0);
+  } catch {
+    return [];
+  }
 }
 
 // =============================================================================
@@ -675,7 +763,7 @@ export interface SaveSavingsProposalInput {
   extras_snapshot?: Array<{
     product_id: string;
     name: string;
-    role: "tap" | "cooler";
+    role: "tap" | "cooler" | "addon";
     monthly_cents: number;
     install_cents: number;
   }>;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Plus, Pencil } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -8,7 +8,12 @@ import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
-import { upsertAttributeSafeAction, type ProductAttribute } from "@/modules/products/attributes-actions";
+import {
+  upsertAttributeSafeAction,
+  listAttributeExtraCategories,
+  setAttributeExtraCategoriesAction,
+  type ProductAttribute,
+} from "@/modules/products/attributes-actions";
 import type { CategoryItem } from "@/modules/products/types";
 import { toSnakeCase } from "@/shared/lib/slug";
 
@@ -86,16 +91,19 @@ export function AttributesConfig({ attributes, categories, units = [] }: Props) 
   );
 }
 
-function AttrForm({
+export function AttrForm({
   initial,
   categories,
   units,
   onDone,
+  forcedCategoryId,
 }: {
   initial: ProductAttribute | null;
   categories: CategoryItem[];
   units: Array<{ code: string; label: string }>;
   onDone: () => void;
+  /** Si se pasa, la categoría queda fijada y no se muestra el selector. */
+  forcedCategoryId?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [form, setForm] = useState({
@@ -103,10 +111,23 @@ function AttrForm({
     name: initial?.name ?? "",
     data_type: initial?.data_type ?? ("text" as ProductAttribute["data_type"]),
     unit: initial?.unit ?? "",
-    category_id: initial?.category_id ?? "",
+    category_id: forcedCategoryId ?? initial?.category_id ?? "",
     is_required: initial?.is_required ?? false,
     sort_order: initial?.sort_order ?? 0,
   });
+  // Categorías EXTRA (además de la principal) a las que aplica el atributo.
+  const [extraCats, setExtraCats] = useState<string[]>([]);
+  useEffect(() => {
+    if (initial?.id) {
+      listAttributeExtraCategories(initial.id)
+        .then(setExtraCats)
+        .catch(() => setExtraCats([]));
+    }
+  }, [initial?.id]);
+  const principalId = forcedCategoryId ?? form.category_id;
+  function toggleExtra(id: string) {
+    setExtraCats((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   function setName(name: string) {
     // Auto-generar key desde nombre solo cuando es nuevo o si key sigue derivada
@@ -133,11 +154,22 @@ function AttrForm({
         id: initial?.id,
         ...form,
         key: finalKey,
-        category_id: form.category_id || null,
+        category_id: (forcedCategoryId || form.category_id) || null,
       });
       if (!r.ok) {
         notify.error("Error", r.error);
         return;
+      }
+      // Guardar categorías EXTRA (excluyendo la principal). Solo si tenemos id.
+      const attrId = r.id ?? initial?.id;
+      if (attrId) {
+        const extras = extraCats.filter((c) => c && c !== principalId);
+        const er = await setAttributeExtraCategoriesAction(attrId, extras);
+        if (!er.ok) {
+          notify.error("Atributo guardado, pero falló asignar categorías extra", er.error);
+          onDone();
+          return;
+        }
       }
       notify.success("Guardado");
       onDone();
@@ -209,21 +241,57 @@ function AttrForm({
               />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Categoría aplicable</Label>
-            <select
-              value={form.category_id}
-              onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-              className="flex h-12 w-full rounded-xl border border-border bg-card px-4 text-base"
-            >
-              <option value="">Todas las categorías</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!forcedCategoryId && (
+            <div className="space-y-1.5">
+              <Label>Categoría aplicable</Label>
+              <select
+                value={form.category_id}
+                onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                className="flex h-12 w-full rounded-xl border border-border bg-card px-4 text-base"
+              >
+                <option value="">Todas las categorías</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {/* Categorías ADICIONALES: el mismo atributo puede aplicar a varias.
+              Ej: "micras" vale para flujo directo Y compacta. */}
+          {categories.length > 0 && (
+            <div className="space-y-1.5">
+              <Label>También aplica a estas otras categorías (opcional)</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Marca las categorías EXTRA en las que también quieras rellenar esta
+                característica. La principal de arriba ya queda incluida.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {categories
+                  .filter((c) => c.id !== principalId)
+                  .map((c) => {
+                    const on = extraCats.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleExtra(c.id)}
+                        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                          on
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border bg-card text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {on ? "✓ " : ""}
+                        {c.name}
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           <label className="flex items-center gap-2">
             <input
               type="checkbox"

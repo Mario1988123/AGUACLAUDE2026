@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { productCreateSchema } from "./schemas";
+import { productCreateSchema, PRODUCT_ROLES } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CategoryItem, ProductDetail, ProductListItem, ProductKind } from "./types";
 
@@ -215,11 +215,22 @@ export async function getProduct(id: string): Promise<ProductDetail> {
 
 export async function listCategories(): Promise<CategoryItem[]> {
   await requireSession();
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const FULL =
+    "id, name, default_kind, sort_order, is_active, cloned_from_global_id, parent_id, description, icon";
+  const LEGACY = "id, name, default_kind, sort_order, is_active, cloned_from_global_id";
+  let { data, error } = await supabase
     .from("product_categories")
-    .select("id, name, default_kind, sort_order, is_active, cloned_from_global_id")
+    .select(FULL)
     .order("sort_order");
+  // Defensivo: parent_id/description/icon ya existen en la migración base, pero
+  // si por cualquier motivo el cache de esquema no las trae, caemos al subset.
+  if (error && /(parent_id|description|icon)/i.test(error.message ?? "")) {
+    const fb = await supabase.from("product_categories").select(LEGACY).order("sort_order");
+    data = fb.data;
+    error = fb.error;
+  }
   if (error) throw error;
   return (data ?? []) as CategoryItem[];
 }
@@ -287,6 +298,142 @@ export async function createCategoryAction(formData: FormData) {
   } as never);
   if (error) throw error;
   revalidatePath("/configuracion/productos");
+}
+
+/**
+ * Edita una categoría existente. Solo admin. Aditivo: cualquier campo
+ * undefined no se toca. parent_id no puede ser la propia categoría.
+ */
+export async function updateCategoryAction(
+  id: string,
+  input: {
+    name?: string;
+    default_kind?: ProductKind;
+    description?: string | null;
+    icon?: string | null;
+    sort_order?: number;
+    is_active?: boolean;
+    parent_id?: string | null;
+  },
+): Promise<ProductActionResult> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id || !session.roles.includes("company_admin"))
+      return { ok: false, error: "Solo el administrador puede modificar categorías." };
+    if (input.parent_id && input.parent_id === id)
+      return { ok: false, error: "Una categoría no puede ser su propia categoría padre." };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminCheck = createAdminClient() as any;
+
+    // Anti-ciclo: el padre elegido no puede ser un descendiente de esta categoría
+    // (evita bucles A→B→A que romperían las consultas de jerarquía).
+    if (input.parent_id) {
+      const { data: allCats } = await adminCheck
+        .from("product_categories")
+        .select("id, parent_id")
+        .eq("company_id", session.company_id);
+      const parentOf = new Map(
+        ((allCats ?? []) as Array<{ id: string; parent_id: string | null }>).map((c) => [
+          c.id,
+          c.parent_id,
+        ]),
+      );
+      let cursor: string | null | undefined = input.parent_id;
+      let guard = 0;
+      while (cursor && guard < 100) {
+        if (cursor === id)
+          return {
+            ok: false,
+            error: "No puedes poner como padre una subcategoría de esta misma categoría.",
+          };
+        cursor = parentOf.get(cursor);
+        guard += 1;
+      }
+    }
+
+    const payload: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (v !== undefined) payload[k] = v;
+    }
+    if (Object.keys(payload).length === 0) return { ok: true };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { error } = await admin
+      .from("product_categories")
+      .update(payload)
+      .eq("id", id)
+      .eq("company_id", session.company_id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/configuracion/productos");
+    revalidatePath("/productos");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * "Borra" una categoría. Por seguridad con datos vivos:
+ *   - Si tiene productos, atributos o subcategorías colgando → NO borra;
+ *     la desactiva (is_active=false) y avisa.
+ *   - Si está limpia → borrado duro.
+ * Solo admin.
+ */
+export async function deleteCategoryAction(
+  id: string,
+): Promise<{ ok: true; deactivated: boolean } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id || !session.roles.includes("company_admin"))
+      return { ok: false, error: "Solo el administrador puede borrar categorías." };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const [prod, attr, children, bridge] = await Promise.all([
+      admin
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("category_id", id)
+        .is("deleted_at", null),
+      admin.from("product_attributes").select("id", { count: "exact", head: true }).eq("category_id", id),
+      admin.from("product_categories").select("id", { count: "exact", head: true }).eq("parent_id", id),
+      // Atributos que usan esta categoría como EXTRA (tabla puente). Defensivo:
+      // si la tabla no existe todavía, lo tratamos como 0.
+      admin
+        .from("product_attribute_categories")
+        .select("attribute_id", { count: "exact", head: true })
+        .eq("category_id", id),
+    ]);
+    const inUse =
+      (prod.count ?? 0) > 0 ||
+      (attr.count ?? 0) > 0 ||
+      (children.count ?? 0) > 0 ||
+      (bridge.count ?? 0) > 0;
+
+    if (inUse) {
+      const { error } = await admin
+        .from("product_categories")
+        .update({ is_active: false })
+        .eq("id", id)
+        .eq("company_id", session.company_id);
+      if (error) return { ok: false, error: error.message };
+      revalidatePath("/configuracion/productos");
+      return { ok: true, deactivated: true };
+    }
+
+    const { error } = await admin
+      .from("product_categories")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", session.company_id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/configuracion/productos");
+    return { ok: true, deactivated: false };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 export async function createProductAction(formData: FormData) {
@@ -389,6 +536,28 @@ export async function createProductAction(formData: FormData) {
     }
   }
 
+  // Roles adicionales elegidos en el alta (Fase B). Vienen como JSON array de
+  // strings. Defensivo: si la columna roles no existe aún, se ignora.
+  const rolesRaw = formData.get("roles");
+  if (typeof rolesRaw === "string" && rolesRaw.trim().length > 0) {
+    try {
+      const chosen = (JSON.parse(rolesRaw) as string[]).filter((r) =>
+        (PRODUCT_ROLES as readonly string[]).includes(r),
+      );
+      if (chosen.length > 0) {
+        const { error: rErr } = await admin
+          .from("products")
+          .update({ roles: chosen })
+          .eq("id", productId);
+        if (rErr && !/roles/i.test(rErr.message ?? "")) {
+          console.error("[create product] roles update:", rErr.message);
+        }
+      }
+    } catch (e) {
+      console.error("[create product] bad roles JSON:", e);
+    }
+  }
+
   revalidatePath("/productos");
   redirect(`/productos/${productId}` as never);
 }
@@ -469,6 +638,8 @@ export async function updateProductAction(
     replaced_by_product_id?: string | null;
     installation_diagram_url?: string | null;
     datasheet_color_accent?: string | null;
+    // Fase B (Plan FIX 2026-06-09): papeles adicionales del producto.
+    roles?: string[] | null;
   },
 ): Promise<ProductActionResult> {
   try {
@@ -520,6 +691,7 @@ export async function updateProductAction(
         "replaced_by_product_id",
         "installation_diagram_url",
         "datasheet_color_accent",
+        "roles",
       ];
       const re = new RegExp(`(${newCols.join("|")})`, "i");
       if (re.test(error.message ?? "") || (error as { code?: string }).code === "42703") {

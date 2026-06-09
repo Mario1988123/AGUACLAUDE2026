@@ -40,6 +40,8 @@ export interface ProductDetail {
   default_supplier_name: string | null;
   main_image_url: string | null;
   notes: string | null;
+  /** Papeles adicionales (además de kind). Vacío si la migración no se aplicó. */
+  roles?: string[] | null;
 }
 
 export interface CategoryItem {
@@ -49,4 +51,8 @@ export interface CategoryItem {
   sort_order: number;
   is_active: boolean;
   cloned_from_global_id: string | null;
+  /** Categoría padre (subcategorías). null = categoría raíz. */
+  parent_id?: string | null;
+  description?: string | null;
+  icon?: string | null;
 }

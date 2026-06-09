@@ -1,9 +1,8 @@
 import { listCategories, listGlobalCategories } from "@/modules/products/actions";
-import { listAttributes } from "@/modules/products/attributes-actions";
+import { listAttributes, listAttributeCategoryLinks } from "@/modules/products/attributes-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Badge } from "@/shared/ui/badge";
 import { CloneCategoryButton, CreateCategoryForm } from "@/modules/products/categories-panel";
-import { ImportSuggestedAttributesButton } from "@/modules/products/import-attributes-button";
+import { CategoriesManager } from "@/modules/products/categories-manager";
 import { TagsCatalogManager } from "@/modules/products/tags-catalog-manager";
 import { listTagsCatalog } from "@/modules/products/tags-actions";
 import { isProductEditor } from "@/modules/products/permissions";
@@ -19,12 +18,13 @@ export const dynamic = "force-dynamic";
 export default async function ConfiguracionProductosPage() {
   const session = await requireSession();
   const canEdit = isProductEditor(session);
-  const [local, globals, attributes, units, tagsCatalog] = await Promise.all([
+  const [local, globals, attributes, units, tagsCatalog, attributeLinks] = await Promise.all([
     listCategories(),
     listGlobalCategories(),
     listAttributes(),
     listUnits(),
     listTagsCatalog().catch(() => []),
+    listAttributeCategoryLinks().catch(() => []),
   ]);
   const clonedIds = new Set(local.map((c) => c.cloned_from_global_id).filter(Boolean));
 
@@ -47,39 +47,12 @@ export default async function ConfiguracionProductosPage() {
             <CardTitle>Mis categorías ({local.length})</CardTitle>
           </CardHeader>
           <CardContent>
-            {local.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Aún no tienes categorías. Precarga del catálogo global o crea las tuyas.
-              </p>
-            ) : (
-              <ul className="divide-y">
-                {local.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-3 py-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium">{c.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {KIND_LABEL[c.default_kind]}
-                        {c.cloned_from_global_id && " · Precargada del catálogo"}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <ImportSuggestedAttributesButton
-                        categoryId={c.id}
-                        isCloned={Boolean(c.cloned_from_global_id)}
-                      />
-                      {c.is_active ? (
-                        <Badge variant="success">Activa</Badge>
-                      ) : (
-                        <Badge variant="secondary">Inactiva</Badge>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <CategoriesManager
+              categories={local}
+              attributes={attributes}
+              units={units.map((u) => ({ code: u.code, label: u.label }))}
+              attributeLinks={attributeLinks}
+            />
             <div className="mt-6 border-t pt-4">
               <h3 className="mb-3 text-sm font-semibold">Crear categoría</h3>
               <CreateCategoryForm />

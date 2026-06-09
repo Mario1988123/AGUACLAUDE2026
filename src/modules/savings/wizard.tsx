@@ -107,6 +107,8 @@ export function SavingsWizard(props: Props) {
   const [productId, setProductId] = useState<string | null>(null);
   const [extraTapId, setExtraTapId] = useState<string | null>(null);
   const [extraCoolerId, setExtraCoolerId] = useState<string | null>(null);
+  // Extras genéricos (productos con rol configurator_extra): selección múltiple.
+  const [extraAddonIds, setExtraAddonIds] = useState<string[]>([]);
 
   const [result, setResult] = useState<CalcResult | null>(null);
   const [calcDone, setCalcDone] = useState(false);
@@ -129,13 +131,17 @@ export function SavingsWizard(props: Props) {
   );
   const selectedProduct = products.find((p) => p.id === productId);
   const selectedExtras = (initialExtras ?? []).filter(
-    (e) => e.id === extraTapId || e.id === extraCoolerId,
+    (e) => e.id === extraTapId || e.id === extraCoolerId || extraAddonIds.includes(e.id),
   );
   const taps = (initialExtras ?? []).filter((e) => e.extra_role === "tap");
   const coolers = (initialExtras ?? []).filter((e) => e.extra_role === "cooler");
+  const addons = (initialExtras ?? []).filter((e) => e.extra_role === "addon");
 
-  // Determinar si el producto seleccionado admite extras
-  const acceptsExtras = !!selectedProduct?.category_accepts_extras;
+  // El paso de extras aparece si la categoría del producto admite extras
+  // clásicos (grifería/enfriador) O si hay extras genéricos disponibles
+  // (productos marcados como "extra del configurador"). Así, en los equipos
+  // del configurador sale la pestaña de añadir extra.
+  const acceptsExtras = !!selectedProduct?.category_accepts_extras || addons.length > 0;
 
   // Calcular resultado al llegar al paso 9
   useEffect(() => {
@@ -786,6 +792,7 @@ export function SavingsWizard(props: Props) {
                         // reset extras
                         setExtraTapId(null);
                         setExtraCoolerId(null);
+                        setExtraAddonIds([]);
                       }}
                       className={`flex flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition ${
                         sel ? "border-primary bg-primary/10" : "border-border bg-card hover:border-primary/40"
@@ -824,10 +831,12 @@ export function SavingsWizard(props: Props) {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold">Extras (opcionales)</h2>
             <p className="text-sm text-muted-foreground">
-              Añade grifería y/o enfriador. Se suma al coste mensual.
+              Añade los extras que quiera el cliente. Se suman al coste.
             </p>
 
-            {/* Grifería */}
+            {/* Grifería / Enfriador: solo si la categoría del equipo los admite */}
+            {selectedProduct?.category_accepts_extras && (
+            <>
             <div>
               <h3 className="font-bold mb-2">Grifería</h3>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -892,6 +901,48 @@ export function SavingsWizard(props: Props) {
                 })}
               </div>
             </div>
+            </>
+            )}
+
+            {/* Extras genéricos (productos marcados como "extra del configurador").
+                Selección múltiple: el cliente puede añadir varios. */}
+            {addons.length > 0 && (
+              <div>
+                <h3 className="font-bold mb-2">Añadir extras</h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {addons.map((e) => {
+                    const planRow = e.pricing.find((pr) => {
+                      if (pr.plan_type !== planType) return false;
+                      if (planType === "renting") return pr.duration_months === duration;
+                      return true;
+                    });
+                    const price =
+                      planType === "cash" ? planRow?.total_cents : planRow?.monthly_cents;
+                    const checked = extraAddonIds.includes(e.id);
+                    return (
+                      <ExtraOption
+                        key={e.id}
+                        selected={checked}
+                        onClick={() =>
+                          setExtraAddonIds((prev) =>
+                            prev.includes(e.id)
+                              ? prev.filter((x) => x !== e.id)
+                              : [...prev, e.id],
+                          )
+                        }
+                        label={e.name}
+                        sublabel={e.category_name}
+                        price={price ?? null}
+                        planType={planType ?? "cash"}
+                      />
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Pulsa para añadir o quitar. Puedes elegir varios.
+                </p>
+              </div>
+            )}
           </div>
         )}
 

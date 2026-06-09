@@ -161,6 +161,7 @@ export function FiltersListClient({ filters, stockByFilter = {}, canEdit }: Prop
         main_image_url: f.main_image_url ?? null,
         is_active: f.is_active ?? true,
         notes: f.notes ?? null,
+        show_in_catalog: f.show_in_catalog ?? false,
       });
       if (!r.ok) {
         notify.error("No se pudo guardar el filtro", r.error);
@@ -298,11 +299,14 @@ export function FiltersListClient({ filters, stockByFilter = {}, canEdit }: Prop
                     {f.assignment_count ?? 0}
                   </td>
                   <td className="px-4 py-3">
-                    {f.is_active ? (
-                      <Badge variant="success">Activo</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactivo</Badge>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {f.is_active ? (
+                        <Badge variant="success">Activo</Badge>
+                      ) : (
+                        <Badge variant="secondary">Inactivo</Badge>
+                      )}
+                      {f.show_in_catalog && <Badge variant="outline">En catálogo</Badge>}
+                    </div>
                   </td>
                   {canEdit && (
                     <td className="px-4 py-3 text-right">
@@ -580,6 +584,28 @@ export function FiltersListClient({ filters, stockByFilter = {}, canEdit }: Prop
                   }
                 />
                 Gestionar stock
+              </label>
+              <label className="flex items-start gap-2 text-sm sm:col-span-2 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+                <input
+                  type="checkbox"
+                  checked={state.filter.show_in_catalog ?? false}
+                  onChange={(e) =>
+                    setState((s) => ({
+                      ...s,
+                      filter: { ...s.filter, show_in_catalog: e.target.checked },
+                    }))
+                  }
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block font-semibold text-emerald-900">
+                    Vender suelto / mostrar en catálogo
+                  </span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    Además de ser recambio, este filtro se puede vender por sí mismo.
+                    Asegúrate de ponerle precio de venta arriba.
+                  </span>
+                </span>
               </label>
             </div>
             <div className="mt-6 flex justify-end gap-2">

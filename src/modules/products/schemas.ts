@@ -9,6 +9,31 @@ export const KIND_LABEL: Record<(typeof PRODUCT_KIND)[number], string> = {
   service: "Servicio",
 };
 
+/**
+ * Papeles ADICIONALES de un producto (además de su `kind` principal). Un mismo
+ * producto puede tener varios a la vez (ej. la grifería: vendible suelta Y extra
+ * del configurador). Ver migración 20260609110000_products_roles.sql.
+ */
+export const PRODUCT_ROLES = [
+  "sellable_standalone",
+  "configurator_extra",
+  "spare_part_role",
+  "accessory_role",
+] as const;
+export type ProductRole = (typeof PRODUCT_ROLES)[number];
+export const ROLE_LABEL: Record<ProductRole, string> = {
+  sellable_standalone: "Se vende suelto",
+  configurator_extra: "Extra del configurador",
+  spare_part_role: "También es recambio",
+  accessory_role: "Es un accesorio",
+};
+export const ROLE_HELP: Record<ProductRole, string> = {
+  sellable_standalone: "Aparece en el catálogo y se puede añadir a propuestas por sí mismo.",
+  configurator_extra: "Se puede ofrecer como extra al configurar otro equipo (ej. grifería de una ósmosis).",
+  spare_part_role: "Sirve como recambio compatible con uno o varios equipos.",
+  accessory_role: "Complemento de otro producto.",
+};
+
 export const productCreateSchema = z.object({
   name: z.string().min(2, "Nombre obligatorio"),
   kind: z.enum(PRODUCT_KIND).default("equipment"),

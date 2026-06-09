@@ -19,7 +19,7 @@ import { CollapsibleCard } from "@/modules/products/collapsible-card";
 import { PriceHistoryCard } from "@/modules/products/price-history-card";
 import { listPriceHistory } from "@/modules/products/bulk-actions";
 import { Badge } from "@/shared/ui/badge";
-import { KIND_LABEL } from "@/modules/products/schemas";
+import { KIND_LABEL, ROLE_LABEL, type ProductRole } from "@/modules/products/schemas";
 import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { isProductEditor } from "@/modules/products/permissions";
@@ -159,6 +159,21 @@ export default async function ProductDetailPage({
           <p className="mt-0.5 text-xs uppercase tracking-wide text-muted-foreground">
             {KIND_LABEL[product.kind]}
           </p>
+          {(() => {
+            const roles = ((product as { roles?: string[] | null }).roles ?? []).filter(
+              (r): r is ProductRole => r in ROLE_LABEL,
+            );
+            if (roles.length === 0) return null;
+            return (
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {roles.map((r) => (
+                  <Badge key={r} variant="outline">
+                    {ROLE_LABEL[r]}
+                  </Badge>
+                ))}
+              </div>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-3">
           {canEdit && (
@@ -179,6 +194,7 @@ export default async function ProductDetailPage({
                 stock_min: product.stock_min ?? 0,
                 show_in_calculator:
                   (product as { show_in_calculator?: boolean }).show_in_calculator ?? false,
+                roles: (product as { roles?: string[] | null }).roles ?? [],
               }}
               categories={categories}
             />

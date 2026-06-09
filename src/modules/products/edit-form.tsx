@@ -8,6 +8,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { updateProductAction, toggleShowInCalculatorAction } from "./actions";
+import { PRODUCT_ROLES, ROLE_LABEL, ROLE_HELP, type ProductRole } from "./schemas";
 
 export function ProductEditButton({
   productId,
@@ -31,6 +32,7 @@ export function ProductEditButton({
     show_in_calculator: boolean;
     installation_manual_url?: string | null;
     installation_notes?: string | null;
+    roles?: string[] | null;
   };
   categories: { id: string; name: string }[];
 }) {
@@ -54,6 +56,10 @@ export function ProductEditButton({
     installation_manual_url: initial.installation_manual_url ?? "",
     installation_notes: initial.installation_notes ?? "",
   });
+  const [roles, setRoles] = useState<string[]>(initial.roles ?? []);
+  function toggleRole(r: ProductRole) {
+    setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
+  }
 
   function save() {
     if (!form.name.trim()) {
@@ -77,6 +83,7 @@ export function ProductEditButton({
         show_in_calculator: form.show_in_calculator,
         installation_manual_url: form.installation_manual_url.trim() || null,
         installation_notes: form.installation_notes.trim() || null,
+        roles,
       });
       if (!r.ok) {
         notify.error("No se pudo guardar", r.error);
@@ -242,6 +249,40 @@ export function ProductEditButton({
                   </div>
                 </div>
               </label>
+
+              {/* Roles: cómo se usa este producto (Fase B). Un producto puede
+                  tener varios papeles a la vez (ej. grifería: suelta + extra). */}
+              <div className="space-y-2 rounded-xl border-2 border-emerald-200 bg-emerald-50/40 p-3">
+                <div className="text-sm font-bold text-emerald-900">
+                  🧩 ¿Cómo se usa este producto?
+                </div>
+                <p className="text-[11px] text-emerald-800">
+                  Marca todo lo que aplique. Un mismo producto puede usarse de varias
+                  formas (por ejemplo, una grifería que se vende suelta y además se ofrece
+                  como extra de una ósmosis).
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {PRODUCT_ROLES.map((r) => (
+                    <label
+                      key={r}
+                      className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-card p-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={roles.includes(r)}
+                        onChange={() => toggleRole(r)}
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold">{ROLE_LABEL[r]}</span>
+                        <span className="block text-[11px] text-muted-foreground">
+                          {ROLE_HELP[r]}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
               {/* Ayudas a la instalación: PDF manual + notas */}
               <div className="space-y-3 rounded-xl border-2 border-amber-200 bg-amber-50/40 p-3">

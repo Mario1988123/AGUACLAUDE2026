@@ -41,6 +41,8 @@ export interface ProductFilterItem {
   main_image_url: string | null;
   is_active: boolean;
   notes: string | null;
+  /** Vendible suelto / mostrar en catálogo (Fase C). false si la migración no se aplicó. */
+  show_in_catalog?: boolean;
   /** Equipos a los que está asignado este filtro. */
   assignment_count?: number;
 }
@@ -61,20 +63,25 @@ export async function listProductFilters(filters?: {
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  let q = supabase
-    .from("product_filters")
-    .select(
-      "id, name, internal_reference, manufacturer_name, manufacturer_model, filter_type, micron_rating, size_inches, connection_inches, capacity_liters, lifespan_months, cost_cents, sale_price_cents, stock_managed, stock_min, stock_max, supplier_lead_time_days, main_image_url, is_active, notes",
-    )
-    .is("deleted_at", null)
-    .order("name");
-  if (filters?.filter_type) q = q.eq("filter_type", filters.filter_type);
-  if (filters?.active_only) q = q.eq("is_active", true);
-  if (filters?.q) {
-    const txt = filters.q.replace(/[%_]/g, "");
-    q = q.or(`name.ilike.%${txt}%,internal_reference.ilike.%${txt}%`);
+  const BASE_COLS =
+    "id, name, internal_reference, manufacturer_name, manufacturer_model, filter_type, micron_rating, size_inches, connection_inches, capacity_liters, lifespan_months, cost_cents, sale_price_cents, stock_managed, stock_min, stock_max, supplier_lead_time_days, main_image_url, is_active, notes";
+  function build(cols: string) {
+    let q = supabase.from("product_filters").select(cols).is("deleted_at", null).order("name");
+    if (filters?.filter_type) q = q.eq("filter_type", filters.filter_type);
+    if (filters?.active_only) q = q.eq("is_active", true);
+    if (filters?.q) {
+      const txt = filters.q.replace(/[%_]/g, "");
+      q = q.or(`name.ilike.%${txt}%,internal_reference.ilike.%${txt}%`);
+    }
+    return q;
   }
-  const { data } = await q;
+  // Defensivo: show_in_catalog es columna nueva (migración 20260609120000).
+  let { data, error } = await build(BASE_COLS + ", show_in_catalog");
+  if (error && /show_in_catalog/i.test(error.message ?? "")) {
+    const fb = await build(BASE_COLS);
+    data = fb.data;
+    error = fb.error;
+  }
   const rows = (data ?? []) as ProductFilterItem[];
 
   if (rows.length === 0) return [];
@@ -99,14 +106,24 @@ export async function getProductFilter(filterId: string): Promise<ProductFilterI
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data } = await supabase
+  const BASE_COLS =
+    "id, name, internal_reference, manufacturer_name, manufacturer_model, filter_type, micron_rating, size_inches, connection_inches, capacity_liters, lifespan_months, cost_cents, sale_price_cents, stock_managed, stock_min, stock_max, supplier_lead_time_days, main_image_url, is_active, notes";
+  const res = await supabase
     .from("product_filters")
-    .select(
-      "id, name, internal_reference, manufacturer_name, manufacturer_model, filter_type, micron_rating, size_inches, connection_inches, capacity_liters, lifespan_months, cost_cents, sale_price_cents, stock_managed, stock_min, stock_max, supplier_lead_time_days, main_image_url, is_active, notes",
-    )
+    .select(BASE_COLS + ", show_in_catalog")
     .eq("id", filterId)
     .is("deleted_at", null)
     .maybeSingle();
+  let data = res.data;
+  if (res.error && /show_in_catalog/i.test(res.error.message ?? "")) {
+    const fb = await supabase
+      .from("product_filters")
+      .select(BASE_COLS)
+      .eq("id", filterId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    data = fb.data;
+  }
   return (data ?? null) as ProductFilterItem | null;
 }
 
@@ -134,6 +151,7 @@ export interface UpsertFilterInput {
   main_image_url?: string | null;
   is_active?: boolean;
   notes?: string | null;
+  show_in_catalog?: boolean;
 }
 
 export async function upsertProductFilterAction(
@@ -171,25 +189,43 @@ export async function upsertProductFilterAction(
       main_image_url: input.main_image_url?.trim() || null,
       is_active: input.is_active ?? true,
       notes: input.notes?.trim() || null,
+      // Columna nueva (migración 20260609120000). Defensivo más abajo.
+      show_in_catalog: input.show_in_catalog ?? false,
     };
+    const isNewColError = (msg: string | undefined) => /show_in_catalog/i.test(msg ?? "");
 
     if (input.id) {
-      const { error } = await admin
+      let { error } = await admin
         .from("product_filters")
         .update(payload)
         .eq("id", input.id)
         .eq("company_id", session.company_id);
+      if (error && isNewColError(error.message)) {
+        const { show_in_catalog: _omit, ...rest } = payload;
+        const r2 = await admin
+          .from("product_filters")
+          .update(rest)
+          .eq("id", input.id)
+          .eq("company_id", session.company_id);
+        error = r2.error;
+      }
       if (error) return { ok: false, error: error.message };
       revalidatePath("/productos/filtros");
       revalidatePath(`/productos/filtros/${input.id}`);
       return { ok: true, id: input.id };
     }
     payload.created_by = session.user_id;
-    const { data, error } = await admin
+    let { data, error } = await admin
       .from("product_filters")
       .insert(payload)
       .select("id")
       .single();
+    if (error && isNewColError(error.message)) {
+      const { show_in_catalog: _omit, ...rest } = payload;
+      const r2 = await admin.from("product_filters").insert(rest).select("id").single();
+      data = r2.data;
+      error = r2.error;
+    }
     if (error) {
       if ((error as { code?: string }).code === "23505") {
         return { ok: false, error: "Ya hay un filtro con esa referencia interna." };
