@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { parseOrFriendly, zBoolean } from "@/shared/lib/zod-friendly";
 
 export interface WarehouseSettings {
   valuation_method: "PMP" | "FIFO";
@@ -70,11 +70,11 @@ const schema = z.object({
   alert_no_rotation_days: z.coerce.number().int().min(1),
   alert_min_company_age_days: z.coerce.number().int().min(0),
   alerts_enabled: z.object({
-    below_min: z.coerce.boolean(),
-    predictive_low: z.coerce.boolean(),
-    over_max: z.coerce.boolean(),
-    no_rotation_90d: z.coerce.boolean(),
-    no_lead_time_set: z.coerce.boolean(),
+    below_min: zBoolean(),
+    predictive_low: zBoolean(),
+    over_max: zBoolean(),
+    no_rotation_90d: zBoolean(),
+    no_lead_time_set: zBoolean(),
   }),
   default_iva_pct: z.coerce.number().min(0).max(100),
 });

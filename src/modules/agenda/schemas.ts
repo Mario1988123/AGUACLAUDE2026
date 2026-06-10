@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 
 export const AGENDA_KIND = [
   "visit",
@@ -20,7 +21,7 @@ export const agendaCreateSchema = z.object({
   description: z.string().optional().default(""),
   starts_at: z.string().min(1, "Fecha/hora obligatoria"),
   ends_at: z.string().optional().default(""),
-  all_day: z.coerce.boolean().default(false),
+  all_day: zBoolean().default(false),
   assigned_user_id: z.string().uuid().optional(),
   subject_type: z.string().optional(),
   subject_id: z.string().uuid().optional(),

@@ -13,7 +13,31 @@
  * `err instanceof Error ? err.message : String(err)`.
  */
 
-import type { z } from "zod";
+import { z } from "zod";
+
+/**
+ * Booleano seguro para formularios. NUNCA uses z.coerce.boolean() con
+ * campos que vienen de un <form>/FormData: z.coerce.boolean() hace
+ * Boolean(valor), y Boolean("false") === true, así que la cadena "false"
+ * (la que mandan los checkboxes/hidden cuando están desmarcados) se
+ * convertía en TRUE. Eso provocaba, p.ej., que un lead/cliente de EMPRESA
+ * se tratara como autónomo, o que un interruptor desmarcado se guardara
+ * activado.
+ *
+ * zBoolean() interpreta "true"/"1"/"on"/"yes"/"sí" como true y el resto
+ * (incluida "false") como false. Soporta encadenar .optional()/.default():
+ *   is_autonomo: zBoolean().optional().default(false)
+ *   all_day:     zBoolean().default(false)
+ */
+export function zBoolean() {
+  return z.preprocess(
+    (v) =>
+      typeof v === "string"
+        ? ["true", "1", "on", "yes", "sí", "si"].includes(v.trim().toLowerCase())
+        : Boolean(v),
+    z.boolean(),
+  );
+}
 
 /**
  * Generic preserva la inferencia de defaults/transforms del schema

@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { parseOrFriendly, zBoolean } from "@/shared/lib/zod-friendly";
 
 export type FinancierKind = "renting_strict" | "financing";
 
@@ -54,10 +54,10 @@ const financierSchema = z.object({
   kind: z.enum(["renting_strict", "financing"]),
   residual_pct: z.coerce.number().min(0).max(100).optional().nullable(),
   reserve_pct: z.coerce.number().min(0).max(100).optional().nullable(),
-  accepts_individual: z.coerce.boolean().default(false),
-  accepts_autonomo: z.coerce.boolean().default(true),
-  accepts_company: z.coerce.boolean().default(true),
-  is_active: z.coerce.boolean().default(true),
+  accepts_individual: zBoolean().default(false),
+  accepts_autonomo: zBoolean().default(true),
+  accepts_company: zBoolean().default(true),
+  is_active: zBoolean().default(true),
   sort_order: z.coerce.number().int().default(0),
   fiscal_legal_name: z.string().optional().nullable(),
   fiscal_tax_id: z.string().optional().nullable(),

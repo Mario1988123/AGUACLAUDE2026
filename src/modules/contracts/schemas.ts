@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 
 export const CONTRACT_STATUS = [
   "draft",
@@ -51,7 +52,7 @@ export const contractCreateSchema = z.object({
   total_cash_cents: z.coerce.number().int().min(0).optional().nullable(),
   monthly_cents: z.coerce.number().int().min(0).optional().nullable(),
   permanence_months: z.coerce.number().int().min(0).optional().nullable(),
-  maintenance_included: z.coerce.boolean().default(false),
+  maintenance_included: zBoolean().default(false),
   maintenance_periodicity_months: z.coerce.number().int().min(1).optional().nullable(),
   maintenance_months_included: z.coerce.number().int().min(0).optional().nullable(),
   notes: z.string().optional().default(""),

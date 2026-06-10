@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 import {
   validateSpanishPhone,
   validateSpanishPostalCode,
@@ -66,19 +67,9 @@ export const STATUS_VARIANT: Record<
 export const leadCreateSchema = z
   .object({
     party_kind: z.enum(PARTY_KIND),
-    // OJO: z.coerce.boolean() convierte la cadena "false" en true
-    // (Boolean("false") === true en JS), lo que rompía el alta de lead de
-    // EMPRESA: el sistema lo trataba como autónomo y exigía el nombre de
-    // contacto en vez de la razón social. Parseamos a mano el booleano.
-    is_autonomo: z
-      .preprocess(
-        (v) =>
-          typeof v === "string"
-            ? ["true", "1", "on", "yes", "sí", "si"].includes(v.trim().toLowerCase())
-            : Boolean(v),
-        z.boolean(),
-      )
-      .default(false),
+    // zBoolean (no z.coerce.boolean): Boolean("false") === true rompía el
+    // alta de lead de EMPRESA (lo trataba como autónomo). Ver helper.
+    is_autonomo: zBoolean().optional().default(false),
     legal_name: z.string().optional().default(""),
     trade_name: z.string().optional().default(""),
     first_name: z.string().optional().default(""),

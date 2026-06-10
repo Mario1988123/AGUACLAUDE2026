@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 import { validateSpanishPhone } from "@/shared/lib/validations/spanish";
 
 export const customerCreateSchema = z
@@ -8,7 +9,7 @@ export const customerCreateSchema = z
      *  como persona física pero opera como empresa. A efectos de IVA/
      *  precio se comporta como empresa, pero el módulo de financieras
      *  lo distingue para filtrar qué financiera puede ofrecerse. */
-    is_autonomo: z.coerce.boolean().optional().default(false),
+    is_autonomo: zBoolean().optional().default(false),
     legal_name: z.string().optional().default(""),
     trade_name: z.string().optional().default(""),
     first_name: z.string().optional().default(""),
@@ -60,7 +61,7 @@ export const customerUpdateSchema = z
     tax_id: z.string().optional(),
     /** Necesario para validar tax_id según particular vs empresa. */
     party_kind: z.enum(["individual", "company"]).optional(),
-    is_autonomo: z.coerce.boolean().optional(),
+    is_autonomo: zBoolean().optional(),
     notes: z.string().optional(),
   })
   // Tax ID: NO bloqueamos por formato — TaxIdInput avisa, admin responsable.

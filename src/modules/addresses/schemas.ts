@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 
 export const ADDRESS_KIND = [
   "fiscal",
@@ -73,7 +74,7 @@ export const addressUpsertSchema = z
     customer_id: z.string().uuid().nullish(),
     kind: z.enum(ADDRESS_KIND).default("home"),
     label: optStr,
-    is_primary: z.coerce.boolean().default(false),
+    is_primary: zBoolean().default(false),
     contact_name: optStr,
     contact_phone: optStr,
     street_type: z.enum(STREET_TYPE).default("calle"),

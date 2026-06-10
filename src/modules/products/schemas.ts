@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 
 export const PRODUCT_KIND = ["equipment", "spare_part", "accessory", "consumable", "service"] as const;
 export const KIND_LABEL: Record<(typeof PRODUCT_KIND)[number], string> = {
@@ -57,7 +58,7 @@ export const productCreateSchema = z.object({
   dim_height_mm: z.coerce.number().int().min(0).optional().nullable(),
   dim_depth_mm: z.coerce.number().int().min(0).optional().nullable(),
   weight_grams: z.coerce.number().int().min(0).optional().nullable(),
-  stock_managed: z.coerce.boolean().default(true),
+  stock_managed: zBoolean().default(true),
   stock_min: z.coerce.number().int().min(0).default(0),
   // Plan inicial cash
   cash_total_cents: z.coerce.number().int().min(0).optional().nullable(),

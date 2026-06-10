@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zBoolean } from "@/shared/lib/zod-friendly";
 
 export const PROPOSAL_STATUS = [
   "draft",
@@ -50,14 +51,14 @@ const proposalItemSchema = z.object({
   product_id: z.string().uuid(),
   quantity: z.coerce.number().int().min(1).default(1),
   unit_price_cents: z.coerce.number().int().min(0),
-  installation_included: z.coerce.boolean().default(true),
+  installation_included: zBoolean().default(true),
   installation_price_cents: z.coerce.number().int().min(0).nullable().default(null),
-  maintenance_included: z.coerce.boolean().default(false),
+  maintenance_included: zBoolean().default(false),
   maintenance_until_date: z.string().nullable().default(null),
   maintenance_price_cents: z.coerce.number().int().min(0).nullable().default(null),
   maintenance_periodicity_months: z.coerce.number().int().nullable().default(null),
   deposit_cents: z.coerce.number().int().min(0).nullable().default(null),
-  charge_first_payment_now: z.coerce.boolean().default(false),
+  charge_first_payment_now: zBoolean().default(false),
 });
 
 export const proposalCreateSchema = z
@@ -73,7 +74,7 @@ export const proposalCreateSchema = z
      * Si true, la propuesta se acepta automáticamente y se genera el
      * contrato. Caso "cliente acepta de palabra sin propuesta formal".
      */
-    auto_accept: z.coerce.boolean().default(false),
+    auto_accept: zBoolean().default(false),
     // Datos de financiera (Fase 4 — solo aplicables cuando plan = renting).
     financier_id: z.string().uuid().optional().nullable(),
     financier_payment_cents: z.coerce.number().int().min(0).optional().nullable(),
