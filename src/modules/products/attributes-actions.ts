@@ -151,6 +151,23 @@ export async function listProductAttributeValues(productId: string): Promise<Pro
   });
 }
 
+/** Traduce el error de BD al guardar un atributo a un mensaje legible. El
+ *  caso típico: el identificador (key) ya existe en esa categoría — pasa
+ *  mucho cuando la categoría trae atributos precargados del catálogo global
+ *  y se intenta añadir uno con el mismo nombre. */
+function friendlyAttrError(
+  error: { code?: string; message?: string } | null,
+  key: string,
+): string {
+  if (
+    error?.code === "23505" ||
+    /duplicate key|unique/i.test(error?.message ?? "")
+  ) {
+    return `Ya existe una característica con el identificador «${key}» en esta categoría. Cámbiale el nombre o edita la que ya hay.`;
+  }
+  return error?.message || "No se pudo guardar la característica.";
+}
+
 export async function upsertAttributeAction(input: unknown): Promise<string | undefined> {
   const session = await ensureAdmin();
   const parsed = parseOrFriendly(attributeUpsertSchema, input, "Atributo producto");
@@ -169,13 +186,23 @@ export async function upsertAttributeAction(input: unknown): Promise<string | un
   };
   let id = parsed.id;
   if (parsed.id) {
-    await admin.from("product_attributes").update(payload).eq("id", parsed.id);
+    // ANTES: el error del update se ignoraba → fallo silencioso.
+    const { error } = await admin
+      .from("product_attributes")
+      .update(payload)
+      .eq("id", parsed.id);
+    if (error) throw new Error(friendlyAttrError(error, parsed.key));
   } else {
-    const { data } = await admin
+    // ANTES: solo se leía `data`, no `error`. Si el insert chocaba con
+    // unique(company_id, category_id, key), `data` venía null, `id`
+    // quedaba undefined y NO se lanzaba nada: la UI decía "Guardado" pero
+    // no guardaba. Ahora comprobamos el error y avisamos claro.
+    const { data, error } = await admin
       .from("product_attributes")
       .insert(payload)
       .select("id")
       .single();
+    if (error) throw new Error(friendlyAttrError(error, parsed.key));
     id = (data as { id: string } | null)?.id;
   }
   revalidatePath("/configuracion/productos");

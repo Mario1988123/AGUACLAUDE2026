@@ -289,6 +289,26 @@ export async function createCategoryAction(formData: FormData) {
   if (!name) throw new Error("Nombre obligatorio");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // Pre-chequeo de duplicados SIN distinguir mayúsculas/tildes: tu copia
+  // local no admite dos categorías con el mismo nombre (unique company_id,
+  // name) y, al precargar del catálogo global, ya te quedan con esos
+  // nombres. Avisamos claro en vez de soltar el error técnico de Postgres.
+  const norm = (s: string) =>
+    s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+  const { data: existingCats } = await admin
+    .from("product_categories")
+    .select("name")
+    .eq("company_id", session.company_id);
+  const dup = ((existingCats ?? []) as Array<{ name: string }>).find(
+    (c) => norm(c.name) === norm(name),
+  );
+  if (dup) {
+    throw new Error(
+      `Ya tienes una categoría llamada «${dup.name}». Usa otro nombre o edita la que ya existe.`,
+    );
+  }
+
   const { error } = await admin.from("product_categories").insert({
     company_id: session.company_id,
     name,
@@ -296,7 +316,15 @@ export async function createCategoryAction(formData: FormData) {
     is_active: true,
     created_by: session.user_id,
   } as never);
-  if (error) throw error;
+  if (error) {
+    // Backstop por si dos usuarios crean a la vez el mismo nombre.
+    if ((error as { code?: string }).code === "23505") {
+      throw new Error(
+        `Ya tienes una categoría llamada «${name}». Usa otro nombre o edita la que ya existe.`,
+      );
+    }
+    throw error;
+  }
   revalidatePath("/configuracion/productos");
 }
 
