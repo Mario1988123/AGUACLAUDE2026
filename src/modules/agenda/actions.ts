@@ -105,6 +105,9 @@ export interface AgendaItem {
   is_outside_hours: boolean;
   subject_type: string | null;
   subject_id: string | null;
+  /** Nombre del cliente/lead vinculado a la tarea (si lo hay), para
+   *  mostrarlo en la agenda. Lo rellena enrichTitlesFromSubjects. */
+  subject_label?: string | null;
 }
 
 export async function listAgendaMonth(year: number, month: number): Promise<AgendaItem[]> {
@@ -338,12 +341,23 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   if (events.length === 0) return;
   const installationIds = new Set<string>();
   const maintenanceIds = new Set<string>();
+  // Tareas manuales vinculadas directamente a un cliente o lead.
+  const directCustomerIds = new Set<string>();
+  const leadIds = new Set<string>();
   for (const e of events) {
     if (!e.subject_id) continue;
     if (e.subject_type === "installation") installationIds.add(e.subject_id);
     else if (e.subject_type === "maintenance") maintenanceIds.add(e.subject_id);
+    else if (e.subject_type === "customer") directCustomerIds.add(e.subject_id);
+    else if (e.subject_type === "lead") leadIds.add(e.subject_id);
   }
-  if (installationIds.size === 0 && maintenanceIds.size === 0) return;
+  if (
+    installationIds.size === 0 &&
+    maintenanceIds.size === 0 &&
+    directCustomerIds.size === 0 &&
+    leadIds.size === 0
+  )
+    return;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -371,6 +385,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   const custIds = new Set<string>();
   for (const i of insts) if (i.customer_id) custIds.add(i.customer_id);
   for (const m of maints) if (m.customer_id) custIds.add(m.customer_id);
+  for (const id of directCustomerIds) custIds.add(id);
 
   const nameMap = new Map<string, string>();
   if (custIds.size > 0) {
@@ -395,6 +410,30 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
     }
   }
 
+  // Nombres de leads vinculados directamente a una tarea.
+  const leadNameMap = new Map<string, string>();
+  if (leadIds.size > 0) {
+    const { data: ls } = await supabase
+      .from("leads")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .in("id", Array.from(leadIds));
+    for (const l of (ls ?? []) as Array<{
+      id: string;
+      party_kind: "individual" | "company";
+      legal_name: string | null;
+      trade_name: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    }>) {
+      leadNameMap.set(
+        l.id,
+        l.party_kind === "company"
+          ? l.trade_name || l.legal_name || "Lead"
+          : `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "Lead",
+      );
+    }
+  }
+
   const instById = new Map(insts.map((i) => [i.id, i]));
   const maintById = new Map(maints.map((m) => [m.id, m]));
 
@@ -408,11 +447,29 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
       if (ref && cust) e.title = `Instalación · ${ref} · ${cust}`;
       else if (ref) e.title = `Instalación · ${ref}`;
       else if (cust) e.title = `Instalación · ${cust}`;
+      if (cust) e.subject_label = cust;
     } else if (e.subject_type === "maintenance") {
       const m = maintById.get(e.subject_id);
       if (!m) continue;
       const cust = m.customer_id ? nameMap.get(m.customer_id) : null;
-      if (cust) e.title = `Mantenimiento · ${cust}`;
+      if (cust) {
+        e.title = `Mantenimiento · ${cust}`;
+        e.subject_label = cust;
+      }
+    } else if (e.subject_type === "customer") {
+      // Tarea manual vinculada a un cliente: conservamos el título que
+      // escribió el usuario y añadimos el nombre del cliente.
+      const cust = nameMap.get(e.subject_id);
+      if (cust) {
+        e.subject_label = cust;
+        if (!e.title.includes(cust)) e.title = `${e.title} · ${cust}`;
+      }
+    } else if (e.subject_type === "lead") {
+      const lead = leadNameMap.get(e.subject_id);
+      if (lead) {
+        e.subject_label = lead;
+        if (!e.title.includes(lead)) e.title = `${e.title} · ${lead}`;
+      }
     }
   }
 }
@@ -649,6 +706,94 @@ async function recomputeOutsideHoursForList(
     }
     return { ...ev, is_outside_hours: outside };
   });
+}
+
+export interface AgendaSubjectHit {
+  subject_type: "customer" | "lead";
+  subject_id: string;
+  label: string;
+  sublabel: string | null;
+}
+
+/**
+ * Busca clientes y leads por nombre/teléfono para vincularlos a una tarea
+ * de la agenda. Usa el cliente con RLS (createClient), así que el
+ * aislamiento por empresa y el scope por rol los aplica la base de datos.
+ * Devuelve como mucho ~16 resultados (8 clientes + 8 leads).
+ */
+export async function searchAgendaSubjectsAction(
+  query: string,
+): Promise<AgendaSubjectHit[]> {
+  const session = await requireSession();
+  if (!session.company_id) return [];
+  const q = (query || "").trim();
+  if (q.length < 2) return [];
+  // Saneamos caracteres que tienen significado en el filtro .or() de
+  // PostgREST (comodines % _, separador de coma, paréntesis de grupo).
+  const safe = q.replace(/[%_,()]/g, " ").replace(/\s+/g, " ").trim();
+  if (!safe) return [];
+  const like = `%${safe}%`;
+  const orFilter = [
+    `legal_name.ilike.${like}`,
+    `trade_name.ilike.${like}`,
+    `first_name.ilike.${like}`,
+    `last_name.ilike.${like}`,
+    `phone_primary.ilike.${like}`,
+  ].join(",");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+
+  type Row = {
+    id: string;
+    party_kind: "individual" | "company";
+    legal_name: string | null;
+    trade_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    phone_primary: string | null;
+  };
+  const cols = "id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary";
+
+  const [custRes, leadRes] = await Promise.all([
+    supabase
+      .from("customers")
+      .select(cols)
+      .is("deleted_at", null)
+      .or(orFilter)
+      .limit(8),
+    supabase
+      .from("leads")
+      .select(cols)
+      .is("deleted_at", null)
+      .neq("status", "converted")
+      .or(orFilter)
+      .limit(8),
+  ]);
+
+  const nameOf = (r: Row) =>
+    r.party_kind === "company"
+      ? r.trade_name || r.legal_name || "Sin nombre"
+      : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Sin nombre";
+
+  const hits: AgendaSubjectHit[] = [];
+  for (const r of (custRes.data ?? []) as Row[]) {
+    hits.push({
+      subject_type: "customer",
+      subject_id: r.id,
+      label: nameOf(r),
+      sublabel: r.phone_primary,
+    });
+  }
+  for (const r of (leadRes.data ?? []) as Row[]) {
+    hits.push({
+      subject_type: "lead",
+      subject_id: r.id,
+      label: nameOf(r),
+      sublabel: r.phone_primary,
+    });
+  }
+  return hits;
 }
 
 /**

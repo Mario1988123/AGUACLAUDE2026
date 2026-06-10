@@ -333,19 +333,10 @@ export async function createLeadAction(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const parsed = parseOrFriendly(leadCreateSchema, raw, "Lead");
 
-  // Dirección obligatoria — el wizard front-end ya valida esto pero
-  // duplicamos en server por si alguien crea por API directa. Antes el
-  // lead se podía guardar con calle vacía y al convertir a cliente
-  // saltaba aviso de "sin dirección" sin opción cómoda de corrección.
-  if (
-    !parsed.address_street?.trim() ||
-    !parsed.address_postal_code?.trim() ||
-    !parsed.address_city?.trim()
-  ) {
-    throw new Error(
-      "Dirección incompleta: calle, código postal y población son obligatorios",
-    );
-  }
+  // Dirección 100% opcional (decisión 2026-06-10): se puede crear un lead
+  // sin calle/CP/población. Si más abajo hay calle+CP se persiste como
+  // dirección principal; si no, el lead se abre con el formulario de
+  // dirección (?address=open) para completarla cuando se quiera.
 
   // Anti-duplicado server-side (cubre el caso de dos comerciales creando a la vez)
   const dups = await checkDedupe({

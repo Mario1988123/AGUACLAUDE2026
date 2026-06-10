@@ -19,6 +19,7 @@ import { upsertAddressSafeAction } from "./actions";
 import {
   provinceFromPostalCode,
   validateSpanishPostalCode,
+  provincesMatch,
 } from "@/shared/lib/validations/spanish";
 import { reverseGeocodeAction as reverseGeocode, forwardGeocodeAction as forwardGeocode } from "@/shared/lib/geocoding/actions";
 import { detectStreetType } from "@/shared/lib/geocoding/street-type";
@@ -127,9 +128,11 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       ? provinceFromPostalCode(cpForProvince)
       : null;
     const revProvince = rev.province ?? "";
+    // Si el mapa devolvió una variante cooficial del mismo sitio
+    // (Bizkaia/Vizcaya), la conservamos; solo forzamos el nombre del CP
+    // cuando de verdad discrepan.
     const provinceFromRev =
-      cpProvince &&
-      revProvince.toLowerCase().trim() !== cpProvince.toLowerCase().trim()
+      cpProvince && !provincesMatch(revProvince, cpProvince)
         ? cpProvince
         : revProvince;
 
@@ -215,12 +218,11 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       const next = { ...f, [key]: value };
       if (key === "postal_code" && typeof value === "string" && value.length === 5) {
         const p = provinceFromPostalCode(value);
-        // Si el CP es válido y la provincia actual no coincide, la
-        // pisamos. Evita el caso aberrante "CP 46xxx + Provincia Galicia".
-        if (p) {
-          if (!next.province || next.province.toLowerCase().trim() !== p.toLowerCase().trim()) {
-            next.province = p;
-          }
+        // Si el CP es válido y la provincia actual no coincide (ni como
+        // variante cooficial), la pisamos. Evita el caso aberrante "CP
+        // 46xxx + Provincia Galicia", pero respeta "Bizkaia" vs "Vizcaya".
+        if (p && !provincesMatch(next.province, p)) {
+          next.province = p;
         }
       }
       return next;
@@ -350,12 +352,14 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     }
     const expectedProvince = provinceFromPostalCode(cp);
     const current = form.province?.trim() ?? "";
+    // Tolerante a variantes cooficiales (Bizkaia/Vizcaya, A Coruña/La
+    // Coruña…): solo avisamos si de verdad son provincias distintas.
     if (
       expectedProvince &&
       current &&
-      current.toLowerCase() !== expectedProvince.toLowerCase()
+      !provincesMatch(current, expectedProvince)
     ) {
-      return `El CP ${cp} pertenece a ${expectedProvince}, no a "${current}". Corrige la provincia o el CP.`;
+      return `El CP ${cp} pertenece a ${expectedProvince}, no a "${current}". Revisa la provincia o el CP.`;
     }
     if (expectedProvince && !current) {
       return `Indica la provincia. El CP ${cp} corresponde a ${expectedProvince}.`;
@@ -368,10 +372,12 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Geo: solo avisar, nunca bloquear (decisión 2026-06-10). El nombre de
+    // provincia que devuelve el mapa puede ser una variante cooficial; el
+    // banner amarillo ya informa si algo no cuadra, pero dejamos guardar.
     const geoErr = validateGeo();
     if (geoErr) {
-      notify.error("Dirección incoherente", geoErr);
-      return;
+      notify.warning("Revisa la dirección", geoErr);
     }
     // Coordenadas SIEMPRE obligatorias (decisión 2026-05-19): el técnico
     // no puede iniciar parte ni validar GPS si faltan. Si no se han

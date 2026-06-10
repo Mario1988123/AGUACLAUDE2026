@@ -1,33 +1,106 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
-import { createAgendaEventSafeAction } from "./actions";
+import {
+  createAgendaEventSafeAction,
+  searchAgendaSubjectsAction,
+  type AgendaSubjectHit,
+} from "./actions";
 import { AGENDA_KIND } from "./schemas";
 import { KIND_LABEL } from "./constants";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 interface Props {
   teamMembers?: { user_id: string; full_name: string }[];
+  /** Si se pasa, la tarea queda vinculada a este cliente/lead y el selector
+   *  se muestra fijo (no se puede cambiar). Lo usa el botón "Agendar" de la
+   *  ficha de lead. */
+  presetSubject?: { type: "customer" | "lead"; id: string; label: string };
+  /** Título sugerido al abrir (ej. "Visita comercial"). */
+  presetTitle?: string;
+  /** Texto del botón que abre el formulario. */
+  triggerLabel?: string;
+  /** Clases extra del botón disparador (para encajar en barras de la ficha). */
+  triggerClassName?: string;
+  /** Variante visual del botón disparador. */
+  triggerVariant?: "default" | "outline" | "success";
 }
 
-export function CreateAgendaButton({ teamMembers = [] }: Props) {
+const emptyForm = (presetTitle?: string) => ({
+  kind: "manual" as (typeof AGENDA_KIND)[number],
+  title: presetTitle ?? "",
+  description: "",
+  starts_at: "",
+  ends_at: "",
+  assigned_user_id: "",
+  recurrence_freq: "none" as "none" | "daily" | "weekly" | "monthly",
+  recurrence_count: 1,
+});
+
+export function CreateAgendaButton({
+  teamMembers = [],
+  presetSubject,
+  presetTitle,
+  triggerLabel = "Nuevo evento",
+  triggerClassName,
+  triggerVariant = "default",
+}: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [form, setForm] = useState({
-    kind: "manual" as (typeof AGENDA_KIND)[number],
-    title: "",
-    description: "",
-    starts_at: "",
-    ends_at: "",
-    assigned_user_id: "",
-    recurrence_freq: "none" as "none" | "daily" | "weekly" | "monthly",
-    recurrence_count: 1,
-  });
+  const [form, setForm] = useState(emptyForm(presetTitle));
+
+  // Cliente/lead vinculado a la tarea.
+  const presetHit: AgendaSubjectHit | null = presetSubject
+    ? {
+        subject_type: presetSubject.type,
+        subject_id: presetSubject.id,
+        label: presetSubject.label,
+        sublabel: null,
+      }
+    : null;
+  const [subject, setSubject] = useState<AgendaSubjectHit | null>(presetHit);
+  const [subjectQuery, setSubjectQuery] = useState("");
+  const [subjectResults, setSubjectResults] = useState<AgendaSubjectHit[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  // Búsqueda con pequeño retardo (debounce) para no llamar al servidor en
+  // cada tecla. Si el sujeto viene preseleccionado, no se busca.
+  useEffect(() => {
+    if (presetSubject) return;
+    const q = subjectQuery.trim();
+    if (q.length < 2) {
+      setSubjectResults([]);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await searchAgendaSubjectsAction(q);
+        if (!cancelled) setSubjectResults(res);
+      } catch {
+        if (!cancelled) setSubjectResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [subjectQuery, presetSubject]);
+
+  function resetAll() {
+    setForm(emptyForm(presetTitle));
+    setSubject(presetHit);
+    setSubjectQuery("");
+    setSubjectResults([]);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,6 +112,8 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
         starts_at: form.starts_at,
         ends_at: form.ends_at,
         assigned_user_id: form.assigned_user_id || undefined,
+        subject_type: subject?.subject_type,
+        subject_id: subject?.subject_id,
         recurrence_freq: form.recurrence_freq,
         recurrence_count: form.recurrence_count,
       });
@@ -47,24 +122,19 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
         return;
       }
       notify.success("Evento agendado");
-      setForm({
-        kind: "manual",
-        title: "",
-        description: "",
-        starts_at: "",
-        ends_at: "",
-        assigned_user_id: "",
-        recurrence_freq: "none",
-        recurrence_count: 1,
-      });
+      resetAll();
       setOpen(false);
     });
   }
 
   if (!open) {
     return (
-      <Button onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" /> Nuevo evento
+      <Button
+        variant={triggerVariant}
+        className={triggerClassName}
+        onClick={() => setOpen(true)}
+      >
+        <Plus className="h-4 w-4" /> {triggerLabel}
       </Button>
     );
   }
@@ -107,6 +177,82 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Cliente o lead vinculado a la tarea */}
+          <div className="space-y-1.5">
+            <Label>Cliente o lead</Label>
+            {subject ? (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2.5">
+                <span className="flex min-w-0 items-center gap-2 text-sm">
+                  <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold uppercase text-primary">
+                    {subject.subject_type === "customer" ? "Cliente" : "Lead"}
+                  </span>
+                  <span className="truncate font-medium">{subject.label}</span>
+                  {subject.sublabel && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      · {subject.sublabel}
+                    </span>
+                  )}
+                </span>
+                {!presetSubject && (
+                  <button
+                    type="button"
+                    onClick={() => setSubject(null)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label="Quitar"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="relative">
+                <Input
+                  value={subjectQuery}
+                  onChange={(e) => setSubjectQuery(e.target.value)}
+                  placeholder="Buscar cliente o lead por nombre o teléfono…"
+                  autoComplete="off"
+                />
+                {subjectQuery.trim().length >= 2 && (
+                  <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-border bg-card shadow-lg">
+                    {searching && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">Buscando…</div>
+                    )}
+                    {!searching && subjectResults.length === 0 && (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">
+                        Sin resultados
+                      </div>
+                    )}
+                    {subjectResults.map((r) => (
+                      <button
+                        key={`${r.subject_type}:${r.subject_id}`}
+                        type="button"
+                        onClick={() => {
+                          setSubject(r);
+                          setSubjectQuery("");
+                          setSubjectResults([]);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                      >
+                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold uppercase text-primary">
+                          {r.subject_type === "customer" ? "Cliente" : "Lead"}
+                        </span>
+                        <span className="truncate font-medium">{r.label}</span>
+                        {r.sublabel && (
+                          <span className="truncate text-xs text-muted-foreground">
+                            · {r.sublabel}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Opcional. Si lo vinculas, el nombre saldrá en la tarea de la agenda.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -194,7 +340,14 @@ export function CreateAgendaButton({ teamMembers = [] }: Props) {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                resetAll();
+                setOpen(false);
+              }}
+            >
               Cancelar
             </Button>
             <Button type="submit" disabled={pending}>

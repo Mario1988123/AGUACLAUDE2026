@@ -19,6 +19,7 @@ import { Plus, MapPin } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
 import { listTeamMembers } from "@/modules/agenda/actions";
+import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
@@ -171,6 +172,18 @@ export default async function LeadDetailPage({
           </Link>
         )}
       </div>
+
+      {/* Agendar — mismo flujo que la agenda, ya vinculado a este lead.
+          Al pulsar se despliega el formulario completo (cliente prefijado). */}
+      {!isConverted && (
+        <CreateAgendaButton
+          teamMembers={team}
+          presetSubject={{ type: "lead", id: lead.id, label: displayName }}
+          presetTitle="Visita comercial"
+          triggerLabel="📅 Agendar"
+          triggerVariant="outline"
+        />
+      )}
 
       {/* Datos: full-width, Editar en esquina superior derecha */}
       <Card>

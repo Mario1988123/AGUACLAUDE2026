@@ -96,6 +96,71 @@ export function provinceFromPostalCode(cp: string): string | null {
   return SPAIN_PROVINCES[code] ?? null;
 }
 
+// =============================================================================
+// Tolerancia de nombres de provincia (Bizkaia/Vizcaya, A Coruña/La Coruña…)
+// Google/OSM devuelven el nombre cooficial o una variante; nuestra tabla de
+// CP usa el nombre oficial castellano. Antes el form comparaba letra por
+// letra y saltaba un falso "Dirección incoherente" al geolocalizar.
+// =============================================================================
+
+/** Quita tildes y pasa a minúsculas para comparar de forma laxa. */
+function stripDiacritics(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+// Cada grupo = variantes del MISMO sitio. La primera es la canónica.
+const PROVINCE_ALIASES: string[][] = [
+  ["Álava", "Araba"],
+  ["Guipúzcoa", "Gipuzkoa"],
+  ["Vizcaya", "Bizkaia"],
+  ["A Coruña", "La Coruña", "Coruña"],
+  ["Girona", "Gerona"],
+  ["Lleida", "Lérida"],
+  ["Islas Baleares", "Illes Balears", "Baleares", "Balears"],
+  ["Ourense", "Orense"],
+  ["Las Palmas", "Las Palmas de Gran Canaria"],
+  ["Santa Cruz de Tenerife", "Tenerife"],
+  ["Castellón", "Castelló"],
+  ["Valencia", "València"],
+  ["Alicante", "Alacant"],
+  ["Navarra", "Nafarroa"],
+];
+
+// variante normalizada → canónica normalizada
+const PROVINCE_CANONICAL = new Map<string, string>();
+for (const group of PROVINCE_ALIASES) {
+  const canonical = stripDiacritics(group[0]!);
+  for (const name of group) PROVINCE_CANONICAL.set(stripDiacritics(name), canonical);
+}
+
+/** Normaliza un nombre de provincia: quita prefijos ("Provincia de…",
+ *  "Comunidad de…"), tildes y resuelve alias cooficiales a su canónico. */
+export function normalizeProvinceName(value: string): string {
+  let v = stripDiacritics(value ?? "");
+  v = v
+    .replace(
+      /^(provincia de la |provincia de |province of |provincia |provincia de l'|comunidad foral de |comunidad de |comunitat de |principado de |principat d'|principat de )/,
+      "",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+  return PROVINCE_CANONICAL.get(v) ?? v;
+}
+
+/** ¿Dos nombres de provincia se refieren al mismo sitio? Si alguno está
+ *  vacío devuelve true (no podemos afirmar que se contradigan). Tolera
+ *  variantes cooficiales y de grafía. */
+export function provincesMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const na = (a ?? "").trim();
+  const nb = (b ?? "").trim();
+  if (!na || !nb) return true;
+  return normalizeProvinceName(na) === normalizeProvinceName(nb);
+}
+
 const SPAIN_PROVINCES: Record<string, string> = {
   "01": "Álava",
   "02": "Albacete",

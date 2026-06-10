@@ -12,6 +12,7 @@ import { LEAD_ORIGIN, LEAD_POTENTIAL, ORIGIN_LABEL } from "./schemas";
 import {
   provinceFromPostalCode,
   validateSpanishPostalCode,
+  provincesMatch,
 } from "@/shared/lib/validations/spanish";
 import { MapPicker } from "@/shared/components/map-picker";
 import { PlacesAutocomplete } from "@/shared/components/places-autocomplete";
@@ -107,12 +108,10 @@ export function LeadCreateForm() {
     // de "A Coruña" para CP 15220.
     const cpForProv = rev.postal_code ?? "";
     const cpProv = cpForProv ? provinceFromPostalCode(cpForProv) : null;
+    // Conserva la variante cooficial del mapa (Bizkaia/Vizcaya); solo
+    // fuerza el nombre del CP cuando de verdad son provincias distintas.
     const provinceFinal =
-      cpProv &&
-      (rev.province ?? "").toLowerCase().trim() !==
-        cpProv.toLowerCase().trim()
-        ? cpProv
-        : rev.province;
+      cpProv && !provincesMatch(rev.province, cpProv) ? cpProv : rev.province;
     if (provinceFinal) {
       setProvince((cur) => (force || !cur ? provinceFinal : cur));
       filled.push("provincia");
@@ -183,24 +182,26 @@ export function LeadCreateForm() {
     setPostal(v);
     if (v.length === 5) {
       const p = provinceFromPostalCode(v);
-      // Si CP es válido y la provincia actual no coincide → pisar.
-      // Evita el caso aberrante "CP 46xxx + Provincia Galicia".
-      if (p && (!province || province.toLowerCase().trim() !== p.toLowerCase().trim())) {
+      // Si CP es válido y la provincia actual no coincide (ni como variante
+      // cooficial) → pisar. Respeta "Bizkaia" vs "Vizcaya".
+      if (p && !provincesMatch(province, p)) {
         setProvince(p);
       }
     }
   }
 
-  /** Devuelve mensaje de error si CP, provincia o ciudad no encajan. */
+  /** Devuelve mensaje de aviso (no bloqueante) si CP o provincia no encajan. */
   function geoIncoherence(): string | null {
     const cp = postal.trim();
-    if (!cp) return null; // step 3 ya valida que no esté vacío
+    if (!cp) return null;
     if (!validateSpanishPostalCode(cp)) {
       return `El código postal "${cp}" no es válido (5 dígitos, 01-52).`;
     }
     const expected = provinceFromPostalCode(cp);
     const current = province.trim();
-    if (expected && current && current.toLowerCase() !== expected.toLowerCase()) {
+    // Tolerante a variantes cooficiales: solo avisa si son provincias
+    // realmente distintas.
+    if (expected && current && !provincesMatch(current, expected)) {
       return `El CP ${cp} pertenece a ${expected}, no a "${current}".`;
     }
     return null;
@@ -223,25 +224,14 @@ export function LeadCreateForm() {
     return true;
   }
 
-  /** Dirección obligatoria al crear lead — antes se permitía guardar
-   *  sin calle/CP/ciudad y al convertir a cliente saltaba el aviso de
-   *  "sin dirección" cuando ya no podía corregirse cómodamente. */
+  /** Dirección 100% opcional al crear lead (decisión 2026-06-10). Se puede
+   *  guardar sin calle/CP/población; la ficha del lead abre luego el
+   *  formulario de dirección (con mapa) para completarla. Aquí solo
+   *  comprobamos el formato del CP si el usuario escribió uno, y el
+   *  conflicto CP↔provincia es un aviso amarillo, no un bloqueo. */
   function validateStep3(): boolean {
-    if (!street.trim()) {
-      notify.warning("Calle obligatoria", "Escribe el nombre de la calle");
-      return false;
-    }
-    if (!postal.trim() || postal.trim().length !== 5) {
-      notify.warning("Código postal obligatorio", "5 dígitos");
-      return false;
-    }
-    if (!city.trim()) {
-      notify.warning("Población obligatoria");
-      return false;
-    }
-    const geoErr = geoIncoherence();
-    if (geoErr) {
-      notify.error("Dirección incoherente", geoErr);
+    if (postal.trim() && postal.trim().length !== 5) {
+      notify.warning("Código postal incompleto", "Son 5 dígitos, o déjalo vacío");
       return false;
     }
     return true;
@@ -294,12 +284,12 @@ export function LeadCreateForm() {
     fd.set("address_postal_code", postal);
     fd.set("address_city", city);
     fd.set("address_province", province);
-    // Coordenadas obligatorias si se ha rellenado dirección (decisión
-    // 2026-05-19): el técnico necesita lat/lng para validar GPS al instalar.
-    const hasAddressData = Boolean(
-      street.trim() || postal.trim() || city.trim(),
-    );
-    if (hasAddressData && (latitude == null || longitude == null)) {
+    // Coordenadas obligatorias SOLO si la dirección se va a guardar de
+    // verdad (calle + CP; es lo que persiste el servidor). Así un lead sin
+    // dirección, o con solo el CP, no obliga a fijar chincheta. El técnico
+    // necesita lat/lng para validar GPS, pero eso aplica cuando hay calle.
+    const willPersistAddress = Boolean(street.trim() && postal.trim());
+    if (willPersistAddress && (latitude == null || longitude == null)) {
       notify.error(
         "Faltan coordenadas",
         "Pulsa «Buscar en mapa» o usa tu ubicación actual para fijar la chincheta. Sin lat/lng el técnico no puede validar GPS al instalar.",
@@ -627,7 +617,7 @@ export function LeadCreateForm() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label>Nombre *</Label>
+              <Label>Nombre</Label>
               <Input
                 value={street}
                 onChange={(e) => {
@@ -677,7 +667,7 @@ export function LeadCreateForm() {
           {/* CP / Población / Provincia */}
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label>CP *</Label>
+              <Label>CP</Label>
               <Input
                 inputMode="numeric"
                 maxLength={5}
@@ -686,7 +676,7 @@ export function LeadCreateForm() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Población *</Label>
+              <Label>Población</Label>
               <Input value={city} onChange={(e) => setCity(e.target.value)} />
             </div>
             <div className="space-y-2">
