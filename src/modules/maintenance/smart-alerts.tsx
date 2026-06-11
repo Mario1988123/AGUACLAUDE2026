@@ -133,9 +133,6 @@ export async function getMaintenanceAlerts(): Promise<MaintenanceAlerts> {
   const next7 = new Date();
   next7.setDate(next7.getDate() + 7);
   const next7Iso = next7.toISOString();
-  const past30 = new Date();
-  past30.setDate(past30.getDate() - 30);
-  const past30Iso = past30.toISOString();
 
   // 1) Vencidos sin completar (status scheduled con scheduled_at en el pasado)
   let overdue = 0;
@@ -167,20 +164,10 @@ export async function getMaintenanceAlerts(): Promise<MaintenanceAlerts> {
     /* */
   }
 
-  // 3) NPS bajo últimos 30d (completados con nps_score <=2 si existe la columna)
-  let low_nps_30d = 0;
-  try {
-    const { count } = await admin
-      .from("maintenance_jobs")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", session.company_id)
-      .eq("status", "completed")
-      .lte("nps_score", 2)
-      .gte("completed_at", past30Iso);
-    low_nps_30d = count ?? 0;
-  } catch {
-    /* tabla puede no tener nps_score → 0 */
-  }
+  // 3) NPS bajo últimos 30d. maintenance_jobs NO tiene columna nps_score (el NPS
+  // no se captura todavía), así que esta métrica queda en 0 sin lanzar la query
+  // (antes fallaba siempre en silencio). Reactivar cuando exista la captura de NPS.
+  const low_nps_30d = 0;
 
   // 4) Contratos activos sin job programado futuro
   let active_contracts_without_job = 0;

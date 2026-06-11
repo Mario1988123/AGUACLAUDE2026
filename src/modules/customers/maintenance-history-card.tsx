@@ -125,7 +125,9 @@ export async function getCustomerMaintenanceHistory(
     const { data: jobs } = await admin
       .from("maintenance_jobs")
       .select(
-        "id, customer_equipment_id, contract_id, notes, completed_at, kind, charge_cents, is_charged, nps_score, technician_user_id",
+        // nps_score NO existe en maintenance_jobs (no se captura aún) → incluirlo
+        // rompía TODA la query y dejaba el historial vacío.
+        "id, customer_equipment_id, contract_id, notes, completed_at, kind, charge_cents, is_charged, technician_user_id",
       )
       .eq("customer_id", customerId)
       .eq("status", "completed")
@@ -140,7 +142,6 @@ export async function getCustomerMaintenanceHistory(
       kind: string;
       charge_cents: number | null;
       is_charged: boolean;
-      nps_score: number | null;
       technician_user_id: string | null;
     };
     const list = (jobs ?? []) as J[];
@@ -202,7 +203,7 @@ export async function getCustomerMaintenanceHistory(
       kind: j.kind,
       charge_cents: j.charge_cents,
       is_charged: j.is_charged,
-      nps_score: j.nps_score,
+      nps_score: null, // NPS no se captura aún (columna inexistente)
       technician_name: j.technician_user_id
         ? profMap.get(j.technician_user_id) ?? null
         : null,

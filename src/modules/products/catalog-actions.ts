@@ -222,9 +222,11 @@ export async function sendCatalogEmailAction(input: {
     if (!tpl) return { ok: false, error: "Plantilla 'product_catalog_share' no encontrada." };
 
     // 3) Variables
+    // companies NO tiene legal_name/trade_name (solo `name`). El nombre fiscal
+    // vive en company_settings.fiscal_legal_name.
     const { data: company } = await admin
       .from("companies")
-      .select("legal_name, trade_name")
+      .select("name")
       .eq("id", session.company_id)
       .maybeSingle();
     const { data: companySettings } = await admin
@@ -234,8 +236,7 @@ export async function sendCatalogEmailAction(input: {
       .maybeSingle();
     const companyName =
       (companySettings as { fiscal_legal_name: string | null } | null)?.fiscal_legal_name ??
-      (company as { trade_name: string | null; legal_name: string | null } | null)?.trade_name ??
-      (company as { legal_name: string | null } | null)?.legal_name ??
+      (company as { name: string | null } | null)?.name ??
       "Empresa";
 
     const catalogName = share.custom_title ?? "Nuestro catálogo";

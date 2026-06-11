@@ -35,13 +35,13 @@ export async function recomputeChurnScoreAction(
         .select("id", { count: "exact", head: true })
         .eq("subject_type", "customer")
         .eq("subject_id", customerId)
-        .gt("created_at", past180);
+        .gt("occurred_at", past180); // events usa occurred_at, no created_at
       // Mira también si tiene equipo activo
       const { count: hasEq } = await admin
         .from("customer_equipment")
         .select("id", { count: "exact", head: true })
         .eq("customer_id", customerId)
-        .eq("status", "active");
+        .eq("is_active", true); // customer_equipment usa is_active, no status
       if ((recent ?? 0) === 0 && (hasEq ?? 0) > 0) score += 30;
     } catch {
       /* */
@@ -53,7 +53,7 @@ export async function recomputeChurnScoreAction(
         .from("customer_equipment")
         .select("id", { count: "exact", head: true })
         .eq("customer_id", customerId)
-        .eq("status", "active");
+        .eq("is_active", true); // customer_equipment usa is_active, no status
       const { count: contracts } = await admin
         .from("contracts")
         .select("id", { count: "exact", head: true })

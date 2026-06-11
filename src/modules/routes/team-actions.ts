@@ -263,7 +263,9 @@ async function getTasksForUser(userId: string, dateIso: string): Promise<{
   const { data: agenda } = await admin
     .from("agenda_events")
     .select(
-      "id, title, starts_at, geo_latitude, geo_longitude, status, customer_id",
+      // agenda_events NO tiene customer_id (usa subject_type/subject_id). Antes
+      // el SELECT fallaba y la vista equipo ocultaba TODOS los eventos de agenda.
+      "id, title, starts_at, geo_latitude, geo_longitude, status",
     )
     .eq("company_id", session.company_id)
     .eq("assigned_user_id", userId)

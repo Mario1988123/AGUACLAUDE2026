@@ -59,7 +59,7 @@ export async function exportCustomerDataAction(
         .eq("company_id", companyId)
         .eq("subject_type", "customer")
         .eq("subject_id", customerId)
-        .order("created_at", { ascending: false }),
+        .order("occurred_at", { ascending: false }), // events usa occurred_at
       admin.from("customer_consents").select("*").eq("customer_id", customerId).eq("company_id", companyId),
     ]);
 

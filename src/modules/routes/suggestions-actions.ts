@@ -55,11 +55,13 @@ export async function suggestNearbyVisits(args: Args): Promise<NearbySuggestion[
   const { data: leadsRows } = await admin
     .from("leads")
     .select(
-      "id, status, first_name, last_name, company_name, party_kind, last_activity_at, address_id",
+      // leads NO tiene company_name ni last_activity_at → usamos legal_name/
+      // trade_name y updated_at (como en customers). Antes la query fallaba.
+      "id, status, first_name, last_name, legal_name, trade_name, party_kind, updated_at, address_id",
     )
     .eq("company_id", session.company_id)
     .not("status", "in", "(lost,converted)")
-    .or(`last_activity_at.is.null,last_activity_at.lt.${sinceIso}`)
+    .or(`updated_at.is.null,updated_at.lt.${sinceIso}`)
     .limit(200);
 
   // 2) Clientes con actividad antigua o sin actividad
@@ -128,9 +130,10 @@ export async function suggestNearbyVisits(args: Args): Promise<NearbySuggestion[
     status: string;
     first_name: string | null;
     last_name: string | null;
-    company_name: string | null;
+    legal_name: string | null;
+    trade_name: string | null;
     party_kind: string | null;
-    last_activity_at: string | null;
+    updated_at: string | null;
   };
   for (const r of (leadsRows ?? []) as LR[]) {
     const a = leadAddr.get(r.id);
@@ -147,13 +150,13 @@ export async function suggestNearbyVisits(args: Args): Promise<NearbySuggestion[
       kind: "lead",
       title:
         r.party_kind === "company"
-          ? r.company_name ?? "Empresa"
+          ? r.trade_name ?? r.legal_name ?? "Empresa"
           : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Lead",
       subtitle: a.street
         ? `${a.street_type ?? "Calle"} ${a.street}${a.city ? `, ${a.city}` : ""}`
         : null,
       distance_km: dist,
-      last_activity: r.last_activity_at,
+      last_activity: r.updated_at,
       lat: Number(a.latitude),
       lng: Number(a.longitude),
       href: `/leads/${r.id}`,

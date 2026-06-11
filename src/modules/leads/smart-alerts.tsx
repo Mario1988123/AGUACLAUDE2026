@@ -165,28 +165,30 @@ export async function getLeadAlerts(userId: string | null): Promise<LeadAlerts> 
     /* */
   }
 
-  // 3+4) Citas hoy / mañana (status appointment_scheduled con appointment_at en rango)
+  // 3+4) Citas hoy / mañana. Las "citas" de un lead viven en agenda_events
+  // (subject_type='lead'), NO en leads (que no tiene appointment_at ni el
+  // status 'appointment_scheduled'). Antes la query fallaba y salía siempre 0.
   try {
     let q1 = admin
-      .from("leads")
+      .from("agenda_events")
       .select("id", { count: "exact", head: true })
       .eq("company_id", session.company_id)
-      .eq("status", "appointment_scheduled")
-      .is("deleted_at", null)
-      .gte("appointment_at", todayStart.toISOString())
-      .lte("appointment_at", todayEnd.toISOString());
+      .eq("subject_type", "lead")
+      .neq("status", "cancelled")
+      .gte("starts_at", todayStart.toISOString())
+      .lte("starts_at", todayEnd.toISOString());
     if (userId) q1 = q1.eq("assigned_user_id", userId);
     const { count: c1 } = await q1;
     out.appointments_today = c1 ?? 0;
 
     let q2 = admin
-      .from("leads")
+      .from("agenda_events")
       .select("id", { count: "exact", head: true })
       .eq("company_id", session.company_id)
-      .eq("status", "appointment_scheduled")
-      .is("deleted_at", null)
-      .gte("appointment_at", tomorrowStart.toISOString())
-      .lte("appointment_at", tomorrowEnd.toISOString());
+      .eq("subject_type", "lead")
+      .neq("status", "cancelled")
+      .gte("starts_at", tomorrowStart.toISOString())
+      .lte("starts_at", tomorrowEnd.toISOString());
     if (userId) q2 = q2.eq("assigned_user_id", userId);
     const { count: c2 } = await q2;
     out.appointments_tomorrow = c2 ?? 0;

@@ -125,7 +125,6 @@ export async function mergeCustomersAction(
     "incidents",
     "free_trials",
     "customer_equipment",
-    "events",
   ];
   for (const t of tables) {
     try {
@@ -137,6 +136,20 @@ export async function mergeCustomersAction(
     } catch {
       /* algunas tablas pueden no tener customer_id o company_id; ignorar */
     }
+  }
+
+  // events NO tiene customer_id: la timeline se enlaza por subject_type/subject_id.
+  // Antes iba en el bucle genérico y fallaba en silencio → la timeline del
+  // cliente secundario se perdía al fusionar.
+  try {
+    await supabase
+      .from("events")
+      .update({ subject_id: primaryId })
+      .eq("subject_type", "customer")
+      .eq("subject_id", secondaryId)
+      .eq("company_id", session.company_id);
+  } catch {
+    /* defensivo */
   }
 
   // Soft-delete el secundario (sigue con scope company_id por defensa)

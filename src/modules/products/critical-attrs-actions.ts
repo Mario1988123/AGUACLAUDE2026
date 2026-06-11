@@ -57,11 +57,12 @@ export async function getCriticalAttributesState(
   if (!catId) return { isDismissed: true, missing: [] };
 
   // 2) Atributos críticos locales de esa categoría (defensivo con is_critical)
-  let criticalAttrs: Array<{ id: string; name: string; unit: string | null }> = [];
+  // data_type vive en product_attributes (NO en product_attribute_values).
+  let criticalAttrs: Array<{ id: string; name: string; unit: string | null; data_type: string }> = [];
   try {
     const { data, error } = await admin
       .from("product_attributes")
-      .select("id, name, unit, is_critical")
+      .select("id, name, unit, data_type, is_critical")
       .eq("company_id", session.company_id)
       .eq("category_id", catId)
       .eq("is_critical", true);
@@ -73,8 +74,9 @@ export async function getCriticalAttributesState(
       id: string;
       name: string;
       unit: string | null;
+      data_type: string | null;
       is_critical: boolean;
-    }>).map((a) => ({ id: a.id, name: a.name, unit: a.unit }));
+    }>).map((a) => ({ id: a.id, name: a.name, unit: a.unit, data_type: a.data_type ?? "text" }));
   } catch {
     return { isDismissed: true, missing: [] };
   }
@@ -85,7 +87,8 @@ export async function getCriticalAttributesState(
   const { data: values } = await admin
     .from("product_attribute_values")
     .select(
-      "attribute_id, value_text, value_number, value_boolean, data_type, is_visible",
+      // product_attribute_values NO tiene data_type (vive en product_attributes).
+      "attribute_id, value_text, value_number, value_boolean, is_visible",
     )
     .eq("product_id", productId);
   type V = {
@@ -93,15 +96,17 @@ export async function getCriticalAttributesState(
     value_text: string | null;
     value_number: number | null;
     value_boolean: boolean | null;
-    data_type: string;
     is_visible: boolean;
   };
+  // data_type por atributo, desde criticalAttrs (product_attributes).
+  const dataTypeById = new Map(criticalAttrs.map((a) => [a.id, a.data_type]));
   const filledMap = new Map<string, V>();
   for (const v of (values ?? []) as V[]) {
+    const dt = dataTypeById.get(v.attribute_id) ?? "text";
     const hasValue =
-      v.data_type === "boolean"
+      dt === "boolean"
         ? v.value_boolean != null
-        : v.data_type === "number" || v.data_type === "dimension"
+        : dt === "number" || dt === "dimension"
           ? v.value_number != null
           : v.value_text != null && v.value_text.trim().length > 0;
     if (hasValue && v.is_visible) filledMap.set(v.attribute_id, v);
