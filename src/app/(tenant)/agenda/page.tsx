@@ -8,6 +8,7 @@ import {
 } from "@/modules/agenda/actions";
 import { KIND_LABEL } from "@/modules/agenda/constants";
 import { CreateAgendaButton } from "@/modules/agenda/create-form";
+import { UninstallFromAgendaButton } from "@/modules/agenda/uninstall-button";
 import { AgendaCalendar } from "@/modules/agenda/calendar";
 import { DraggableAgendaList } from "@/modules/agenda/draggable-list";
 import { AgendaWeekView } from "@/modules/agenda/week-view";
@@ -184,7 +185,14 @@ export default async function AgendaPage({
             Calendario mensual + listado próximos 14 días
           </p>
         </div>
-        <CreateAgendaButton teamMembers={team} />
+        <div className="flex flex-wrap items-center gap-2">
+          {(session.is_superadmin ||
+            session.roles.includes("company_admin") ||
+            session.roles.includes("technical_director")) && (
+            <UninstallFromAgendaButton teamMembers={team} />
+          )}
+          <CreateAgendaButton teamMembers={team} />
+        </div>
       </div>
 
       {pendingMaintenanceCount > 0 && (

@@ -15,6 +15,9 @@ export interface UninstallEquipmentInput {
   // forzar aquí. Default: el técnico decide al completar la instalación.
   default_state?: "used" | "damaged" | null;
   notes?: string | null;
+  // Técnico que hará la retirada (opcional). Si se asigna, la verá en su
+  // "Mi día" y agenda como RETIRADA.
+  installer_user_id?: string | null;
 }
 
 /**
@@ -122,6 +125,9 @@ export async function createUninstallAction(
         customer_id: input.customer_id,
         address_id: firstAddressId,
         scheduled_at: input.scheduled_at ?? null,
+        installer_user_id: input.installer_user_id ?? null,
+        assigned_at: input.installer_user_id ? new Date().toISOString() : null,
+        assigned_by: input.installer_user_id ? session.user_id : null,
         notes: notesParts.join("\n"),
       })
       .select("id")
@@ -170,6 +176,79 @@ export async function createUninstallAction(
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
+}
+
+/**
+ * Programa una desinstalación DESDE LA AGENDA: el admin elige cliente, sus
+ * equipos a retirar, el técnico y la fecha. El destino es la FURGONETA del
+ * técnico (decisión 2026-06-11: el equipo retirado pasa primero a su furgoneta
+ * con etiqueta 'usado' + S/N, y luego él lo descarga donde toque). Si el técnico
+ * no tiene furgoneta, cae al almacén principal.
+ */
+export async function createUninstallFromAgendaAction(input: {
+  customer_id: string;
+  equipment_ids: string[];
+  technician_user_id?: string | null;
+  scheduled_at?: string | null;
+  notes?: string | null;
+}): Promise<
+  { ok: true; installation_id: string } | { ok: false; error: string }
+> {
+  const session = await requireSession();
+  if (!session.company_id) return { ok: false, error: "Sin empresa" };
+  if (
+    !session.is_superadmin &&
+    !session.roles.includes("company_admin") &&
+    !session.roles.includes("technical_director")
+  ) {
+    return { ok: false, error: "Solo admin o director técnico puede programar retiradas" };
+  }
+  if (!input.equipment_ids || input.equipment_ids.length === 0) {
+    return { ok: false, error: "Selecciona al menos un equipo a retirar" };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: whs } = await admin
+    .from("warehouses")
+    .select("id, kind, assigned_user_id")
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null);
+  const list = (whs ?? []) as Array<{
+    id: string;
+    kind: string;
+    assigned_user_id: string | null;
+  }>;
+
+  let destWarehouseId: string | null = null;
+  if (input.technician_user_id) {
+    const van = list.find(
+      (w) => w.kind === "vehicle" && w.assigned_user_id === input.technician_user_id,
+    );
+    if (van) destWarehouseId = van.id;
+  }
+  if (!destWarehouseId) {
+    const main =
+      list.find((w) => w.kind === "main") ?? list.find((w) => w.kind !== "vehicle");
+    destWarehouseId = main?.id ?? null;
+  }
+  if (!destWarehouseId) {
+    return {
+      ok: false,
+      error:
+        "No hay almacén destino. Crea un almacén principal o asigna una furgoneta al técnico.",
+    };
+  }
+
+  return createUninstallAction({
+    customer_id: input.customer_id,
+    equipment_ids: input.equipment_ids,
+    destination_warehouse_id: destWarehouseId,
+    default_state: "used",
+    scheduled_at: input.scheduled_at ?? null,
+    installer_user_id: input.technician_user_id ?? null,
+    notes: input.notes ?? null,
+  });
 }
 
 /**
