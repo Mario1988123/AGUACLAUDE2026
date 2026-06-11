@@ -137,7 +137,9 @@ export async function createCompanyAction(formData: FormData) {
     const path = first?.path?.join(".") ?? "campo";
     const msg = first?.message ?? "Datos inválidos";
     console.error("[createCompany] Zod failed:", JSON.stringify(result.error.issues));
-    throw new Error(`${path}: ${msg}`);
+    // Patrón result: en producción Next redacta el throw → el mensaje útil de
+    // validación se perdía. Lo devolvemos para que el formulario lo muestre.
+    return { ok: false as const, error: `${path}: ${msg}` };
   }
   const parsed = result.data;
 
@@ -153,7 +155,10 @@ export async function createCompanyAction(formData: FormData) {
     .eq("slug", parsed.slug)
     .maybeSingle();
   if (existing) {
-    throw new Error(`Ya existe una empresa con el slug "${parsed.slug}". Elige otro.`);
+    return {
+      ok: false as const,
+      error: `Ya existe una empresa con el slug "${parsed.slug}". Elige otro.`,
+    };
   }
 
   const insertResult = await supabase

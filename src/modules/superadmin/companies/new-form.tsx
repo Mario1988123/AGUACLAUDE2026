@@ -51,8 +51,12 @@ export function NewCompanyForm() {
     fd.delete("monthly_cost_euros");
     startTransition(async () => {
       try {
-        await createCompanyAction(fd);
-        // El server action redirige al final, no llegaríamos aquí salvo error
+        const res = await createCompanyAction(fd);
+        // En éxito redirige (NEXT_REDIRECT). Si devuelve {ok:false} es un aviso legible.
+        if (res && res.ok === false) {
+          notify.error("No se pudo crear", res.error);
+          return;
+        }
       } catch (err) {
         // NEXT_REDIRECT no es error real
         if (err && typeof err === "object" && "digest" in err) {
