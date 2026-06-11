@@ -57,12 +57,16 @@ export async function generateLoadingRequestsForTomorrow(): Promise<{
       const main = whs.find((w) => w.kind === "main") ?? whs.find((w) => w.kind !== "vehicle");
       if (!main) continue;
 
-      // Instalaciones de mañana
+      // Instalaciones de mañana. SOLO las que MONTAN equipo (normal/prueba):
+      // las desinstalaciones (kind='uninstall') retiran material, no lo cargan,
+      // y las reubicaciones (relocation) mueven equipo ya instalado. Antes una
+      // desinstalación generaba carga de furgoneta con el equipo a retirar.
       const { data: insts } = await admin
         .from("installations")
         .select("id, installer_user_id")
         .eq("company_id", c.id)
         .in("status", ["scheduled"])
+        .in("kind", ["normal", "free_trial"])
         .gte("scheduled_at", dayStart.toISOString())
         .lte("scheduled_at", dayEnd.toISOString())
         .is("deleted_at", null);

@@ -44,7 +44,7 @@ export async function getMyDayItems(): Promise<DayItem[]> {
   const [instRes, maintRes, agendaRes] = await Promise.all([
     supabase
       .from("installations")
-      .select("id, reference_code, customer_id, status, scheduled_at, address_id")
+      .select("id, reference_code, customer_id, status, scheduled_at, address_id, kind")
       .eq("installer_user_id", session.user_id)
       .in("status", ["scheduled", "in_progress", "paused"])
       .not("scheduled_at", "is", null)
@@ -77,6 +77,7 @@ export async function getMyDayItems(): Promise<DayItem[]> {
     status: string;
     scheduled_at: string;
     address_id: string | null;
+    kind: "normal" | "free_trial" | "relocation" | "uninstall" | null;
   };
   type Maint = {
     id: string;
@@ -172,11 +173,23 @@ export async function getMyDayItems(): Promise<DayItem[]> {
 
   for (const i of insts) {
     const geo = i.address_id ? addrGeoMap.get(i.address_id) : null;
+    // Etiquetar claramente las desinstalaciones (RETIRADA): el técnico NO lleva
+    // equipo, lo retira. Reubicación también se distingue.
+    const ref = i.reference_code ?? `#${i.id.slice(0, 8)}`;
+    const subtitle =
+      i.kind === "uninstall"
+        ? `⚠ DESINSTALACIÓN — retirar equipo · ${ref}`
+        : i.kind === "relocation"
+          ? `Reubicación de equipo · ${ref}`
+          : ref;
     items.push({
       id: i.id,
       kind: "installation",
-      title: nameMap.get(i.customer_id) ?? "Cliente",
-      subtitle: i.reference_code ?? `#${i.id.slice(0, 8)}`,
+      title:
+        i.kind === "uninstall"
+          ? `🔧 RETIRADA · ${nameMap.get(i.customer_id) ?? "Cliente"}`
+          : nameMap.get(i.customer_id) ?? "Cliente",
+      subtitle,
       scheduled_at: i.scheduled_at,
       status: i.status,
       href: `/instalaciones/${i.id}`,
