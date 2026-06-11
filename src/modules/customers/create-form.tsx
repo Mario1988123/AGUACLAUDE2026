@@ -96,7 +96,12 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
     if (sourceLeadId) fd.set("source_lead_id", sourceLeadId);
     startTransition(async () => {
       try {
-        await createCustomerAction(fd);
+        const res = await createCustomerAction(fd);
+        // En éxito hace redirect (lanza NEXT_REDIRECT, no llega aquí). Si
+        // devuelve {ok:false} es un aviso legible (p.ej. duplicado).
+        if (res && res.ok === false) {
+          notify.error("No se pudo crear", res.error);
+        }
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {
           const d = String((err as { digest?: unknown }).digest);

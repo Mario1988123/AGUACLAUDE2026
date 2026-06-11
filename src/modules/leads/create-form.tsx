@@ -300,7 +300,11 @@ export function LeadCreateForm() {
     if (longitude != null) fd.set("address_longitude", String(longitude));
     startTransition(async () => {
       try {
-        await createLeadAction(fd);
+        const res = await createLeadAction(fd);
+        // En éxito redirige (NEXT_REDIRECT, no llega aquí). {ok:false} = aviso legible.
+        if (res && res.ok === false) {
+          notify.error("No se pudo crear", res.error);
+        }
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {
           const d = String((err as { digest?: unknown }).digest);

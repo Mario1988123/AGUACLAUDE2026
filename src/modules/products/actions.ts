@@ -277,7 +277,16 @@ export async function cloneGlobalCategoryAction(globalCategoryId: string) {
     is_active: true,
     created_by: session.user_id,
   } as never);
-  if (error) throw error;
+  if (error) {
+    // Duplicado (unique company_id, name): mensaje legible en vez del error
+    // técnico de Postgres (el wrapper Safe lo propaga a la UI).
+    if (error.code === "23505" || /duplicate key|unique/i.test(error.message ?? "")) {
+      throw new Error(
+        `Ya tienes una categoría llamada "${g.name_es}". Renómbrala o edita la que ya hay.`,
+      );
+    }
+    throw new Error(error.message);
+  }
   revalidatePath("/configuracion/productos");
 }
 

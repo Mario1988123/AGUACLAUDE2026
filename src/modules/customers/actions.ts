@@ -458,9 +458,12 @@ export async function createCustomerAction(formData: FormData) {
     const first = dups[0]!;
     const fieldLabel =
       first.field === "tax_id" ? "DNI/CIF" : first.field === "email" ? "email" : "teléfono";
-    throw new Error(
-      `Duplicado: ${fieldLabel} ya registrado en ${first.entity === "lead" ? "lead" : "cliente"} "${first.display_name}"${first.assigned_user_name ? ` (asignado a ${first.assigned_user_name})` : ""}`,
-    );
+    // Patrón result: en producción Next redacta el mensaje de un throw, así que
+    // el aviso de duplicado (útil para el comercial) se perdía. Lo devolvemos.
+    return {
+      ok: false as const,
+      error: `Duplicado: ${fieldLabel} ya registrado en ${first.entity === "lead" ? "lead" : "cliente"} "${first.display_name}"${first.assigned_user_name ? ` (asignado a ${first.assigned_user_name})` : ""}`,
+    };
   }
 
   const supabase = await createClient();
