@@ -143,13 +143,16 @@ export async function confirmFinancierPaymentAction(input: {
   has_reserve_pending?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const { allowed } = await ensureAdminOrLevel2();
+    const { session, allowed } = await ensureAdminOrLevel2();
     if (!allowed) return { ok: false, error: "Solo admin / director" };
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const state = input.has_reserve_pending
       ? "reserve_pending"
       : "paid_financier";
+    // SEGURIDAD: admin salta RLS → filtrar por company_id para no confirmar
+    // pagos de financiera sobre contratos de otra empresa.
     const r = await admin
       .from("contracts")
       .update({
@@ -157,10 +160,15 @@ export async function confirmFinancierPaymentAction(input: {
         financier_paid_at: input.paid_at,
         financier_paid_amount_cents: input.paid_amount_cents,
       })
-      .eq("id", input.contract_id);
+      .eq("id", input.contract_id)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length)
+      return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
 
     await admin.from("events").insert({
+      company_id: session.company_id,
       subject_type: "contract",
       subject_id: input.contract_id,
       kind: "contract.financier_paid",
@@ -169,6 +177,7 @@ export async function confirmFinancierPaymentAction(input: {
         paid_amount_cents: input.paid_amount_cents,
         has_reserve_pending: input.has_reserve_pending ?? false,
       },
+      actor_user_id: session.user_id,
     });
 
     revalidatePath("/wallet/financieras");
@@ -190,15 +199,20 @@ export async function confirmReserveReleaseAction(input: {
   paid_amount_cents: number;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    const { allowed } = await ensureAdminOrLevel2();
+    const { session, allowed } = await ensureAdminOrLevel2();
     if (!allowed) return { ok: false, error: "Solo admin / director" };
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
     const { data } = await admin
       .from("contracts")
       .select("financier_paid_amount_cents")
       .eq("id", input.contract_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
+    if (!data)
+      return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
     const previous =
       (data as { financier_paid_amount_cents: number | null } | null)
         ?.financier_paid_amount_cents ?? 0;
@@ -208,9 +222,11 @@ export async function confirmReserveReleaseAction(input: {
         payment_state: "paid_financier",
         financier_paid_amount_cents: previous + input.paid_amount_cents,
       })
-      .eq("id", input.contract_id);
+      .eq("id", input.contract_id)
+      .eq("company_id", session.company_id);
     if (upd.error) return { ok: false, error: upd.error.message };
     await admin.from("events").insert({
+      company_id: session.company_id,
       subject_type: "contract",
       subject_id: input.contract_id,
       kind: "contract.reserve_released",
@@ -218,6 +234,7 @@ export async function confirmReserveReleaseAction(input: {
         paid_at: input.paid_at,
         amount_cents: input.paid_amount_cents,
       },
+      actor_user_id: session.user_id,
     });
     revalidatePath("/wallet/financieras");
     revalidatePath(`/contratos/${input.contract_id}`);

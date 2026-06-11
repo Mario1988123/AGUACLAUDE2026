@@ -449,9 +449,12 @@ export async function validateWalletEntryAction(id: string) {
   ) {
     throw new Error("Solo admin/director puede validar");
   }
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client + verificación de count: la policy we_update filtra por
   // scope (admin / wallet:approve:dept / collected_by own). Si el director
   // no es del scope correcto, el UPDATE silenciaría.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id para no validar
+  // cobros de otra empresa (contabilidad ajena).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: entry } = await admin
@@ -460,6 +463,7 @@ export async function validateWalletEntryAction(id: string) {
       "id, contract_id, contract_payment_id, collected_by_user_id, concept, amount_cents, method, status",
     )
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const e = entry as
     | {
@@ -496,7 +500,8 @@ export async function validateWalletEntryAction(id: string) {
       validated_by_user_id: session.user_id,
       ...(finalStatus === "settled" ? { settled_at: new Date().toISOString() } : {}),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   // PROPAGAR al contract_payment vinculado. El estado válido en
@@ -615,12 +620,15 @@ export async function rejectWalletEntryAction(id: string, reason: string) {
   ) {
     throw new Error("Solo admin/director puede rechazar");
   }
+  if (!session.company_id) throw new Error("Sin empresa");
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: entry } = await admin
     .from("wallet_entries")
     .select("id, collected_by_user_id, concept, amount_cents")
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const e = entry as
     | {
@@ -630,7 +638,7 @@ export async function rejectWalletEntryAction(id: string, reason: string) {
         amount_cents: number;
       }
     | null;
-  if (!e) throw new Error("Entrada no encontrada");
+  if (!e) throw new Error("Entrada no encontrada o no pertenece a tu empresa");
   const r = await admin
     .from("wallet_entries")
     .update({
@@ -639,7 +647,8 @@ export async function rejectWalletEntryAction(id: string, reason: string) {
       validated_by_user_id: session.user_id,
       validated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
     company_id: session.company_id,
