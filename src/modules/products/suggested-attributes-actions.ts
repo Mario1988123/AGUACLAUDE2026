@@ -191,27 +191,50 @@ export async function importGlobalAttributesForCategoryAction(
       is_critical: s.is_critical,
     }));
 
-    let inserted = 0;
-    const { error } = await admin.from("product_attributes").insert(rows);
-    if (error) {
-      // Retry sin is_critical si la columna aún no existe en la BD.
-      if (
-        /is_critical/i.test(error.message ?? "") ||
-        (error as { code?: string }).code === "42703"
-      ) {
-        const rowsNoCritical = rows.map(({ is_critical: _omit, ...rest }) => rest);
-        const r2 = await admin.from("product_attributes").insert(rowsNoCritical);
-        if (r2.error) return { ok: false, error: r2.error.message };
-        inserted = rowsNoCritical.length;
-      } else if ((error as { code?: string }).code === "23505") {
-        // Choque con unique (company_id, category_id, key): otro user en
-        // paralelo ya lo insertó. Lo tratamos como skipped.
-        inserted = 0;
-      } else {
-        return { ok: false, error: error.message };
+    // Inserta una lista de filas tolerando:
+    //  - columnas inexistentes (42703): quita la columna citada y reintenta
+    //    (cubre is_critical, default_visible o cualquier otra no migrada aún).
+    //  - choque unique (23505): cae a inserción fila a fila para meter las que
+    //    sí entran (antes UN choque tumbaba TODO el lote → no se importaba nada).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function insertTolerant(batch: Array<Record<string, unknown>>): Promise<number> {
+      if (batch.length === 0) return 0;
+      let current = batch;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const { error } = await admin.from("product_attributes").insert(current);
+        if (!error) return current.length;
+        const code = (error as { code?: string }).code;
+        const msg = error.message ?? "";
+        if (code === "42703" || /column .* does not exist|schema cache|Could not find/i.test(msg)) {
+          const col =
+            msg.match(/column "?([a-z_]+)"?/i)?.[1] ??
+            msg.match(/'([a-z_]+)' column/i)?.[1] ??
+            msg.match(/Could not find the '([a-z_]+)'/i)?.[1] ??
+            null;
+          if (col && current.some((r) => col in r)) {
+            current = current.map(({ [col]: _omit, ...rest }) => rest);
+            continue;
+          }
+        }
+        if (code === "23505") {
+          // Inserción fila a fila: las que no chocan entran igual.
+          let ok = 0;
+          for (const row of current) {
+            const r = await admin.from("product_attributes").insert(row);
+            if (!r.error) ok++;
+          }
+          return ok;
+        }
+        throw new Error(msg);
       }
-    } else {
-      inserted = rows.length;
+      return 0;
+    }
+
+    let inserted = 0;
+    try {
+      inserted = await insertTolerant(rows as Array<Record<string, unknown>>);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Error al precargar" };
     }
 
     revalidatePath("/configuracion/productos");

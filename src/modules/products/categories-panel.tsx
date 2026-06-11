@@ -52,6 +52,9 @@ export function CreateCategoryForm() {
       }
       notify.success("Categoría creada");
       (e.target as HTMLFormElement).reset();
+      // Recargar para que la categoría nueva aparezca en la lista (y se le
+      // puedan añadir atributos). Antes quedaba sin verse hasta refrescar.
+      location.reload();
     });
   }
 
