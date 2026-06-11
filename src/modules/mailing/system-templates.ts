@@ -76,6 +76,39 @@ const TEMPLATES: SystemTemplate[] = [
     ],
   },
   {
+    key: "savings_proposal_sent",
+    name: "Envío de propuesta de ahorro",
+    description: "Adjunta el PDF de la calculadora de ahorro al cliente.",
+    kind: "transactional",
+    subject: "Tu propuesta de ahorro de {{company_name}}",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}},</h2>
+      <p>Te adjunto el estudio de ahorro que hemos preparado para ti.</p>
+      <table cellspacing="0" cellpadding="0" border="0" style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 16px; margin: 16px 0; width: 100%;">
+        <tr>
+          <td style="padding: 12px 16px;">
+            <strong>Referencia:</strong> {{savings_reference}}<br>
+            <strong>Lo que pagas ahora:</strong> {{current_monthly|money}}/mes<br>
+            <strong>Con nosotros:</strong> {{our_monthly|money}}/mes<br>
+            <strong>Ahorro estimado a 5 años:</strong> {{saved_5y|money}}<br>
+            <strong>Recuperas la inversión en:</strong> {{payback_months}} meses
+          </td>
+        </tr>
+      </table>
+      <p>Tienes todo el detalle en el PDF adjunto. Cualquier duda, escríbeme o llámame y lo vemos juntos.</p>
+      <p>Un saludo.</p>
+    `,
+    variables: [
+      "customer_first_name",
+      "company_name",
+      "savings_reference",
+      "current_monthly",
+      "our_monthly",
+      "saved_5y",
+      "payback_months",
+    ],
+  },
+  {
     key: "contract_signed",
     name: "Bienvenida tras firma de contrato",
     description: "Confirmación + próximos pasos cuando se firma el contrato.",

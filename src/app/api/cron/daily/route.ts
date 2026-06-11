@@ -1213,12 +1213,15 @@ export async function GET(req: NextRequest) {
       service_start_date: string | null;
     }>) {
       if (offMaintenance.has(c.company_id)) continue;
-      // ¿Tiene job futuro?
+      // ¿Tiene job futuro? Incluimos 'preprogrammed' y 'needs_callback' además
+      // de scheduled/in_progress: el bloque 4a-bis (ensureMaintenanceWindow) ya
+      // crea jobs 'preprogrammed' 12 meses por delante. Sin esto, P2-D no los
+      // veía y DUPLICABA con un job 'scheduled' (doble programación).
       const { count } = await admin
         .from("maintenance_jobs")
         .select("id", { count: "exact", head: true })
         .eq("contract_id", c.id)
-        .in("status", ["scheduled", "in_progress"])
+        .in("status", ["scheduled", "in_progress", "preprogrammed", "needs_callback"])
         .gte("scheduled_at", todayDate2);
       if ((count ?? 0) > 0) continue;
       // Crear próximo job a 6 meses del último completado (o desde service_start_date).
