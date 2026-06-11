@@ -322,16 +322,22 @@ export async function rescheduleMaintenanceProposalAction(input: {
 
 export async function startMaintenanceAction(id: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: si el técnico_user_id de este job no coincide con el
   // que está pulsando "Iniciar" (porque fue reasignado), la policy
   // mant_update silenciaría el UPDATE.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id para no iniciar
+  // mantenimientos de otra empresa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const r = await admin
     .from("maintenance_jobs")
     .update({ status: "in_progress", started_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Mantenimiento no encontrado o no pertenece a tu empresa");
   await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "maintenance",
@@ -527,6 +533,7 @@ export async function createMaintenanceAction(input: unknown) {
 
 export async function completeMaintenanceAction(input: unknown) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(completeMaintenanceSchema, input, "Cerrar mantenimiento");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -539,7 +546,11 @@ export async function completeMaintenanceAction(input: unknown) {
       "started_at, technician_user_id, company_id, customer_equipment_id, customer_id",
     )
     .eq("id", parsed.id)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  // SEGURIDAD: `supabase` aplica RLS → prev null = de otra empresa o inexistente.
+  // Abortamos para que el UPDATE admin de abajo (salta RLS) no cierre jobs ajenos.
+  if (!prev) throw new Error("Mantenimiento no encontrado o no pertenece a tu empresa");
   const startTs = (prev as { started_at: string | null } | null)?.started_at;
   const durationSec = startTs
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
@@ -556,7 +567,8 @@ export async function completeMaintenanceAction(input: unknown) {
       duration_seconds: durationSec,
       notes: parsed.notes ?? null,
     })
-    .eq("id", parsed.id);
+    .eq("id", parsed.id)
+    .eq("company_id", session.company_id);
   if (updR.error) throw new Error(updR.error.message);
 
   // Auto-resolver notificaciones del mantenimiento (ya completado).

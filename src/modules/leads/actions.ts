@@ -648,17 +648,23 @@ export async function bumpLeadStatus(leadId: string, target: LeadStatus): Promis
   // quedaba congelado.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   const { data } = await admin
     .from("leads")
     .select("status")
     .eq("id", leadId)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
   if (!data) return;
   const current = (data as { status: LeadStatus }).status;
   if (STATUS_ORDER[current] >= 99) return; // terminal
   if (STATUS_ORDER[target] <= STATUS_ORDER[current]) return;
 
-  await admin.from("leads").update({ status: target }).eq("id", leadId);
+  await admin
+    .from("leads")
+    .update({ status: target })
+    .eq("id", leadId)
+    .eq("company_id", session.company_id);
   await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "lead",
@@ -733,15 +739,23 @@ export async function updateLeadAction(
     potential?: "unknown" | "A" | "B" | "C";
   },
 ): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const payload: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(input)) {
     payload[k] = v === "" ? null : v;
   }
-  const r = await admin.from("leads").update(payload).eq("id", leadId);
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
+  const r = await admin
+    .from("leads")
+    .update(payload)
+    .eq("id", leadId)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Lead no encontrado o no pertenece a tu empresa");
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
 }
@@ -751,7 +765,8 @@ export async function updateLeadAction(
  * usa markLeadAsLostAction en su lugar (rechaza propuestas + marca lost).
  */
 export async function deleteLeadAction(leadId: string): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   // Comprobamos primero que no tiene propuestas vivas
@@ -767,11 +782,15 @@ export async function deleteLeadAction(leadId: string): Promise<void> {
       "Este lead tiene propuestas. Usa «Marcar como venta perdida» en lugar de eliminarlo.",
     );
   }
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   const r = await admin
     .from("leads")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Lead no encontrado o no pertenece a tu empresa");
   revalidatePath("/leads");
 }
 
@@ -784,8 +803,19 @@ export async function markLeadAsLostAction(
   reason: string | null,
 ): Promise<void> {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // SEGURIDAD: admin salta RLS → verificar que el lead es de tu empresa
+  // ANTES de rechazar sus propuestas (si no, se rechazarían propuestas ajenas).
+  const { data: ownLead } = await admin
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownLead) throw new Error("Lead no encontrado o no pertenece a tu empresa");
 
   // Rechazar todas las propuestas vivas del lead
   await admin
@@ -798,6 +828,7 @@ export async function markLeadAsLostAction(
         : "Lead marcado como venta perdida",
     })
     .eq("lead_id", leadId)
+    .eq("company_id", session.company_id)
     .is("deleted_at", null)
     .in("status", ["draft", "sent", "pending_approval", "accepted"]);
 
@@ -809,7 +840,8 @@ export async function markLeadAsLostAction(
       lost_at: new Date().toISOString(),
       lost_reason: reason,
     })
-    .eq("id", leadId);
+    .eq("id", leadId)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   // Evento timeline
@@ -837,14 +869,22 @@ export async function updateLeadStatus(id: string, status: LeadStatus, lostReaso
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  if (!session.company_id) throw new Error("Sin empresa");
   const update: Record<string, unknown> = { status };
   if (status === "lost") {
     update.lost_at = new Date().toISOString();
     if (lostReason) update.lost_reason = lostReason;
   }
 
-  const { error } = await admin.from("leads").update(update).eq("id", id);
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
+  const { data: updated, error } = await admin
+    .from("leads")
+    .update(update)
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (error) throw error;
+  if (!updated?.length) throw new Error("Lead no encontrado o no pertenece a tu empresa");
 
   // Si pierde, registrar en lost_sales (idempotente: sólo si no existe ya)
   if (status === "lost") {
