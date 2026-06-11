@@ -49,6 +49,7 @@ const MONTHS = [
 const KIND_COLOR: Record<string, string> = {
   visit: "bg-[#e6e6ff] text-[#5a5acf]", // lila
   installation: "bg-[#dcf6e6] text-[#0caf60]", // verde
+  uninstall: "bg-[#ffe0d0] text-[#c2410c]", // teja (RETIRADA)
   maintenance: "bg-[#ffe9c8] text-[#cf8c1a]", // naranja
   call: "bg-[#dde7ff] text-[#3b82f6]", // azul
   reminder: "bg-[#f4d8ff] text-[#9333ea]", // morado

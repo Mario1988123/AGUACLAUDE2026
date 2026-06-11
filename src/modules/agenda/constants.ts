@@ -1,6 +1,7 @@
 export const KIND_LABEL: Record<string, string> = {
   visit: "Visita",
   installation: "Instalación",
+  uninstall: "Desinstalación",
   maintenance: "Mantenimiento",
   call: "Llamada",
   reminder: "Recordatorio",

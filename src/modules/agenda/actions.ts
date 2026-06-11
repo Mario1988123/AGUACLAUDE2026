@@ -507,7 +507,7 @@ async function loadVirtualAgendaItems(args: {
   let instQ = supabase
     .from("installations")
     .select(
-      "id, reference_code, customer_id, status, scheduled_at, installer_user_id",
+      "id, reference_code, customer_id, status, scheduled_at, installer_user_id, kind",
     )
     .eq("company_id", args.companyId)
     .in("status", ["scheduled", "in_progress", "paused"])
@@ -543,6 +543,7 @@ async function loadVirtualAgendaItems(args: {
     status: string;
     scheduled_at: string;
     installer_user_id: string | null;
+    kind: "normal" | "free_trial" | "relocation" | "uninstall" | null;
   };
   type MaintRow = {
     id: string;
@@ -589,16 +590,23 @@ async function loadVirtualAgendaItems(args: {
   for (const i of instList) {
     const custName = i.customer_id ? nameMap.get(i.customer_id) : null;
     const ref = i.reference_code;
-    // Título: "Instalación · {ref} · {cliente}" si tenemos ambos.
-    // Cae a uno solo si falta el otro.
+    // Distinguir desinstalación (retirada) y reubicación de la instalación normal.
+    const isUninstall = i.kind === "uninstall";
+    const noun = isUninstall
+      ? "Desinstalación"
+      : i.kind === "relocation"
+        ? "Reubicación"
+        : "Instalación";
+    // Título: "{tipo} · {ref} · {cliente}" si tenemos ambos.
     let title: string;
-    if (ref && custName) title = `Instalación · ${ref} · ${custName}`;
-    else if (ref) title = `Instalación · ${ref}`;
-    else if (custName) title = `Instalación · ${custName}`;
-    else title = "Instalación";
+    if (ref && custName) title = `${noun} · ${ref} · ${custName}`;
+    else if (ref) title = `${noun} · ${ref}`;
+    else if (custName) title = `${noun} · ${custName}`;
+    else title = noun;
     out.push({
       id: `virtual-inst-${i.id}`,
-      kind: "installation",
+      // kind 'uninstall' para que el calendario lo pinte distinto (RETIRADA).
+      kind: isUninstall ? "uninstall" : "installation",
       status: i.status,
       title,
       description: ref ?? null,
