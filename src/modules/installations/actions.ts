@@ -17,6 +17,7 @@ import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
+import { assertInstallationCompany } from "./ownership";
 
 /**
  * Reasigna instalador. Solo admin/director técnico.
@@ -37,10 +38,13 @@ export async function reassignInstallationAction(
   // inst_update bloqueaba por scope.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin client salta RLS → filtramos por company_id para no
+  // reasignar instalaciones de otra empresa.
   const r = await admin
     .from("installations")
     .update({ installer_user_id: installerUserId })
-    .eq("id", installationId);
+    .eq("id", installationId)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   await admin.from("events").insert({
@@ -882,6 +886,7 @@ export async function updateInstallationSafeAction(
 
 export async function updateInstallationAction(input: unknown) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
 
   // Solo niveles 1-2 (admin / director técnico) pueden programar/editar.
   const isAuthorized =
@@ -921,7 +926,12 @@ export async function updateInstallationAction(input: unknown) {
   // Pasar a scheduled si hay fecha. El instalador puede asignarse luego.
   if (update.scheduled_at) update.status = "scheduled";
 
-  const { error } = await admin.from("installations").update(update).eq("id", parsed.id);
+  // SEGURIDAD: admin client salta RLS → filtramos por company_id.
+  const { error } = await admin
+    .from("installations")
+    .update(update)
+    .eq("id", parsed.id)
+    .eq("company_id", session.company_id);
   if (error) {
     console.error("[updateInstallation] update failed:", error.message);
     throw new Error(`No se pudo actualizar: ${error.message}`);
@@ -1358,26 +1368,42 @@ function haversineMeters(
 }
 
 export async function pauseInstallation(id: string) {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // Seguridad multi-empresa: el admin client salta RLS, así que filtramos
+  // SIEMPRE por company_id para que no se pueda pausar una instalación ajena.
+  await assertInstallationCompany(id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin.from("installations").update({ status: "paused" }).eq("id", id);
+  await admin
+    .from("installations")
+    .update({ status: "paused" })
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   // installation_steps_log fue dropeada en migración 20260507100000;
   // los eventos viven ahora en `events`. Los wizards ya escriben allí.
   revalidatePath(`/instalaciones/${id}`);
 }
 
 export async function resumeInstallation(id: string) {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  await assertInstallationCompany(id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin.from("installations").update({ status: "in_progress" }).eq("id", id);
+  await admin
+    .from("installations")
+    .update({ status: "in_progress" })
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   revalidatePath(`/instalaciones/${id}`);
 }
 
 export async function reportDamageOrDrilling(input: unknown) {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(installationStepSchema, input, "Estado parte");
+  await assertInstallationCompany(parsed.installation_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -1387,7 +1413,11 @@ export async function reportDamageOrDrilling(input: unknown) {
   if (parsed.needs_countertop_drilling !== undefined)
     update.needs_countertop_drilling = parsed.needs_countertop_drilling;
   if (Object.keys(update).length > 0) {
-    await admin.from("installations").update(update).eq("id", parsed.installation_id);
+    await admin
+      .from("installations")
+      .update(update)
+      .eq("id", parsed.installation_id)
+      .eq("company_id", session.company_id);
   }
   // installation_steps_log dropeada — los wizards escriben en `events`.
   revalidatePath(`/instalaciones/${parsed.installation_id}`);
@@ -1395,12 +1425,15 @@ export async function reportDamageOrDrilling(input: unknown) {
 
 export async function completeInstallation(input: unknown) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(completeInstallationSchema, input, "Cerrar instalación");
   // Admin client para todo el flow: el instalador (nivel 3) tiene
   // policy installations_update por scope que solo cubre las suyas.
   // Las INSERT a customer_equipment, agenda_events, events también
-  // pueden bloquear silentmente. Como ya validamos sesión arriba y
-  // el SELECT inicial verifica que la installation existe, es seguro.
+  // pueden bloquear silentmente. SEGURIDAD: el admin client salta RLS, así
+  // que el SELECT inicial DEBE filtrar por company_id y abortar si no es de
+  // tu empresa; de él cuelga todo el resto del flujo (stock, equipos,
+  // activación de contrato, puntos), que escribe con session.company_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const now = new Date();
@@ -1413,7 +1446,9 @@ export async function completeInstallation(input: unknown) {
       "started_at, scheduled_at, company_id, reference_code, installer_user_id, contract_id, customer_id, address_id, kind, notes, free_trial_id",
     )
     .eq("id", parsed.id)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!inst) throw new Error("Instalación no encontrada o no pertenece a tu empresa");
   const startTs = (inst as { started_at: string | null })?.started_at;
   const durationSec = startTs
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)

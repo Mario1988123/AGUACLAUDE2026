@@ -6,6 +6,13 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { agendaCreateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import {
+  madridHour,
+  madridMinutesOfDay,
+  madridIsoDow,
+  madridJsDay,
+  madridDayRangeUtc,
+} from "@/shared/lib/format-date";
 
 /**
  * Decide si una fecha cae fuera del horario laboral. Prioridad:
@@ -35,8 +42,9 @@ async function computeIsOutsideHours(
   // 1) Horario del usuario asignado (si lo hay)
   if (assignedUserId) {
     try {
-      // JS getDay → ISO day of week (lunes=0...domingo=6)
-      const isoDow = (d.getDay() + 6) % 7;
+      // Día de la semana ISO (lunes=0...domingo=6) EN HORA MADRID. Antes era
+      // d.getDay() en hora del servidor (UTC) y descuadraba cerca de medianoche.
+      const isoDow = madridIsoDow(d);
       const { data: sched } = await admin
         .from("user_work_schedules")
         .select("starts_at, ends_at")
@@ -70,23 +78,23 @@ async function computeIsOutsideHours(
   if (bh) {
     const KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     const slot = (bh as Record<string, { open: string; close: string } | null>)[
-      KEYS[d.getDay()]!
+      KEYS[madridJsDay(d)]!
     ];
     if (!slot) return true;
     return inTimeRange(d, slot.open, slot.close) ? false : true;
   }
 
-  // 3) Fallback 9-18 lun-vie
-  const day = d.getDay();
-  const hour = d.getHours();
+  // 3) Fallback 9-18 lun-vie (en hora Madrid)
+  const day = madridJsDay(d);
+  const hour = madridHour(d);
   return day === 0 || day === 6 || hour < 9 || hour > 18;
 }
 
-/** Acepta "HH:MM" o "HH:MM:SS" y comprueba si la hora local de d cae dentro. */
+/** Acepta "HH:MM" o "HH:MM:SS" y comprueba si la hora Madrid de d cae dentro. */
 function inTimeRange(d: Date, openHHMM: string, closeHHMM: string): boolean {
   const [oh, om] = openHHMM.split(":").map(Number);
   const [ch, cm] = closeHHMM.split(":").map(Number);
-  const minutes = d.getHours() * 60 + d.getMinutes();
+  const minutes = madridMinutesOfDay(d);
   return (
     minutes >= (oh ?? 0) * 60 + (om ?? 0) &&
     minutes <= (ch ?? 23) * 60 + (cm ?? 59)
@@ -185,8 +193,9 @@ export async function listAgenda(
   filters?: { user_id?: string; kind?: string },
 ): Promise<AgendaItem[]> {
   // Implementación: delegamos en listAgendaRange con [start-of-today, +daysAhead].
+  // "Hoy" se calcula en hora Madrid, no en hora del servidor (UTC).
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const startOfToday = madridDayRangeUtc(now).start;
   const until = new Date(now.getTime() + daysAhead * 86400000);
   return listAgendaRange(startOfToday.toISOString(), until.toISOString(), filters);
 }
@@ -672,9 +681,9 @@ async function recomputeOutsideHoursForList(
     const d = new Date(ev.starts_at);
     let outside = false;
     let resolved = false;
-    // 1) horario del usuario
+    // 1) horario del usuario (día de la semana en hora Madrid)
     if (ev.assigned_user_id) {
-      const isoDow = (d.getDay() + 6) % 7;
+      const isoDow = madridIsoDow(d);
       const sched = schedMap.get(`${ev.assigned_user_id}-${isoDow}`);
       if (sched) {
         if (sched.starts_at && sched.ends_at) {
@@ -689,7 +698,7 @@ async function recomputeOutsideHoursForList(
     if (!resolved && bh) {
       const KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
       const slot = (bh as Record<string, { open: string; close: string } | null>)[
-        KEYS[d.getDay()]!
+        KEYS[madridJsDay(d)]!
       ];
       if (!slot) {
         outside = true;
@@ -698,10 +707,10 @@ async function recomputeOutsideHoursForList(
       }
       resolved = true;
     }
-    // 3) fallback 9-18 lun-vie
+    // 3) fallback 9-18 lun-vie (en hora Madrid)
     if (!resolved) {
-      const day = d.getDay();
-      const hour = d.getHours();
+      const day = madridJsDay(d);
+      const hour = madridHour(d);
       outside = day === 0 || day === 6 || hour < 9 || hour > 18;
     }
     return { ...ev, is_outside_hours: outside };
@@ -1104,9 +1113,13 @@ async function rescheduleAgendaEventInternal(
     .from("agenda_events")
     .select("starts_at, ends_at, status")
     .eq("id", eventId)
-    .single();
+    .maybeSingle();
   type Prev = { starts_at: string; ends_at: string | null; status: string };
   const p = prev as Prev | null;
+  // SEGURIDAD: `supabase` aplica RLS, así que un evento de otra empresa
+  // devuelve null aquí. Abortamos para que el UPDATE admin de abajo (que
+  // salta RLS) no pueda mover eventos ajenos pasando su UUID.
+  if (!p) throw new Error("Evento de agenda no encontrado o no pertenece a tu empresa");
 
   // Calcular nueva ends_at preservando la duración
   let newEndsAt: string | null = null;
@@ -1149,7 +1162,8 @@ async function rescheduleAgendaEventInternal(
       is_outside_hours: isOutsideHours,
       ...(p?.status === "scheduled" ? {} : {}),
     })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .eq("company_id", session.company_id);
 
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -1187,11 +1201,20 @@ export async function updateAgendaStatus(
   id: string,
   status: "scheduled" | "in_progress" | "completed" | "cancelled" | "no_show" | "rescheduled",
 ) {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { error } = await admin.from("agenda_events").update({ status }).eq("id", id);
+  // SEGURIDAD: admin client salta RLS → filtramos por company_id para que
+  // no se pueda cambiar el estado de eventos de otra empresa con su UUID.
+  const { data, error } = await admin
+    .from("agenda_events")
+    .update({ status })
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Evento no encontrado o no pertenece a tu empresa");
   revalidatePath("/agenda");
 }
 
@@ -1285,13 +1308,15 @@ export async function reassignAgendaEventAction(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin client salta RLS → filtramos por company_id.
   const { data: ev } = await admin
     .from("agenda_events")
     .select("starts_at, title")
     .eq("id", eventId)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
   const e = ev as { starts_at: string; title: string } | null;
-  if (!e) throw new Error("Evento no encontrado");
+  if (!e) throw new Error("Evento no encontrado o no pertenece a tu empresa");
 
   const newOutside = await computeIsOutsideHours(
     new Date(e.starts_at),
@@ -1305,7 +1330,8 @@ export async function reassignAgendaEventAction(
       assigned_user_id: newUserId,
       is_outside_hours: newOutside,
     })
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   await admin.from("events").insert({

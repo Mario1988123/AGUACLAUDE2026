@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { completeInstallation } from "./actions";
+import { assertInstallationCompany } from "./ownership";
 
 /** Distancia en metros (Haversine) entre dos coordenadas. */
 function haversineMeters(
@@ -51,10 +52,13 @@ export async function startInstallationAction(input: {
     let inst: unknown = null;
     let instErr: string | null = null;
     try {
+      // SEGURIDAD: admin client salta RLS → filtramos por company_id para
+      // que no se pueda iniciar el parte de una instalación de otra empresa.
       const r = await admin
         .from("installations")
         .select("id, company_id, address_id, customer_id, scheduled_at, status")
         .eq("id", input.installation_id)
+        .eq("company_id", session.company_id)
         .maybeSingle();
       inst = r.data;
       instErr = (r.error as { message?: string } | null)?.message ?? null;
@@ -214,7 +218,8 @@ export async function startInstallationAction(input: {
       const r = await admin
         .from("installations")
         .update({ [col]: val })
-        .eq("id", input.installation_id);
+        .eq("id", input.installation_id)
+        .eq("company_id", session.company_id);
       const m = (r.error as { message?: string } | null)?.message ?? null;
       if (!m) continue;
       if (/column .* does not exist|schema cache/i.test(m)) continue;
@@ -294,6 +299,9 @@ export async function pauseInstallationAction(input: {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin client salta RLS → verificamos que la instalación es
+    // de tu empresa antes de pausarla.
+    await assertInstallationCompany(input.installation_id, session.company_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -326,7 +334,8 @@ export async function pauseInstallationAction(input: {
     const upd = await admin
       .from("installations")
       .update({ status: "paused" })
-      .eq("id", input.installation_id);
+      .eq("id", input.installation_id)
+      .eq("company_id", session.company_id);
     if (upd.error) return { ok: false, error: upd.error.message };
 
     await admin.from("events").insert({
@@ -352,6 +361,8 @@ export async function resumeInstallationAction(installationId: string): Promise<
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin client salta RLS → verificamos empresa.
+    await assertInstallationCompany(installationId, session.company_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -377,7 +388,8 @@ export async function resumeInstallationAction(installationId: string): Promise<
     const upd = await admin
       .from("installations")
       .update({ status: "in_progress" })
-      .eq("id", installationId);
+      .eq("id", installationId)
+      .eq("company_id", session.company_id);
     if (upd.error) return { ok: false, error: upd.error.message };
 
     await admin.from("events").insert({
@@ -407,6 +419,9 @@ export async function reportInstallationIncidentAction(input: {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin client salta RLS → verificamos empresa antes de
+    // registrar incidencia / desagendar la instalación.
+    await assertInstallationCompany(input.installation_id, session.company_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -509,7 +524,8 @@ export async function reportInstallationIncidentAction(input: {
           status: "incident_pending",
           scheduled_at: null,
         })
-        .eq("id", input.installation_id);
+        .eq("id", input.installation_id)
+        .eq("company_id", session.company_id);
       await admin.from("events").insert({
         company_id: session.company_id,
         subject_type: "installation",
@@ -570,12 +586,14 @@ export async function resolveInstallationIncidentAction(input: {
           resolved_at: new Date().toISOString(),
           resolved_by: session.user_id,
         })
-        .eq("id", input.incident_id);
+        .eq("id", input.incident_id)
+        .eq("company_id", session.company_id);
       if (r.error && /resolved_by/i.test(r.error.message ?? "")) {
         r = await admin
           .from("installation_incidents")
           .update({ resolved_at: new Date().toISOString() })
-          .eq("id", input.incident_id);
+          .eq("id", input.incident_id)
+          .eq("company_id", session.company_id);
       }
       if (r.error) return { ok: false, error: r.error.message };
     } else {
@@ -586,7 +604,8 @@ export async function resolveInstallationIncidentAction(input: {
           resolved_at: new Date().toISOString(),
           resolved_by: session.user_id,
         })
-        .eq("id", input.incident_id);
+        .eq("id", input.incident_id)
+        .eq("company_id", session.company_id);
       if (r.error) return { ok: false, error: r.error.message };
     }
 
@@ -644,13 +663,15 @@ export async function reclassifyInstallationIncidentAction(input: {
     const r = await admin
       .from("installation_incidents")
       .update({ kind: input.kind })
-      .eq("id", input.incident_id);
+      .eq("id", input.incident_id)
+      .eq("company_id", session.company_id);
     if (r.error) return { ok: false, error: r.error.message };
 
     const { data } = await admin
       .from("installation_incidents")
       .select("installation_id")
       .eq("id", input.incident_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     const instId = (data as { installation_id: string | null } | null)?.installation_id ?? null;
     if (instId) {
@@ -674,14 +695,22 @@ export async function setInstallationItemSerialAction(
   serialNumber: string | null,
 ): Promise<SimpleResult> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin client salta RLS → filtramos por company_id
+    // (installation_items lleva company_id) para no tocar items ajenos.
     const r = await admin
       .from("installation_items")
       .update({ serial_number: serialNumber || null })
-      .eq("id", itemId);
+      .eq("id", itemId)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length) {
+      return { ok: false, error: "Item no encontrado o no pertenece a tu empresa" };
+    }
     return { ok: true };
   } catch (err) {
     return {
@@ -700,17 +729,24 @@ export async function setInstallationInitialStateAction(input: {
   needs_countertop_drilling: boolean;
 }): Promise<SimpleResult> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin client salta RLS → filtramos por company_id.
     const r = await admin
       .from("installations")
       .update({
         has_previous_damage: input.has_previous_damage,
         needs_countertop_drilling: input.needs_countertop_drilling,
       })
-      .eq("id", input.installation_id);
+      .eq("id", input.installation_id)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length) {
+      return { ok: false, error: "Instalación no encontrada o no pertenece a tu empresa" };
+    }
     revalidatePath(`/instalaciones/${input.installation_id}`);
     return { ok: true };
   } catch (err) {
@@ -735,7 +771,11 @@ export async function finishInstallationAction(input: {
   notes?: string | null;
 }): Promise<SimpleResult> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin client salta RLS → verificamos empresa antes de
+    // escribir satisfacción (completeInstallation hace su propio guard).
+    await assertInstallationCompany(input.installation_id, session.company_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -749,7 +789,8 @@ export async function finishInstallationAction(input: {
       const r = await admin
         .from("installations")
         .update({ [col]: val })
-        .eq("id", input.installation_id);
+        .eq("id", input.installation_id)
+        .eq("company_id", session.company_id);
       const m = (r.error as { message?: string } | null)?.message ?? null;
       if (m && !/column .* does not exist|schema cache/i.test(m)) {
         return { ok: false, error: m };
@@ -787,7 +828,8 @@ export async function updateContractMaintenanceScheduleAction(input: {
   months_included: number;
 }): Promise<SimpleResult> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -816,10 +858,13 @@ export async function updateContractMaintenanceScheduleAction(input: {
       };
     }
 
+    // SEGURIDAD: admin client salta RLS → filtramos por company_id en la
+    // instalación y en el contrato para no tocar datos de otra empresa.
     const { data: inst } = await admin
       .from("installations")
       .select("contract_id")
       .eq("id", input.installation_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     const contractId = (inst as { contract_id: string | null } | null)
       ?.contract_id ?? null;
@@ -833,7 +878,8 @@ export async function updateContractMaintenanceScheduleAction(input: {
         maintenance_periodicity_months: input.periodicity_months,
         maintenance_months_included: input.months_included,
       })
-      .eq("id", contractId);
+      .eq("id", contractId)
+      .eq("company_id", session.company_id);
     if (error) {
       return { ok: false, error: error.message };
     }
@@ -851,13 +897,15 @@ export async function updateContractMaintenanceScheduleAction(input: {
  * Devuelve las pausas registradas de una instalación.
  */
 export async function listInstallationPauses(installationId: string) {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("installation_pauses")
     .select("id, reason, reason_notes, paused_at, resumed_at, scheduled_resume_at")
     .eq("installation_id", installationId)
+    .eq("company_id", session.company_id)
     .order("paused_at", { ascending: false });
   return (data ?? []) as Array<{
     id: string;

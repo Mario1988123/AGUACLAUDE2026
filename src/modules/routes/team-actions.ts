@@ -57,15 +57,20 @@ async function getTeamMemberIds(): Promise<{
     );
     return { member_ids: ids, is_leader: true };
   }
-  // Directores: solo los asignados a su equipo
+  // Directores: solo los asignados a su equipo.
+  // OJO: la tabla team_assignments usa manager_user_id / member_user_id
+  // (migración 20260501120200), NO team_lead_user_id / user_id. Con los
+  // nombres viejos la query fallaba → catch → el director solo se veía a sí
+  // mismo. Mismo patrón que agenda/actions.ts.
   try {
     const { data } = await admin
       .from("team_assignments")
-      .select("user_id")
+      .select("member_user_id")
       .eq("company_id", session.company_id)
-      .eq("team_lead_user_id", session.user_id);
-    const ids = ((data ?? []) as Array<{ user_id: string }>).map(
-      (r) => r.user_id,
+      .eq("manager_user_id", session.user_id)
+      .is("revoked_at", null);
+    const ids = ((data ?? []) as Array<{ member_user_id: string }>).map(
+      (r) => r.member_user_id,
     );
     // El propio líder también entra en el plan
     if (!ids.includes(session.user_id)) ids.push(session.user_id);

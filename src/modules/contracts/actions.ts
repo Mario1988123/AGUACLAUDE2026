@@ -1533,11 +1533,28 @@ export async function cancelContractAction(
 
     // Cancelar instalaciones pendientes asociadas (soft-delete)
     if (installs.length > 0) {
+      const nowDel = new Date().toISOString();
       await admin
         .from("installations")
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: nowDel })
         .eq("contract_id", id)
         .is("deleted_at", null);
+
+      // Soft-delete también los eventos de agenda de esas instalaciones.
+      // Antes quedaban "fantasma" en /agenda (la instalación se borraba pero
+      // su agenda_event seguía vivo). El listado de agenda filtra deleted_at.
+      const installIds = installs.map((i) => i.id);
+      try {
+        await admin
+          .from("agenda_events")
+          .update({ deleted_at: nowDel, status: "cancelled" })
+          .eq("company_id", session.company_id)
+          .eq("subject_type", "installation")
+          .in("subject_id", installIds)
+          .is("deleted_at", null);
+      } catch (e) {
+        console.error("[cancelContract] soft-delete agenda_events falló:", e);
+      }
     }
 
     // Cancelar wallet entries pendientes (rejected o cancelled)

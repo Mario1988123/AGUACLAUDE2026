@@ -16,6 +16,7 @@
  * NO debe importarse desde un componente cliente.
  */
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { madridHour } from "@/shared/lib/format-date";
 
 export type Slot = "morning" | "afternoon";
 
@@ -285,7 +286,9 @@ export async function computeOfferableSlots(
         const d = new Date(j.scheduled_at);
         const key = isoDate(d);
         if (!dayCounts[key]) dayCounts[key] = { morning: 0, afternoon: 0 };
-        const slot: Slot = d.getHours() < 14 ? "morning" : "afternoon";
+        // Mañana/tarde según la hora EN MADRID (antes era d.getHours() en hora
+        // del servidor/UTC → un trabajo de las 15:00 se contaba como mañana).
+        const slot: Slot = madridHour(d) < 14 ? "morning" : "afternoon";
         dayCounts[key][slot] += 1;
         const c = coords.get(j.id);
         if (c && input.lat != null && input.lng != null) {

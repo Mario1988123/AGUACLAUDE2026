@@ -2,6 +2,7 @@
 
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { madridDayRangeUtc } from "@/shared/lib/format-date";
 
 /**
  * "Mi día": agrega instalaciones, mantenimientos y eventos agenda asignados al
@@ -26,10 +27,11 @@ export interface DayItem {
 }
 
 function startOfToday(): { from: string; to: string } {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
-  const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
-  return { from, to };
+  // "Hoy" en hora Madrid, no en hora del servidor (Vercel corre en UTC, así
+  // que el rango antiguo descuadraba 1-2 h y se colaban/perdían tareas a
+  // primera o última hora del día).
+  const { start, end } = madridDayRangeUtc(new Date());
+  return { from: start.toISOString(), to: end.toISOString() };
 }
 
 export async function getMyDayItems(): Promise<DayItem[]> {
