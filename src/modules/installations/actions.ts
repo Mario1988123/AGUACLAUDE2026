@@ -1330,14 +1330,22 @@ export async function startInstallation(input: unknown) {
     .eq("id", parsed.id);
   if (error) throw new Error(error.message);
 
-  await supabase.from("installation_steps_log").insert({
-    installation_id: parsed.id,
-    company_id: session.company_id,
-    event_type: "start",
-    event_user_id: session.user_id,
-    geo_latitude: parsed.geo_lat ?? null,
-    geo_longitude: parsed.geo_lng ?? null,
-  });
+  // installation_steps_log se DROPEÓ en la migración 20260507100000; la
+  // timeline vive ahora en `events`. Antes este insert fallaba en silencio.
+  try {
+    await supabase.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "installation",
+      subject_id: parsed.id,
+      kind: "installation.started",
+      payload: {
+        geo: { lat: parsed.geo_lat ?? null, lng: parsed.geo_lng ?? null },
+      },
+      actor_user_id: session.user_id,
+    });
+  } catch {
+    /* fail-soft: el inicio del parte no debe romperse por la timeline */
+  }
 
   await supabase.from("events").insert({
     company_id: session.company_id!,
