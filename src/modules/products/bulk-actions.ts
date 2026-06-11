@@ -79,30 +79,51 @@ export async function bulkProductsAction(
       if (pct === 0 || pct < -90 || pct > 1000) {
         return { ok: false, error: "Porcentaje fuera de rango (-90 a +1000)" };
       }
-      // Leer precio actual, calcular nuevo, registrar en histórico, update.
-      const { data: prods } = await admin
-        .from("products")
-        .select("id, cash_price_cents")
+      // El precio NO vive en products.cash_price_cents (columna inexistente),
+      // sino en product_pricing_plans (plan_type='cash'). Ajustamos ahí los
+      // totales (individual/empresa/legacy) en ±pct y registramos histórico.
+      const factor = 1 + pct / 100;
+      const { data: plans } = await admin
+        .from("product_pricing_plans")
+        .select(
+          "id, product_id, total_price_cents, total_price_individual_cents, total_price_business_cents",
+        )
         .eq("company_id", session.company_id)
-        .in("id", parsed.product_ids);
-      type P = { id: string; cash_price_cents: number | null };
-      const list = (prods ?? []) as P[];
+        .eq("plan_type", "cash")
+        .in("product_id", parsed.product_ids);
+      type Plan = {
+        id: string;
+        product_id: string;
+        total_price_cents: number | null;
+        total_price_individual_cents: number | null;
+        total_price_business_cents: number | null;
+      };
+      const list = (plans ?? []) as Plan[];
+      const scale = (v: number | null) =>
+        v == null ? null : Math.round(v * factor);
       let affected = 0;
-      for (const p of list) {
-        if (p.cash_price_cents == null) continue;
-        const newCents = Math.round(p.cash_price_cents * (1 + pct / 100));
-        await admin
-          .from("products")
-          .update({ cash_price_cents: newCents })
-          .eq("id", p.id);
+      for (const pl of list) {
+        const prevTotal = pl.total_price_cents;
+        const newTotal = scale(pl.total_price_cents);
+        const upd = await admin
+          .from("product_pricing_plans")
+          .update({
+            ...(newTotal != null ? { total_price_cents: newTotal } : {}),
+            total_price_individual_cents: scale(pl.total_price_individual_cents),
+            total_price_business_cents: scale(pl.total_price_business_cents),
+          })
+          .eq("id", pl.id)
+          .eq("company_id", session.company_id);
+        if (upd.error) continue;
         try {
           await admin.from("product_price_history").insert({
             company_id: session.company_id,
-            product_id: p.id,
+            product_id: pl.product_id,
             changed_by: session.user_id,
             change_kind: "cash_price",
-            previous_cents: p.cash_price_cents,
-            new_cents: newCents,
+            plan_type: "cash",
+            previous_cents: prevTotal,
+            new_cents: newTotal ?? prevTotal ?? 0,
             reason: parsed.reason ?? `Bulk ajuste ${pct > 0 ? "+" : ""}${pct}%`,
           });
         } catch {

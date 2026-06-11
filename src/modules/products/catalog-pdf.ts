@@ -146,15 +146,42 @@ export async function generateProductCatalog(companyId: string): Promise<Uint8Ar
   const { data: prods } = await admin
     .from("products")
     .select(
-      "id, name, short_description, internal_reference, kind, cash_price_cents, category_id",
+      // products NO tiene cash_price_cents (el precio vive en product_pricing_plans).
+      "id, name, short_description, internal_reference, kind, category_id",
     )
     .eq("company_id", companyId)
     .eq("is_active", true)
     .order("category_id")
     .order("name");
   const products = ((prods ?? []) as Array<
-    Omit<ProductCatRow, "category_name"> & { category_id: string | null }
+    Omit<ProductCatRow, "category_name" | "cash_price_cents"> & { category_id: string | null }
   >);
+
+  // Precio cash desde product_pricing_plans (plan_type='cash').
+  const cashPriceById = new Map<string, number | null>();
+  if (products.length > 0) {
+    const { data: cashPlans } = await admin
+      .from("product_pricing_plans")
+      .select("product_id, total_price_individual_cents, total_price_cents")
+      .eq("company_id", companyId)
+      .eq("plan_type", "cash")
+      .in(
+        "product_id",
+        products.map((p) => p.id),
+      );
+    for (const pl of ((cashPlans ?? []) as Array<{
+      product_id: string;
+      total_price_individual_cents: number | null;
+      total_price_cents: number | null;
+    }>)) {
+      if (!cashPriceById.has(pl.product_id)) {
+        cashPriceById.set(
+          pl.product_id,
+          pl.total_price_individual_cents ?? pl.total_price_cents ?? null,
+        );
+      }
+    }
+  }
   if (products.length === 0) {
     // PDF con mensaje
     const pdf = await PDFDocument.create();
@@ -193,6 +220,7 @@ export async function generateProductCatalog(companyId: string): Promise<Uint8Ar
 
   const enriched: ProductCatRow[] = products.map((p) => ({
     ...p,
+    cash_price_cents: cashPriceById.get(p.id) ?? null,
     category_name: p.category_id ? catMap.get(p.category_id) ?? "Sin categoría" : "Sin categoría",
   }));
 

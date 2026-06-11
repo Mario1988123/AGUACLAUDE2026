@@ -315,17 +315,23 @@ export async function GET(req: NextRequest) {
     // filtramos por origen + sus días específicos en memoria.
     const bufferCutoff = new Date();
     bufferCutoff.setDate(bufferCutoff.getDate() - Math.min(tmkDays, commercialDays));
-    const { data: stale } = await admin
+    // OJO: lead_status NO tiene 'qualified' (enum real: new, contacted,
+    // proposal_created, proposal_sent, free_trial_proposed, converted, lost,
+    // expired). Incluirlo hacía fallar TODA la query → ningún lead caducaba.
+    const { data: stale, error: staleErr } = await admin
       .from("leads")
       .select(
         "id, legal_name, trade_name, first_name, last_name, party_kind, origin, assigned_user_id, assigned_at",
       )
       .eq("company_id", cs.company_id)
-      .in("status", ["new", "contacted", "qualified"])
+      .in("status", ["new", "contacted"])
       .lt("assigned_at", bufferCutoff.toISOString())
       .is("expired_at", null)
       .is("deleted_at", null)
       .limit(500);
+    if (staleErr) {
+      console.error("[cron/daily] caducidad leads SELECT falló:", staleErr.message);
+    }
     type StaleLead = {
       id: string;
       legal_name: string | null;

@@ -123,32 +123,65 @@ export async function completeStockCountAction(
       diff: number | null;
     };
     const rows = ((items ?? []) as I[]).filter((i) => i.counted_qty != null);
+    // Almacén del conteo (una sola vez).
+    const { data: count } = await admin
+      .from("stock_counts")
+      .select("warehouse_id")
+      .eq("id", countId)
+      .maybeSingle();
+    const whId = (count as { warehouse_id?: string } | null)?.warehouse_id;
     let adjustments = 0;
-    for (const i of rows) {
-      const diff = Number(i.counted_qty) - Number(i.expected_qty);
-      if (diff === 0) continue;
-      // Insertar ajuste manual en stock_movements (delta = diff)
-      const { data: count } = await admin
-        .from("stock_counts")
-        .select("warehouse_id")
-        .eq("id", countId)
-        .maybeSingle();
-      const whId = (count as { warehouse_id?: string } | null)?.warehouse_id;
-      if (!whId) continue;
-      try {
-        await admin.from("stock_movements").insert({
+    if (whId) {
+      for (const i of rows) {
+        const counted = Number(i.counted_qty);
+        const diff = counted - Number(i.expected_qty);
+        if (diff === 0) continue;
+
+        // 1) RECONCILIAR el stock real al valor contado (antes solo se
+        //    registraba el movimiento pero warehouse_stock no se tocaba →
+        //    el descuadre seguía ahí).
+        const { data: existing } = await admin
+          .from("warehouse_stock")
+          .select("id")
+          .eq("warehouse_id", whId)
+          .eq("product_id", i.product_id)
+          .eq("state", "new")
+          .is("location_id", null)
+          .maybeSingle();
+        const exRow = existing as { id: string } | null;
+        if (exRow) {
+          await admin
+            .from("warehouse_stock")
+            .update({ quantity: counted })
+            .eq("id", exRow.id);
+        } else if (counted > 0) {
+          await admin.from("warehouse_stock").insert({
+            company_id: session.company_id,
+            warehouse_id: whId,
+            product_id: i.product_id,
+            quantity: counted,
+            state: "new",
+          });
+        }
+
+        // 2) Registrar el movimiento con el tipo VÁLIDO del enum
+        //    (adjustment_plus/adjustment_minus; 'adjustment' no existe) y
+        //    cantidad positiva.
+        const { error: movErr } = await admin.from("stock_movements").insert({
           company_id: session.company_id,
           product_id: i.product_id,
           warehouse_id: whId,
-          movement_type: "adjustment",
-          quantity: diff,
+          movement_type: diff > 0 ? "adjustment_plus" : "adjustment_minus",
+          quantity: Math.abs(diff),
+          state_after: "new",
           notes: `Ajuste por conteo ${countId.slice(0, 8)}`,
           performed_by: session.user_id,
           performed_at: new Date().toISOString(),
         });
+        if (movErr) {
+          console.error("[applyStockCount] movimiento falló:", movErr.message);
+        }
         adjustments++;
-      } catch {
-        /* sigue */
       }
     }
     await admin
