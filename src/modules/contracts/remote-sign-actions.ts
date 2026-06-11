@@ -465,13 +465,45 @@ export async function submitRemoteSignatureAction(input: {
       console.error("[remote-sign] insert contract_signature failed:", e);
     }
 
-    // Marcar contrato como signed.
+    // Marcar contrato como signed — con el MISMO guard de IBAN que la firma
+    // presencial (markContractSigned): si el plan es rental/renting y el IBAN
+    // del cliente es ES00 o no validado, no queda 'signed' limpio sino
+    // 'pending_data' (luego el admin valida el IBAN). Antes la firma remota se
+    // saltaba esto y dejaba contratos 'signed' sin domiciliación válida.
     try {
+      let nextStatus = "signed";
+      let provisional = false;
+      try {
+        const { data: cInfo } = await admin
+          .from("contracts")
+          .select("plan_type, customer_id")
+          .eq("id", s.contract_id)
+          .maybeSingle();
+        const planType = (cInfo as { plan_type?: string | null } | null)?.plan_type;
+        const custId = (cInfo as { customer_id?: string | null } | null)?.customer_id ?? null;
+        if (custId && (planType === "rental" || planType === "renting")) {
+          const { data: bk } = await admin
+            .from("customer_bank_accounts")
+            .select("iban, is_validated")
+            .eq("customer_id", custId)
+            .order("is_primary", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const b = bk as { iban: string | null; is_validated: boolean | null } | null;
+          if (!b?.iban || /^ES00/i.test(b.iban) || !b.is_validated) provisional = true;
+        }
+      } catch {
+        /* si no podemos comprobar el IBAN, firmamos normal */
+      }
+      if (provisional) nextStatus = "pending_data";
       await admin
         .from("contracts")
         .update({
-          status: "signed",
+          status: nextStatus,
           signed_at: new Date().toISOString(),
+          ...(provisional
+            ? { has_provisional_data: true, pending_fields: ["iban"] }
+            : { has_provisional_data: false, pending_fields: [] }),
         })
         .eq("id", s.contract_id);
     } catch (e) {

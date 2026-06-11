@@ -37,6 +37,9 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
     .select("id, quantity, state, location_id")
     .eq("warehouse_id", input.warehouse_id)
     .eq("product_id", input.product_id)
+    // Solo stock VENDIBLE ('new'). Antes consumía también used/damaged/
+    // refurbished/reservado en salidas por instalación/transferencia.
+    .eq("state", "new")
     .order("quantity", { ascending: false });
   type Row = { id: string; quantity: number; state: string; location_id: string | null };
   const list = (rows ?? []) as Row[];

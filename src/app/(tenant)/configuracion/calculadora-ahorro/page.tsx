@@ -7,10 +7,13 @@ import { SavingsBrandsManager } from "@/modules/savings/brands-manager";
 import { RefreshScraperButton } from "@/modules/savings/refresh-scraper-button";
 import { AlertCircle } from "lucide-react";
 import { formatDateES } from "@/shared/lib/format-date";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 
 export const dynamic = "force-dynamic";
 
 export default async function CalculadoraAhorroConfigPage() {
+  // Gating: configuración solo si el módulo está activo en la empresa.
+  await assertModuleActive("savings_calculator");
   const [config, brands] = await Promise.all([getSavingsConfig(), listSavingsBrands()]);
 
   // Detectar marcas con scrape fallido recientemente

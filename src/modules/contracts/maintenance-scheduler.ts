@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 
 /**
  * Genera maintenance_jobs futuros a partir de la configuración del contrato:
@@ -18,8 +18,12 @@ import { createClient } from "@/shared/lib/supabase/server";
 export async function scheduleMaintenanceForContract(
   contractId: string,
 ): Promise<number> {
+  // Admin client: esta función corre también en la firma REMOTA (sin sesión),
+  // donde el cliente RLS bloquearía todas las escrituras y no se crearían los
+  // mantenimientos. Todo lo que escribe deriva del propio contrato (company_id
+  // de la fila cargada), así que es seguro.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const supabase = createAdminClient() as any;
 
   const { data: contract } = await supabase
     .from("contracts")

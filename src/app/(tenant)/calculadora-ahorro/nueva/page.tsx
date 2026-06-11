@@ -6,6 +6,7 @@ import {
 } from "@/modules/savings/actions";
 import { SavingsWizard } from "@/modules/savings/wizard";
 import { BackButton } from "@/shared/components/back-button";
+import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export default async function CalculadoraAhorroPage({
 }: {
   searchParams: Promise<{ lead_id?: string; customer_id?: string }>;
 }) {
+  // Gating: si el módulo no está activo en la empresa, no permitir el wizard
+  // (la página de listado ya lo hacía; ésta se saltaba la comprobación).
+  await assertModuleActive("savings_calculator");
   const sp = await searchParams;
 
   const [config, brands, productsHomeRental, productsHomeRenting, productsHomeCash, productsOfficeRental, productsOfficeRenting, productsOfficeCash, extrasRental, extrasRenting, extrasCash] = await Promise.all([

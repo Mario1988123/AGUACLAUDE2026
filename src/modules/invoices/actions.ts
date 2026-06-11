@@ -648,11 +648,21 @@ export async function cancelInvoiceAction(invoiceId: string, reason?: string): P
   const session = await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin
+  // El motivo va a cancelled_reason (no a notes, que antes se SOBRESCRIBÍA y
+  // destruía las notas previas). Defensivo: si la columna no existe, solo status.
+  let r = await admin
     .from("invoices")
-    .update({ status: "cancelled", notes: reason ?? null })
+    .update({ status: "cancelled", cancelled_reason: reason ?? null })
     .eq("id", invoiceId)
     .eq("company_id", session.company_id);
+  if (r.error && /cancelled_reason/i.test(r.error.message ?? "")) {
+    r = await admin
+      .from("invoices")
+      .update({ status: "cancelled" })
+      .eq("id", invoiceId)
+      .eq("company_id", session.company_id);
+  }
+  if (r.error) throw new Error(r.error.message);
   revalidatePath(`/facturas/${invoiceId}`);
   revalidatePath("/facturas");
 }
