@@ -798,10 +798,13 @@ export async function approveProposalAction(id: string): Promise<void> {
     session.roles.includes("technical_director") ||
     session.roles.includes("telemarketing_director");
   if (!isUpper) throw new Error("Solo nivel 1 o 2 puede validar propuestas");
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: la policy proposals_update_draft sólo permite UPDATE
   // cuando status='draft'. La propuesta está en pending_approval y el
   // update fallaba silenciosamente — el toast salía pero el estado no
   // cambiaba. Usamos service_role para bypassar RLS aquí.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id para no aprobar
+  // propuestas de otra empresa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const r = await admin
@@ -813,6 +816,7 @@ export async function approveProposalAction(id: string): Promise<void> {
       approved_at: new Date().toISOString(),
     })
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .eq("status", "pending_approval");
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
@@ -836,7 +840,9 @@ export async function rejectApprovalAction(id: string, reason?: string): Promise
     session.roles.includes("commercial_director") ||
     session.roles.includes("telemarketing_director");
   if (!isUpper) throw new Error("Solo nivel 1 o 2 puede rechazar aprobaciones");
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client por la misma razón que approveProposalAction.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const r = await admin
@@ -846,6 +852,7 @@ export async function rejectApprovalAction(id: string, reason?: string): Promise
       notes: reason ? `[Aprobación rechazada] ${reason}` : null,
     })
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .eq("status", "pending_approval");
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
@@ -861,20 +868,25 @@ export async function rejectApprovalAction(id: string, reason?: string): Promise
 
 export async function markProposalSent(id: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: la policy proposals_update_draft sólo permite UPDATE
   // cuando status='draft'. Si el flujo se reabre desde sent o pending,
   // o si hay race entre dos comerciales, el UPDATE silente falla.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: prop } = await admin
     .from("proposals")
     .select("lead_id")
     .eq("id", id)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!prop) throw new Error("Propuesta no encontrada o no pertenece a tu empresa");
   const r = await admin
     .from("proposals")
     .update({ status: "sent", sent_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
     company_id: session.company_id!,
@@ -1148,9 +1160,11 @@ export async function listProposalsByLead(leadId: string): Promise<ProposalListI
 
 export async function markProposalRejected(id: string, reason?: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: la policy proposals_update_draft sólo permite UPDATE si
   // status='draft'. La propuesta puede estar en 'sent' o 'pending_approval'
   // cuando se rechaza → silent fail con cliente RLS-bound.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const r = await admin
@@ -1160,7 +1174,8 @@ export async function markProposalRejected(id: string, reason?: string) {
       rejected_at: new Date().toISOString(),
       rejected_reason: reason ?? null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
     company_id: session.company_id!,

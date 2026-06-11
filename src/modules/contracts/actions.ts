@@ -734,10 +734,23 @@ export async function markContractSigned(id: string) {
   // condition o policy de scope el comercial no tiene permiso, el UPDATE
   // silenciaría y NO se firmaría el contrato. Mismo patrón que ya hemos
   // arreglado en otras acciones.
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+
+  // SEGURIDAD: admin client salta RLS → verificar que el contrato es de tu
+  // empresa antes de firmarlo (dispara wallet_entries, instalación,
+  // sales_records, soft-delete del lead). Sin esto se podían firmar contratos
+  // ajenos pasando su UUID.
+  const { data: ownContract } = await admin
+    .from("contracts")
+    .select("id")
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownContract) throw new Error("Contrato no encontrado o no pertenece a tu empresa");
 
   // Guard: contrato debe tener al menos un item antes de firmar (audit
   // final 2026-05-10). Antes se firmaba un contrato vacío y el flujo
@@ -839,7 +852,11 @@ export async function markContractSigned(id: string) {
     updates.pending_fields = [];
   }
 
-  const r = await admin.from("contracts").update(updates).eq("id", id);
+  const r = await admin
+    .from("contracts")
+    .update(updates)
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   // Cuando se firma el contrato, el lead origen (si existía) ya cumplió
@@ -1649,12 +1666,16 @@ export async function reassignContractAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // SEGURIDAD: admin client salta RLS → filtrar por company_id para no
+  // reasignar contratos de otra empresa.
   // Capturar usuario saliente para notificarle también.
   const { data: prevRow } = await admin
     .from("contracts")
     .select("assigned_user_id")
     .eq("id", contractId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
+  if (!prevRow) throw new Error("Contrato no encontrado o no pertenece a tu empresa");
   const prevUserId = (prevRow as { assigned_user_id: string | null } | null)?.assigned_user_id ?? null;
 
   const r = await admin
@@ -1663,7 +1684,8 @@ export async function reassignContractAction(
       assigned_user_id: userId,
       assigned_at: userId ? new Date().toISOString() : null,
     })
-    .eq("id", contractId);
+    .eq("id", contractId)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   await admin.from("events").insert({

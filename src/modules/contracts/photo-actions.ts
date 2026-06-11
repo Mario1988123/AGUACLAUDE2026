@@ -49,6 +49,17 @@ export async function uploadContractPhotoAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // SEGURIDAD: verificar que el contrato es de tu empresa antes de subirle
+    // documentos (admin client salta RLS).
+    const { data: ownContract } = await admin
+      .from("contracts")
+      .select("id")
+      .eq("id", contractId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!ownContract)
+      return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
+
     const ok = await ensureBucket(admin, BUCKET);
     if (!ok)
       return {
@@ -131,14 +142,18 @@ export async function uploadContractPhotoAction(
 }
 
 export async function listContractPhotos(contractId: string): Promise<ContractPhoto[]> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD (RGPD): admin client salta RLS → filtrar por company_id. Sin
+  // esto se exponían fotos de DNI/NIE de contratos de otra empresa con su UUID.
   const { data, error } = await admin
     .from("documents")
     .select("id, kind, storage_path, uploaded_at")
     .eq("subject_type", "contract")
     .eq("subject_id", contractId)
+    .eq("company_id", session.company_id)
     .in("kind", ["contract.id_card", "contract.other"])
     .is("deleted_at", null)
     .order("uploaded_at", { ascending: false });

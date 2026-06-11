@@ -68,6 +68,7 @@ export async function assignFinancierToContractAction(
         error: "Solo admin / director puede asignar financiera al contrato",
       };
     }
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     const parsed = parseOrFriendly(assignSchema, input, "Asignación financiera");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
@@ -79,13 +80,22 @@ export async function assignFinancierToContractAction(
       financier_residual_cents: parsed.financier_residual_cents,
       financier_reserve_cents: parsed.financier_reserve_cents,
     };
+    // SEGURIDAD: admin client salta RLS → filtrar por company_id para no
+    // sobrescribir la financiera de un contrato de otra empresa.
     const r = await admin
       .from("contracts")
       .update(payload)
-      .eq("id", parsed.contract_id);
+      .eq("id", parsed.contract_id)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length)
+      return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
 
+    // events.company_id es NOT NULL → antes el insert fallaba y el rastro de
+    // auditoría no se guardaba nunca.
     await admin.from("events").insert({
+      company_id: session.company_id,
       subject_type: "contract",
       subject_id: parsed.contract_id,
       kind: "contract.financier_assigned",
@@ -94,6 +104,7 @@ export async function assignFinancierToContractAction(
         financier_payment_cents: parsed.financier_payment_cents,
         financier_term_months: parsed.financier_term_months,
       },
+      actor_user_id: session.user_id,
     });
 
     if (session.company_id) {
@@ -130,8 +141,10 @@ export async function clearFinancierFromContractAction(
         error: "Solo admin / director puede modificar la financiera del contrato",
       };
     }
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin client salta RLS → filtrar por company_id.
     const r = await admin
       .from("contracts")
       .update({
@@ -142,14 +155,20 @@ export async function clearFinancierFromContractAction(
         financier_residual_cents: null,
         financier_reserve_cents: null,
       })
-      .eq("id", contractId);
+      .eq("id", contractId)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length)
+      return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
 
     await admin.from("events").insert({
+      company_id: session.company_id,
       subject_type: "contract",
       subject_id: contractId,
       kind: "contract.financier_cleared",
       payload: {},
+      actor_user_id: session.user_id,
     });
 
     if (session.company_id) {
