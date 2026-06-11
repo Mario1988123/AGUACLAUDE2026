@@ -671,13 +671,26 @@ export async function updateCustomerAction(
   for (const [k, v] of Object.entries(patch)) {
     cleaned[k] = v === "" ? null : v;
   }
-  let r = await admin.from("customers").update(cleaned).eq("id", customerId);
+  // SEGURIDAD: admin client salta RLS → filtrar por company_id para no
+  // sobrescribir datos de clientes de otra empresa con su UUID.
+  let r = await admin
+    .from("customers")
+    .update(cleaned)
+    .eq("id", customerId)
+    .eq("company_id", session.company_id)
+    .select("id");
   // Defensa schema cache para is_autonomo
   if (r.error && /is_autonomo/i.test(r.error.message ?? "")) {
     delete cleaned.is_autonomo;
-    r = await admin.from("customers").update(cleaned).eq("id", customerId);
+    r = await admin
+      .from("customers")
+      .update(cleaned)
+      .eq("id", customerId)
+      .eq("company_id", session.company_id)
+      .select("id");
   }
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Cliente no encontrado o no pertenece a tu empresa");
 
   await admin.from("events").insert({
     company_id: session.company_id,

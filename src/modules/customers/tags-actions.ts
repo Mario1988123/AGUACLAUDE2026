@@ -47,14 +47,18 @@ export async function listTagsCatalog(): Promise<CustomerTag[]> {
 }
 
 export async function listCustomerTags(customerId: string): Promise<CustomerTag[]> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   try {
+    // SEGURIDAD: customer_tags no tiene company_id; acotamos por el catálogo
+    // (inner join) para no exponer etiquetas de clientes de otra empresa.
     const { data } = await admin
       .from("customer_tags")
       .select("tag_id, customer_tag_catalog!inner(id, label, color)")
-      .eq("customer_id", customerId);
+      .eq("customer_id", customerId)
+      .eq("customer_tag_catalog.company_id", session.company_id);
     type Row = { customer_tag_catalog: { id: string; label: string; color: string } };
     return ((data ?? []) as Row[]).map((r) => r.customer_tag_catalog);
   } catch {
@@ -88,12 +92,18 @@ export async function upsertTagAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     if (parsed.id) {
+      // SEGURIDAD: admin client salta RLS → filtrar por company_id para no
+      // renombrar/recolorear etiquetas del catálogo de otra empresa.
       const r = await admin
         .from("customer_tag_catalog")
         .update({ label: parsed.label, color: parsed.color })
-        .eq("id", parsed.id);
+        .eq("id", parsed.id)
+        .eq("company_id", session.company_id)
+        .select("id");
       if (r.error)
         return { ok: false, error: friendlyTableMissing(r.error.message) };
+      if (!r.data?.length)
+        return { ok: false, error: "Etiqueta no encontrada o no pertenece a tu empresa" };
       revalidatePath("/configuracion/clientes");
       return { ok: true, id: parsed.id };
     } else {
@@ -158,6 +168,23 @@ export async function toggleCustomerTagAction(input: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: customer_tags no tiene company_id → verificamos que tanto el
+    // cliente como la etiqueta son de tu empresa antes de enlazarlos (si no,
+    // se podrían etiquetar clientes ajenos o usar etiquetas de otra empresa).
+    const { data: okCust } = await admin
+      .from("customers")
+      .select("id")
+      .eq("id", input.customer_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!okCust) return { ok: false, error: "Cliente no encontrado o no pertenece a tu empresa" };
+    const { data: okTag } = await admin
+      .from("customer_tag_catalog")
+      .select("id")
+      .eq("id", input.tag_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!okTag) return { ok: false, error: "Etiqueta no encontrada o no pertenece a tu empresa" };
     if (input.attach) {
       const { error } = await admin
         .from("customer_tags")

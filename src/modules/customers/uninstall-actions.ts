@@ -320,6 +320,11 @@ export async function changeStockStateAction(input: {
       location_id: string | null;
       company_id: string;
     };
+    // SEGURIDAD: admin client salta RLS → la línea se cargó solo por id;
+    // verificamos que es de tu empresa antes de mover/borrar stock.
+    if (!session.company_id || r.company_id !== session.company_id) {
+      return { ok: false, error: "Línea no encontrada o no pertenece a tu empresa" };
+    }
     if (r.state === input.new_state) return { ok: true };
     const qty = Math.min(r.quantity, input.quantity ?? r.quantity);
     if (qty <= 0) return { ok: false, error: "Cantidad inválida" };

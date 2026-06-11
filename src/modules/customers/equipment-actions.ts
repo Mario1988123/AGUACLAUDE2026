@@ -192,6 +192,16 @@ export async function addCustomerEquipmentAction(input: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // SEGURIDAD: admin client salta RLS → verificar que el cliente es de tu
+  // empresa antes de colgarle un equipo (si no, se inyectaría customer_id ajeno).
+  const { data: ownerCust } = await admin
+    .from("customers")
+    .select("id")
+    .eq("id", input.customer_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownerCust) throw new Error("Cliente no encontrado o no pertenece a tu empresa");
+
   const productId: string | null = input.product_id ?? null;
   let externalModelId: string | null = null;
 
@@ -309,14 +319,19 @@ export async function removeCustomerEquipmentAction(
   equipmentId: string,
   customerId: string,
 ): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin client salta RLS → filtrar por company_id.
   const r = await admin
     .from("customer_equipment")
     .update({ is_active: false })
-    .eq("id", equipmentId);
+    .eq("id", equipmentId)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Equipo no encontrado o no pertenece a tu empresa");
   revalidatePath(`/clientes/${customerId}`);
 }
 

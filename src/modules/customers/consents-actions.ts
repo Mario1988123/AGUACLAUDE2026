@@ -21,6 +21,15 @@ export async function recordCustomerConsent(args: RecordConsentArgs): Promise<vo
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin client salta RLS → verificar que el cliente es de tu
+  // empresa antes de grabar un consentimiento RGPD (PII sensible).
+  const { data: ownerCust } = await admin
+    .from("customers")
+    .select("id")
+    .eq("id", args.customer_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownerCust) throw new Error("Cliente no encontrado o no pertenece a tu empresa");
   await admin.from("customer_consents").insert({
     company_id: session.company_id,
     customer_id: args.customer_id,
@@ -46,13 +55,16 @@ export interface ConsentRow {
  * Devuelve el estado actual de cada tipo de consentimiento (la última fila).
  */
 export async function getCustomerConsents(customerId: string): Promise<ConsentRow[]> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin client salta RLS → filtrar por company_id (PII RGPD).
   const { data } = await admin
     .from("customer_consents")
     .select("id, kind, granted, source, granted_at")
     .eq("customer_id", customerId)
+    .eq("company_id", session.company_id)
     .order("granted_at", { ascending: false })
     .limit(200);
   type R = ConsentRow;
@@ -82,12 +94,16 @@ export async function hasActiveConsent(
   customerId: string,
   kind: ConsentKind,
 ): Promise<boolean> {
+  const session = await requireSession();
+  if (!session.company_id) return false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin client salta RLS → filtrar por company_id.
   const { data } = await admin
     .from("customer_consents")
     .select("granted")
     .eq("customer_id", customerId)
+    .eq("company_id", session.company_id)
     .eq("kind", kind)
     .order("granted_at", { ascending: false })
     .limit(1)

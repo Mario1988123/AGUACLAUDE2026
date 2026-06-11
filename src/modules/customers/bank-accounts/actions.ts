@@ -126,6 +126,7 @@ export async function createBankAccountAction(input: unknown) {
       .from("customer_bank_accounts")
       .update({ is_primary: false })
       .eq("customer_id", parsed.customer_id)
+      .eq("company_id", session.company_id)
       .is("deleted_at", null);
   }
 
@@ -155,14 +156,20 @@ export async function createBankAccountAction(input: unknown) {
 
 export async function deleteBankAccountAction(id: string, customerId: string) {
   // Solo admin puede borrar — protección de datos bancarios.
-  await ensureAdminOrSuper();
+  const session = await ensureAdminOrSuper();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { error } = await admin
+  // SEGURIDAD: admin client salta RLS → filtrar por company_id para no
+  // borrar cuentas bancarias (IBAN/mandatos SEPA) de otra empresa.
+  const { data, error } = await admin
     .from("customer_bank_accounts")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Cuenta no encontrada o no pertenece a tu empresa");
   revalidatePath(`/clientes/${customerId}`);
 }
 
