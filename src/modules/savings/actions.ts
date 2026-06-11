@@ -372,10 +372,16 @@ export async function convertSavingsToProposalAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const e of (s.extras ?? []) as any[]) {
       if (!e.product_id) continue;
+      // En CONTADO el importe del extra está en install_cents (total+instalación);
+      // monthly_cents es 0. Antes se usaba siempre monthly_cents → extras a 0 €.
+      const extraPrice =
+        s.plan_type === "cash"
+          ? e.install_cents ?? 0
+          : e.monthly_cents ?? 0;
       items.push({
         product_id: e.product_id,
         quantity: 1,
-        unit_price_cents: e.monthly_cents ?? 0,
+        unit_price_cents: extraPrice,
         installation_included: true,
         installation_price_cents: null,
         maintenance_included: false,

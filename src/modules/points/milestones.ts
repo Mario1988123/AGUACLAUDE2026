@@ -22,37 +22,29 @@ export async function checkAndAwardMilestones(
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  // Suma del mes (excluyendo bonuses de hitos para no contar el bonus dentro del threshold)
+  // points_ledger NO tiene subject_id/subject_type; la clave del hito vive en
+  // metadata->>'milestone_key'. Leemos points/reason/metadata del mes.
   const { data: rows } = await admin
     .from("points_ledger")
-    .select("points, reason")
+    .select("points, reason, metadata")
     .eq("company_id", companyId)
     .eq("user_id", userId)
     .eq("period_year", year)
     .eq("period_month", month);
-  type R = { points: number; reason: string };
-  const totalNet = ((rows ?? []) as R[])
+  type R = { points: number; reason: string; metadata: { milestone_key?: string } | null };
+  const allRows = (rows ?? []) as R[];
+  // Suma del mes EXCLUYENDO los bonus de hito (para no inflar el threshold).
+  const totalNet = allRows
     .filter((r) => r.reason !== "milestone_reached")
     .reduce((s, r) => s + r.points, 0);
 
-  // Hitos ya otorgados este mes
+  // Hitos ya otorgados este mes (clave en metadata).
   const grantedKeys = new Set(
-    ((rows ?? []) as Array<R & { subject_id?: string }>)
+    allRows
       .filter((r) => r.reason === "milestone_reached")
-      .map((r) => (r as unknown as { subject_id?: string }).subject_id ?? ""),
+      .map((r) => r.metadata?.milestone_key ?? "")
+      .filter(Boolean),
   );
-  // ⚠ los rows no traen subject_id; consultamos aparte para precisión
-  const { data: milestoneRows } = await admin
-    .from("points_ledger")
-    .select("subject_id")
-    .eq("company_id", companyId)
-    .eq("user_id", userId)
-    .eq("period_year", year)
-    .eq("period_month", month)
-    .eq("reason", "milestone_reached");
-  for (const r of (milestoneRows ?? []) as Array<{ subject_id: string }>) {
-    if (r.subject_id) grantedKeys.add(r.subject_id);
-  }
 
   const awarded: number[] = [];
   const sorted = [...cfg.monthly_milestones].sort((a, b) => a.threshold - b.threshold);
@@ -60,18 +52,21 @@ export async function checkAndAwardMilestones(
     if (totalNet < m.threshold) break;
     const key = `${year}-${month}-${m.threshold}`;
     if (grantedKeys.has(key)) continue;
-    await admin.from("points_ledger").insert({
+    const { error: insErr } = await admin.from("points_ledger").insert({
       company_id: companyId,
       user_id: userId,
       points: m.bonus_points,
       reason: "milestone_reached",
-      subject_type: "milestone",
-      subject_id: key,
-      metadata: { threshold: m.threshold, label: m.label },
+      metadata: { milestone_key: key, threshold: m.threshold, label: m.label },
       period_year: year,
       period_month: month,
       awarded_at: new Date().toISOString(),
     });
+    if (insErr) {
+      // p.ej. migración metadata aún no aplicada → no otorgar (ni notificar)
+      console.error("[milestones] insert bonus falló:", insErr.message);
+      continue;
+    }
     awarded.push(m.threshold);
 
     // Notificar al usuario

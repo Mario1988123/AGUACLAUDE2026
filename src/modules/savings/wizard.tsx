@@ -332,6 +332,27 @@ export function SavingsWizard(props: Props) {
       }
     }
 
+    // MISMA derivación de extras que el preview (useEffect). Antes se pasaba
+    // extras:[] aquí → los totales GUARDADOS (y el PDF) no incluían los extras,
+    // y diferían de lo que veía el cliente en pantalla.
+    const extrasInputs = selectedExtras
+      .map((e) => {
+        const pr = e.pricing.find((p) => {
+          if (p.plan_type !== planType) return false;
+          if (planType === "renting") return p.duration_months === duration;
+          return true;
+        });
+        if (!pr) return null;
+        if (planType === "cash") {
+          return {
+            cash_price_cents: pr.total_cents ?? 0,
+            install_cents: e.install_cents ?? 0,
+          };
+        }
+        return { monthly_cents: pr.monthly_cents ?? 0 };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+
     const inputs: CalcInputs = {
       client_type: clientType,
       num_people: numPeople,
@@ -350,7 +371,7 @@ export function SavingsWizard(props: Props) {
       duration_months: planType === "renting" ? duration : null,
       product_unit_price_cents: productUnitCents,
       num_units: numUnits,
-      extras: [],
+      extras: extrasInputs,
       deposit_cents:
         planType === "rental" ? planRow.deposit_cents ?? 0 : 0,
     };

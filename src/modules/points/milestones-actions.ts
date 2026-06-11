@@ -44,7 +44,7 @@ export async function getMyMilestones(): Promise<MyMilestones> {
 
   const { data: ledger } = await admin
     .from("points_ledger")
-    .select("points, reason, subject_id, awarded_at")
+    .select("points, reason, metadata, awarded_at")
     .eq("company_id", session.company_id)
     .eq("user_id", session.user_id)
     .eq("period_year", year)
@@ -52,7 +52,7 @@ export async function getMyMilestones(): Promise<MyMilestones> {
   type LR = {
     points: number;
     reason: string;
-    subject_id: string | null;
+    metadata: { milestone_key?: string; threshold?: number } | null;
     awarded_at: string;
   };
   const rows = (ledger ?? []) as LR[];
@@ -60,14 +60,16 @@ export async function getMyMilestones(): Promise<MyMilestones> {
     .filter((r) => r.reason !== "milestone_reached")
     .reduce((s, r) => s + r.points, 0);
 
-  // Mapa de hitos otorgados este mes (subject_id = "year-month-threshold")
+  // Mapa de hitos otorgados este mes. La clave/threshold vive en metadata
+  // (points_ledger no tiene subject_id).
   const reachedMap = new Map<number, string>();
   for (const r of rows.filter((r) => r.reason === "milestone_reached")) {
-    if (!r.subject_id) continue;
-    const m = r.subject_id.match(/-(\d+)$/);
-    if (!m) continue;
-    const threshold = parseInt(m[1]!, 10);
-    reachedMap.set(threshold, r.awarded_at);
+    const threshold =
+      r.metadata?.threshold ??
+      (r.metadata?.milestone_key
+        ? parseInt(r.metadata.milestone_key.match(/-(\d+)$/)?.[1] ?? "", 10)
+        : NaN);
+    if (Number.isFinite(threshold)) reachedMap.set(threshold as number, r.awarded_at);
   }
 
   const sorted = [...(cfg.monthly_milestones ?? [])].sort(
