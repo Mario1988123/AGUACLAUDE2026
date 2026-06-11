@@ -175,6 +175,7 @@ export async function approvePurchaseSuggestionAction(
       return { ok: false, error: "Cantidad debe ser > 0" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
     const r = await admin
       .from("purchase_suggestions")
       .update({
@@ -183,8 +184,12 @@ export async function approvePurchaseSuggestionAction(
         reviewed_by: session.user_id,
         reviewed_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length)
+      return { ok: false, error: "Sugerencia no encontrada o no pertenece a tu empresa" };
     revalidatePath("/almacenes/sugerencias");
     return { ok: true };
   } catch (err) {
@@ -197,8 +202,10 @@ export async function dismissPurchaseSuggestionAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const session = await ensureAdminOrDirector();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
     const r = await admin
       .from("purchase_suggestions")
       .update({
@@ -206,8 +213,12 @@ export async function dismissPurchaseSuggestionAction(
         reviewed_by: session.user_id,
         reviewed_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (r.error) return { ok: false, error: r.error.message };
+    if (!r.data?.length)
+      return { ok: false, error: "Sugerencia no encontrada o no pertenece a tu empresa" };
     revalidatePath("/almacenes/sugerencias");
     return { ok: true };
   } catch (err) {

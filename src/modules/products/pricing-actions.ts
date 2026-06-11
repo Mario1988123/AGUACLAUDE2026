@@ -128,9 +128,20 @@ export async function listPricingPlans(productId: string): Promise<PricingPlan[]
 
 export async function upsertPricingPlanAction(input: unknown) {
   const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(pricingUpsertSchema, input, "Precio producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // SEGURIDAD: admin salta RLS → verificar que el producto es de tu empresa
+  // antes de crear/editar un plan de precio (si no, se cuelga de un product_id ajeno).
+  const { data: ownProduct } = await admin
+    .from("products")
+    .select("id")
+    .eq("id", parsed.product_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownProduct) throw new Error("Producto no encontrado o no pertenece a tu empresa");
 
   // Validación: al menos un precio debe estar relleno.
   const indivTotal = parsed.total_price_individual_cents ?? parsed.total_price_cents;
@@ -200,7 +211,11 @@ export async function upsertPricingPlanAction(input: unknown) {
   const payload = { ...fullPayload };
   for (let i = 0; i < 10; i++) {
     const r = parsed.id
-      ? await admin.from("product_pricing_plans").update(payload).eq("id", parsed.id)
+      ? await admin
+          .from("product_pricing_plans")
+          .update(payload)
+          .eq("id", parsed.id)
+          .eq("company_id", session.company_id)
       : await admin.from("product_pricing_plans").insert(payload);
     if (!r.error) break;
     const msg = r.error.message ?? "";
@@ -219,10 +234,16 @@ export async function upsertPricingPlanAction(input: unknown) {
 }
 
 export async function deletePricingPlanAction(id: string, productId: string) {
-  await ensureAdmin();
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin.from("product_pricing_plans").update({ is_active: false }).eq("id", id);
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
+  await admin
+    .from("product_pricing_plans")
+    .update({ is_active: false })
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   revalidatePath(`/productos/${productId}`);
 }
 

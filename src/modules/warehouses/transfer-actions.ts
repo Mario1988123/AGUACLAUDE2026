@@ -22,6 +22,11 @@ export async function transferStockAction(args: TransferArgs): Promise<void> {
   if (args.from_warehouse_id === args.to_warehouse_id)
     throw new Error("Origen y destino son el mismo almacén");
   if (args.quantity <= 0) throw new Error("Cantidad debe ser mayor que 0");
+  // SEGURIDAD: el admin client salta RLS → verificar que AMBOS almacenes son
+  // de tu empresa antes de mover stock entre ellos.
+  const { assertWarehouseCompany } = await import("./ownership");
+  await assertWarehouseCompany(args.from_warehouse_id, session.company_id);
+  await assertWarehouseCompany(args.to_warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

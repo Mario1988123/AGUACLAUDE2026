@@ -245,7 +245,8 @@ export async function generatePostImageAction(
         product_ids: safeProductIds,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", postId);
+      .eq("id", postId)
+      .eq("company_id", session.company_id);
 
     await admin
       .from("social_settings")

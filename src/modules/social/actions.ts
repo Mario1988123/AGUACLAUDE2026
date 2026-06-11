@@ -220,8 +220,17 @@ export async function upsertSocialPost(
     };
     let id = parsed.id;
     if (id) {
-      const r = await admin.from("social_posts").update(payload).eq("id", id);
+      // SEGURIDAD: admin salta RLS → filtrar por company_id. Sin esto se podía
+      // sobrescribir (y re-tenantear) un post de otra empresa con su UUID.
+      const r = await admin
+        .from("social_posts")
+        .update(payload)
+        .eq("id", id)
+        .eq("company_id", session.company_id)
+        .select("id");
       if (r.error) return { ok: false, error: r.error.message };
+      if (!r.data?.length)
+        return { ok: false, error: "Publicación no encontrada o no pertenece a tu empresa" };
     } else {
       payload.created_by = session.user_id;
       const r = await admin.from("social_posts").insert(payload).select("id").single();

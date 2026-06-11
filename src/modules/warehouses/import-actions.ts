@@ -36,6 +36,11 @@ export async function importStockCsvAction(input: {
   ) {
     throw new Error("Solo admin/director técnico");
   }
+  if (!session.company_id) throw new Error("Sin empresa");
+  // SEGURIDAD: el admin client salta RLS → verificar que el almacén es tuyo
+  // antes de importar stock en él.
+  const { assertWarehouseCompany } = await import("./ownership");
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

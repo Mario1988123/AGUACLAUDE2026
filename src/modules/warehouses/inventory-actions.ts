@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertWarehouseCompany } from "./ownership";
 
 async function ensureCanManage() {
   const session = await requireSession();
@@ -53,7 +54,10 @@ export async function addStockAction(input: {
   notes?: string;
 }): Promise<void> {
   const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
   if (input.quantity <= 0) throw new Error("Cantidad debe ser > 0");
+  // SEGURIDAD: el admin client salta RLS → verificar que el almacén es tuyo.
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -108,7 +112,10 @@ export async function setStockQuantityAction(input: {
   reason?: string;
 }): Promise<void> {
   const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
   if (input.new_quantity < 0) throw new Error("La cantidad no puede ser negativa");
+  // SEGURIDAD: el admin client salta RLS → verificar que el almacén es tuyo.
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -167,9 +174,12 @@ export async function upsertStockThresholdAction(input: {
   stock_max: number | null;
 }): Promise<void> {
   const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
   if (input.stock_min < 0) throw new Error("Mínimo no puede ser negativo");
   if (input.stock_max != null && input.stock_max < input.stock_min)
     throw new Error("Máximo debe ser mayor o igual que el mínimo");
+  // SEGURIDAD: el admin client salta RLS → verificar que el almacén es tuyo.
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;

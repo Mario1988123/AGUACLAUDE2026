@@ -619,8 +619,10 @@ export async function recomputeStockAlertsForCompany(
 
 export async function dismissAlertAction(id: string): Promise<void> {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   await admin
     .from("stock_alerts")
     .update({
@@ -628,7 +630,8 @@ export async function dismissAlertAction(id: string): Promise<void> {
       dismissed_at: new Date().toISOString(),
       dismissed_by: session.user_id,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   revalidatePath("/almacenes");
 }
 

@@ -36,6 +36,7 @@ async function ensureCanManageWarehouses() {
 
 export async function upsertWarehouseAction(input: unknown) {
   const session = await ensureCanManageWarehouses();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(warehouseUpsertSchema, input, "Almacén");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -85,8 +86,15 @@ export async function upsertWarehouseAction(input: unknown) {
     is_active: true,
   };
   if (parsed.id) {
-    const { error } = await admin.from("warehouses").update(payload).eq("id", parsed.id);
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
+    const { data, error } = await admin
+      .from("warehouses")
+      .update(payload)
+      .eq("id", parsed.id)
+      .eq("company_id", session.company_id)
+      .select("id");
     if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error("Almacén no encontrado o no pertenece a tu empresa");
   } else {
     const { error } = await admin.from("warehouses").insert(payload);
     if (error) throw new Error(error.message);
@@ -95,13 +103,19 @@ export async function upsertWarehouseAction(input: unknown) {
 }
 
 export async function deleteWarehouseAction(id: string) {
-  await ensureCanManageWarehouses();
+  const session = await ensureCanManageWarehouses();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
+  const { data, error } = await admin
     .from("warehouses")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("Almacén no encontrado o no pertenece a tu empresa");
   revalidatePath("/almacenes");
 }
 

@@ -70,8 +70,9 @@ export async function deliverLoadingRequestAction(requestId: string) {
     .from("loading_requests")
     .select("id, status, source_warehouse_id, destination_warehouse_id, company_id")
     .eq("id", requestId)
-    .single();
-  if (!req) throw new Error("Solicitud no encontrada");
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!req) throw new Error("Solicitud no encontrada o no pertenece a tu empresa");
   const r = req as {
     id: string;
     status: string;
@@ -79,6 +80,11 @@ export async function deliverLoadingRequestAction(requestId: string) {
     destination_warehouse_id: string;
     company_id: string;
   };
+  // SEGURIDAD: el admin client salta RLS; ya filtramos por company_id arriba,
+  // pero reforzamos para que todo el movimiento de stock use SOLO datos propios.
+  if (r.company_id !== session.company_id) {
+    throw new Error("Solicitud no pertenece a tu empresa");
+  }
   if (r.status === "delivered") throw new Error("Ya entregada");
 
   const { data: items } = await admin

@@ -170,6 +170,7 @@ function friendlyAttrError(
 
 export async function upsertAttributeAction(input: unknown): Promise<string | undefined> {
   const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(attributeUpsertSchema, input, "Atributo producto");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -187,10 +188,12 @@ export async function upsertAttributeAction(input: unknown): Promise<string | un
   let id = parsed.id;
   if (parsed.id) {
     // ANTES: el error del update se ignoraba → fallo silencioso.
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
     const { error } = await admin
       .from("product_attributes")
       .update(payload)
-      .eq("id", parsed.id);
+      .eq("id", parsed.id)
+      .eq("company_id", session.company_id);
     if (error) throw new Error(friendlyAttrError(error, parsed.key));
   } else {
     // ANTES: solo se leía `data`, no `error`. Si el insert chocaba con
@@ -258,7 +261,8 @@ export async function setAttributeExtraCategoriesAction(
     const del = await admin
       .from("product_attribute_categories")
       .delete()
-      .eq("attribute_id", attributeId);
+      .eq("attribute_id", attributeId)
+      .eq("company_id", session.company_id);
     if (del.error) {
       // Tabla aún no existe → no rompemos; lo dejamos como no-op.
       if (/(does not exist|schema cache|Could not find|relation)/i.test(del.error.message ?? "")) {
@@ -286,9 +290,19 @@ export async function setAttributeExtraCategoriesAction(
 
 export async function setProductAttributeValue(input: unknown) {
   const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(valueUpsertSchema, input, "Valor atributo");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // SEGURIDAD: admin salta RLS → verificar que el producto es de tu empresa.
+  const { data: ownProduct } = await admin
+    .from("products")
+    .select("id")
+    .eq("id", parsed.product_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownProduct) throw new Error("Producto no encontrado o no pertenece a tu empresa");
 
   // Validar máx 5 destacados (decisión prompt)
   if (parsed.is_featured) {
@@ -296,6 +310,7 @@ export async function setProductAttributeValue(input: unknown) {
       .from("product_attribute_values")
       .select("id", { count: "exact", head: true })
       .eq("product_id", parsed.product_id)
+      .eq("company_id", session.company_id)
       .eq("is_featured", true)
       .neq("attribute_id", parsed.attribute_id);
     if ((count ?? 0) >= 5)
@@ -307,6 +322,7 @@ export async function setProductAttributeValue(input: unknown) {
     .select("id")
     .eq("product_id", parsed.product_id)
     .eq("attribute_id", parsed.attribute_id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
 
   const payload = {
@@ -324,7 +340,8 @@ export async function setProductAttributeValue(input: unknown) {
     await admin
       .from("product_attribute_values")
       .update(payload)
-      .eq("id", (existing as { id: string }).id);
+      .eq("id", (existing as { id: string }).id)
+      .eq("company_id", session.company_id);
   } else {
     await admin.from("product_attribute_values").insert(payload);
   }
@@ -332,10 +349,16 @@ export async function setProductAttributeValue(input: unknown) {
 }
 
 export async function deleteProductAttributeValue(id: string, productId: string) {
-  await ensureAdmin();
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin.from("product_attribute_values").delete().eq("id", id);
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
+  await admin
+    .from("product_attribute_values")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   revalidatePath(`/productos/${productId}`);
 }
 
