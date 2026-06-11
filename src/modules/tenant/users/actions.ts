@@ -392,20 +392,28 @@ export async function deleteUserPermanentlyAction(userId: string): Promise<void>
 
 export async function updateUserRoles(userId: string, roles: RoleKey[]) {
   const session = await ensureCompanyAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   const admin = createAdminClient();
 
-  // Validar único admin
-  if (roles.includes("company_admin")) {
-    const supabase = await createClient();
-    const { data: existing } = await supabase
+  // Decisión N-admins: se permiten VARIOS company_admin por empresa (antes esta
+  // función rechazaba el 2º, contradiciendo a invite/createCompanyAdmin). Por eso
+  // ya NO bloqueamos crear otro admin. PERO sí impedimos el lockout: si a un admin
+  // se le quitan TODOS los roles de admin y es el único, la empresa quedaría sin
+  // ningún administrador.
+  if (!roles.includes("company_admin")) {
+    const { data: curAdmins } = await admin
       .from("user_roles")
       .select("user_id")
-      .eq("company_id", session.company_id!)
+      .eq("company_id", session.company_id)
       .eq("role_key", "company_admin")
       .is("revoked_at", null);
-    const owners = (existing ?? []) as { user_id: string }[];
-    if (owners.some((o) => o.user_id !== userId)) {
-      throw new Error("Ya hay otro company_admin en la empresa");
+    const adminIds = new Set(
+      ((curAdmins ?? []) as { user_id: string }[]).map((a) => a.user_id),
+    );
+    if (adminIds.has(userId) && adminIds.size <= 1) {
+      throw new Error(
+        "No se puede quitar el rol de administrador al último admin de la empresa. Asigna otro admin primero.",
+      );
     }
   }
 

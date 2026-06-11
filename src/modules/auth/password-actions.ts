@@ -14,16 +14,26 @@ export async function markPasswordChangedAction(): Promise<void> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // Solo promover "invited" → "active". Antes esto ponía status='active'
+  // SIEMPRE, así que un usuario suspended/inactive que cambiaba su contraseña
+  // se reactivaba solo.
+  const { data: prof } = await admin
+    .from("user_profiles")
+    .select("status")
+    .eq("user_id", session.user_id)
+    .maybeSingle();
+  const curStatus = (prof as { status?: string | null } | null)?.status ?? null;
+
+  const update: Record<string, unknown> = {
+    must_change_password: false,
+    activated_at: new Date().toISOString(),
+  };
+  if (curStatus === "invited") update.status = "active";
+
   const { error } = await admin
     .from("user_profiles")
-    .update({
-      must_change_password: false,
-      activated_at: new Date().toISOString(),
-      // Pasar de "invited" → "active" cuando el usuario establece su
-      // contraseña por primera vez. Antes solo se tocaba activated_at y
-      // el status quedaba siempre "invited" en el listado de usuarios.
-      status: "active",
-    })
+    .update(update)
     .eq("user_id", session.user_id);
   if (error) {
     console.error("[markPasswordChanged] update failed:", error.message);

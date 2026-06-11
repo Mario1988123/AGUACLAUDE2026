@@ -73,22 +73,35 @@ export async function requireSession(): Promise<SessionClaims> {
   const claims = accessToken ? decodeJwt(accessToken) : {};
   const meta = (user.app_metadata ?? {}) as Record<string, unknown>;
 
-  // Lectura defensiva de must_change_password desde user_profiles. Si la
-  // tabla no existe o falla, devolvemos false (no bloqueamos al usuario).
+  // Lectura defensiva de must_change_password + status desde user_profiles. Si
+  // la tabla no existe o falla, devolvemos valores neutros (no bloqueamos).
   let mustChangePassword = false;
+  let profileStatus: string | null = null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const { data } = await admin
       .from("user_profiles")
-      .select("must_change_password")
+      .select("must_change_password, status")
       .eq("user_id", user.id)
       .maybeSingle();
     mustChangePassword = Boolean(
       (data as { must_change_password?: boolean } | null)?.must_change_password,
     );
+    profileStatus = (data as { status?: string | null } | null)?.status ?? null;
   } catch {
     /* fail-soft */
+  }
+
+  // SEGURIDAD: si el usuario está suspendido o desactivado, NO debe acceder
+  // aunque conserve sesión/JWT válido. Antes "Suspender" solo cambiaba el badge
+  // y el ex-empleado seguía dentro hasta que el token caducaba. Superadmin y
+  // 'invited' (onboarding) no se bloquean aquí.
+  if (
+    !Boolean(claims.is_superadmin ?? meta.is_superadmin) &&
+    (profileStatus === "suspended" || profileStatus === "inactive")
+  ) {
+    redirect("/login?error=suspended");
   }
 
   return {

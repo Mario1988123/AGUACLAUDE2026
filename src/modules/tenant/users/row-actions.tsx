@@ -258,7 +258,8 @@ export function UserRowActions({
             <DialogTitle>Editar roles</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Marca los roles que tendrá este usuario. Solo puede haber UN admin por empresa.
+            Marca los roles que tendrá este usuario. Puede haber varios administradores
+            por empresa; eso sí, no puedes dejar la empresa sin ningún admin.
           </p>
           <div className="grid gap-2">
             {ROLE_KEYS.map((r) => (

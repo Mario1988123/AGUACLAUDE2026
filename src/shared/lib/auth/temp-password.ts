@@ -7,6 +7,8 @@
  * Caracteres ambiguos excluidos (I/O/1/0/l) para que no se confundan
  * al copiarla.
  */
+import { randomInt } from "node:crypto";
+
 export function generateTempPassword(): string {
   const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
   const lower = "abcdefghjkmnpqrstuvwxyz";
@@ -14,16 +16,21 @@ export function generateTempPassword(): string {
   const symbols = "!@#$%&*";
   const all = upper + lower + digits + symbols;
   const len = 16;
-  let pwd = "";
-  pwd += upper[Math.floor(Math.random() * upper.length)];
-  pwd += lower[Math.floor(Math.random() * lower.length)];
-  pwd += digits[Math.floor(Math.random() * digits.length)];
-  pwd += symbols[Math.floor(Math.random() * symbols.length)];
-  for (let i = pwd.length; i < len; i++) {
-    pwd += all[Math.floor(Math.random() * all.length)];
+  // crypto.randomInt: seguro criptográficamente (Math.random NO lo es).
+  const pick = (set: string) => set[randomInt(0, set.length)]!;
+  const chars: string[] = [
+    pick(upper),
+    pick(lower),
+    pick(digits),
+    pick(symbols),
+  ];
+  for (let i = chars.length; i < len; i++) {
+    chars.push(pick(all));
   }
-  return pwd
-    .split("")
-    .sort(() => Math.random() - 0.5)
-    .join("");
+  // Shuffle Fisher-Yates con índices criptográficos.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1);
+    [chars[i], chars[j]] = [chars[j]!, chars[i]!];
+  }
+  return chars.join("");
 }
