@@ -23,24 +23,38 @@ function ListDeleteButton({ productId }: { productId: string }) {
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const ask = useConfirm();
-  function handle() {
+  // Confirmamos FUERA de la transición (así el botón solo sale "cargando"
+  // durante el borrado real) y la llamada lleva timeout: nunca se queda colgado.
+  async function handle() {
+    const ok = await ask({
+      message:
+        "¿Borrar este producto definitivamente? Solo se puede si no tiene historial (stock, ventas, instalaciones…). Si lo tiene, se queda desactivado.",
+      confirmText: "Borrar producto",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await ask({
-        message:
-          "¿Borrar este producto definitivamente? Solo se puede si no tiene historial (stock, ventas, instalaciones…). Si lo tiene, se queda desactivado.",
-        confirmText: "Borrar producto",
-        variant: "destructive",
-      });
-      if (!ok) return;
-      const r = await deleteProductAction(productId);
-      if (r.ok) {
-        notify.success("Producto borrado");
-        router.refresh();
-        return;
+      try {
+        const r = await Promise.race([
+          deleteProductAction(productId),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("timeout")), 15000),
+          ),
+        ]);
+        if (r.ok) {
+          notify.success("Producto borrado");
+          router.refresh();
+          return;
+        }
+        if (r.reason === "history") notify.warning("No se puede borrar", r.error);
+        else if (r.reason === "active") notify.warning("Primero desactívalo", r.error);
+        else notify.error("Error", r.error);
+      } catch {
+        notify.error(
+          "No se pudo completar el borrado",
+          "Tardó demasiado o falló la conexión (posible caché del navegador). Recarga con Ctrl+Shift+R y reinténtalo.",
+        );
       }
-      if (r.reason === "history") notify.warning("No se puede borrar", r.error);
-      else if (r.reason === "active") notify.warning("Primero desactívalo", r.error);
-      else notify.error("Error", r.error);
     });
   }
   return (

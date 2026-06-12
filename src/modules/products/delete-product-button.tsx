@@ -23,9 +23,9 @@ export function DeleteProductButton({
   const router = useRouter();
   const ask = useConfirm();
 
-  function handle() {
-    // REGLA: solo se borra un producto inactivo. Si está activo, guiamos a
-    // desactivarlo primero (sin llamar al servidor: feedback inmediato).
+  // REGLA: solo se borra un producto inactivo. Confirmamos FUERA de la
+  // transición y la llamada lleva timeout: el botón nunca se queda colgado.
+  async function handle() {
     if (isActive) {
       notify.warning(
         "Primero desactívalo",
@@ -33,26 +33,38 @@ export function DeleteProductButton({
       );
       return;
     }
+    const ok = await ask({
+      message:
+        "¿Borrar este producto definitivamente? Solo se puede si NO tiene ningún movimiento (stock, instalaciones, contratos…). Si lo tiene, no se borrará y se queda desactivado.",
+      confirmText: "Borrar producto",
+      variant: "destructive",
+    });
+    if (!ok) return;
     startTransition(async () => {
-      const ok = await ask({
-        message:
-          "¿Borrar este producto definitivamente? Solo se puede si NO tiene ningún movimiento (stock, instalaciones, contratos…). Si lo tiene, no se borrará y se queda desactivado.",
-        confirmText: "Borrar producto",
-        variant: "destructive",
-      });
-      if (!ok) return;
-      const r = await deleteProductAction(productId);
-      if (r.ok) {
-        notify.success("Producto borrado");
-        router.push("/productos");
-        return;
-      }
-      if (r.reason === "active") {
-        notify.warning("Primero desactívalo", r.error);
-      } else if (r.reason === "history") {
-        notify.warning("No se puede borrar", r.error);
-      } else {
-        notify.error("Error", r.error);
+      try {
+        const r = await Promise.race([
+          deleteProductAction(productId),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("timeout")), 15000),
+          ),
+        ]);
+        if (r.ok) {
+          notify.success("Producto borrado");
+          router.push("/productos");
+          return;
+        }
+        if (r.reason === "active") {
+          notify.warning("Primero desactívalo", r.error);
+        } else if (r.reason === "history") {
+          notify.warning("No se puede borrar", r.error);
+        } else {
+          notify.error("Error", r.error);
+        }
+      } catch {
+        notify.error(
+          "No se pudo completar el borrado",
+          "Tardó demasiado o falló la conexión (posible caché del navegador). Recarga con Ctrl+Shift+R y reinténtalo.",
+        );
       }
     });
   }
