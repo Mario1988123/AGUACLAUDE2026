@@ -22,11 +22,13 @@ export async function getInstallationProductAids(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   try {
-    // 1) Items de la instalación
+    // 1) Items de la instalación. SEGURIDAD: admin salta RLS → filtrar por
+    // company_id (installation_items lo lleva); si la instalación no es tuya, vacío.
     const { data: items } = await admin
       .from("installation_items")
       .select("product_id, product_name_snapshot")
-      .eq("installation_id", installationId);
+      .eq("installation_id", installationId)
+      .eq("company_id", session.company_id);
     type IT = { product_id: string; product_name_snapshot: string };
     const list = (items ?? []) as IT[];
     if (list.length === 0) return [];

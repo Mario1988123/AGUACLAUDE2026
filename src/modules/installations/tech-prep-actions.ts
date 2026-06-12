@@ -138,14 +138,18 @@ export async function getTechPrepByContract(contractId: string): Promise<TechPre
 export async function getTechPrepForInstallation(
   installationId: string,
 ): Promise<{ notes: string; media: TechPrepMedia[] }> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return { notes: "", media: [] };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id; si no es tuya, vacío.
   const { data: inst } = await admin
     .from("installations")
     .select("tech_prep_notes")
     .eq("id", installationId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
+  if (!inst) return { notes: "", media: [] };
   const media = await signMedia(admin, installationId);
   return {
     notes: (inst as { tech_prep_notes: string | null } | null)?.tech_prep_notes ?? "",

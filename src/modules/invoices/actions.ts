@@ -817,14 +817,17 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id (la factura copia datos
+  // fiscales del cliente del contrato; sin esto se facturaría sobre uno ajeno).
   const { data: c } = await admin
     .from("contracts")
     .select(
       "id, customer_id, total_cash_cents, monthly_cents, plan_type, status, service_start_date, signed_at, reference_code",
     )
     .eq("id", contractId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
-  if (!c) throw new Error("Contrato no encontrado");
+  if (!c) throw new Error("Contrato no encontrado o no pertenece a tu empresa");
   const con = c as {
     id: string;
     customer_id: string;
@@ -950,14 +953,16 @@ export async function createInvoiceForFinancierFromContractAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   const { data: c } = await admin
     .from("contracts")
     .select(
       "id, status, reference_code, plan_type, financier_id, financier_payment_cents, financier_term_months",
     )
     .eq("id", contractId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
-  if (!c) throw new Error("Contrato no encontrado");
+  if (!c) throw new Error("Contrato no encontrado o no pertenece a tu empresa");
   const con = c as {
     id: string;
     status: string;

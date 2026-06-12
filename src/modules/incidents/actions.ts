@@ -100,15 +100,19 @@ export async function getIncident(id: string) {
 
 export async function assignIncidentAction(id: string, userId: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: la policy de incidents filtra por scope. Si el rol del
   // que asigna no incluye el scope, UPDATE silencia.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id y abortar si no es tuya.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: incPrev } = await admin
     .from("incidents")
     .select("title, company_id")
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
+  if (!incPrev) throw new Error("Incidencia no encontrada o no pertenece a tu empresa");
   const r = await admin
     .from("incidents")
     .update({
@@ -116,7 +120,8 @@ export async function assignIncidentAction(id: string, userId: string) {
       assigned_at: userId ? new Date().toISOString() : null,
       status: userId ? "assigned" : "open",
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -250,14 +255,18 @@ async function sendIncidentEmail(
 
 export async function resolveIncidentAction(id: string, notes: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // SEGURIDAD: admin salta RLS → filtrar por company_id y abortar si no es tuya.
   const { data: prev } = await admin
     .from("incidents")
     .select("assigned_user_id, company_id, title")
     .eq("id", id)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!prev) throw new Error("Incidencia no encontrada o no pertenece a tu empresa");
 
   const r = await admin
     .from("incidents")
@@ -267,7 +276,8 @@ export async function resolveIncidentAction(id: string, notes: string) {
       resolved_by: session.user_id,
       resolution_notes: notes,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
   await admin.from("events").insert({
     company_id: session.company_id,

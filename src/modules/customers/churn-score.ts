@@ -112,10 +112,12 @@ export async function recomputeChurnScoreAction(
     score = Math.min(100, score);
 
     try {
+      // SEGURIDAD: admin salta RLS → filtrar por company_id.
       await admin
         .from("customers")
         .update({ churn_score: score, churn_score_at: new Date().toISOString() })
-        .eq("id", customerId);
+        .eq("id", customerId)
+        .eq("company_id", session.company_id);
     } catch {
       /* tabla puede no estar migrada */
     }

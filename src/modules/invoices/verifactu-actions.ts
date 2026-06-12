@@ -256,12 +256,16 @@ export async function createInvoiceFromContractV2Action(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin salta RLS → filtrar por company_id (factura copia datos
+    // fiscales del cliente del contrato).
     const { data: contract } = await admin
       .from("contracts")
       .select("id, customer_id, total_cash_cents, monthly_cents")
       .eq("id", contractId)
-      .single();
-    if (!contract) return { ok: false, error: "Contrato no encontrado" };
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!contract) return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
 
     const { data: customer } = await admin
       .from("customers")
@@ -467,12 +471,15 @@ export async function createMonthlyV2InvoiceAction(opts: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
     const { data: contract } = await admin
       .from("contracts")
       .select("id, customer_id")
       .eq("id", opts.contract_id)
-      .single();
-    if (!contract) return { ok: false, error: "Contrato no encontrado" };
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!contract) return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
     const { data: customer } = await admin
       .from("customers")
       .select(

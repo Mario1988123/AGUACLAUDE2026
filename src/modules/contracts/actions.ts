@@ -1985,7 +1985,8 @@ export async function saveInstallPreferenceAction(
     dates: string[] | null;
   },
 ): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -1993,6 +1994,7 @@ export async function saveInstallPreferenceAction(
   // actualiza por separado. Si una columna no existe en BD, esa UPDATE
   // falla sin afectar al resto. Así el flujo nunca se rompe aunque sólo
   // estén aplicadas algunas migraciones.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id en cada update.
   const updates: Array<[string, unknown]> = [
     ["preferred_install_time_slot", input.slot],
     ["preferred_install_time_notes", input.notes],
@@ -2003,7 +2005,11 @@ export async function saveInstallPreferenceAction(
   let savedAny = false;
   let lastNonColumnError: string | null = null;
   for (const [col, val] of updates) {
-    const r = await admin.from("contracts").update({ [col]: val }).eq("id", contractId);
+    const r = await admin
+      .from("contracts")
+      .update({ [col]: val })
+      .eq("id", contractId)
+      .eq("company_id", session.company_id);
     const errMsg = (r.error as { message?: string } | null)?.message ?? null;
     if (!errMsg) {
       savedAny = true;
@@ -2028,16 +2034,21 @@ export async function saveInstallPreferenceAction(
 
 export async function markContractActive(id: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: la policy contracts_update_by_scope sólo permite UPDATE
   // cuando status IN (draft, pending_data, pending_signature). El contrato
   // ya está en 'signed' cuando lo activamos → silent fail con RLS-bound.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id y abortar si no es tuyo.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const r = await admin
     .from("contracts")
     .update({ status: "active" })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Contrato no encontrado o no pertenece a tu empresa");
   const scheduledJobs = await autoScheduleMaintenanceForContract(id);
   await admin.from("events").insert({
     company_id: session.company_id!,

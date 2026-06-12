@@ -762,12 +762,15 @@ export async function declineRenewalAction(input: {
     const days = input.call_in_days ?? 30;
     const callAt = new Date(Date.now() + days * 86400000);
 
+    // SEGURIDAD: admin salta RLS → filtrar por company_id y abortar si el
+    // contrato no es de tu empresa.
     const { data: ct } = await admin
       .from("contracts")
       .select("id, customer_id, reference_code")
       .eq("id", input.contract_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
-    if (!ct) return { ok: false, error: "Contrato no encontrado" };
+    if (!ct) return { ok: false, error: "Contrato no encontrado o no pertenece a tu empresa" };
     const c = ct as { id: string; customer_id: string; reference_code: string | null };
 
     // Marcar el contrato como rechazó renovación
@@ -779,7 +782,8 @@ export async function declineRenewalAction(input: {
         renewal_call_scheduled_at: callAt.toISOString(),
         renewal_offered_by_user_id: session.user_id,
       })
-      .eq("id", input.contract_id);
+      .eq("id", input.contract_id)
+      .eq("company_id", session.company_id);
 
     // Crear evento de agenda tipo task para TMK
     try {
@@ -835,20 +839,23 @@ export async function acceptRenewalAction(input: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: admin salta RLS → filtrar por company_id (contrato y plan).
     const { data: ct } = await admin
       .from("contracts")
       .select("id, customer_id, reference_code")
       .eq("id", input.contract_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
-    if (!ct) return { ok: false, error: "Contrato origen no encontrado" };
+    if (!ct) return { ok: false, error: "Contrato origen no encontrado o no pertenece a tu empresa" };
     const c = ct as { id: string; customer_id: string; reference_code: string | null };
 
     const { data: plan } = await admin
       .from("maintenance_plans")
       .select("id, tier, monthly_cents, name")
       .eq("id", input.maintenance_plan_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
-    if (!plan) return { ok: false, error: "Plan de mantenimiento no encontrado" };
+    if (!plan) return { ok: false, error: "Plan de mantenimiento no encontrado o no pertenece a tu empresa" };
     const p = plan as {
       id: string;
       tier: string;
@@ -886,7 +893,8 @@ export async function acceptRenewalAction(input: {
         renewal_new_contract_id: newId,
         renewal_offered_by_user_id: session.user_id,
       })
-      .eq("id", input.contract_id);
+      .eq("id", input.contract_id)
+      .eq("company_id", session.company_id);
 
     await admin.from("events").insert({
       company_id: session.company_id,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
+import { assertInstallationCompany } from "./ownership";
 
 const PHOTO_BUCKET = "installation-photos";
 const SIG_BUCKET = "installation-signatures";
@@ -58,6 +59,8 @@ export async function uploadInstallationPhotoAction(
     if (!(file instanceof Blob)) return { ok: false, error: "Archivo inválido" };
     if (!installationId) return { ok: false, error: "Falta installation_id" };
     if (file.size > 10 * 1024 * 1024) return { ok: false, error: "Máximo 10 MB" };
+    // SEGURIDAD: admin salta RLS → verificar que la instalación es de tu empresa.
+    await assertInstallationCompany(installationId, session.company_id);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
@@ -205,6 +208,8 @@ export async function saveInstallationSignatureAction(input: {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin salta RLS → verificar que la instalación es de tu empresa.
+    await assertInstallationCompany(input.installation_id, session.company_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -272,21 +277,25 @@ export async function saveInstallationSignatureAction(input: {
 export async function listInstallationSignaturesFull(
   installationId: string,
 ): Promise<InstallationSignature[]> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id (firmas con DNI).
   let r = await admin
     .from("installation_signatures")
     .select(
       "id, signer_role, signer_name, signer_tax_id, context, signed_at, signature_data_url",
     )
     .eq("installation_id", installationId)
+    .eq("company_id", session.company_id)
     .order("signed_at");
   if (r.error && /signature_data_url/i.test(r.error.message ?? "")) {
     r = await admin
       .from("installation_signatures")
       .select("id, signer_role, signer_name, signer_tax_id, context, signed_at")
       .eq("installation_id", installationId)
+      .eq("company_id", session.company_id)
       .order("signed_at");
   }
   if (r.error) return [];
@@ -302,11 +311,14 @@ export async function listInstallationSignaturesFull(
 export async function listInstallationPhotosFull(
   installationId: string,
 ): Promise<InstallationPhoto[]> {
+  let companyId: string | null = null;
   try {
-    await requireSession();
+    const session = await requireSession();
+    companyId = session.company_id;
   } catch {
     return [];
   }
+  if (!companyId) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   let rows: Array<{
@@ -317,10 +329,12 @@ export async function listInstallationPhotosFull(
     taken_at: string;
   }> = [];
   try {
+    // SEGURIDAD: admin salta RLS → filtrar por company_id.
     const { data } = await admin
       .from("installation_photos")
       .select("id, storage_path, category, caption, taken_at")
       .eq("installation_id", installationId)
+      .eq("company_id", companyId)
       .order("taken_at", { ascending: false });
     rows = (data ?? []) as typeof rows;
   } catch {
