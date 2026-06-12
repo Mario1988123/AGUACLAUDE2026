@@ -516,21 +516,34 @@ export async function createCustomerAction(formData: FormData) {
   if (parsed.source_lead_id) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    await admin
+    // SEGURIDAD: source_lead_id viene del navegador. Verificar que el lead es
+    // de tu empresa ANTES de convertirlo y de mover sus direcciones; si no,
+    // un usuario podría convertir un lead ajeno y ROBARSE sus direcciones (PII).
+    const { data: ownLead } = await admin
       .from("leads")
-      .update({
-        status: "converted",
-        converted_at: new Date().toISOString(),
-        converted_to_customer_id: newId,
-      })
-      .eq("id", parsed.source_lead_id);
-    // Mover direcciones del lead al customer (UPDATE directo con admin —
-    // el RPC vive en schema `app` y no siempre es accesible vía REST).
-    await admin
-      .from("addresses")
-      .update({ customer_id: newId, lead_id: null })
-      .eq("lead_id", parsed.source_lead_id)
-      .is("deleted_at", null);
+      .select("id")
+      .eq("id", parsed.source_lead_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (ownLead) {
+      await admin
+        .from("leads")
+        .update({
+          status: "converted",
+          converted_at: new Date().toISOString(),
+          converted_to_customer_id: newId,
+        })
+        .eq("id", parsed.source_lead_id)
+        .eq("company_id", session.company_id);
+      // Mover direcciones del lead al customer (UPDATE directo con admin —
+      // el RPC vive en schema `app` y no siempre es accesible vía REST).
+      await admin
+        .from("addresses")
+        .update({ customer_id: newId, lead_id: null })
+        .eq("lead_id", parsed.source_lead_id)
+        .eq("company_id", session.company_id)
+        .is("deleted_at", null);
+    }
   }
 
   await supabase.from("events").insert({
