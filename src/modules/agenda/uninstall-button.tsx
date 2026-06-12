@@ -11,8 +11,8 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { PackageMinus, X } from "lucide-react";
-import { searchAgendaSubjectsAction } from "./actions";
+import { PackageMinus, X, Search } from "lucide-react";
+import { SubjectPickerModal } from "./subject-picker-modal";
 import {
   listCustomerEquipment,
   type CustomerEquipmentRow,
@@ -35,12 +35,8 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // Paso 1 — buscar cliente
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<
-    { id: string; label: string; sublabel: string | null }[]
-  >([]);
-  const [searching, setSearching] = useState(false);
+  // Paso 1 — buscar cliente (modal grande con el listado completo, navegable)
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [customer, setCustomer] = useState<{ id: string; label: string } | null>(
     null,
   );
@@ -53,38 +49,6 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
   // Paso 3 — técnico + fecha
   const [technician, setTechnician] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-
-  // Búsqueda con debounce. Solo clientes (los leads no tienen equipo instalado).
-  useEffect(() => {
-    if (customer) return;
-    const q = query.trim();
-    if (q.length < 2) {
-      setResults([]);
-      return;
-    }
-    let cancelled = false;
-    setSearching(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await searchAgendaSubjectsAction(q);
-        if (!cancelled) {
-          setResults(
-            res
-              .filter((r) => r.subject_type === "customer")
-              .map((r) => ({ id: r.subject_id, label: r.label, sublabel: r.sublabel })),
-          );
-        }
-      } catch {
-        if (!cancelled) setResults([]);
-      } finally {
-        if (!cancelled) setSearching(false);
-      }
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [query, customer]);
 
   // Al elegir cliente, cargar sus equipos ACTIVOS (preseleccionados todos).
   useEffect(() => {
@@ -114,8 +78,7 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
   }, [customer]);
 
   function resetAll() {
-    setQuery("");
-    setResults([]);
+    setPickerOpen(false);
     setCustomer(null);
     setEquipment([]);
     setSelected(new Set());
@@ -202,44 +165,14 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
                   </button>
                 </div>
               ) : (
-                <div className="relative">
-                  <Input
-                    autoFocus
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Busca por nombre o teléfono…"
-                    autoComplete="off"
-                  />
-                  {query.trim().length >= 2 && (
-                    <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-border bg-card shadow-lg">
-                      {searching && (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">Buscando…</div>
-                      )}
-                      {!searching && results.length === 0 && (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Sin clientes. Prueba con el teléfono.
-                        </div>
-                      )}
-                      {results.map((r) => (
-                        <button
-                          key={r.id}
-                          type="button"
-                          onClick={() => {
-                            setCustomer({ id: r.id, label: r.label });
-                            setQuery("");
-                            setResults([]);
-                          }}
-                          className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted"
-                        >
-                          <span className="font-medium">{r.label}</span>
-                          {r.sublabel && (
-                            <span className="text-xs text-muted-foreground">{r.sublabel}</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  <Search className="h-4 w-4" /> Buscar cliente…
+                </Button>
               )}
             </div>
 
@@ -332,6 +265,13 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+      <SubjectPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        allowedTypes={["customer"]}
+        title="Buscar cliente para la desinstalación"
+        onSelect={(hit) => setCustomer({ id: hit.subject_id, label: hit.label })}
+      />
     </>
   );
 }

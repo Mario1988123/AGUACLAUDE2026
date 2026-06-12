@@ -1,19 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
-import {
-  createAgendaEventSafeAction,
-  searchAgendaSubjectsAction,
-  type AgendaSubjectHit,
-} from "./actions";
+import { createAgendaEventSafeAction, type AgendaSubjectHit } from "./actions";
+import { SubjectPickerModal } from "./subject-picker-modal";
 import { AGENDA_KIND } from "./schemas";
 import { KIND_LABEL } from "./constants";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Search } from "lucide-react";
 
 interface Props {
   teamMembers?: { user_id: string; full_name: string }[];
@@ -64,42 +61,12 @@ export function CreateAgendaButton({
       }
     : null;
   const [subject, setSubject] = useState<AgendaSubjectHit | null>(presetHit);
-  const [subjectQuery, setSubjectQuery] = useState("");
-  const [subjectResults, setSubjectResults] = useState<AgendaSubjectHit[]>([]);
-  const [searching, setSearching] = useState(false);
-
-  // Búsqueda con pequeño retardo (debounce) para no llamar al servidor en
-  // cada tecla. Si el sujeto viene preseleccionado, no se busca.
-  useEffect(() => {
-    if (presetSubject) return;
-    const q = subjectQuery.trim();
-    if (q.length < 2) {
-      setSubjectResults([]);
-      return;
-    }
-    let cancelled = false;
-    setSearching(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await searchAgendaSubjectsAction(q);
-        if (!cancelled) setSubjectResults(res);
-      } catch {
-        if (!cancelled) setSubjectResults([]);
-      } finally {
-        if (!cancelled) setSearching(false);
-      }
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [subjectQuery, presetSubject]);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   function resetAll() {
     setForm(emptyForm(presetTitle));
     setSubject(presetHit);
-    setSubjectQuery("");
-    setSubjectResults([]);
+    setPickerOpen(false);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -140,6 +107,7 @@ export function CreateAgendaButton({
   }
 
   return (
+    <>
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -207,49 +175,18 @@ export function CreateAgendaButton({
                 )}
               </div>
             ) : (
-              <div className="relative">
-                <Input
-                  value={subjectQuery}
-                  onChange={(e) => setSubjectQuery(e.target.value)}
-                  placeholder="Buscar cliente o lead por nombre o teléfono…"
-                  autoComplete="off"
-                />
-                {subjectQuery.trim().length >= 2 && (
-                  <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-border bg-card shadow-lg">
-                    {searching && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">Buscando…</div>
-                    )}
-                    {!searching && subjectResults.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">
-                        Sin resultados
-                      </div>
-                    )}
-                    {subjectResults.map((r) => (
-                      <button
-                        key={`${r.subject_type}:${r.subject_id}`}
-                        type="button"
-                        onClick={() => {
-                          setSubject(r);
-                          setSubjectQuery("");
-                          setSubjectResults([]);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
-                      >
-                        <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[11px] font-bold uppercase text-primary">
-                          {r.subject_type === "customer" ? "Cliente" : "Lead"}
-                        </span>
-                        <span className="truncate font-medium">{r.label}</span>
-                        {r.sublabel && (
-                          <span className="truncate text-xs text-muted-foreground">
-                            · {r.sublabel}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => setPickerOpen(true)}
+                >
+                  <Search className="h-4 w-4" /> Buscar cliente o lead…
+                </Button>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Opcional. Si lo vinculas, el nombre saldrá en la tarea de la agenda.
+                  Opcional. Abre el listado completo (clientes o leads), filtra por
+                  nombre o teléfono y elige.
                 </p>
               </div>
             )}
@@ -357,5 +294,11 @@ export function CreateAgendaButton({
         </form>
       </CardContent>
     </Card>
+    <SubjectPickerModal
+      open={pickerOpen}
+      onClose={() => setPickerOpen(false)}
+      onSelect={(hit) => setSubject(hit)}
+    />
+    </>
   );
 }

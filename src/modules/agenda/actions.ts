@@ -813,6 +813,84 @@ export async function searchAgendaSubjectsAction(
   return hits;
 }
 
+export interface AgendaSubjectPage {
+  items: AgendaSubjectHit[];
+  hasMore: boolean;
+}
+
+/**
+ * Lista clientes O leads para el MODAL-buscador de la agenda. A diferencia de
+ * searchAgendaSubjectsAction (typeahead que obliga a escribir el nombre), esta
+ * permite NAVEGAR la lista completa (query vacía) y paginar de 50 en 50 — útil
+ * cuando no recuerdas el nombre y tienes miles de clientes. Filtra por tipo.
+ * RLS (createClient) acota a la empresa y al scope por rol.
+ */
+export async function listAgendaSubjectsAction(input: {
+  type: "customer" | "lead";
+  query?: string;
+  offset?: number;
+}): Promise<AgendaSubjectPage> {
+  const session = await requireSession();
+  if (!session.company_id) return { items: [], hasMore: false };
+  const PAGE = 50;
+  const offset = Math.max(0, input.offset ?? 0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const cols =
+    "id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary";
+  let q = supabase
+    .from(input.type === "customer" ? "customers" : "leads")
+    .select(cols)
+    .is("deleted_at", null);
+  if (input.type === "lead") q = q.neq("status", "converted");
+  const raw = (input.query ?? "").trim();
+  if (raw.length >= 1) {
+    const safe = raw.replace(/[%_,()]/g, " ").replace(/\s+/g, " ").trim();
+    if (safe) {
+      const like = `%${safe}%`;
+      q = q.or(
+        [
+          `legal_name.ilike.${like}`,
+          `trade_name.ilike.${like}`,
+          `first_name.ilike.${like}`,
+          `last_name.ilike.${like}`,
+          `phone_primary.ilike.${like}`,
+        ].join(","),
+      );
+    }
+  }
+  // Pedimos PAGE+1 (range inclusivo) para saber si hay más sin un count aparte.
+  q = q
+    .order("legal_name", { ascending: true, nullsFirst: false })
+    .order("last_name", { ascending: true, nullsFirst: false })
+    .order("first_name", { ascending: true, nullsFirst: false })
+    .range(offset, offset + PAGE);
+  const { data } = await q;
+  type Row = {
+    id: string;
+    party_kind: "individual" | "company";
+    legal_name: string | null;
+    trade_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    phone_primary: string | null;
+  };
+  const rows = (data ?? []) as Row[];
+  const hasMore = rows.length > PAGE;
+  const page = rows.slice(0, PAGE);
+  const nameOf = (r: Row) =>
+    r.party_kind === "company"
+      ? r.trade_name || r.legal_name || "Sin nombre"
+      : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "Sin nombre";
+  const items: AgendaSubjectHit[] = page.map((r) => ({
+    subject_type: input.type,
+    subject_id: r.id,
+    label: nameOf(r),
+    sublabel: r.phone_primary,
+  }));
+  return { items, hasMore };
+}
+
 /**
  * Devuelve la lista de miembros para los selectores de "asignar a" /
  * "ver agenda de". Aplica las reglas de scope:

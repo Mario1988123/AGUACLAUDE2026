@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
@@ -29,6 +29,11 @@ const WEEKDAYS = ["L", "M", "X", "J", "V", "S", "D"];
  */
 function localDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+/** Lunes de la semana de `d` (lunes = inicio de semana). */
+function startOfWeek(d: Date): Date {
+  const day = (d.getDay() + 6) % 7; // lunes = 0
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
 }
 const MONTHS = [
   "Enero",
@@ -60,7 +65,17 @@ const KIND_COLOR: Record<string, string> = {
 
 export function AgendaCalendar({ events, team = [], canReassign = false }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+
+  // Doble-clic en un día (vista mes) → abre la SEMANA de ese día, conservando
+  // los filtros actuales (usuario/tipo).
+  function goToWeek(d: Date) {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("view", "week");
+    params.set("w", localDateKey(startOfWeek(d)));
+    router.push(`/agenda?${params.toString()}` as never);
+  }
   const userNameMap = useMemo(
     () => new Map(team.map((u) => [u.user_id, u.full_name])),
     [team],
@@ -185,8 +200,11 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                 onDragOver={inMonth ? (e) => handleDragOver(key, e) : undefined}
                 onDragLeave={() => dragOverKey === key && setDragOverKey(null)}
                 onDrop={inMonth ? (e) => handleDrop(key, e) : undefined}
+                onDoubleClick={inMonth && date ? () => goToWeek(date) : undefined}
+                title={inMonth ? "Doble clic para ver esta semana" : undefined}
                 className={cn(
                   "min-h-24 border-b border-r border-border p-2 last:border-r-0 transition-colors",
+                  inMonth && "cursor-pointer",
                   !inMonth && "bg-muted/20",
                   isToday && "bg-primary/5",
                   dragOverKey === key && "bg-primary/20 ring-2 ring-primary ring-inset",
@@ -213,6 +231,7 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                           onDragStart={(e) => handleDragStart(ev, e)}
                           onDragEnd={() => setDraggingId(null)}
                           onClick={() => setMoveTarget(ev)}
+                          onDoubleClick={(e) => e.stopPropagation()}
                           className={cn(
                             "block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-grab active:cursor-grabbing",
                             KIND_COLOR[ev.kind] ?? KIND_COLOR.manual,
@@ -244,7 +263,8 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">
           💡 Tip: arrastra un evento a otro día para reagendarlo (conserva la
-          hora). Pulsa el evento para abrir el detalle con todas las opciones.
+          hora). Pulsa el evento para abrir el detalle. Doble clic en un día para
+          ver esa semana en detalle.
         </p>
         <div className="flex flex-wrap gap-2 text-xs">
           {Object.entries(KIND_COLOR).map(([k, c]) => (
