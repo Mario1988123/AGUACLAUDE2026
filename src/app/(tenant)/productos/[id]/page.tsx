@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getProduct, listCategories } from "@/modules/products/actions";
 import { ProductEditButton } from "@/modules/products/edit-form";
 import { DeleteProductButton } from "@/modules/products/delete-product-button";
+import { ProductActiveToggle } from "@/modules/products/product-active-toggle";
 import { listPricingPlans } from "@/modules/products/pricing-actions";
 import { PricingPlansPanel } from "@/modules/products/pricing-panel";
 import {
@@ -202,7 +203,18 @@ export default async function ProductDetailPage({
               categories={categories}
             />
           )}
-          {canDelete && <DeleteProductButton productId={product.id} />}
+          {canDelete && (
+            <ProductActiveToggle
+              productId={product.id}
+              isActive={product.is_active}
+            />
+          )}
+          {canDelete && (
+            <DeleteProductButton
+              productId={product.id}
+              isActive={product.is_active}
+            />
+          )}
           <a
             href={`/api/pdf/product-datasheet/${product.id}`}
             target="_blank"

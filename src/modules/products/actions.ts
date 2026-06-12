@@ -789,7 +789,7 @@ export async function createCategorySafeAction(
 
 export type DeleteProductResult =
   | { ok: true }
-  | { ok: false; error: string; reason?: "history" };
+  | { ok: false; error: string; reason?: "history" | "active" };
 
 /**
  * Borra un producto. SOLO admin (nivel 1). Regla (decisión 2026-06-12):
@@ -811,14 +811,26 @@ export async function deleteProductAction(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // Verificar pertenencia del producto a la empresa.
+  // Verificar pertenencia del producto a la empresa + su estado.
   const { data: prod } = await admin
     .from("products")
-    .select("id")
+    .select("id, is_active")
     .eq("id", productId)
     .eq("company_id", session.company_id)
     .maybeSingle();
   if (!prod) return { ok: false, error: "Producto no encontrado o no pertenece a tu empresa" };
+
+  // REGLA (2026-06-12): solo se puede borrar un producto INACTIVO. El borrado es
+  // siempre un acto deliberado en dos pasos (desactivar → borrar), así nunca se
+  // pierde por accidente un producto en uso.
+  if ((prod as { is_active: boolean }).is_active) {
+    return {
+      ok: false,
+      reason: "active",
+      error:
+        "Solo puedes borrar un producto que esté inactivo. Desactívalo primero (botón «Desactivar») y luego bórralo.",
+    };
+  }
 
   // Tablas de HISTORIAL que impiden el borrado (cuenta por product_id, que es
   // único de esta empresa). Conservador: si una comprobación falla por algo
@@ -888,5 +900,39 @@ export async function deleteProductAction(
   }
   revalidatePath("/productos");
   revalidatePath("/configuracion/productos");
+  return { ok: true };
+}
+
+/**
+ * Activa o desactiva un producto. SOLO admin de empresa (nivel 1) o superadmin.
+ * Desactivar = sacarlo de catálogos/calculadora/nuevas ventas sin perder nada.
+ * Es el paso previo obligatorio para poder BORRARLO (ver deleteProductAction).
+ */
+export async function setProductActiveAction(
+  productId: string,
+  active: boolean,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireSession();
+  if (!session.company_id) return { ok: false, error: "Sin empresa" };
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    return {
+      ok: false,
+      error: "Solo el admin de empresa puede activar o desactivar productos",
+    };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data, error } = await admin
+    .from("products")
+    .update({ is_active: active })
+    .eq("id", productId)
+    .eq("company_id", session.company_id) // anti cross-tenant
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  if (!data?.length) {
+    return { ok: false, error: "Producto no encontrado o no pertenece a tu empresa" };
+  }
+  revalidatePath("/productos");
+  revalidatePath(`/productos/${productId}`);
   return { ok: true };
 }
