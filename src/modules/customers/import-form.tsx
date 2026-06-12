@@ -20,15 +20,42 @@ const HEADER_MAP: Record<string, keyof ImportCustomerRow> = {
   last_name: "last_name",
   email: "email",
   telefono: "phone_primary",
+  telefono_1: "phone_primary",
   phone: "phone_primary",
   phone_primary: "phone_primary",
   telefono_secundario: "phone_secondary",
+  telefono_2: "phone_secondary",
   phone_secondary: "phone_secondary",
   dni: "tax_id",
   cif: "tax_id",
+  dni_cif: "tax_id",
   tax_id: "tax_id",
   notas: "notes",
   notes: "notes",
+  // Dirección
+  direccion: "address_street",
+  calle: "address_street",
+  address_street: "address_street",
+  cp: "address_postal_code",
+  codigo_postal: "address_postal_code",
+  poblacion: "address_city",
+  ciudad: "address_city",
+  provincia: "address_province",
+  // Equipo + mantenimiento (1 fila = 1 equipo)
+  equipo: "equipment_name",
+  equipo_nombre: "equipment_name",
+  modelo: "equipment_name",
+  marca: "equipment_brand",
+  equipo_marca: "equipment_brand",
+  numero_serie: "serial_number",
+  n_serie: "serial_number",
+  serial: "serial_number",
+  fecha_instalacion: "installed_at",
+  instalado_el: "installed_at",
+  periodicidad_meses: "maintenance_periodicity_months",
+  periodicidad: "maintenance_periodicity_months",
+  ultimo_mantenimiento: "last_maintenance_at",
+  proximo_mantenimiento: "next_maintenance_at",
 };
 
 function parseCsv(text: string): ImportCustomerRow[] {
@@ -67,6 +94,9 @@ function parseCsv(text: string): ImportCustomerRow[] {
       if (key === "party_kind") {
         const v = val.toLowerCase();
         row.party_kind = v === "company" || v === "empresa" ? "company" : "individual";
+      } else if (key === "maintenance_periodicity_months") {
+        const n = parseInt(val.replace(/[^0-9]/g, ""), 10);
+        if (Number.isFinite(n) && n > 0) row.maintenance_periodicity_months = n;
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (row as any)[key] = val;
@@ -109,10 +139,53 @@ export function ImportCustomersButton() {
         return;
       }
       setResult(r.result);
-      if (r.result.inserted > 0) notify.success(`Importados ${r.result.inserted} clientes`);
+      if (r.result.inserted > 0)
+        notify.success(
+          `Importados ${r.result.inserted} clientes`,
+          r.result.equipment > 0 ? `${r.result.equipment} equipos con sus mantenimientos` : undefined,
+        );
       if (r.result.duplicates > 0) notify.info(`${r.result.duplicates} duplicados ignorados`);
       if (r.result.errors.length > 0) notify.warning(`${r.result.errors.length} errores`);
     });
+  }
+
+  function downloadTemplate() {
+    const headers = [
+      "tipo",
+      "razon_social",
+      "nombre",
+      "apellidos",
+      "dni_cif",
+      "telefono_1",
+      "telefono_2",
+      "email",
+      "direccion",
+      "cp",
+      "poblacion",
+      "provincia",
+      "notas",
+      "equipo",
+      "marca",
+      "numero_serie",
+      "fecha_instalacion",
+      "periodicidad_meses",
+      "ultimo_mantenimiento",
+      "proximo_mantenimiento",
+    ];
+    const examples = [
+      ["individual", "", "Juan", "Pérez García", "12345678Z", "600111222", "", "juan@email.com", "Calle Mayor 3", "28001", "Madrid", "Madrid", "Cliente del CRM antiguo", "Ósmosis 5 etapas", "", "SN-001", "2024-03-15", "6", "2025-09-15", "2026-03-15"],
+      ["individual", "", "Juan", "Pérez García", "12345678Z", "600111222", "", "juan@email.com", "Calle Mayor 3", "28001", "Madrid", "Madrid", "", "Descalcificador BWT", "BWT", "SN-002", "2024-03-15", "12", "2025-03-15", "2026-03-15"],
+      ["company", "Aguas del Norte SL", "", "", "B12345678", "910000000", "910000001", "info@aguasnorte.es", "Pol. Ind. Sur, nave 4", "28100", "Alcobendas", "Madrid", "", "Equipo industrial", "", "SN-100", "2023-06-01", "4", "2025-06-01", "2025-10-01"],
+    ];
+    const esc = (v: string) => (/[",\n;]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const csv = [headers, ...examples].map((r) => r.map(esc).join(",")).join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "plantilla-clientes-hidromanager.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -127,10 +200,24 @@ export function ImportCustomersButton() {
           <DialogTitle>Importar clientes desde CSV</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Cabeceras admitidas: <code>tipo, razon_social, nombre, apellidos, email, telefono, telefono_secundario, dni, notas</code>.
-            Tipo: <code>individual</code> o <code>company</code>. Los duplicados (DNI/email/teléfono) se ignoran.
-          </p>
+          <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            <p>
+              Importa clientes del CRM antiguo <strong>con histórico</strong>: datos + dirección
+              + equipo + mantenimientos. <strong>Una fila por equipo</strong>; si un cliente tiene
+              varios equipos, repite sus datos (mismo DNI) en varias filas.
+            </p>
+            <p className="mt-1">
+              Columnas: <code>tipo (individual/company), razon_social, nombre, apellidos, dni_cif,
+              telefono_1, telefono_2, email, direccion, cp, poblacion, provincia, notas, equipo,
+              marca, numero_serie, fecha_instalacion, periodicidad_meses, ultimo_mantenimiento,
+              proximo_mantenimiento</code>. Si <code>equipo</code> coincide con un producto tuyo se
+              vincula al catálogo; si no, se guarda como equipo externo. Con <code>periodicidad_meses</code>
+              se generan los mantenimientos del próximo año. Duplicados (DNI/email/teléfono) se ignoran.
+            </p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={downloadTemplate} type="button">
+              <FileText className="h-4 w-4" /> Descargar plantilla CSV
+            </Button>
+          </div>
           <input
             type="file"
             accept=".csv,text/csv"
@@ -181,7 +268,7 @@ export function ImportCustomersButton() {
             <div className="space-y-2 rounded-xl border-2 border-success bg-success/5 p-3">
               <div className="flex items-center gap-2 font-semibold text-success">
                 <CheckCircle2 className="h-4 w-4" />
-                {result.inserted} insertados · {result.duplicates} duplicados · {result.errors.length} errores
+                {result.inserted} clientes · {result.equipment} equipos · {result.duplicates} duplicados · {result.errors.length} errores
               </div>
               {result.errors.length > 0 && (
                 <ul className="space-y-1 text-xs text-destructive">
