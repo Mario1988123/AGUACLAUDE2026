@@ -551,7 +551,11 @@ export async function getInstallation(id: string) {
         if (m) n = parseInt(m[1]!, 10) + 1;
       }
       const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
-      await admin.from("installations").update({ reference_code: code }).eq("id", id);
+      await admin
+        .from("installations")
+        .update({ reference_code: code })
+        .eq("id", id)
+        .eq("company_id", inst.company_id); // defensa en profundidad
       inst.reference_code = code;
     } catch {
       /* fail-soft */
@@ -798,12 +802,14 @@ export async function getInstallerAvailabilityAction(
   fromDate: string, // "YYYY-MM-DD"
   toDate: string, // "YYYY-MM-DD"
 ): Promise<Record<string, number>> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return {};
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   let q = admin
     .from("installations")
     .select("scheduled_at, installer_user_id")
+    .eq("company_id", session.company_id) // anti cross-tenant: solo mi empresa
     .gte("scheduled_at", `${fromDate}T00:00:00`)
     .lte("scheduled_at", `${toDate}T23:59:59`)
     .not("status", "in", "(cancelled,completed)")

@@ -51,12 +51,17 @@ export async function getMyYoungestChildAgeAt(
   userId: string,
   dateIso: string,
 ): Promise<number | null> {
+  // anti cross-tenant: este export es un endpoint server action; acotar a mi empresa
+  // (los datos de hijos son RGPD). Si userId es de otra empresa, no devuelve nada.
+  const session = await requireSession();
+  if (!session.company_id) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("employee_children")
     .select("birth_date")
     .eq("user_id", userId)
+    .eq("company_id", session.company_id)
     .order("birth_date", { ascending: false })
     .limit(1)
     .maybeSingle();

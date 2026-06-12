@@ -39,6 +39,15 @@ export async function startStockCountAction(input: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // anti cross-tenant: el almacén (warehouse_id viene del navegador) debe ser de mi empresa
+    const { data: ownWh } = await admin
+      .from("warehouses")
+      .select("id")
+      .eq("id", input.warehouse_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!ownWh) return { ok: false, error: "Almacén no encontrado" };
+
     // Crear cabecera
     const ins = await admin
       .from("stock_counts")
@@ -57,7 +66,8 @@ export async function startStockCountAction(input: {
     const { data: stocks } = await admin
       .from("warehouse_stock")
       .select("product_id, quantity")
-      .eq("warehouse_id", input.warehouse_id);
+      .eq("warehouse_id", input.warehouse_id)
+      .eq("company_id", session.company_id);
     type S = { product_id: string; quantity: number };
     const items = ((stocks ?? []) as S[]).map((s) => ({
       count_id: id,

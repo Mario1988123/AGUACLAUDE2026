@@ -93,7 +93,8 @@ export async function reassignMaintenanceAction(
     const { error } = await admin
       .from("maintenance_jobs")
       .update({ technician_user_id: newTechnicianUserId })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("company_id", session.company_id); // defensa en profundidad
     if (error) return { ok: false, error: error.message };
 
     await admin.from("events").insert({
@@ -209,7 +210,8 @@ export async function validateMaintenanceJobAction(input: {
     const { error } = await admin
       .from("maintenance_jobs")
       .update(updates)
-      .eq("id", input.id);
+      .eq("id", input.id)
+      .eq("company_id", session.company_id); // defensa en profundidad
     if (error) return { ok: false, error: error.message };
 
     await admin.from("events").insert({
@@ -297,7 +299,8 @@ export async function rescheduleMaintenanceProposalAction(input: {
         customer_called_at: nowIso,
         customer_called_by: session.user_id,
       })
-      .eq("id", input.id);
+      .eq("id", input.id)
+      .eq("company_id", session.company_id); // defensa en profundidad
     if (error) return { ok: false, error: error.message };
 
     await admin.from("events").insert({
