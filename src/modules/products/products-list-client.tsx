@@ -1,14 +1,60 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Pencil } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { ShowInCalculatorToggle } from "@/modules/products/edit-form";
 import { ProductBulkToolbar, ProductCheckbox } from "@/modules/products/bulk-toolbar";
 import { CatalogModal } from "@/modules/products/catalog-modal";
 import { Button } from "@/shared/ui/button";
+import { notify } from "@/shared/hooks/use-toast";
+import { useConfirm } from "@/shared/components/confirm-dialog";
+import { deleteProductAction } from "@/modules/products/actions";
+
+/**
+ * Botón compacto de BORRAR en la lista (icono papelera). Solo aparece en
+ * productos INACTIVOS (regla: solo se borra lo inactivo). Confirma, borra y
+ * refresca la lista para que el producto desaparezca sin entrar a la ficha.
+ */
+function ListDeleteButton({ productId }: { productId: string }) {
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const ask = useConfirm();
+  function handle() {
+    startTransition(async () => {
+      const ok = await ask({
+        message:
+          "¿Borrar este producto definitivamente? Solo se puede si no tiene historial (stock, ventas, instalaciones…). Si lo tiene, se queda desactivado.",
+        confirmText: "Borrar producto",
+        variant: "destructive",
+      });
+      if (!ok) return;
+      const r = await deleteProductAction(productId);
+      if (r.ok) {
+        notify.success("Producto borrado");
+        router.refresh();
+        return;
+      }
+      if (r.reason === "history") notify.warning("No se puede borrar", r.error);
+      else if (r.reason === "active") notify.warning("Primero desactívalo", r.error);
+      else notify.error("Error", r.error);
+    });
+  }
+  return (
+    <button
+      type="button"
+      onClick={handle}
+      disabled={pending}
+      title="Borrar producto (inactivo)"
+      className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+    >
+      <Trash2 className="h-4 w-4" />
+    </button>
+  );
+}
 
 export interface ProductListItem {
   id: string;
@@ -33,6 +79,8 @@ interface Props {
   tagColors?: Record<string, string>;
   /** Si false (nivel 2 y 3): ocultar lápices de edición y toggle de calculadora. */
   canEdit?: boolean;
+  /** Solo admin de empresa / superadmin: muestra el botón Borrar (productos inactivos). */
+  canDelete?: boolean;
 }
 
 function TagChip({ name, color }: { name: string; color: string }) {
@@ -84,6 +132,7 @@ export function ProductsListClient({
   canBulk,
   tagColors = {},
   canEdit = canBulk,
+  canDelete = false,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -292,6 +341,9 @@ export function ProductsListClient({
                           <Pencil className="h-4 w-4" />
                         </Link>
                       )}
+                      {canDelete && !p.is_active && (
+                        <ListDeleteButton productId={p.id} />
+                      )}
                     </div>
                   </div>
                 </li>
@@ -403,6 +455,9 @@ export function ProductsListClient({
                             >
                               <Pencil className="h-4 w-4" />
                             </Link>
+                          )}
+                          {canDelete && !p.is_active && (
+                            <ListDeleteButton productId={p.id} />
                           )}
                         </div>
                       </td>

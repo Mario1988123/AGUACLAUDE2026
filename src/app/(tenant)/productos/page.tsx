@@ -40,6 +40,9 @@ export default async function ProductsPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
   const canEdit = isProductEditor(session);
+  // Borrar producto: solo admin de empresa (nivel 1) o superadmin.
+  const canDelete =
+    session.is_superadmin || session.roles.includes("company_admin");
   const [products, categories, alerts, tagsCatalog] = await Promise.all([
     listProducts({ kind, category_id: categoryId, q: sp.q, active_only: activeOnly }),
     listCategories().catch(() => []),
@@ -252,6 +255,7 @@ export default async function ProductsPage({
         viewMode={viewMode}
         canBulk={canEdit}
         canEdit={canEdit}
+        canDelete={canDelete}
         tagColors={tagColors}
       />
     </div>

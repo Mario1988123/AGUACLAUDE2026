@@ -803,6 +803,7 @@ export type DeleteProductResult =
 export async function deleteProductAction(
   productId: string,
 ): Promise<DeleteProductResult> {
+  try {
   const session = await requireSession();
   if (!session.company_id) return { ok: false, error: "Sin empresa" };
   if (!session.is_superadmin && !session.roles.includes("company_admin")) {
@@ -897,6 +898,17 @@ export async function deleteProductAction(
   revalidatePath("/productos");
   revalidatePath("/configuracion/productos");
   return { ok: true };
+  } catch (e) {
+    // Nunca dejar el botón colgado sin mensaje: cualquier excepción se reporta.
+    console.error("[deleteProductAction] excepción:", e);
+    return {
+      ok: false,
+      error:
+        e instanceof Error
+          ? `Error al borrar: ${e.message}`
+          : "Error inesperado al borrar el producto",
+    };
+  }
 }
 
 /**
