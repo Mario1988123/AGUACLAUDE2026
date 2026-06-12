@@ -65,7 +65,7 @@ export async function listProducts(filters?: {
   const productIds = rows.map((p) => p.id);
   const categoryIds = rows.map((p) => p.category_id).filter(Boolean) as string[];
 
-  const [catRes, plansRes] = await Promise.all([
+  const [catRes, plansRes, stockRes] = await Promise.all([
     categoryIds.length > 0
       ? supabase.from("product_categories").select("id, name").in("id", categoryIds)
       : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
@@ -73,6 +73,12 @@ export async function listProducts(filters?: {
       .from("product_pricing_plans")
       .select("product_id, total_price_cents")
       .eq("plan_type", "cash")
+      .in("product_id", productIds),
+    // Stock total por producto sumando TODOS los almacenes (RLS ya acota a la
+    // empresa). Defensivo: si falla (RLS/tabla), dejamos el mapa vacío → 0.
+    supabase
+      .from("warehouse_stock")
+      .select("product_id, quantity")
       .in("product_id", productIds),
   ]);
 
@@ -84,6 +90,16 @@ export async function listProducts(filters?: {
       (p) => [p.product_id, p.total_price_cents],
     ),
   );
+  const stockByProduct = new Map<string, number>();
+  for (const s of (stockRes.data ?? []) as Array<{
+    product_id: string;
+    quantity: number | null;
+  }>) {
+    stockByProduct.set(
+      s.product_id,
+      (stockByProduct.get(s.product_id) ?? 0) + (s.quantity ?? 0),
+    );
+  }
 
   return rows.map((p) => ({
     ...p,
@@ -91,6 +107,7 @@ export async function listProducts(filters?: {
     tags: Array.isArray(p.tags) ? p.tags : [],
     category_name: p.category_id ? cats.get(p.category_id) ?? null : null,
     cash_price_cents: cashPrices.get(p.id) ?? null,
+    stock_total: stockByProduct.get(p.id) ?? 0,
   }));
 }
 

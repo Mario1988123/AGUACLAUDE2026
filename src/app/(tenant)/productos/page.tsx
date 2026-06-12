@@ -250,12 +250,14 @@ export default async function ProductsPage({
           show_in_calculator: p.show_in_calculator,
           photo_url: (p as { photo_url?: string | null }).photo_url ?? null,
           tags: p.tags,
+          stock_total: p.stock_total ?? 0,
         }))}
         categories={categories}
         viewMode={viewMode}
         canBulk={canEdit}
         canEdit={canEdit}
         canDelete={canDelete}
+        canSeeStock={isUpper}
         tagColors={tagColors}
       />
     </div>

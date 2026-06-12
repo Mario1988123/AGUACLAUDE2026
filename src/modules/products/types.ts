@@ -15,6 +15,8 @@ export interface ProductListItem {
   show_in_calculator: boolean;
   /** Tags libres del producto. Vacío si la migración 20260604100000 no se aplicó. */
   tags: string[];
+  /** Stock total sumando TODOS los almacenes de la empresa. 0 si no gestiona stock. */
+  stock_total?: number;
 }
 
 export interface ProductDetail {

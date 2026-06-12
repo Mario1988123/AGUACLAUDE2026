@@ -81,6 +81,8 @@ export interface ProductListItem {
   show_in_calculator: boolean;
   photo_url?: string | null;
   tags?: string[];
+  /** Stock total sumando todos los almacenes de la empresa. */
+  stock_total?: number;
 }
 
 interface Props {
@@ -95,6 +97,27 @@ interface Props {
   canEdit?: boolean;
   /** Solo admin de empresa / superadmin: muestra el botón Borrar (productos inactivos). */
   canDelete?: boolean;
+  /** Solo admin/dir comercial ve la cantidad de stock; el resto "Hay/Sin stock". */
+  canSeeStock?: boolean;
+}
+
+/** Celda de stock total (suma de almacenes). Cantidad solo para admin/dir comercial. */
+function StockCell({ total, canSee }: { total: number; canSee: boolean }) {
+  if (!canSee) {
+    return total > 0 ? (
+      <span className="text-xs font-medium text-emerald-700">Hay stock</span>
+    ) : (
+      <span className="text-xs font-medium text-destructive">Sin stock</span>
+    );
+  }
+  return (
+    <span
+      className={`font-semibold tabular-nums ${total > 0 ? "" : "text-destructive"}`}
+    >
+      {total}
+      <span className="ml-1 text-xs font-normal text-muted-foreground">ud</span>
+    </span>
+  );
 }
 
 function TagChip({ name, color }: { name: string; color: string }) {
@@ -147,6 +170,7 @@ export function ProductsListClient({
   tagColors = {},
   canEdit = canBulk,
   canDelete = false,
+  canSeeStock = false,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -306,11 +330,10 @@ export function ProductsListClient({
                           Ref: {p.internal_reference}
                         </div>
                       )}
-                      {p.tags && p.tags.length > 0 && (
-                        <div className="mt-1.5">
-                          <TagsCell tags={p.tags} tagColors={tagColors} />
-                        </div>
-                      )}
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Stock:{" "}
+                        <StockCell total={p.stock_total ?? 0} canSee={canSeeStock} />
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="font-bold tabular-nums">
@@ -381,7 +404,7 @@ export function ProductsListClient({
                   <th className="px-4 py-3 text-left">Producto</th>
                   <th className="px-4 py-3 text-left">Tipo</th>
                   <th className="px-4 py-3 text-left">Categoría</th>
-                  <th className="px-4 py-3 text-left">Tags</th>
+                  <th className="px-4 py-3 text-right">Stock</th>
                   <th className="px-4 py-3 text-left">Ref.</th>
                   <th className="px-4 py-3 text-right">Precio contado</th>
                   <th className="px-4 py-3 text-left">Calculadora</th>
@@ -424,8 +447,8 @@ export function ProductsListClient({
                       <td className="px-4 py-3 text-xs">
                         {p.category_name ?? "—"}
                       </td>
-                      <td className="px-4 py-3">
-                        <TagsCell tags={p.tags} tagColors={tagColors} />
+                      <td className="px-4 py-3 text-right">
+                        <StockCell total={p.stock_total ?? 0} canSee={canSeeStock} />
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {p.internal_reference ?? "—"}
