@@ -846,20 +846,16 @@ export async function deleteProductAction(
     "free_trial_items",
   ];
   for (const t of HISTORY_TABLES) {
+    // Contamos por product_id (columna presente en TODAS estas tablas; algunas
+    // como warehouse_stock no tienen columna `id`, por eso no la usamos).
     const { count, error } = await admin
       .from(t)
-      .select("id", { count: "exact", head: true })
+      .select("product_id", { count: "exact", head: true })
       .eq("product_id", productId);
-    if (error) {
-      if (/relation .* does not exist|does not exist|schema cache|Could not find/i.test(error.message ?? "")) {
-        continue; // tabla no presente en este entorno → no aplica
-      }
-      // Error inesperado → no borrar (conservador).
-      return {
-        ok: false,
-        error: `No se pudo comprobar el historial (${t}): ${error.message}`,
-      };
-    }
+    // Si la comprobación falla por lo que sea (tabla ausente, columna distinta…)
+    // NO bloqueamos: el DELETE final, con sus claves foráneas RESTRICT, es la red
+    // de seguridad real y devolverá el motivo exacto si hay rastro de verdad.
+    if (error) continue;
     if ((count ?? 0) > 0) {
       return {
         ok: false,
@@ -890,12 +886,12 @@ export async function deleteProductAction(
     .eq("id", productId)
     .eq("company_id", session.company_id);
   if (delErr) {
-    // Si falla por FK (algún rastro no contemplado), sugerimos desactivar.
+    // Si falla por FK (algún rastro no contemplado), sugerimos desactivar e
+    // incluimos el detalle técnico para poder localizar la tabla que lo retiene.
     return {
       ok: false,
       reason: "history",
-      error:
-        "No se pudo borrar (tiene referencias). Desactívalo en su lugar para conservar el historial.",
+      error: `No se pudo borrar: el producto está referenciado en otro sitio y se conserva el historial. Desactívalo en su lugar. (Detalle: ${delErr.message})`,
     };
   }
   revalidatePath("/productos");
