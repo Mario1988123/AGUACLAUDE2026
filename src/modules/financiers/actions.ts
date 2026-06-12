@@ -185,6 +185,7 @@ export async function upsertFinancierAction(input: unknown): Promise<{ id: strin
       .from("financiers")
       .update(payload)
       .eq("id", parsed.id)
+      .eq("company_id", session.company_id) // anti cross-tenant: solo de mi empresa
       .select("id")
       .single();
     if (r.error) throw new Error(r.error.message);
@@ -202,21 +203,32 @@ export async function upsertFinancierAction(input: unknown): Promise<{ id: strin
 }
 
 export async function deleteFinancierAction(id: string): Promise<void> {
-  await ensureAdmin();
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   await admin
     .from("financiers")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id); // anti cross-tenant
   revalidatePath("/configuracion/financieras");
 }
 
 export async function upsertFinancierCoefficientAction(input: unknown): Promise<void> {
-  await ensureAdmin();
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(coefSchema, input, "Coeficiente");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // anti cross-tenant: la financiera padre debe ser de mi empresa
+  const { data: ownFin } = await admin
+    .from("financiers")
+    .select("id")
+    .eq("id", parsed.financier_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownFin) throw new Error("Financiera no encontrada");
   const payload = {
     financier_id: parsed.financier_id,
     term_months: parsed.term_months,
@@ -227,7 +239,8 @@ export async function upsertFinancierCoefficientAction(input: unknown): Promise<
     const r = await admin
       .from("financier_coefficients")
       .update(payload)
-      .eq("id", parsed.id);
+      .eq("id", parsed.id)
+      .eq("financier_id", parsed.financier_id); // ligado a la financiera ya verificada
     if (r.error) throw new Error(r.error.message);
   } else {
     const r = await admin
@@ -239,9 +252,27 @@ export async function upsertFinancierCoefficientAction(input: unknown): Promise<
 }
 
 export async function deleteFinancierCoefficientAction(id: string): Promise<void> {
-  await ensureAdmin();
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // anti cross-tenant: el coeficiente debe colgar de una financiera de mi empresa
+  const { data: coef } = await admin
+    .from("financier_coefficients")
+    .select("id, financier_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!coef) {
+    revalidatePath("/configuracion/financieras");
+    return;
+  }
+  const { data: ownFin } = await admin
+    .from("financiers")
+    .select("id")
+    .eq("id", (coef as { financier_id: string }).financier_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownFin) throw new Error("Financiera no encontrada");
   await admin.from("financier_coefficients").delete().eq("id", id);
   revalidatePath("/configuracion/financieras");
 }

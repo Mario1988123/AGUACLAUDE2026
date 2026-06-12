@@ -57,10 +57,14 @@ export async function listLeaveBudgetsForUser(
     .eq("company_id", session.company_id)
     .eq("user_id", userId)
     .eq("year", year);
+  // Anti cross-tenant: resolver el nombre solo si el empleado es de MI
+  // empresa (user_profiles.company_id). Evita filtrar nombres de otros
+  // tenants pasando un UUID ajeno.
   const { data: prof } = await admin
     .from("user_profiles")
     .select("full_name")
     .eq("user_id", userId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const userName =
     (prof as { full_name?: string } | null)?.full_name ?? null;
@@ -142,6 +146,18 @@ export async function upsertLeaveBudgetAction(
     const parsed = parseOrFriendly(updateSchema, input, "Presupuesto");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+
+    // Anti cross-tenant: el user_id viene del navegador. Verificar que ese
+    // empleado pertenece a MI empresa antes de tocar nada (user_profiles
+    // tiene user_id + company_id not null). Si no, abortar sin escribir.
+    const { data: targetProf } = await admin
+      .from("user_profiles")
+      .select("user_id")
+      .eq("user_id", parsed.user_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!targetProf) return { ok: false, error: "Empleado no encontrado" };
+
     const def = DEFAULT_BUDGETS_2026[parsed.kind as AbsenceKind];
     const unit = parsed.unit ?? def?.unit ?? "days";
 
@@ -225,6 +241,19 @@ export async function adminCreateAbsenceAction(
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+
+    // Anti cross-tenant: el user_id viene del navegador. Verificar que ese
+    // empleado pertenece a MI empresa antes de crear ausencia / tocar
+    // presupuesto / notificarle (user_profiles tiene user_id + company_id
+    // not null). Si no, abortar sin escribir.
+    const { data: targetProf } = await admin
+      .from("user_profiles")
+      .select("user_id")
+      .eq("user_id", parsed.user_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!targetProf) return { ok: false, error: "Empleado no encontrado" };
+
     const ins = await admin
       .from("time_absences")
       .insert({

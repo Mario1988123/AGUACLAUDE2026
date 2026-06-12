@@ -19,6 +19,15 @@ export async function logPaymentReminderAction(input: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // Anti cross-tenant: verificar que la factura (parent) es de MI empresa
+    // antes de registrar el evento colgante con su id desde el navegador.
+    const { data: ownInvoice } = await admin
+      .from("invoices")
+      .select("id")
+      .eq("id", input.invoice_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!ownInvoice) return { ok: false, error: "Factura no encontrada" };
     await admin.from("events").insert({
       company_id: session.company_id,
       subject_type: "invoice",
@@ -49,9 +58,14 @@ export async function suggestReminderLevel(input: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   try {
+    // Anti cross-tenant: scopear la lectura de events a MI empresa. Sin esto un
+    // usuario podría leer recordatorios de una factura de otra empresa por su id.
+    const session = await requireSession();
+    if (!session.company_id) return "first";
     const { data: events } = await admin
       .from("events")
       .select("payload")
+      .eq("company_id", session.company_id)
       .eq("subject_type", "invoice")
       .eq("subject_id", input.invoice_id)
       .eq("kind", "invoice.payment_reminder_sent");

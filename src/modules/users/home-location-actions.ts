@@ -52,10 +52,14 @@ export async function updateUserHomeLocationAction(input: {
     if (input.address_label !== undefined) {
       update.home_address_label = input.address_label;
     }
+    // Anti cross-tenant: el usuario destino debe pertenecer a MI empresa.
+    // El admin client salta RLS, así que filtramos por company_id de la sesión.
+    // Si el user_id es de otra empresa, la actualización afecta 0 filas.
     const { error } = await admin
       .from("user_profiles")
       .update(update)
-      .eq("user_id", targetUserId);
+      .eq("user_id", targetUserId)
+      .eq("company_id", session.company_id);
     if (error) {
       // Defensa columnas
       if (/column .* does not exist/i.test(error.message ?? "")) {
@@ -64,7 +68,8 @@ export async function updateUserHomeLocationAction(input: {
         const { error: e2 } = await admin
           .from("user_profiles")
           .update(update)
-          .eq("user_id", targetUserId);
+          .eq("user_id", targetUserId)
+          .eq("company_id", session.company_id);
         if (e2) return { ok: false, error: e2.message };
       } else {
         return { ok: false, error: error.message };

@@ -731,10 +731,14 @@ export async function generateFreeTrialDeliveryNotePdf(
     "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id, customer_signature_path, customer_signer_name, customer_signer_tax_id, customer_signed_at, representative_signature_path, representative_user_id, representative_signed_at";
   const CORE_COLS =
     "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id";
+  // Scoping anti fuga cross-tenant: admin client salta RLS, así que filtramos
+  // explícitamente por company_id de la sesión. Sin esto la empresa A podría
+  // renderizar el PDF (con DNI/datos) de la prueba de la empresa B.
   let trialRes = await admin
     .from("free_trials")
     .select(FULL_COLS)
     .eq("id", trialId)
+    .eq("company_id", session.company_id!)
     .maybeSingle();
   if (
     trialRes.error &&
@@ -750,6 +754,7 @@ export async function generateFreeTrialDeliveryNotePdf(
       .from("free_trials")
       .select(CORE_COLS)
       .eq("id", trialId)
+      .eq("company_id", session.company_id!)
       .maybeSingle();
   }
   const trialRow = trialRes.data;

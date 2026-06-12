@@ -142,6 +142,19 @@ export async function setFilterStockAction(input: {
       };
     }
 
+    // Verificar que el almacén pertenece a la empresa (anti cross-tenant):
+    // el warehouseId puede venir del navegador, así que confirmamos ownership
+    // antes de leer/escribir filter_stock o registrar movimientos.
+    const { data: warehouseRow } = await admin
+      .from("warehouses")
+      .select("id")
+      .eq("id", warehouseId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!warehouseRow) {
+      return { ok: false, error: "Almacén no encontrado o de otra empresa." };
+    }
+
     // Verificar que el filtro pertenece a la empresa
     const { data: filterRow } = await admin
       .from("product_filters")

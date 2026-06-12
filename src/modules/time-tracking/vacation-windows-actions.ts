@@ -82,11 +82,18 @@ export async function upsertVacationWindowAction(
       max_concurrent_users: parsed.max_concurrent_users ?? null,
     };
     if (parsed.id) {
+      // Scoping cross-tenant: solo actualizar si la ventana es de MI empresa.
+      // Con admin client (salta RLS) hay que filtrar también por company_id;
+      // si es de otra empresa, .select() devuelve 0 filas → abortamos.
       const r = await admin
         .from("vacation_windows")
         .update(payload)
-        .eq("id", parsed.id);
+        .eq("id", parsed.id)
+        .eq("company_id", session.company_id)
+        .select("id")
+        .maybeSingle();
       if (r.error) return { ok: false, error: r.error.message };
+      if (!r.data) return { ok: false, error: "No encontrado" };
       revalidatePath("/configuracion/festivos");
       return { ok: true, id: parsed.id };
     }
@@ -110,10 +117,17 @@ export async function deleteVacationWindowAction(
   id: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await ensureAdminOrDirector();
+    const session = await ensureAdminOrDirector();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const r = await admin.from("vacation_windows").delete().eq("id", id);
+    // Scoping cross-tenant: añadir company_id para no borrar ventanas de otra
+    // empresa con admin client (salta RLS). Si es de otra empresa → 0 filas.
+    const r = await admin
+      .from("vacation_windows")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", session.company_id);
     if (r.error) return { ok: false, error: r.error.message };
     revalidatePath("/configuracion/festivos");
     return { ok: true };

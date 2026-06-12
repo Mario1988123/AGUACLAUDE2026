@@ -258,6 +258,8 @@ export async function approveAbsenceAction(id: string, approve: boolean): Promis
   const { data: ab } = await admin
     .from("time_absences")
     .select("user_id, kind, starts_on, ends_on, status")
+    // Anti cross-tenant: la ausencia debe pertenecer a mi empresa.
+    .eq("company_id", session.company_id)
     .eq("id", id)
     .maybeSingle();
   if (!ab) throw new Error("Ausencia no encontrada");
@@ -271,6 +273,8 @@ export async function approveAbsenceAction(id: string, approve: boolean): Promis
       approved_by: session.user_id,
       approved_at: new Date().toISOString(),
     })
+    // Anti cross-tenant: solo actualizar si es de mi empresa.
+    .eq("company_id", session.company_id)
     .eq("id", id);
 
   // Saldo de vacaciones: idempotente (decisión 2026-05-19).
@@ -295,6 +299,9 @@ export async function approveAbsenceAction(id: string, approve: boolean): Promis
       const { data: bal } = await admin
         .from("user_vacation_balances")
         .select("days_taken, days_total")
+        // Anti cross-tenant: el saldo es de mi empresa (a.user_id ya viene
+        // de una ausencia validada por company_id arriba).
+        .eq("company_id", session.company_id)
         .eq("user_id", a.user_id)
         .eq("year", year)
         .maybeSingle();
@@ -344,11 +351,24 @@ export async function recalculateVacationBalanceAction(
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // Anti cross-tenant: el userId viene del navegador. Verificar que ese
+    // usuario pertenece a MI empresa antes de leer sus ausencias o
+    // sobreescribir su saldo de vacaciones.
+    const { data: member } = await admin
+      .from("user_roles")
+      .select("user_id")
+      .eq("company_id", session.company_id)
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (!member) return { ok: false, error: "Usuario no encontrado" };
     const yearStart = `${year}-01-01`;
     const yearEnd = `${year}-12-31`;
     const { data: abs } = await admin
       .from("time_absences")
       .select("starts_on, ends_on")
+      // Anti cross-tenant: filtrar también por mi empresa.
+      .eq("company_id", session.company_id)
       .eq("user_id", userId)
       .eq("kind", "vacation")
       .eq("status", "approved")
@@ -368,6 +388,8 @@ export async function recalculateVacationBalanceAction(
     const { data: bal } = await admin
       .from("user_vacation_balances")
       .select("days_total")
+      // Anti cross-tenant: saldo de mi empresa (userId ya verificado arriba).
+      .eq("company_id", session.company_id)
       .eq("user_id", userId)
       .eq("year", year)
       .maybeSingle();

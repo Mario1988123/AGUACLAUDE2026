@@ -61,11 +61,26 @@ export async function reserveStockForContractAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // SEGURIDAD: contractId viene del navegador y el admin client salta RLS.
+    // Verificar que el contrato es de MI empresa antes de leer sus items o
+    // crear reservas; si no, un usuario de la empresa A reservaría stock contra
+    // un contrato de la empresa B pasando solo su UUID.
+    const { data: contractRow } = await admin
+      .from("contracts")
+      .select("id")
+      .eq("id", contractId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!contractRow) {
+      return { ok: false, reserved: 0, error: "Contrato no encontrado" };
+    }
+
     // Si ya hay reservas activas para este contrato, no duplicamos.
     const { data: existing } = await admin
       .from("stock_reservations")
       .select("id")
       .eq("contract_id", contractId)
+      .eq("company_id", session.company_id)
       .eq("status", "active")
       .limit(1);
     if (((existing ?? []) as Array<unknown>).length > 0) {
@@ -85,7 +100,8 @@ export async function reserveStockForContractAction(
       const { data: ci } = await admin
         .from("contract_items")
         .select("product_id, quantity")
-        .eq("contract_id", contractId);
+        .eq("contract_id", contractId)
+        .eq("company_id", session.company_id);
       items = ((ci ?? []) as Array<{ product_id: string | null; quantity: number | null }>)
         .filter((i) => i.product_id && (i.quantity ?? 0) > 0)
         .map((i) => ({ product_id: i.product_id!, quantity: i.quantity! }));

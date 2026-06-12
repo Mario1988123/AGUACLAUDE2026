@@ -68,6 +68,21 @@ export async function relocateEquipmentAction(input: {
       };
     }
 
+    // 1bis) Validar que la nueva dirección es de MI empresa y del MISMO cliente
+    // (anti cross-tenant: el address_id viene del navegador).
+    const { data: newAddr } = await admin
+      .from("addresses")
+      .select("id, company_id, customer_id")
+      .eq("id", input.new_address_id)
+      .maybeSingle();
+    const na = newAddr as { company_id: string; customer_id: string | null } | null;
+    if (!na || na.company_id !== session.company_id) {
+      return { ok: false, error: "Dirección no encontrada" };
+    }
+    if (na.customer_id && na.customer_id !== eq.customer_id) {
+      return { ok: false, error: "La dirección pertenece a otro cliente" };
+    }
+
     // 2) Reference code I-YYYY-NNNN
     const year = new Date().getFullYear();
     const yearPrefix = `I-${year}-`;

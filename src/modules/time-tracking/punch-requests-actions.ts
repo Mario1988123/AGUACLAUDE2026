@@ -167,6 +167,7 @@ export async function approvePunchRequestAction(
       "id, company_id, user_id, requested_at, punch_kind, status",
     )
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const r = req as {
     id: string;
@@ -209,7 +210,8 @@ export async function approvePunchRequestAction(
       review_notes: notes ?? null,
       resulting_punch_id: newPunchId,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
 
   // Notificar al empleado
   try {
@@ -234,6 +236,7 @@ export async function rejectPunchRequestAction(
   notes?: string,
 ): Promise<void> {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   if (!isAdminOrDirector(session.roles, session.is_superadmin)) {
     throw new Error("Solo admin / director puede rechazar");
   }
@@ -243,6 +246,7 @@ export async function rejectPunchRequestAction(
     .from("time_punch_requests")
     .select("user_id, company_id, punch_kind, status")
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const r = req as
     | { user_id: string; company_id: string; punch_kind: string; status: string }
@@ -258,7 +262,8 @@ export async function rejectPunchRequestAction(
       reviewed_at: new Date().toISOString(),
       review_notes: notes ?? null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
 
   try {
     await admin.from("notifications").insert({

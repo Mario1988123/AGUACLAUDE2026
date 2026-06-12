@@ -20,13 +20,17 @@ async function ensureAdmin() {
 }
 
 export async function getUserSchedule(userId: string): Promise<WorkScheduleDay[]> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("user_work_schedules")
     .select("day_of_week, starts_at, ends_at, break_minutes, expected_hours")
     .eq("user_id", userId)
+    // Anti cross-tenant: la tabla tiene company_id; sin este filtro un usuario
+    // de la empresa A podría leer el horario de un empleado de la empresa B.
+    .eq("company_id", session.company_id)
     .order("day_of_week");
   return (data ?? []) as WorkScheduleDay[];
 }
@@ -39,8 +43,23 @@ export async function setUserScheduleAction(
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  // Borrar todos y reinsertar (transacción simple)
-  await admin.from("user_work_schedules").delete().eq("user_id", userId);
+  // Anti cross-tenant: verificar que el empleado pertenece a mi empresa antes de
+  // borrar/insertar su horario (el userId viene del navegador). Sin esto un admin
+  // de la empresa A podría reescribir el horario de un empleado de la empresa B.
+  const { data: ownProf } = await admin
+    .from("user_profiles")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownProf) throw new Error("El usuario no pertenece a tu empresa");
+  // Borrar todos y reinsertar (transacción simple). El filtro company_id evita
+  // afectar filas de otra empresa aunque coincidiera el user_id.
+  await admin
+    .from("user_work_schedules")
+    .delete()
+    .eq("user_id", userId)
+    .eq("company_id", session.company_id);
   const rows = days
     .filter((d) => d.starts_at && d.ends_at)
     .map((d) => ({
@@ -116,6 +135,16 @@ export async function setVacationDaysAction(
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Anti cross-tenant: verificar que el empleado pertenece a mi empresa antes del
+  // upsert. El conflicto es por (user_id, year), así que sin esta comprobación un
+  // admin de la empresa A podría sobrescribir el saldo de un usuario de la empresa B.
+  const { data: ownProf } = await admin
+    .from("user_profiles")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownProf) throw new Error("El usuario no pertenece a tu empresa");
   await admin
     .from("user_vacation_balances")
     .upsert(
