@@ -444,6 +444,15 @@ async function _signAndInstallFreeTrialAction(input: {
   const { ensureBucket } = await import("@/shared/lib/supabase/storage-buckets");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → verificar que la prueba es de tu empresa antes
+  // de subir firmas / marcarla instalada.
+  const { data: ownTrial } = await admin
+    .from("free_trials")
+    .select("id")
+    .eq("id", input.trial_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!ownTrial) throw new Error("Prueba no encontrada o no pertenece a tu empresa");
   const BUCKET = "free-trial-signatures";
   const ok = await ensureBucket(admin, BUCKET);
   if (!ok) throw new Error("No se pudo preparar el bucket de firmas");
@@ -504,7 +513,8 @@ async function _signAndInstallFreeTrialAction(input: {
   let upd = await admin
     .from("free_trials")
     .update(metaPayload)
-    .eq("id", input.trial_id);
+    .eq("id", input.trial_id)
+    .eq("company_id", session.company_id);
   while (upd.error) {
     const msg = upd.error.message ?? "";
     // Coincide tanto "column X of free_trials" como "Could not find the 'X' column"
@@ -904,8 +914,10 @@ export async function acceptFreeTrialAction(input: {
 
 export async function rejectFreeTrialAction(id: string, reason: string) {
   const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // Admin client: la policy ft_update bloquea si ya está
   // accepted/rejected/expired/removed.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id y abortar si no es tuya.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const r = await admin
@@ -916,8 +928,11 @@ export async function rejectFreeTrialAction(id: string, reason: string) {
       decided_outcome: "rejected",
       rejected_reason: reason,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (!r.data?.length) throw new Error("Prueba no encontrada o no pertenece a tu empresa");
   await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "free_trial",
@@ -944,11 +959,14 @@ export async function markReturnedAction(id: string) {
   // y no hay installation kind='uninstall' status='completed' enlazada,
   // bloqueamos. Excepto cuando el propio completeInstallation nos llama
   // (entonces ya existe la installation completada).
+  // SEGURIDAD: admin salta RLS → filtrar por company_id y abortar si no es tuya.
   const { data: trialStateData } = await admin
     .from("free_trials")
     .select("status")
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
+  if (!trialStateData) throw new Error("Prueba no encontrada o no pertenece a tu empresa");
   const trialState = (trialStateData as { status: string } | null)?.status;
   if (
     trialState &&
@@ -973,7 +991,8 @@ export async function markReturnedAction(id: string) {
   const r = await admin
     .from("free_trials")
     .update({ status: "removed", removed_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
 
   // Re-incorporar stock como 'used' al almacén main

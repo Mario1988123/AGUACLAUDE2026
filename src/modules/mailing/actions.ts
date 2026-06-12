@@ -204,6 +204,7 @@ export async function testSmtpAction(
           .from("email_user_settings")
           .select("smtp_password_enc")
           .eq("user_id", uid)
+          .eq("company_id", session.company_id)
           .maybeSingle();
         if (data?.smtp_password_enc) {
           const { decryptSecret } = await import("./encryption");

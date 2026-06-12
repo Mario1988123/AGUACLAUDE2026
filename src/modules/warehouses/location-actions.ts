@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { composeLocationCode } from "./location-utils";
+import { assertWarehouseCompany } from "./ownership";
 
 async function ensureCanManage() {
   const session = await requireSession();
@@ -57,8 +58,11 @@ export async function upsertLocationAction(input: {
   description?: string | null;
 }): Promise<void> {
   const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
   const code = composeLocationCode(input.shelf, input.level, input.slot);
   if (!code) throw new Error("Indica al menos estantería, altura o hueco");
+  // SEGURIDAD: admin salta RLS → verificar que el almacén es de tu empresa.
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const payload = {
@@ -74,7 +78,8 @@ export async function upsertLocationAction(input: {
     const { error } = await admin
       .from("warehouse_locations")
       .update(payload)
-      .eq("id", input.id);
+      .eq("id", input.id)
+      .eq("company_id", session.company_id);
     if (error) throw new Error(error.message);
   } else {
     const { error } = await admin.from("warehouse_locations").insert(payload);
@@ -87,14 +92,17 @@ export async function deleteLocationAction(
   locationId: string,
   warehouseId: string,
 ): Promise<void> {
-  await ensureCanManage();
+  const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   // No bloqueamos: warehouse_stock.location_id ON DELETE SET NULL.
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   const { error } = await admin
     .from("warehouse_locations")
     .delete()
-    .eq("id", locationId);
+    .eq("id", locationId)
+    .eq("company_id", session.company_id);
   if (error) throw new Error(error.message);
   revalidatePath(`/almacenes/${warehouseId}`);
 }
@@ -109,7 +117,10 @@ export async function assignStockLocationAction(input: {
   product_id: string;
   location_id: string | null;
 }): Promise<void> {
-  await ensureCanManage();
+  const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // SEGURIDAD: admin salta RLS → verificar que el almacén es de tu empresa.
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   // Solo state='new' por simplicidad (lo que usamos en toda la app).
@@ -118,6 +129,7 @@ export async function assignStockLocationAction(input: {
     .select("id, quantity, location_id")
     .eq("warehouse_id", input.warehouse_id)
     .eq("product_id", input.product_id)
+    .eq("company_id", session.company_id)
     .eq("state", "new");
   const list = (rows ?? []) as Array<{
     id: string;
@@ -134,12 +146,13 @@ export async function assignStockLocationAction(input: {
   await admin
     .from("warehouse_stock")
     .delete()
+    .eq("company_id", session.company_id)
     .in(
       "id",
       list.map((r) => r.id),
     );
   await admin.from("warehouse_stock").insert({
-    company_id: (await requireSession()).company_id,
+    company_id: session.company_id,
     warehouse_id: input.warehouse_id,
     product_id: input.product_id,
     quantity: total,

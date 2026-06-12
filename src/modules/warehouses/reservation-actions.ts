@@ -131,13 +131,16 @@ export async function reserveStockForContractAction(
 export async function cancelReservationsForContractAction(
   contractId: string,
 ): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   await admin
     .from("stock_reservations")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
     .eq("contract_id", contractId)
+    .eq("company_id", session.company_id)
     .eq("status", "active");
 }
 
@@ -148,13 +151,16 @@ export async function cancelReservationsForContractAction(
 export async function fulfillReservationsForContractAction(
   contractId: string,
 ): Promise<void> {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id.
   await admin
     .from("stock_reservations")
     .update({ status: "fulfilled", fulfilled_at: new Date().toISOString() })
     .eq("contract_id", contractId)
+    .eq("company_id", session.company_id)
     .eq("status", "active");
 }
 

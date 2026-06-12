@@ -25,12 +25,15 @@ export async function getUserSmtpAction(targetUserId: string): Promise<UserSmtpR
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // SEGURIDAD: admin salta RLS → filtrar por company_id para que un admin no
+  // pueda leer/descifrar credenciales SMTP de un usuario de OTRA empresa.
   const { data } = await admin
     .from("email_user_settings")
     .select(
       "smtp_host, smtp_port, smtp_user, smtp_password_enc, smtp_secure, smtp_provider, from_email, from_name, signature_html",
     )
     .eq("user_id", targetUserId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   if (!data) {
     return {
@@ -86,10 +89,24 @@ export async function setUserSmtpAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // SEGURIDAD: si un admin configura el SMTP de OTRO usuario, ese usuario debe
+    // pertenecer a su empresa (si no, un admin podría plantar credenciales en
+    // usuarios de otra empresa).
+    if (input.user_id !== session.user_id) {
+      const { data: member } = await admin
+        .from("user_profiles")
+        .select("user_id")
+        .eq("user_id", input.user_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      if (!member) return { ok: false, error: "Ese usuario no pertenece a tu empresa" };
+    }
+
     const { data: existing } = await admin
       .from("email_user_settings")
       .select("user_id")
       .eq("user_id", input.user_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
 
     const payload: Record<string, unknown> = {
@@ -110,7 +127,11 @@ export async function setUserSmtpAction(
     }
 
     const { error } = existing
-      ? await admin.from("email_user_settings").update(payload).eq("user_id", input.user_id)
+      ? await admin
+          .from("email_user_settings")
+          .update(payload)
+          .eq("user_id", input.user_id)
+          .eq("company_id", session.company_id)
       : await admin.from("email_user_settings").insert(payload);
     if (error) return { ok: false, error: error.message };
 

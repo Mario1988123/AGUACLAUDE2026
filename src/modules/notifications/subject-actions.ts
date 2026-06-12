@@ -63,6 +63,10 @@ export async function autoResolveNotificationsForSubject(
   reason: string,
 ): Promise<void> {
   try {
+    // SEGURIDAD: server action exportada → exigir sesión y filtrar por company_id
+    // (si no, se podrían resolver notificaciones de un subject de otra empresa).
+    const session = await requireSession();
+    if (!session.company_id) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const now = new Date().toISOString();
@@ -71,6 +75,7 @@ export async function autoResolveNotificationsForSubject(
       .update({ auto_resolved_at: now, resolved_reason: reason })
       .eq("subject_type", subjectType)
       .eq("subject_id", subjectId)
+      .eq("company_id", session.company_id)
       .is("read_at", null)
       .is("auto_resolved_at", null);
     if (
@@ -85,6 +90,7 @@ export async function autoResolveNotificationsForSubject(
         .update({ read_at: now })
         .eq("subject_type", subjectType)
         .eq("subject_id", subjectId)
+        .eq("company_id", session.company_id)
         .is("read_at", null);
     }
   } catch {

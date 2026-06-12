@@ -54,8 +54,24 @@ export async function createPurchaseAction(input: {
       if (it.quantity <= 0) return { ok: false, error: "Cantidad debe ser > 0" };
       if (it.unit_cost_cents < 0) return { ok: false, error: "Coste no puede ser negativo" };
     }
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // SEGURIDAD: admin salta RLS → verificar que el almacén y TODOS los productos
+    // de las líneas son de tu empresa (luego se actualiza products.cost_cents).
+    const { assertWarehouseCompany } = await import("./ownership");
+    await assertWarehouseCompany(input.warehouse_id, session.company_id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    {
+      const productIds = Array.from(new Set(input.items.map((it) => it.product_id)));
+      const { data: ownProds } = await admin
+        .from("products")
+        .select("id")
+        .eq("company_id", session.company_id)
+        .in("id", productIds);
+      if (((ownProds ?? []) as Array<{ id: string }>).length !== productIds.length) {
+        return { ok: false, error: "Algún producto no pertenece a tu empresa" };
+      }
+    }
 
     const total = input.items.reduce(
       (s, it) => s + it.quantity * it.unit_cost_cents,
@@ -112,7 +128,8 @@ export async function createPurchaseAction(input: {
       const { data: allStock } = await admin
         .from("warehouse_stock")
         .select("quantity")
-        .eq("product_id", it.product_id);
+        .eq("product_id", it.product_id)
+        .eq("company_id", session.company_id);
       const prevQty = ((allStock ?? []) as Array<{ quantity: number }>).reduce(
         (s, r) => s + r.quantity,
         0,
@@ -123,6 +140,7 @@ export async function createPurchaseAction(input: {
         .from("products")
         .select("cost_cents")
         .eq("id", it.product_id)
+        .eq("company_id", session.company_id)
         .maybeSingle();
       const prevCost = (prod as { cost_cents: number | null } | null)?.cost_cents ?? 0;
 
@@ -135,7 +153,8 @@ export async function createPurchaseAction(input: {
       await admin
         .from("products")
         .update({ cost_cents: cmp })
-        .eq("id", it.product_id);
+        .eq("id", it.product_id)
+        .eq("company_id", session.company_id);
 
       // Suma stock en almacén destino
       const { data: existing } = await admin
@@ -143,6 +162,7 @@ export async function createPurchaseAction(input: {
         .select("id, quantity")
         .eq("warehouse_id", input.warehouse_id)
         .eq("product_id", it.product_id)
+        .eq("company_id", session.company_id)
         .eq("state", "new")
         .is("location_id", null)
         .maybeSingle();
@@ -324,7 +344,11 @@ export async function returnToSupplierAction(input: {
   reason?: string;
 }): Promise<void> {
   const session = await ensureCanManage();
+  if (!session.company_id) throw new Error("Sin empresa");
   if (input.quantity <= 0) throw new Error("Cantidad > 0");
+  // SEGURIDAD: admin salta RLS → verificar almacén propio y acotar por company_id.
+  const { assertWarehouseCompany } = await import("./ownership");
+  await assertWarehouseCompany(input.warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -333,7 +357,8 @@ export async function returnToSupplierAction(input: {
     .from("purchase_items")
     .select("quantity")
     .eq("purchase_id", input.purchase_id)
-    .eq("product_id", input.product_id);
+    .eq("product_id", input.product_id)
+    .eq("company_id", session.company_id);
   const totalBought = ((bought ?? []) as Array<{ quantity: number }>).reduce(
     (s, r) => s + r.quantity,
     0,
@@ -344,6 +369,7 @@ export async function returnToSupplierAction(input: {
     .select("quantity")
     .eq("purchase_id", input.purchase_id)
     .eq("product_id", input.product_id)
+    .eq("company_id", session.company_id)
     .eq("movement_type", "outbound_return_supplier");
   const totalReturned = ((returned ?? []) as Array<{ quantity: number }>).reduce(
     (s, r) => s + r.quantity,
@@ -362,6 +388,7 @@ export async function returnToSupplierAction(input: {
     .select("id, quantity")
     .eq("warehouse_id", input.warehouse_id)
     .eq("product_id", input.product_id)
+    .eq("company_id", session.company_id)
     .eq("state", "new")
     .is("location_id", null)
     .maybeSingle();
@@ -374,7 +401,8 @@ export async function returnToSupplierAction(input: {
   await admin
     .from("warehouse_stock")
     .update({ quantity: sRow.quantity - input.quantity })
-    .eq("id", sRow.id);
+    .eq("id", sRow.id)
+    .eq("company_id", session.company_id);
 
   await admin.from("stock_movements").insert({
     company_id: session.company_id,

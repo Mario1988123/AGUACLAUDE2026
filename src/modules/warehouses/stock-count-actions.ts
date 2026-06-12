@@ -123,12 +123,15 @@ export async function completeStockCountAction(
       diff: number | null;
     };
     const rows = ((items ?? []) as I[]).filter((i) => i.counted_qty != null);
-    // Almacén del conteo (una sola vez).
+    // Almacén del conteo. SEGURIDAD: admin salta RLS → filtrar por company_id y
+    // abortar si el conteo no es de tu empresa (si no, se reconciliaría stock ajeno).
     const { data: count } = await admin
       .from("stock_counts")
       .select("warehouse_id")
       .eq("id", countId)
+      .eq("company_id", session.company_id)
       .maybeSingle();
+    if (!count) return { ok: false, error: "Conteo no encontrado o no pertenece a tu empresa" };
     const whId = (count as { warehouse_id?: string } | null)?.warehouse_id;
     let adjustments = 0;
     if (whId) {
@@ -145,6 +148,7 @@ export async function completeStockCountAction(
           .select("id")
           .eq("warehouse_id", whId)
           .eq("product_id", i.product_id)
+          .eq("company_id", session.company_id)
           .eq("state", "new")
           .is("location_id", null)
           .maybeSingle();
@@ -153,7 +157,8 @@ export async function completeStockCountAction(
           await admin
             .from("warehouse_stock")
             .update({ quantity: counted })
-            .eq("id", exRow.id);
+            .eq("id", exRow.id)
+            .eq("company_id", session.company_id);
         } else if (counted > 0) {
           await admin.from("warehouse_stock").insert({
             company_id: session.company_id,
@@ -191,7 +196,8 @@ export async function completeStockCountAction(
         completed_at: new Date().toISOString(),
         completed_by: session.user_id,
       })
-      .eq("id", countId);
+      .eq("id", countId)
+      .eq("company_id", session.company_id);
     revalidatePath("/almacenes/conteo");
     revalidatePath("/almacenes");
     return { ok: true, adjustments };
@@ -206,13 +212,25 @@ export async function recordCountedQtyAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const session = await ensureAuthorized();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD: stock_count_items NO tiene company_id → verificamos el padre
+    // (stock_counts) por company_id antes de actualizar.
     const { data: prev } = await admin
       .from("stock_count_items")
-      .select("expected_qty")
+      .select("expected_qty, count_id")
       .eq("id", itemId)
       .maybeSingle();
+    if (!prev) return { ok: false, error: "Línea de conteo no encontrada" };
+    const parentId = (prev as { count_id?: string } | null)?.count_id;
+    const { data: parent } = await admin
+      .from("stock_counts")
+      .select("id")
+      .eq("id", parentId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!parent) return { ok: false, error: "El conteo no pertenece a tu empresa" };
     const exp = Number(
       (prev as { expected_qty?: number } | null)?.expected_qty ?? 0,
     );

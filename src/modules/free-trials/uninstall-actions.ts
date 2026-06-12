@@ -237,12 +237,17 @@ export async function scheduleFreeTrialUninstallAction(
 export async function processFreeTrialUninstallCompletion(
   installationId: string,
 ): Promise<void> {
+  // SEGURIDAD: aunque normalmente lo llama completeInstallation (ya verificado),
+  // es una server action exportada → exigimos sesión y filtramos por company_id.
+  const session = await requireSession();
+  if (!session.company_id) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data: inst } = await admin
     .from("installations")
     .select("id, company_id, free_trial_id, kind")
     .eq("id", installationId)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const i = inst as
     | {
@@ -258,7 +263,8 @@ export async function processFreeTrialUninstallCompletion(
   const upd = await admin
     .from("free_trials")
     .update({ status: "removed", removed_at: now })
-    .eq("id", i.free_trial_id);
+    .eq("id", i.free_trial_id)
+    .eq("company_id", session.company_id);
   if (upd.error) {
     console.error(
       "[processFreeTrialUninstallCompletion] update free_trials:",
