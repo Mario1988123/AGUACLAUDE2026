@@ -186,6 +186,13 @@ export async function addCustomerEquipmentAction(input: {
    * fijar el inicio de los servicios.
    */
   next_maintenance_at?: string | null;
+  /**
+   * Periodicidad de mantenimiento en meses. Si se informa, en vez de crear un
+   * solo job se genera la SERIE de visitas de los próximos 12 meses según la
+   * periodicidad (igual que el motor de contratos). Vale para equipo propio y
+   * de competencia.
+   */
+  maintenance_periodicity_months?: number | null;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -277,10 +284,43 @@ export async function addCustomerEquipmentAction(input: {
     }
   }
 
-  // Programar el próximo: si el usuario quiere fijar la siguiente
-  // visita (típico cuando contratamos a mitad de ciclo), creamos un
-  // job scheduled con esa fecha. El técnico se asigna después.
-  if (input.next_maintenance_at) {
+  // Programar mantenimientos:
+  //  - Si hay PERIODICIDAD → generar la SERIE de visitas de los próximos 12
+  //    meses (igual que contratos). firstDue = próximo indicado, o si no se
+  //    indica, instalación + periodicidad.
+  //  - Si NO hay periodicidad pero sí "próximo" → un único job (comportamiento previo).
+  const periodicity = input.maintenance_periodicity_months ?? null;
+  if (periodicity && periodicity > 0) {
+    try {
+      let firstDue: Date | null = null;
+      if (input.next_maintenance_at) {
+        firstDue = new Date(input.next_maintenance_at);
+      } else if (input.installed_at) {
+        const d = new Date(input.installed_at);
+        d.setMonth(d.getMonth() + periodicity);
+        firstDue = d;
+      } else if (input.last_maintenance_at) {
+        const d = new Date(input.last_maintenance_at);
+        d.setMonth(d.getMonth() + periodicity);
+        firstDue = d;
+      }
+      if (firstDue && !isNaN(firstDue.getTime())) {
+        const { generateEquipmentMaintenanceWindow } = await import(
+          "@/modules/maintenance/auto-schedule"
+        );
+        await generateEquipmentMaintenanceWindow({
+          company_id: session.company_id,
+          customer_id: input.customer_id,
+          customer_equipment_id: equipmentId,
+          periodicity_months: periodicity,
+          firstDue,
+          monthsAhead: 12,
+        });
+      }
+    } catch (e) {
+      console.error("[addCustomerEquipment] generar serie mantenimientos:", e);
+    }
+  } else if (input.next_maintenance_at) {
     try {
       await admin.from("maintenance_jobs").insert({
         company_id: session.company_id,

@@ -786,3 +786,107 @@ export async function createCategorySafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+export type DeleteProductResult =
+  | { ok: true }
+  | { ok: false; error: string; reason?: "history" };
+
+/**
+ * Borra un producto. SOLO admin (nivel 1). Regla (decisión 2026-06-12):
+ *  - Si el producto NO tiene NINGÚN rastro real (stock/movimientos, equipo
+ *    instalado en cliente, línea de contrato/propuesta, compra, prueba) → se
+ *    BORRA de verdad (era un alta por error). La config pura (precios,
+ *    atributos, docs, filtros) NO impide borrar: se borra en cascada.
+ *  - Si tiene algún rastro → NO se borra (se devuelve reason:'history' para
+ *    sugerir desactivarlo y conservar el histórico).
+ */
+export async function deleteProductAction(
+  productId: string,
+): Promise<DeleteProductResult> {
+  const session = await requireSession();
+  if (!session.company_id) return { ok: false, error: "Sin empresa" };
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    return { ok: false, error: "Solo el admin de empresa puede borrar productos" };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  // Verificar pertenencia del producto a la empresa.
+  const { data: prod } = await admin
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!prod) return { ok: false, error: "Producto no encontrado o no pertenece a tu empresa" };
+
+  // Tablas de HISTORIAL que impiden el borrado (cuenta por product_id, que es
+  // único de esta empresa). Conservador: si una comprobación falla por algo
+  // distinto a "tabla inexistente", bloqueamos (no borramos a ciegas).
+  const HISTORY_TABLES = [
+    "warehouse_stock",
+    "stock_movements",
+    "customer_equipment",
+    "installation_items",
+    "contract_items",
+    "proposal_items",
+    "purchase_items",
+    "free_trial_items",
+  ];
+  for (const t of HISTORY_TABLES) {
+    const { count, error } = await admin
+      .from(t)
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", productId);
+    if (error) {
+      if (/relation .* does not exist|does not exist|schema cache|Could not find/i.test(error.message ?? "")) {
+        continue; // tabla no presente en este entorno → no aplica
+      }
+      // Error inesperado → no borrar (conservador).
+      return {
+        ok: false,
+        error: `No se pudo comprobar el historial (${t}): ${error.message}`,
+      };
+    }
+    if ((count ?? 0) > 0) {
+      return {
+        ok: false,
+        reason: "history",
+        error:
+          "Este producto tiene historial (stock, movimientos, equipos instalados, contratos, compras o pruebas). No se puede borrar: desactívalo para conservar el histórico.",
+      };
+    }
+  }
+
+  // Sin historial → borrar config hija (best-effort) y el producto.
+  const CONFIG_TABLES = [
+    "product_pricing_plans",
+    "product_attribute_values",
+    "product_attribute_categories",
+    "product_documents",
+  ];
+  for (const t of CONFIG_TABLES) {
+    try {
+      await admin.from(t).delete().eq("product_id", productId).eq("company_id", session.company_id);
+    } catch {
+      /* best-effort: si la tabla no existe o no tiene company_id, seguimos */
+    }
+  }
+  const { error: delErr } = await admin
+    .from("products")
+    .delete()
+    .eq("id", productId)
+    .eq("company_id", session.company_id);
+  if (delErr) {
+    // Si falla por FK (algún rastro no contemplado), sugerimos desactivar.
+    return {
+      ok: false,
+      reason: "history",
+      error:
+        "No se pudo borrar (tiene referencias). Desactívalo en su lugar para conservar el historial.",
+    };
+  }
+  revalidatePath("/productos");
+  revalidatePath("/configuracion/productos");
+  return { ok: true };
+}

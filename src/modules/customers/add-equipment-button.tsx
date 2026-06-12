@@ -47,6 +47,7 @@ export function AddEquipmentButton({
   const [addressId, setAddressId] = useState(defaultAddressId);
   const [lastMaintenanceAt, setLastMaintenanceAt] = useState("");
   const [nextMaintenanceAt, setNextMaintenanceAt] = useState("");
+  const [periodicityMonths, setPeriodicityMonths] = useState("");
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -62,6 +63,7 @@ export function AddEquipmentButton({
     setInstalledAt("");
     setLastMaintenanceAt("");
     setNextMaintenanceAt("");
+    setPeriodicityMonths("");
     setNotes("");
     setAddressId(defaultAddressId);
   }
@@ -85,6 +87,9 @@ export function AddEquipmentButton({
         installed_at: installedAt || null,
         last_maintenance_at: lastMaintenanceAt || null,
         next_maintenance_at: nextMaintenanceAt || null,
+        maintenance_periodicity_months: periodicityMonths
+          ? Number(periodicityMonths)
+          : null,
         notes: notes || null,
         address_id: addressId || null,
       });
@@ -252,6 +257,23 @@ export function AddEquipmentButton({
                       onChange={(e) => setNextMaintenanceAt(e.target.value)}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Periodicidad de mantenimiento (meses)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={60}
+                    inputMode="numeric"
+                    placeholder="Ej. 6 (cada 6 meses)"
+                    value={periodicityMonths}
+                    onChange={(e) => setPeriodicityMonths(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Si la indicas, se generan automáticamente las visitas del próximo año
+                    según esa periodicidad (desde el próximo programado o desde la instalación).
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">

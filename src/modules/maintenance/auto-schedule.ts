@@ -153,6 +153,92 @@ export async function ensureMaintenanceWindow(
 }
 
 /**
+ * Genera la SERIE de mantenimientos preventivos de un EQUIPO concreto (sin
+ * contrato), según una periodicidad en meses, para los próximos `monthsAhead`
+ * meses (default 12). Lo usa el alta manual de equipo y la importación de
+ * clientes con histórico. Idempotente (tolerancia ±7 días, fechas aproximadas).
+ *
+ * `firstDue` = fecha del PRÓXIMO mantenimiento (si se conoce). Si cae en el
+ * pasado, se adelanta sumando periodicidades hasta hoy. Devuelve nº de jobs.
+ */
+export async function generateEquipmentMaintenanceWindow(input: {
+  company_id: string;
+  customer_id: string;
+  customer_equipment_id: string;
+  periodicity_months: number;
+  firstDue: Date;
+  monthsAhead?: number;
+}): Promise<number> {
+  const monthsAhead = input.monthsAhead ?? 12;
+  if (!input.periodicity_months || input.periodicity_months <= 0) return 0;
+  if (isNaN(input.firstDue.getTime())) return 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const a = createAdminClient() as any;
+
+  const now = new Date();
+  const windowEnd = new Date(now);
+  windowEnd.setMonth(windowEnd.getMonth() + monthsAhead);
+
+  // Construir fechas: firstDue, +periodicity, ... mientras quepan en la ventana.
+  const candidates: Date[] = [];
+  let d = new Date(input.firstDue);
+  let guard = 0;
+  // Adelantar al futuro si firstDue ya pasó.
+  while (d.getTime() < now.getTime() && guard < 120) {
+    d = new Date(d);
+    d.setMonth(d.getMonth() + input.periodicity_months);
+    guard++;
+  }
+  guard = 0;
+  while (d.getTime() <= windowEnd.getTime() && guard < 60) {
+    candidates.push(new Date(d));
+    const nd = new Date(d);
+    nd.setMonth(nd.getMonth() + input.periodicity_months);
+    d = nd;
+    guard++;
+  }
+  if (candidates.length === 0) return 0;
+
+  // Idempotencia: no duplicar jobs ya existentes de este equipo (±7 días).
+  const { data: existing } = await a
+    .from("maintenance_jobs")
+    .select("scheduled_at")
+    .eq("company_id", input.company_id)
+    .eq("customer_equipment_id", input.customer_equipment_id)
+    .in("status", ["preprogrammed", "scheduled", "in_progress", "completed", "rescheduled"]);
+  const existingTimes = ((existing ?? []) as Array<{ scheduled_at: string | null }>)
+    .map((e) => (e.scheduled_at ? new Date(e.scheduled_at).getTime() : null))
+    .filter((t): t is number => t !== null);
+  const tol = 7 * 86400000;
+  const toCreate = candidates.filter(
+    (c) => !existingTimes.some((e) => Math.abs(e - c.getTime()) < tol),
+  );
+  if (toCreate.length === 0) return 0;
+
+  const jobs = toCreate.map((dt) => ({
+    company_id: input.company_id,
+    customer_id: input.customer_id,
+    customer_equipment_id: input.customer_equipment_id,
+    kind: "contracted",
+    status: "preprogrammed" as const,
+    scheduled_at: dt.toISOString(),
+    original_scheduled_at: dt.toISOString(),
+    is_charged: false,
+  }));
+  const { error } = await a.from("maintenance_jobs").insert(jobs);
+  if (error) {
+    if (/invalid input value for enum|preprogrammed/i.test(error.message ?? "")) {
+      const legacy = jobs.map((j) => ({ ...j, status: "scheduled" as const }));
+      const { error: e2 } = await a.from("maintenance_jobs").insert(legacy);
+      if (e2) return 0;
+      return legacy.length;
+    }
+    return 0;
+  }
+  return jobs.length;
+}
+
+/**
  * @deprecated Usa `ensureMaintenanceWindow(contractId, 12)`. Antes esto
  * generaba TODOS los mantenimientos del contrato de golpe (hasta 7-8
  * para contratos largos) — ahora preferimos la ventana 12m.

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getProduct, listCategories } from "@/modules/products/actions";
 import { ProductEditButton } from "@/modules/products/edit-form";
+import { DeleteProductButton } from "@/modules/products/delete-product-button";
 import { listPricingPlans } from "@/modules/products/pricing-actions";
 import { PricingPlansPanel } from "@/modules/products/pricing-panel";
 import {
@@ -117,6 +118,8 @@ export default async function ProductDetailPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
   const canEdit = isProductEditor(session);
+  // Borrar producto: solo admin de empresa (nivel 1) o superadmin.
+  const canDelete = session.is_superadmin || session.roles.includes("company_admin");
   const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 
   // Etiqueta de stock al lado del título.
@@ -199,6 +202,7 @@ export default async function ProductDetailPage({
               categories={categories}
             />
           )}
+          {canDelete && <DeleteProductButton productId={product.id} />}
           <a
             href={`/api/pdf/product-datasheet/${product.id}`}
             target="_blank"
