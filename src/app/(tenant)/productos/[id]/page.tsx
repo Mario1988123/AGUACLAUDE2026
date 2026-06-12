@@ -209,7 +209,8 @@ export default async function ProductDetailPage({
               isActive={product.is_active}
             />
           )}
-          {canDelete && (
+          {/* Borrar SOLO aparece si el producto está inactivo (regla 2026-06-12). */}
+          {canDelete && !product.is_active && (
             <DeleteProductButton
               productId={product.id}
               isActive={product.is_active}
