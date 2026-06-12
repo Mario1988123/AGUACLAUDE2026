@@ -6,9 +6,13 @@ const withSerwist = withSerwistInit({
   swDest: "public/sw.js",
   cacheOnNavigation: true,
   reloadOnOnline: true,
-  // Re-activado 2026-05-20: SW reescrito sin interceptar /api/* ni RSC,
-  // push notifications operativas. En dev seguimos deshabilitado.
-  disable: process.env.NODE_ENV === "development",
+  // DESACTIVADO 2026-06-13: el SW (cacheOnNavigation) cacheaba navegaciones y
+  // servía listas/páginas viejas tras mutaciones → borrar/desactivar parecía
+  // "no se actualiza". Confirmado en incógnito (sin SW funciona perfecto).
+  // Lo apagamos del todo; public/sw.js es ahora un kill-switch que desinstala
+  // el SW antiguo y limpia la caché en todos los navegadores. (Pausa también
+  // las push; reversible con un SW mínimo solo-push si se quiere.)
+  disable: true,
 });
 
 const nextConfig: NextConfig = {

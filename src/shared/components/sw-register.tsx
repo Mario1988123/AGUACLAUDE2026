@@ -3,23 +3,34 @@
 import { useEffect } from "react";
 
 /**
- * Registra el Service Worker generado por Serwist (`/sw.js`).
+ * KILL SWITCH del Service Worker (2026-06-13).
  *
- * Decisión 2026-05-20: tras endurecer el SW (no intercepta /api/* ni
- * RSC, fallback solo en navegaciones HTML que fallan por red) volvemos
- * a habilitarlo. En desarrollo se mantiene desactivado vía next.config.
+ * Antes registraba el SW de Serwist. Lo desactivamos: el SW cacheaba las
+ * navegaciones (cacheOnNavigation) y servía páginas/listas viejas tras
+ * mutaciones → borrar/desactivar "no se actualizaba". Confirmado en incógnito.
  *
- * Serwist también puede registrar el SW automáticamente, pero hacemos
- * un fallback manual para asegurarnos.
+ * Ahora, en cada carga, DESINSTALA cualquier Service Worker previo y limpia
+ * toda la caché. Combinado con el kill-switch de /public/sw.js, esto limpia a
+ * todos los usuarios que tuvieran el SW antiguo. (Pausa push; reversible.)
  */
 export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!("serviceWorker" in navigator)) return;
-    if (process.env.NODE_ENV !== "production") return;
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      /* no-op: si Serwist ya lo registró, devolverá la misma reg */
-    });
+    navigator.serviceWorker
+      .getRegistrations()
+      .then((regs) => {
+        for (const reg of regs) reg.unregister().catch(() => {});
+      })
+      .catch(() => {});
+    if (typeof caches !== "undefined") {
+      caches
+        .keys()
+        .then((keys) => {
+          for (const k of keys) caches.delete(k).catch(() => {});
+        })
+        .catch(() => {});
+    }
   }, []);
   return null;
 }
