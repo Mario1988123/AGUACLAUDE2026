@@ -23,22 +23,37 @@ export function ProductActiveToggle({
   const router = useRouter();
   const ask = useConfirm();
 
-  function handle() {
+  // Confirmamos FUERA de la transición (pedir confirmación dentro de
+  // startTransition podía dejar el botón colgado en React 19) y la llamada
+  // lleva timeout: nunca se queda cargando sin fin.
+  async function handle() {
+    if (isActive) {
+      const ok = await ask({
+        message:
+          "¿Desactivar este producto? Dejará de aparecer en catálogos, calculadora y nuevas ventas. No se pierde nada: podrás reactivarlo cuando quieras (y, si fue un alta por error, borrarlo).",
+        confirmText: "Desactivar",
+      });
+      if (!ok) return;
+    }
     startTransition(async () => {
-      if (isActive) {
-        const ok = await ask({
-          message:
-            "¿Desactivar este producto? Dejará de aparecer en catálogos, calculadora y nuevas ventas. No se pierde nada: podrás reactivarlo cuando quieras (y, si fue un alta por error, borrarlo).",
-          confirmText: "Desactivar",
-        });
-        if (!ok) return;
-      }
-      const r = await setProductActiveAction(productId, !isActive);
-      if (r.ok) {
-        notify.success(isActive ? "Producto desactivado" : "Producto activado");
-        router.refresh();
-      } else {
-        notify.error("Error", r.error);
+      try {
+        const r = await Promise.race([
+          setProductActiveAction(productId, !isActive),
+          new Promise<never>((_, rej) =>
+            setTimeout(() => rej(new Error("timeout")), 15000),
+          ),
+        ]);
+        if (r.ok) {
+          notify.success(isActive ? "Producto desactivado" : "Producto activado");
+          router.refresh();
+        } else {
+          notify.error("Error", r.error);
+        }
+      } catch {
+        notify.error(
+          "No se pudo completar",
+          "Tardó demasiado o falló la conexión. Recarga (Ctrl+Shift+R) y reinténtalo.",
+        );
       }
     });
   }
