@@ -1081,7 +1081,7 @@ export async function GET(req: NextRequest) {
     const { data: actives } = await admin
       .from("customer_equipment")
       .select("customer_id")
-      .eq("status", "active");
+      .eq("is_active", true); // customer_equipment usa is_active, no status
     const customerIds = Array.from(
       new Set(
         ((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id),

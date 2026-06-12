@@ -155,7 +155,7 @@ export async function getCustomerAlerts(): Promise<CustomerAlerts> {
       .from("customer_equipment")
       .select("customer_id")
       .eq("company_id", session.company_id)
-      .eq("status", "active");
+      .eq("is_active", true); // customer_equipment usa is_active, no status
     const customerIds = Array.from(
       new Set(((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id)),
     );
@@ -214,7 +214,7 @@ export async function getCustomerAlerts(): Promise<CustomerAlerts> {
       .from("customer_equipment")
       .select("customer_id")
       .eq("company_id", session.company_id)
-      .eq("status", "active");
+      .eq("is_active", true); // customer_equipment usa is_active, no status
     const customerIds = Array.from(
       new Set(((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id)),
     );

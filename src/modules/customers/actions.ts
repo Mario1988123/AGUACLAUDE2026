@@ -132,11 +132,12 @@ export async function listCustomers(
           )
           .in("customer_id", ids)
           .order("is_primary", { ascending: false }),
+        // ROBUSTO: sin embeds (products/external). Si el embed falla, PostgREST
+        // devolvía [] y la columna "equipo instalado" salía vacía aunque hubiera
+        // equipos. Resolvemos los nombres por id más abajo.
         supabase
           .from("customer_equipment")
-          .select(
-            "customer_id, product_id, external_equipment_model_id, products(name), external_equipment_models(brand, model)",
-          )
+          .select("customer_id, product_id, external_equipment_model_id")
           .in("customer_id", ids)
           .eq("is_active", true),
         // Mantenimientos vencidos: scheduled_at < now Y aún no completados.
@@ -188,18 +189,52 @@ export async function listCustomers(
         });
       }
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    for (const e of ((equipRes.data as any[] | null) ?? [])) {
+    // Resolver nombres de equipo por id (sin embeds → robusto).
+    const equipRows =
+      (equipRes.data as Array<{
+        customer_id: string;
+        product_id: string | null;
+        external_equipment_model_id: string | null;
+      }> | null) ?? [];
+    const pIds = Array.from(
+      new Set(equipRows.map((e) => e.product_id).filter(Boolean)),
+    ) as string[];
+    const eIds = Array.from(
+      new Set(equipRows.map((e) => e.external_equipment_model_id).filter(Boolean)),
+    ) as string[];
+    const pName = new Map<string, string>();
+    const eName = new Map<string, string>();
+    if (pIds.length > 0) {
+      const { data } = await supabase
+        .from("products")
+        .select("id, name")
+        .in("id", pIds);
+      for (const p of (data as Array<{ id: string; name: string }> | null) ?? [])
+        pName.set(p.id, p.name);
+    }
+    if (eIds.length > 0) {
+      const { data } = await supabase
+        .from("external_equipment_models")
+        .select("id, brand, model")
+        .in("id", eIds);
+      for (const x of (data as Array<{
+        id: string;
+        brand: string | null;
+        model: string | null;
+      }> | null) ?? []) {
+        const label = `${x.brand ?? ""} ${x.model ?? ""}`.trim();
+        if (label) eName.set(x.id, label);
+      }
+    }
+    for (const e of equipRows) {
       const cur = equipmentMap.get(e.customer_id) ?? { count: 0, firstName: null };
       cur.count += 1;
       if (!cur.firstName) {
-        const ext = e.external_equipment_models as
-          | { brand?: string | null; model?: string | null }
-          | null;
-        const extLabel = ext
-          ? `${ext.brand ?? ""} ${ext.model ?? ""}`.trim() || null
-          : null;
-        cur.firstName = e.products?.name ?? extLabel ?? null;
+        cur.firstName =
+          (e.product_id ? pName.get(e.product_id) ?? null : null) ??
+          (e.external_equipment_model_id
+            ? eName.get(e.external_equipment_model_id) ?? null
+            : null);
       }
       equipmentMap.set(e.customer_id, cur);
     }

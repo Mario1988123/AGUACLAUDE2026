@@ -37,24 +37,16 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
   // (verificado en migración 20260501121100_products.sql:134-143).
   // El SELECT anterior con `name` rompía el join y devolvía rows=[]
   // aunque el INSERT funcionara, dejando el listado siempre a 0.
+  // ROBUSTO (bug recurrente "listado vacío", 3ª vez): NO usamos embeds de
+  // PostgREST (product:products / external:... / address:...). Si una sola
+  // relación o columna del embed falla, PostgREST tumbaba TODA la query y
+  // devolvía [] aunque los equipos existieran. Ahora: SELECT plano de
+  // customer_equipment + lookups por id por separado. Un fallo aislado de
+  // un lookup nunca vacía la lista; como mucho deja un nombre a null.
   const { data: equipment, error } = await supabase
     .from("customer_equipment")
     .select(
-      `
-        id,
-        customer_id,
-        product_id,
-        address_id,
-        serial_number,
-        installed_at,
-        warranty_until,
-        is_active,
-        notes,
-        installation_id,
-        product:products(name),
-        external:external_equipment_models(brand, model),
-        address:addresses(street_type, street, street_number, city)
-      `,
+      "id, customer_id, product_id, external_equipment_model_id, address_id, serial_number, installed_at, warranty_until, is_active, notes, installation_id",
     )
     .eq("customer_id", customerId)
     .order("installed_at", { ascending: false });
@@ -67,6 +59,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     id: string;
     customer_id: string;
     product_id: string | null;
+    external_equipment_model_id: string | null;
     address_id: string | null;
     serial_number: string | null;
     installed_at: string | null;
@@ -74,17 +67,62 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     is_active: boolean;
     notes: string | null;
     installation_id: string | null;
-    product: { name: string } | null;
-    external: { brand: string | null; model: string | null } | null;
-    address: {
+  }>;
+
+  if (rows.length === 0) return [];
+
+  // Lookups por id (independientes y defensivos)
+  const uniq = (xs: Array<string | null>) =>
+    Array.from(new Set(xs.filter(Boolean))) as string[];
+  const productName = new Map<string, string>();
+  const externalName = new Map<string, string>();
+  const addressLabel = new Map<string, string>();
+
+  const productIds = uniq(rows.map((r) => r.product_id));
+  if (productIds.length) {
+    const { data } = await supabase
+      .from("products")
+      .select("id, name")
+      .in("id", productIds);
+    for (const p of (data ?? []) as Array<{ id: string; name: string }>) {
+      productName.set(p.id, p.name);
+    }
+  }
+  const externalIds = uniq(rows.map((r) => r.external_equipment_model_id));
+  if (externalIds.length) {
+    const { data } = await supabase
+      .from("external_equipment_models")
+      .select("id, brand, model")
+      .in("id", externalIds);
+    for (const e of (data ?? []) as Array<{
+      id: string;
+      brand: string | null;
+      model: string | null;
+    }>) {
+      const label = `${e.brand ?? ""} ${e.model ?? ""}`.trim();
+      if (label) externalName.set(e.id, label);
+    }
+  }
+  const addressIds = uniq(rows.map((r) => r.address_id));
+  if (addressIds.length) {
+    const { data } = await supabase
+      .from("addresses")
+      .select("id, street_type, street, street_number, city")
+      .in("id", addressIds);
+    for (const a of (data ?? []) as Array<{
+      id: string;
       street_type: string | null;
       street: string | null;
       street_number: string | null;
       city: string | null;
-    } | null;
-  }>;
-
-  if (rows.length === 0) return [];
+    }>) {
+      const label = [a.street_type, a.street, a.street_number, a.city]
+        .filter(Boolean)
+        .join(" ")
+        .replace(/^([a-zñA-ZÑ]+) /, (m) => m.charAt(0).toUpperCase() + m.slice(1));
+      if (label) addressLabel.set(a.id, label);
+    }
+  }
 
   const ids = rows.map((r) => r.id);
   const { data: maintenance } = await supabase
@@ -132,22 +170,11 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     is_active: r.is_active,
     notes: r.notes,
     installation_id: r.installation_id,
-    product_name: r.product?.name ?? null,
-    external_model_name:
-      r.external?.brand && r.external?.model
-        ? `${r.external.brand} ${r.external.model}`
-        : null,
-    address_label: r.address
-      ? [
-          r.address.street_type,
-          r.address.street,
-          r.address.street_number,
-          r.address.city,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .replace(/^([a-zñA-ZÑ]+) /, (m) => m.charAt(0).toUpperCase() + m.slice(1))
+    product_name: r.product_id ? (productName.get(r.product_id) ?? null) : null,
+    external_model_name: r.external_equipment_model_id
+      ? (externalName.get(r.external_equipment_model_id) ?? null)
       : null,
+    address_label: r.address_id ? (addressLabel.get(r.address_id) ?? null) : null,
     last_maintenance_at: lastMaintenance[r.id] ?? null,
     next_maintenance_at: nextMaintenance[r.id] ?? null,
   }));
