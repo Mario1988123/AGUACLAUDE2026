@@ -262,6 +262,7 @@ export default async function FichajesAdminPage() {
                           {new Date(p.punched_at).toLocaleTimeString("es-ES", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "Europe/Madrid",
                           })}
                         </td>
                         <td className="py-1.5 font-semibold">{p.user_name}</td>
@@ -298,6 +299,7 @@ export default async function FichajesAdminPage() {
                           {new Date(p.punched_at).toLocaleTimeString("es-ES", {
                             hour: "2-digit",
                             minute: "2-digit",
+                            timeZone: "Europe/Madrid",
                           })}{" "}
                           · {KIND_LABEL[p.punch_kind] ?? p.punch_kind}
                         </div>
