@@ -29,6 +29,72 @@ const PAGE_W = 595;
 const PAGE_H = 842;
 const MARGIN = 50;
 
+// -----------------------------------------------------------------------------
+// Sanitizado de texto para fuentes estándar (WinAnsi / CP1252)
+// -----------------------------------------------------------------------------
+// Las fuentes estándar de pdf-lib (Helvetica) usan codificación WinAnsi. Si se
+// intenta dibujar un carácter fuera de ese juego, pdf-lib LANZA
+// ("WinAnsi cannot encode …") y la generación del PDF revienta con un 500.
+// Dos disparadores reales que hemos visto:
+//   1) El espacio fino U+202F que Intl.NumberFormat('es-ES', currency) inserta
+//      antes del símbolo € en el Node/ICU de Vercel (en local suele ser U+00A0,
+//      por eso "en mi máquina funciona"). Rompía CADA PDF con importes.
+//   2) Emojis o caracteres no latinos (chino, cirílico…) en nombres de cliente,
+//      producto o notas (p. ej. notas autogeneradas por la calculadora).
+// Solución: convertimos los espacios "raros" en espacio normal y sustituimos
+// cualquier carácter no representable por "?", para que el PDF SIEMPRE salga.
+
+// Los 27 caracteres "extra" de CP1252 (rango 0x80-0x9F) expresados en Unicode.
+const CP1252_EXTRA = new Set<number>([
+  0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030,
+  0x0160, 0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022,
+  0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178,
+]);
+// Espacios Unicode "exoticos" (incluye U+202F y U+00A0) -> espacio normal.
+const EXOTIC_SPACE_CP = new Set([
+  0x00a0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006,
+  0x2007, 0x2008, 0x2009, 0x200a, 0x200b, 0x2028, 0x2029, 0x202f, 0x205f,
+  0x2060, 0x3000, 0xfeff,
+]);
+
+export function sanitizeWinAnsi(input: string | null | undefined): string {
+  if (input == null) return "";
+  let out = "";
+  for (const ch of String(input)) {
+    const cp = ch.codePointAt(0)!;
+    if (EXOTIC_SPACE_CP.has(cp)) {
+      out += " ";
+    } else if (cp === 0x0a || cp === 0x0d || cp === 0x09) {
+      out += ch;
+    } else if (
+      (cp >= 0x20 && cp <= 0x7e) ||
+      (cp >= 0xa1 && cp <= 0xff) ||
+      CP1252_EXTRA.has(cp)
+    ) {
+      out += ch;
+    } else {
+      out += "?";
+    }
+  }
+  return out;
+}
+
+// Envuelve una fuente de pdf-lib para que TODO el texto que se codifique o se
+// mida pase antes por sanitizeWinAnsi. Así ningún drawText/anchura puede tumbar
+// el PDF, sin tener que tocar cada llamada individual.
+// Exportada para reutilizar en otros generadores que crean su fuente a mano
+// (contratos, facturas, productos…): `const font = withSanitizer(await pdf.embedFont(...))`.
+export function withSanitizer(font: PDFFont): PDFFont {
+  const origEncode = font.encodeText.bind(font);
+  const origWidth = font.widthOfTextAtSize.bind(font);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (font as any).encodeText = (t: string) => origEncode(sanitizeWinAnsi(t));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (font as any).widthOfTextAtSize = (t: string, size: number) =>
+    origWidth(sanitizeWinAnsi(t), size);
+  return font;
+}
+
 export interface DashDoc {
   pdf: PDFDocument;
   page: PDFPage;
@@ -39,8 +105,8 @@ export interface DashDoc {
 
 export async function newDashDoc(): Promise<DashDoc> {
   const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const font = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
+  const bold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
   const page = pdf.addPage([PAGE_W, PAGE_H]);
   return { pdf, page, font, bold, cursorY: PAGE_H - MARGIN };
 }

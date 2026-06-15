@@ -652,7 +652,9 @@ export async function acceptFreeTrialAction(input: {
           last_name: l.last_name,
           email: l.email,
           phone_primary: l.phone_primary,
-          phone_company: l.phone_company,
+          // customers NO tiene phone_company (solo leads). La columna equivalente
+          // en customers es phone_secondary. Mapear igual que convertLeadToCustomerAction.
+          phone_secondary: l.phone_company,
           tax_id: l.tax_id,
           notes: l.notes,
           assigned_user_id: l.assigned_user_id,

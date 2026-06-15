@@ -23,6 +23,7 @@ import {
   type PDFPage,
   type RGB,
 } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 
 // =============================================================================
@@ -382,8 +383,8 @@ export async function generateProductCatalogV2(
   // 3. Construir PDF
   // ------------------------------------------------------------------
   const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const font = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
+  const bold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
   let page = pdf.addPage([PAGE_W, PAGE_H]);
   let pageNum = 1;
 

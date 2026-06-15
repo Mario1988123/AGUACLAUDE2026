@@ -8,6 +8,7 @@ import {
   StandardFonts,
   rgb,
 } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { DEFAULT_FREE_TRIAL_CONDITIONS } from "@/modules/config/free-trials/defaults";
@@ -44,9 +45,9 @@ interface Doc {
 
 async function newDoc(): Promise<Doc> {
   const pdf = await PDFDocument.create();
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
+  const font = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
+  const bold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
+  const italic = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaOblique));
   const page = pdf.addPage([PAGE_W, PAGE_H]);
   return { pdf, page, font, bold, italic, cursorY: PAGE_H - MARGIN };
 }

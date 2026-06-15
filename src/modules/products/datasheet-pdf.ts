@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 
 interface ProductRow {
@@ -251,8 +252,8 @@ export async function generateProductDatasheet(productId: string): Promise<Uint8
 
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([PAGE_W, PAGE_H]);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const font = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
+  const bold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
 
   // ===== Cabecera =====
   const headerH = 90;

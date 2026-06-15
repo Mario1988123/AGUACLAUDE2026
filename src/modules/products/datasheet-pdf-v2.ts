@@ -25,6 +25,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 
 // =============================================================================
@@ -517,8 +518,8 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
   // ------------------------------------------------------------------------
   const pdf = await PDFDocument.create();
   let page = pdf.addPage([PAGE_W, PAGE_H]);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const font = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
+  const bold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
 
   function pageBreakIfNeeded(spaceNeeded: number, currentY: number): number {
     if (currentY - spaceNeeded < 70) {

@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 
 const PAGE_W = 595;
@@ -186,8 +187,8 @@ export async function generateProductCatalog(companyId: string): Promise<Uint8Ar
     // PDF con mensaje
     const pdf = await PDFDocument.create();
     const page = pdf.addPage([PAGE_W, PAGE_H]);
-    const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-    const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
+    const fontBold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
+    const fontRegular = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
     drawHeader(page, fiscal, fontBold, fontRegular, 1);
     page.drawText("Sin productos en el catálogo todavía.", {
       x: MARGIN,
@@ -235,8 +236,8 @@ export async function generateProductCatalog(companyId: string): Promise<Uint8Ar
 
   // Generar PDF
   const pdf = await PDFDocument.create();
-  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const fontRegular = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
+  const fontRegular = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
 
   let page = pdf.addPage([PAGE_W, PAGE_H]);
   let pageNum = 1;

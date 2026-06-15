@@ -4,6 +4,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import QRCode from "qrcode";
 import { VERIFACTU_LEGAL_TEXT, NO_VERIFACTU_LEGAL_TEXT } from "./verifactu";
 
@@ -82,8 +83,8 @@ export async function generateInvoicePdf(data: InvoicePdfData): Promise<Uint8Arr
   const page = doc.addPage([595.28, 841.89]); // A4 portrait
   const { width, height } = page.getSize();
 
-  const helv = await doc.embedFont(StandardFonts.Helvetica);
-  const helvBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const helv = withSanitizer(await doc.embedFont(StandardFonts.Helvetica));
+  const helvBold = withSanitizer(await doc.embedFont(StandardFonts.HelveticaBold));
 
   const brand = rgb(0.282, 0.502, 1); // #4880FF DashStack
   const text = rgb(0.1, 0.1, 0.15);

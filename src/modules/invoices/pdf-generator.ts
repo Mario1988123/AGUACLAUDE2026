@@ -6,6 +6,7 @@ import {
   type PDFPage,
   type PDFImage,
 } from "pdf-lib";
+import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { getInvoice } from "./actions";
 
 // ============================================================================
@@ -548,9 +549,9 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Uint8Array>
 
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([PAGE_W, PAGE_H]);
-  const font = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const italic = await pdf.embedFont(StandardFonts.HelveticaOblique);
+  const font = withSanitizer(await pdf.embedFont(StandardFonts.Helvetica));
+  const bold = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaBold));
+  const italic = withSanitizer(await pdf.embedFont(StandardFonts.HelveticaOblique));
   const d: Doc = { pdf, page, font, bold, italic };
 
   // Cargar logo si la empresa lo tiene configurado
