@@ -1336,29 +1336,31 @@ export async function GET(req: NextRequest) {
     try {
       const monthIso = today.toISOString().slice(0, 10);
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
-      // Query defensiva — paused_at se añadió en migración tardía.
+      // Query defensiva — paused_at y billing_starts_at se añadieron en
+      // migraciones tardías. Probamos con todo y vamos quitando si falta.
       let activeContractsRaw: unknown[] | null = null;
-      const initial = await admin
-        .from("contracts")
-        .select(
-          "id, company_id, customer_id, monthly_cents, reference_code, plan_type, paused_at",
-        )
-        .eq("status", "active")
-        .in("plan_type", ["renting", "rental"])
-        .gt("monthly_cents", 0)
-        .is("deleted_at", null);
-      if (initial.error && /paused_at/i.test(initial.error.message ?? "")) {
-        const retry = await admin
+      const runSel = (cols: string) =>
+        admin
           .from("contracts")
-          .select("id, company_id, customer_id, monthly_cents, reference_code, plan_type")
+          .select(cols)
           .eq("status", "active")
           .in("plan_type", ["renting", "rental"])
           .gt("monthly_cents", 0)
           .is("deleted_at", null);
-        activeContractsRaw = retry.data;
-      } else {
-        activeContractsRaw = initial.data;
+      let q = await runSel(
+        "id, company_id, customer_id, monthly_cents, reference_code, plan_type, paused_at, billing_starts_at",
+      );
+      if (q.error && /billing_starts_at/i.test(q.error.message ?? "")) {
+        q = await runSel(
+          "id, company_id, customer_id, monthly_cents, reference_code, plan_type, paused_at",
+        );
       }
+      if (q.error && /paused_at/i.test(q.error.message ?? "")) {
+        q = await runSel(
+          "id, company_id, customer_id, monthly_cents, reference_code, plan_type",
+        );
+      }
+      activeContractsRaw = q.data;
       const activeContracts = activeContractsRaw;
       for (const c of ((activeContracts ?? []) as Array<{
         id: string;
@@ -1367,9 +1369,13 @@ export async function GET(req: NextRequest) {
         monthly_cents: number;
         reference_code: string | null;
         paused_at?: string | null;
+        billing_starts_at?: string | null;
       }>)) {
         // Skip pausados — no se factura mientras esté en pausa.
         if (c.paused_at) continue;
+        // Skip si la facturación aún no ha empezado (contrato heredado con
+        // "factura desde" en el futuro): no cobrar antes de su mes de inicio.
+        if (c.billing_starts_at && new Date(c.billing_starts_at) > today) continue;
         // Skip empresas con módulo invoicing OFF.
         if (offInvoicing.has(c.company_id)) continue;
         monthlyInvoicing.contracts += 1;

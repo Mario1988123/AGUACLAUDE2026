@@ -5,6 +5,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { SelectableCustomersTable } from "@/modules/customers/selectable-list";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { ImportCustomersButton } from "@/modules/customers/import-form";
+import { GenerateLegacyContractsButton } from "@/modules/contracts/generate-legacy-button";
 import {
   CustomerSmartAlerts,
   getCustomerAlerts,
@@ -61,6 +62,9 @@ export default async function CustomersPage({
         </div>
         <div className="flex items-center gap-2">
           {isUpperLevel && <ImportCustomersButton />}
+          {(session.is_superadmin || session.roles.includes("company_admin")) && (
+            <GenerateLegacyContractsButton />
+          )}
           {isUpperLevel && (
             <Link
               href={"/clientes/duplicados" as never}
