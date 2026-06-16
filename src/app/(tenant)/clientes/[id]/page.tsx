@@ -283,6 +283,7 @@ export default async function CustomerDetailPage({
             </div>
             <div className="text-sm text-muted-foreground">
               {customer.party_kind === "company" ? "Empresa" : "Particular"}
+              {customer.external_code && ` · Nº ${customer.external_code}`}
               {customer.tax_id && ` · ${customer.tax_id}`}
               {assignedName && (
                 <>

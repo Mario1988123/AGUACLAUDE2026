@@ -3,109 +3,92 @@
 import { useState, useTransition } from "react";
 import { Upload, FileText, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/shared/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
-import { importCustomersSafeAction, type ImportCustomerRow, type ImportResult } from "./import-actions";
+import {
+  importCustomersSafeAction,
+  parseImportXlsxAction,
+  type ImportResult,
+} from "./import-actions";
+import { mapSpreadsheetRows, type ImportCustomerRow } from "./import-mapping";
 
-const HEADER_MAP: Record<string, keyof ImportCustomerRow> = {
-  tipo: "party_kind",
-  party_kind: "party_kind",
-  razon_social: "legal_name",
-  legal_name: "legal_name",
-  nombre_comercial: "trade_name",
-  trade_name: "trade_name",
-  nombre: "first_name",
-  first_name: "first_name",
-  apellidos: "last_name",
-  last_name: "last_name",
-  email: "email",
-  telefono: "phone_primary",
-  telefono_1: "phone_primary",
-  phone: "phone_primary",
-  phone_primary: "phone_primary",
-  telefono_secundario: "phone_secondary",
-  telefono_2: "phone_secondary",
-  phone_secondary: "phone_secondary",
-  dni: "tax_id",
-  cif: "tax_id",
-  dni_cif: "tax_id",
-  tax_id: "tax_id",
-  notas: "notes",
-  notes: "notes",
-  // Dirección
-  direccion: "address_street",
-  calle: "address_street",
-  address_street: "address_street",
-  cp: "address_postal_code",
-  codigo_postal: "address_postal_code",
-  poblacion: "address_city",
-  ciudad: "address_city",
-  provincia: "address_province",
-  // Equipo + mantenimiento (1 fila = 1 equipo)
-  equipo: "equipment_name",
-  equipo_nombre: "equipment_name",
-  modelo: "equipment_name",
-  marca: "equipment_brand",
-  equipo_marca: "equipment_brand",
-  numero_serie: "serial_number",
-  n_serie: "serial_number",
-  serial: "serial_number",
-  fecha_instalacion: "installed_at",
-  instalado_el: "installed_at",
-  periodicidad_meses: "maintenance_periodicity_months",
-  periodicidad: "maintenance_periodicity_months",
-  ultimo_mantenimiento: "last_maintenance_at",
-  proximo_mantenimiento: "next_maintenance_at",
-};
+/** Parte una línea CSV respetando comillas, con el delimitador indicado. */
+function splitCsvLine(line: string, delim: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else inQuotes = !inQuotes;
+    } else if (ch === delim && !inQuotes) {
+      out.push(cur);
+      cur = "";
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
 
 function parseCsv(text: string): ImportCustomerRow[] {
-  const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim());
+  const lines = text
+    .replace(/^﻿/, "")
+    .split(/\r?\n/)
+    .filter((l) => l.trim());
   if (lines.length < 2) return [];
-
-  function splitLine(line: string): string[] {
-    const out: string[] = [];
-    let cur = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i]!;
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else inQuotes = !inQuotes;
-      } else if (ch === "," && !inQuotes) {
-        out.push(cur);
-        cur = "";
-      } else cur += ch;
-    }
-    out.push(cur);
-    return out.map((s) => s.trim());
-  }
-
-  const headers = splitLine(lines[0]!).map((h) => h.toLowerCase().replace(/[^a-z_]/g, "_"));
-  const rows: ImportCustomerRow[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = splitLine(lines[i]!);
-    const row: ImportCustomerRow = { party_kind: "individual" };
-    headers.forEach((h, j) => {
-      const key = HEADER_MAP[h];
-      const val = cols[j];
-      if (!key || !val) return;
-      if (key === "party_kind") {
-        const v = val.toLowerCase();
-        row.party_kind = v === "company" || v === "empresa" ? "company" : "individual";
-      } else if (key === "maintenance_periodicity_months") {
-        const n = parseInt(val.replace(/[^0-9]/g, ""), 10);
-        if (Number.isFinite(n) && n > 0) row.maintenance_periodicity_months = n;
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (row as any)[key] = val;
-      }
-    });
-    rows.push(row);
-  }
-  return rows;
+  // Detectar delimitador: Excel español suele guardar con ";".
+  const delim =
+    (lines[0]!.match(/;/g)?.length ?? 0) > (lines[0]!.match(/,/g)?.length ?? 0)
+      ? ";"
+      : ",";
+  const header = splitCsvLine(lines[0]!, delim);
+  const dataRows = lines.slice(1).map((l) => splitCsvLine(l, delim));
+  return mapSpreadsheetRows(header, dataRows);
 }
+
+const TEMPLATE_HEADERS = [
+  "codigo",
+  "tipo",
+  "razon_social",
+  "nombre_comercial",
+  "nombre",
+  "apellidos",
+  "dni_cif",
+  "telefono_1",
+  "telefono_2",
+  "email",
+  "tipo_via",
+  "calle",
+  "numero",
+  "portal",
+  "piso",
+  "puerta",
+  "cp",
+  "poblacion",
+  "provincia",
+  "titular",
+  "iban",
+  "mandato_completo",
+  "equipo",
+  "marca",
+  "numero_serie",
+  "fecha_instalacion",
+  "ultimo_mantenimiento",
+  "periodicidad_meses",
+  "plan",
+  "importe_eur",
+  "fecha_inicio",
+  "notas",
+];
 
 export function ImportCustomersButton() {
   const [open, setOpen] = useState(false);
@@ -113,77 +96,130 @@ export function ImportCustomersButton() {
   const [preview, setPreview] = useState<ImportCustomerRow[]>([]);
   const [fileName, setFileName] = useState<string>("");
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [progress, setProgress] = useState(0);
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setFileName(f.name);
     setResult(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const rows = parseCsv(String(reader.result ?? ""));
-      setPreview(rows);
-    };
-    reader.readAsText(f, "utf-8");
+    setPreview([]);
+    if (/\.xlsx$/i.test(f.name)) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const bytes = new Uint8Array(reader.result as ArrayBuffer);
+        let bin = "";
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]!);
+        const b64 = btoa(bin);
+        startTransition(async () => {
+          const r = await parseImportXlsxAction(b64);
+          if (!r.ok) {
+            notify.error("No se pudo leer el Excel", r.error);
+            return;
+          }
+          setPreview(r.rows);
+        });
+      };
+      reader.readAsArrayBuffer(f);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => setPreview(parseCsv(String(reader.result ?? "")));
+      reader.readAsText(f, "utf-8");
+    }
   }
 
   function importIt() {
     if (preview.length === 0) {
-      notify.warning("Selecciona un CSV con datos");
+      notify.warning("Selecciona un archivo con datos");
       return;
     }
     startTransition(async () => {
-      const r = await importCustomersSafeAction(preview);
-      if (!r.ok) {
-        notify.error("Error", r.error);
-        return;
+      // Troceamos en lotes para no pasarnos del límite de tiempo de la server
+      // action con listados grandes (cientos de filas). El upsert por código
+      // funciona entre lotes (cada lote consulta la BD ya actualizada).
+      const CHUNK = 60;
+      const acc: ImportResult = {
+        inserted: 0,
+        updated: 0,
+        equipment: 0,
+        banks: 0,
+        duplicates: 0,
+        errors: [],
+      };
+      setProgress(0);
+      for (let i = 0; i < preview.length; i += CHUNK) {
+        const slice = preview.slice(i, i + CHUNK);
+        const r = await importCustomersSafeAction(slice);
+        if (!r.ok) {
+          notify.error("Error", r.error);
+          setResult(acc);
+          return;
+        }
+        acc.inserted += r.result.inserted;
+        acc.updated += r.result.updated;
+        acc.equipment += r.result.equipment;
+        acc.banks += r.result.banks;
+        for (const e of r.result.errors) acc.errors.push({ row: e.row + i, message: e.message });
+        setProgress(Math.min(i + CHUNK, preview.length));
       }
-      setResult(r.result);
-      if (r.result.inserted > 0)
+      setResult(acc);
+      if (acc.inserted > 0 || acc.updated > 0) {
         notify.success(
-          `Importados ${r.result.inserted} clientes`,
-          r.result.equipment > 0 ? `${r.result.equipment} equipos con sus mantenimientos` : undefined,
+          `${acc.inserted} nuevos · ${acc.updated} completados`,
+          [
+            acc.equipment > 0 ? `${acc.equipment} equipos` : "",
+            acc.banks > 0 ? `${acc.banks} cuentas banco` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") || undefined,
         );
-      if (r.result.duplicates > 0) notify.info(`${r.result.duplicates} duplicados ignorados`);
-      if (r.result.errors.length > 0) notify.warning(`${r.result.errors.length} errores`);
+      }
+      if (acc.errors.length > 0) notify.warning(`${acc.errors.length} avisos`);
     });
   }
 
   function downloadTemplate() {
-    const headers = [
-      "tipo",
-      "razon_social",
-      "nombre",
-      "apellidos",
-      "dni_cif",
-      "telefono_1",
-      "telefono_2",
-      "email",
-      "direccion",
-      "cp",
-      "poblacion",
-      "provincia",
-      "notas",
-      "equipo",
-      "marca",
-      "numero_serie",
-      "fecha_instalacion",
-      "periodicidad_meses",
-      "ultimo_mantenimiento",
-      "proximo_mantenimiento",
-    ];
-    const examples = [
-      ["individual", "", "Juan", "Pérez García", "12345678Z", "600111222", "", "juan@email.com", "Calle Mayor 3", "28001", "Madrid", "Madrid", "Cliente del CRM antiguo", "Ósmosis 5 etapas", "", "SN-001", "2024-03-15", "6", "2025-09-15", "2026-03-15"],
-      ["individual", "", "Juan", "Pérez García", "12345678Z", "600111222", "", "juan@email.com", "Calle Mayor 3", "28001", "Madrid", "Madrid", "", "Descalcificador BWT", "BWT", "SN-002", "2024-03-15", "12", "2025-03-15", "2026-03-15"],
-      ["company", "Aguas del Norte SL", "", "", "B12345678", "910000000", "910000001", "info@aguasnorte.es", "Pol. Ind. Sur, nave 4", "28100", "Alcobendas", "Madrid", "", "Equipo industrial", "", "SN-100", "2023-06-01", "4", "2025-06-01", "2025-10-01"],
+    const example = [
+      "CL-0001",
+      "particular",
+      "",
+      "",
+      "Juan",
+      "Pérez García",
+      "12345678Z",
+      "600111222",
+      "",
+      "juan@email.com",
+      "Calle",
+      "Mayor",
+      "3",
+      "",
+      "2º",
+      "B",
+      "28001",
+      "Madrid",
+      "Madrid",
+      "Juan Pérez García",
+      "ES0000000000000000000000",
+      "SI",
+      "Ósmosis 5 etapas",
+      "",
+      "SN-001",
+      "2024-03-15",
+      "2025-09-15",
+      "6",
+      "alquiler",
+      "29,90",
+      "2024-03-15",
+      "Cliente heredado",
     ];
     const esc = (v: string) => (/[",\n;]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const csv = [headers, ...examples].map((r) => r.map(esc).join(",")).join("\r\n");
+    const csv = [TEMPLATE_HEADERS, example].map((r) => r.map(esc).join(",")).join("\r\n");
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "plantilla-clientes-hidromanager.csv";
+    a.download = "plantilla-clientes.csv";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -192,36 +228,45 @@ export function ImportCustomersButton() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
-          <Upload className="h-4 w-4" /> Importar CSV
+          <Upload className="h-4 w-4" /> Importar
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Importar clientes desde CSV</DialogTitle>
+          <DialogTitle>Importar clientes (Excel o CSV)</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs text-muted-foreground">
             <p>
-              Importa clientes del CRM antiguo <strong>con histórico</strong>: datos + dirección
-              + equipo + mantenimientos. <strong>Una fila por equipo</strong>; si un cliente tiene
-              varios equipos, repite sus datos (mismo DNI) en varias filas.
+              Sube el <strong>.xlsx</strong> (o CSV) con tus clientes. Importa{" "}
+              <strong>con histórico</strong>: datos + dirección troceada + banco
+              (IBAN) + equipos + mantenimientos.
             </p>
             <p className="mt-1">
-              Columnas: <code>tipo (individual/company), razon_social, nombre, apellidos, dni_cif,
-              telefono_1, telefono_2, email, direccion, cp, poblacion, provincia, notas, equipo,
-              marca, numero_serie, fecha_instalacion, periodicidad_meses, ultimo_mantenimiento,
-              proximo_mantenimiento</code>. Si <code>equipo</code> coincide con un producto tuyo se
-              vincula al catálogo; si no, se guarda como equipo externo. Con <code>periodicidad_meses</code>
-              se generan los mantenimientos del próximo año. Duplicados (DNI/email/teléfono) se ignoran.
+              <strong>Una fila por equipo</strong>; si un cliente tiene varios
+              equipos, repite su <code>codigo</code> en varias filas. Solo son
+              obligatorios <code>codigo</code> + <code>nombre</code> (o{" "}
+              <code>razon_social</code>). <strong>Puedes dejar campos vacíos</strong>{" "}
+              y volver a subir el mismo archivo más tarde: casa por{" "}
+              <code>codigo</code> y <strong>no duplica</strong>, solo completa lo
+              que falte. El mantenimiento se cuadra con{" "}
+              <code>ultimo_mantenimiento</code> + <code>periodicidad_meses</code>.
             </p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={downloadTemplate} type="button">
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={downloadTemplate}
+              type="button"
+            >
               <FileText className="h-4 w-4" /> Descargar plantilla CSV
             </Button>
           </div>
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx"
             onChange={onFile}
+            disabled={pending}
             className="block w-full rounded-xl border border-input bg-background p-3 text-sm"
           />
           {fileName && preview.length > 0 && (
@@ -233,25 +278,25 @@ export function ImportCustomersButton() {
                 <table className="w-full">
                   <thead className="bg-muted/60">
                     <tr>
-                      <th className="px-2 py-1 text-left">#</th>
+                      <th className="px-2 py-1 text-left">Código</th>
                       <th className="px-2 py-1 text-left">Tipo</th>
                       <th className="px-2 py-1 text-left">Nombre / Razón</th>
-                      <th className="px-2 py-1 text-left">Email</th>
-                      <th className="px-2 py-1 text-left">Teléfono</th>
+                      <th className="px-2 py-1 text-left">DNI/CIF</th>
+                      <th className="px-2 py-1 text-left">IBAN</th>
                     </tr>
                   </thead>
                   <tbody>
                     {preview.slice(0, 10).map((r, i) => (
                       <tr key={i} className="border-t">
-                        <td className="px-2 py-1">{i + 1}</td>
+                        <td className="px-2 py-1">{r.external_code ?? "—"}</td>
                         <td className="px-2 py-1">{r.party_kind}</td>
                         <td className="px-2 py-1">
                           {r.party_kind === "company"
                             ? r.legal_name ?? "—"
                             : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "—"}
                         </td>
-                        <td className="px-2 py-1">{r.email ?? "—"}</td>
-                        <td className="px-2 py-1">{r.phone_primary ?? "—"}</td>
+                        <td className="px-2 py-1">{r.tax_id ?? "—"}</td>
+                        <td className="px-2 py-1">{r.iban ? "✓" : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -268,11 +313,13 @@ export function ImportCustomersButton() {
             <div className="space-y-2 rounded-xl border-2 border-success bg-success/5 p-3">
               <div className="flex items-center gap-2 font-semibold text-success">
                 <CheckCircle2 className="h-4 w-4" />
-                {result.inserted} clientes · {result.equipment} equipos · {result.duplicates} duplicados · {result.errors.length} errores
+                {result.inserted} nuevos · {result.updated} completados ·{" "}
+                {result.equipment} equipos · {result.banks} banco ·{" "}
+                {result.errors.length} avisos
               </div>
               {result.errors.length > 0 && (
                 <ul className="space-y-1 text-xs text-destructive">
-                  {result.errors.slice(0, 5).map((e, i) => (
+                  {result.errors.slice(0, 6).map((e, i) => (
                     <li key={i} className="flex items-start gap-1">
                       <AlertTriangle className="mt-0.5 h-3 w-3" />
                       Fila {e.row}: {e.message}
@@ -287,7 +334,11 @@ export function ImportCustomersButton() {
               {result ? "Cerrar" : "Cancelar"}
             </Button>
             <Button onClick={importIt} disabled={pending || preview.length === 0}>
-              {pending ? "Importando..." : `Importar ${preview.length}`}
+              {pending
+                ? progress > 0
+                  ? `Importando ${progress}/${preview.length}…`
+                  : "Procesando…"
+                : `Importar ${preview.length}`}
             </Button>
           </div>
         </div>

@@ -5,38 +5,21 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { normalizeSpanishPhone } from "@/shared/lib/validations/spanish";
 import { addCustomerEquipmentAction } from "./equipment-actions";
+import {
+  mapSpreadsheetRows,
+  normHeader,
+  type ImportCustomerRow,
+} from "./import-mapping";
+import { readXlsxRows } from "@/shared/lib/xlsx/read-xlsx";
 
-export interface ImportCustomerRow {
-  party_kind: "individual" | "company";
-  legal_name?: string;
-  trade_name?: string;
-  first_name?: string;
-  last_name?: string;
-  email?: string;
-  phone_primary?: string;
-  phone_secondary?: string;
-  tax_id?: string;
-  notes?: string;
-  // Dirección (opcional)
-  address_street?: string;
-  address_postal_code?: string;
-  address_city?: string;
-  address_province?: string;
-  // Equipo (1 fila = 1 equipo). Varias filas con el mismo DNI/email/teléfono =
-  // varios equipos del MISMO cliente (se agrupan).
-  equipment_name?: string; // si coincide con un producto del catálogo → propio; si no → externo
-  equipment_brand?: string;
-  serial_number?: string;
-  installed_at?: string;
-  maintenance_periodicity_months?: number | null;
-  last_maintenance_at?: string;
-  next_maintenance_at?: string;
-}
+export type { ImportCustomerRow };
 
 export interface ImportResult {
-  inserted: number; // clientes creados
+  inserted: number; // clientes nuevos creados
+  updated: number; // clientes existentes completados (match por código/DNI/email/tel)
   equipment: number; // equipos creados
-  duplicates: number; // clientes ignorados por duplicado
+  banks: number; // cuentas bancarias creadas
+  duplicates: number; // (compat) reservado
   errors: Array<{ row: number; message: string }>;
 }
 
@@ -50,6 +33,18 @@ function norm(s: string): string {
  * DNI/email/teléfono se agrupan como un solo cliente con varios equipos.
  * Dedupe contra clientes/leads existentes (phone/email/tax_id) → se ignoran.
  */
+/** Rellena los huecos de `target` con los valores no vacíos de `src`. */
+function mergeRowInto(target: ImportCustomerRow, src: ImportCustomerRow): void {
+  const t = target as unknown as Record<string, unknown>;
+  for (const [k, v] of Object.entries(src)) {
+    if (v === undefined || v === null || v === "") continue;
+    const cur = t[k];
+    if (cur === undefined || cur === null || cur === "") {
+      t[k] = v;
+    }
+  }
+}
+
 export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<ImportResult> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -62,54 +57,30 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const result: ImportResult = { inserted: 0, equipment: 0, duplicates: 0, errors: [] };
+  const result: ImportResult = { inserted: 0, updated: 0, equipment: 0, banks: 0, duplicates: 0, errors: [] };
 
-  // 1) Agrupar filas por cliente (clave: tax_id || email || phone || índice).
+  // 1) Agrupar filas por cliente: clave external_code || tax_id || email || phone || idx.
+  //    Varias filas con la misma clave = un cliente con varios equipos.
   type Group = { keyRow: ImportCustomerRow; firstIdx: number; equipmentRows: Array<{ r: ImportCustomerRow; idx: number }> };
   const groups = new Map<string, Group>();
   rows.forEach((r, idx) => {
     const key =
+      (r.external_code && `c:${norm(r.external_code)}`) ||
       (r.tax_id && `t:${norm(r.tax_id)}`) ||
       (r.email && `e:${norm(r.email)}`) ||
       (r.phone_primary && `p:${(normalizeSpanishPhone(r.phone_primary) ?? r.phone_primary).trim()}`) ||
       `i:${idx}`;
     let g = groups.get(key);
     if (!g) {
-      g = { keyRow: r, firstIdx: idx, equipmentRows: [] };
+      g = { keyRow: { ...r }, firstIdx: idx, equipmentRows: [] };
       groups.set(key, g);
+    } else {
+      mergeRowInto(g.keyRow, r);
     }
     if (r.equipment_name?.trim()) g.equipmentRows.push({ r, idx });
   });
 
-  // 2) Dedupe contra BD (phone/email/tax_id existentes en clientes/leads).
-  const phones = new Set<string>();
-  const emails = new Set<string>();
-  const taxIds = new Set<string>();
-  for (const g of groups.values()) {
-    const r = g.keyRow;
-    if (r.phone_primary) phones.add(normalizeSpanishPhone(r.phone_primary) ?? r.phone_primary.trim());
-    if (r.email) emails.add(r.email.trim().toLowerCase());
-    if (r.tax_id) taxIds.add(r.tax_id.trim().toUpperCase());
-  }
-  const dupedPhones = new Set<string>();
-  const dupedEmails = new Set<string>();
-  const dupedTaxIds = new Set<string>();
-  for (const table of ["leads", "customers"] as const) {
-    if (phones.size > 0) {
-      const { data } = await admin.from(table).select("phone_primary").eq("company_id", session.company_id).in("phone_primary", Array.from(phones)).is("deleted_at", null);
-      for (const r of (data ?? []) as Array<{ phone_primary: string | null }>) if (r.phone_primary) dupedPhones.add(r.phone_primary);
-    }
-    if (emails.size > 0) {
-      const { data } = await admin.from(table).select("email").eq("company_id", session.company_id).in("email", Array.from(emails)).is("deleted_at", null);
-      for (const r of (data ?? []) as Array<{ email: string | null }>) if (r.email) dupedEmails.add(r.email.toLowerCase());
-    }
-    if (taxIds.size > 0) {
-      const { data } = await admin.from(table).select("tax_id").eq("company_id", session.company_id).in("tax_id", Array.from(taxIds)).is("deleted_at", null);
-      for (const r of (data ?? []) as Array<{ tax_id: string | null }>) if (r.tax_id) dupedTaxIds.add(r.tax_id.toUpperCase());
-    }
-  }
-
-  // 3) Catálogo de productos propios para emparejar equipo por nombre.
+  // 2) Catálogo de productos propios para emparejar equipo por nombre.
   const { data: prods } = await admin
     .from("products")
     .select("id, name")
@@ -119,7 +90,21 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
     productByName.set(norm(p.name), p.id);
   }
 
-  // 4) Procesar cada grupo (cliente).
+  // Busca un cliente existente de la empresa por una columna concreta.
+  const findExisting = async (col: string, val: string | null): Promise<string | null> => {
+    if (!val) return null;
+    const { data } = await admin
+      .from("customers")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq(col, val)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    return (data as { id: string } | null)?.id ?? null;
+  };
+
+  // 3) Procesar cada grupo (cliente).
   for (const g of groups.values()) {
     const r = g.keyRow;
     const rowNum = g.firstIdx + 1;
@@ -135,17 +120,23 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
       const phoneNorm = r.phone_primary ? normalizeSpanishPhone(r.phone_primary) ?? r.phone_primary.trim() : null;
       const emailNorm = r.email?.trim().toLowerCase() ?? null;
       const taxNorm = r.tax_id?.trim().toUpperCase() ?? null;
-      if ((phoneNorm && dupedPhones.has(phoneNorm)) || (emailNorm && dupedEmails.has(emailNorm)) || (taxNorm && dupedTaxIds.has(taxNorm))) {
-        result.duplicates += 1;
-        continue;
-      }
+      const codeNorm = r.external_code?.trim() ?? null;
 
-      // Crear cliente.
-      const { data: created, error } = await admin
-        .from("customers")
-        .insert({
+      // UPSERT: ¿existe ya? Buscar por código (prioritario), luego DNI/email/tel.
+      // Si existe NO se recrea: se completan dirección/banco/equipos que falten.
+      let customerId =
+        (await findExisting("external_code", codeNorm)) ??
+        (await findExisting("tax_id", taxNorm)) ??
+        (await findExisting("email", emailNorm)) ??
+        (await findExisting("phone_primary", phoneNorm));
+
+      if (customerId) {
+        result.updated += 1;
+      } else {
+        const payload: Record<string, unknown> = {
           company_id: session.company_id,
           party_kind: r.party_kind,
+          external_code: codeNorm,
           legal_name: r.legal_name || null,
           trade_name: r.trade_name || null,
           first_name: r.first_name || null,
@@ -157,42 +148,106 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
           notes: r.notes || null,
           is_active: true,
           created_by: session.user_id,
-        })
-        .select("id")
-        .single();
-      if (error || !created) {
-        result.errors.push({ row: rowNum, message: error?.message ?? "No se pudo crear el cliente" });
-        continue;
+        };
+        let ins = await admin.from("customers").insert(payload).select("id").single();
+        if (ins.error && /external_code|schema cache|Could not find/i.test(ins.error.message ?? "")) {
+          delete payload.external_code;
+          ins = await admin.from("customers").insert(payload).select("id").single();
+        }
+        if (ins.error || !ins.data) {
+          result.errors.push({ row: rowNum, message: ins.error?.message ?? "No se pudo crear el cliente" });
+          continue;
+        }
+        customerId = (ins.data as { id: string }).id;
+        result.inserted += 1;
       }
-      const customerId = (created as { id: string }).id;
-      if (phoneNorm) dupedPhones.add(phoneNorm);
-      if (emailNorm) dupedEmails.add(emailNorm);
-      if (taxNorm) dupedTaxIds.add(taxNorm);
-      result.inserted += 1;
 
-      // Dirección (si hay calle).
+      // Dirección: si el cliente ya tiene una, la reutilizamos (no duplicar al
+      // reimportar). Si no tiene y hay datos, la creamos troceada.
       let addressId: string | null = null;
-      if (r.address_street?.trim()) {
-        const { data: addr } = await admin
-          .from("addresses")
-          .insert({
-            company_id: session.company_id,
-            customer_id: customerId,
-            label: "Importada",
-            is_primary: true,
-            street: r.address_street.trim(),
-            postal_code: r.address_postal_code?.trim() || null,
-            city: r.address_city?.trim() || null,
-            province: r.address_province?.trim() || null,
-          })
-          .select("id")
-          .maybeSingle();
-        addressId = (addr as { id: string } | null)?.id ?? null;
+      const { data: existAddr } = await admin
+        .from("addresses")
+        .select("id")
+        .eq("customer_id", customerId)
+        .limit(1);
+      if ((existAddr ?? []).length > 0) {
+        addressId = (existAddr[0] as { id: string }).id;
+      } else if (r.address_street?.trim() || r.address_city?.trim()) {
+        const addrPayload: Record<string, unknown> = {
+          company_id: session.company_id,
+          customer_id: customerId,
+          label: "Importada",
+          is_primary: true,
+          street_type: r.address_street_type?.trim() || null,
+          street: r.address_street?.trim() || null,
+          street_number: r.address_number?.trim() || null,
+          portal: r.address_portal?.trim() || null,
+          floor: r.address_floor?.trim() || null,
+          door: r.address_door?.trim() || null,
+          postal_code: r.address_postal_code?.trim() || null,
+          city: r.address_city?.trim() || null,
+          province: r.address_province?.trim() || null,
+          notes: r.address_notes?.trim() || null,
+        };
+        let addrRes = await admin.from("addresses").insert(addrPayload).select("id").maybeSingle();
+        if (addrRes.error && /schema cache|Could not find|column/i.test(addrRes.error.message ?? "")) {
+          // Defensa: si algún campo troceado no existe en el cache, caemos a lo básico.
+          addrRes = await admin
+            .from("addresses")
+            .insert({
+              company_id: session.company_id,
+              customer_id: customerId,
+              label: "Importada",
+              is_primary: true,
+              street: [r.address_street_type, r.address_street, r.address_number].filter(Boolean).join(" ").trim() || null,
+              postal_code: r.address_postal_code?.trim() || null,
+              city: r.address_city?.trim() || null,
+              province: r.address_province?.trim() || null,
+            })
+            .select("id")
+            .maybeSingle();
+        }
+        addressId = (addrRes.data as { id: string } | null)?.id ?? null;
       }
 
-      // Equipos del cliente (reusa addCustomerEquipmentAction → genera mantenimientos).
+      // Banco: si hay IBAN y no existe ya esa cuenta en el cliente.
+      if (r.iban?.trim()) {
+        const ibanClean = r.iban.replace(/\s+/g, "").toUpperCase();
+        if (ibanClean.length >= 15 && ibanClean.length <= 34) {
+          const { data: existBank } = await admin
+            .from("customer_bank_accounts")
+            .select("id")
+            .eq("customer_id", customerId)
+            .eq("iban", ibanClean)
+            .limit(1);
+          if ((existBank ?? []).length === 0) {
+            const { error: bErr } = await admin.from("customer_bank_accounts").insert({
+              company_id: session.company_id,
+              customer_id: customerId,
+              account_holder_name: r.account_holder?.trim() || null,
+              iban: ibanClean,
+              is_primary: true,
+              is_validated: !!r.mandate_complete,
+            });
+            if (!bErr) result.banks += 1;
+          }
+        }
+      }
+
+      // Equipos del cliente (evitando duplicar al reimportar por nº de serie).
+      const { data: existEq } = await admin
+        .from("customer_equipment")
+        .select("serial_number")
+        .eq("customer_id", customerId);
+      const existSerials = new Set(
+        ((existEq ?? []) as Array<{ serial_number: string | null }>)
+          .map((e) => (e.serial_number ?? "").trim().toUpperCase())
+          .filter(Boolean),
+      );
       for (const { r: er } of g.equipmentRows) {
         const name = er.equipment_name!.trim();
+        const serial = er.serial_number?.trim() ?? "";
+        if (serial && existSerials.has(serial.toUpperCase())) continue;
         const ownId = productByName.get(norm(name)) ?? null;
         try {
           await addCustomerEquipmentAction({
@@ -200,13 +255,18 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
             product_id: ownId,
             external_brand: ownId ? undefined : (er.equipment_brand?.trim() || "Sin marca"),
             external_model: ownId ? undefined : name,
-            serial_number: er.serial_number?.trim() || null,
+            serial_number: serial || null,
             installed_at: er.installed_at?.trim() || null,
             last_maintenance_at: er.last_maintenance_at?.trim() || null,
             next_maintenance_at: er.next_maintenance_at?.trim() || null,
             maintenance_periodicity_months: er.maintenance_periodicity_months ?? null,
             address_id: addressId,
+            acquisition_type: er.acquisition_type ?? null,
+            acquisition_amount_cents:
+              er.acquisition_amount_eur != null ? Math.round(er.acquisition_amount_eur * 100) : null,
+            acquisition_started_at: er.acquisition_started_at?.trim() || null,
           });
+          if (serial) existSerials.add(serial.toUpperCase());
           result.equipment += 1;
         } catch (eqErr) {
           result.errors.push({
@@ -222,6 +282,39 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
 
   revalidatePath("/clientes");
   return result;
+}
+
+/**
+ * Lee un .xlsx (base64) en el SERVIDOR y lo mapea a ImportCustomerRow[] para
+ * previsualizar e importar. Sin dependencias (lector propio). Solo admin/dir.
+ */
+export async function parseImportXlsxAction(
+  base64: string,
+): Promise<{ ok: true; rows: ImportCustomerRow[] } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const isUpper =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("commercial_director") ||
+      session.roles.includes("telemarketing_director");
+    if (!isUpper) return { ok: false, error: "Solo admin o director puede importar" };
+
+    const buf = Buffer.from(base64, "base64");
+    const matrix = readXlsxRows(buf);
+    if (matrix.length < 2) return { ok: false, error: "El Excel no tiene filas de datos" };
+
+    // Detectar la fila de cabecera (la 1ª que contenga alguna columna conocida).
+    let headerIdx = matrix.findIndex((row) =>
+      row.some((c) => /^(codigo|tipo|nombre|dni_cif|dni|razon_social|email)$/.test(normHeader(c))),
+    );
+    if (headerIdx < 0) headerIdx = 0;
+    const rows = mapSpreadsheetRows(matrix[headerIdx] ?? [], matrix.slice(headerIdx + 1));
+    return { ok: true, rows };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo leer el Excel" };
+  }
 }
 
 export async function importCustomersSafeAction(

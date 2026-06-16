@@ -220,6 +220,12 @@ export async function addCustomerEquipmentAction(input: {
    * de competencia.
    */
   maintenance_periodicity_months?: number | null;
+  /** Modalidad heredada (importación): 'cash' venta | 'rental' alquiler | 'renting'. */
+  acquisition_type?: "cash" | "rental" | "renting" | null;
+  /** Cuota €/mes (alquiler/renting) o precio venta, en céntimos. */
+  acquisition_amount_cents?: number | null;
+  /** Fecha de inicio del contrato heredado. */
+  acquisition_started_at?: string | null;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -272,24 +278,36 @@ export async function addCustomerEquipmentAction(input: {
     }
   }
 
-  const { data: row, error } = await admin
+  const eqPayload: Record<string, unknown> = {
+    company_id: session.company_id,
+    customer_id: input.customer_id,
+    product_id: productId,
+    external_equipment_model_id: externalModelId,
+    address_id: input.address_id ?? null,
+    serial_number: input.serial_number ?? null,
+    installed_at: input.installed_at ?? null,
+    notes: input.notes ?? null,
+    is_active: true,
+    acquisition_type: input.acquisition_type ?? null,
+    acquisition_amount_cents: input.acquisition_amount_cents ?? null,
+    acquisition_started_at: input.acquisition_started_at ?? null,
+  };
+  let eqRes = await admin
     .from("customer_equipment")
-    .insert({
-      company_id: session.company_id,
-      customer_id: input.customer_id,
-      product_id: productId,
-      external_equipment_model_id: externalModelId,
-      address_id: input.address_id ?? null,
-      serial_number: input.serial_number ?? null,
-      installed_at: input.installed_at ?? null,
-      notes: input.notes ?? null,
-      is_active: true,
-    })
+    .insert(eqPayload)
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
+  // Defensa: si las columnas de modalidad no están aún en el cache, reintentar
+  // sin ellas (no bloquear el alta del equipo por la migración).
+  if (eqRes.error && /acquisition_|schema cache|Could not find/i.test(eqRes.error.message ?? "")) {
+    delete eqPayload.acquisition_type;
+    delete eqPayload.acquisition_amount_cents;
+    delete eqPayload.acquisition_started_at;
+    eqRes = await admin.from("customer_equipment").insert(eqPayload).select("id").single();
+  }
+  if (eqRes.error) throw new Error(eqRes.error.message);
 
-  const equipmentId = (row as { id: string }).id;
+  const equipmentId = (eqRes.data as { id: string }).id;
 
   // Histórico: si el usuario sabe cuándo fue el último mantenimiento,
   // creamos un maintenance_jobs completado retroactivo. Así el cron y

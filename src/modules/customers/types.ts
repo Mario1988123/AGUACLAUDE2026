@@ -30,6 +30,8 @@ export interface CustomerListItem {
 export interface CustomerDetail {
   id: string;
   party_kind: "individual" | "company";
+  /** Nº de cliente del sistema antiguo (importación). */
+  external_code?: string | null;
   legal_name: string | null;
   trade_name: string | null;
   first_name: string | null;
