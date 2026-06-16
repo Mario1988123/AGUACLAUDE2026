@@ -36,6 +36,10 @@ export const STORAGE_BUCKETS = {
   /** Documentos adjuntos al producto (manuales, certificados, fichas del
    *  fabricante, etc.). Privados — se sirven con URL firmada. */
   "product-documents": { public: false },
+  /** Catálogo MAESTRO del superadmin: logos de fabricante, fotos y
+   *  documentación de los productos maestros. Privado — se sirve con URL
+   *  firmada; al importar a una empresa se COPIA a sus buckets propios. */
+  "catalog-global": { public: false },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;
