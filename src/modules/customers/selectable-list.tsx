@@ -95,6 +95,7 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
           selectedIds={Array.from(selected)}
           team={team}
           onClear={() => setSelected(new Set())}
+          canDelete={canBulkReassign}
         />
       )}
 

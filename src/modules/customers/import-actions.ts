@@ -45,6 +45,36 @@ function mergeRowInto(target: ImportCustomerRow, src: ImportCustomerRow): void {
   }
 }
 
+/**
+ * Mapea el tipo de vía (texto libre, posible catalán/mayúsculas) al ENUM
+ * app.street_type ('calle','avenida','plaza','camino','carretera',
+ * 'urbanizacion','paseo','ronda','travesia','glorieta','poligono','via','otra').
+ * Devuelve null si no hay tipo (la columna tiene default 'calle'). CRÍTICO:
+ * meter un valor que no esté en el enum hace fallar el INSERT de la dirección.
+ */
+function toStreetTypeEnum(label?: string | null): string | null {
+  if (!label) return null;
+  const s = label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+  if (!s) return null;
+  if (/^(calle|carrer|c\/|c\b)/.test(s)) return "calle";
+  if (/^(aveni|avingu|avda|av)/.test(s)) return "avenida";
+  if (/^(paseo|passeig|pº)/.test(s)) return "paseo";
+  if (/^(plaza|placa|plaça|pza|plz)/.test(s)) return "plaza";
+  if (/^(camino|cami|camí)/.test(s)) return "camino";
+  if (/^(carretera|ctra|crta)/.test(s)) return "carretera";
+  if (/^ronda/.test(s)) return "ronda";
+  if (/^traves/.test(s)) return "travesia";
+  if (/^urban/.test(s)) return "urbanizacion";
+  if (/^(poligono|pol)/.test(s)) return "poligono";
+  if (/^glorieta/.test(s)) return "glorieta";
+  if (/^via/.test(s)) return "via";
+  return "otra";
+}
+
 export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<ImportResult> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -211,7 +241,8 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
         addressId = (existAddr[0] as { id: string }).id;
         // VARIACIÓN: completar/actualizar la dirección existente con lo no vacío.
         const ap: Record<string, unknown> = {};
-        if (r.address_street_type?.trim()) ap.street_type = r.address_street_type.trim();
+        const stEnumU = toStreetTypeEnum(r.address_street_type);
+        if (stEnumU) ap.street_type = stEnumU;
         if (r.address_street?.trim()) ap.street = r.address_street.trim();
         if (r.address_number?.trim()) ap.street_number = r.address_number.trim();
         if (r.address_portal?.trim()) ap.portal = r.address_portal.trim();
@@ -228,14 +259,26 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
             .eq("company_id", session.company_id);
           if (uA.error) console.error("[import] address update:", uA.error.message);
         }
-      } else if (r.address_street?.trim() || r.address_city?.trim()) {
+      } else if (
+        r.address_street?.trim() ||
+        r.address_city?.trim() ||
+        r.address_notes?.trim()
+      ) {
+        // street es NOT NULL → garantizamos contenido. street_type es un ENUM
+        // (calle/avenida/...) → lo mapeamos; meter "Carrer"/"Calle" en mayúscula
+        // o catalán hacía fallar el INSERT en silencio (direcciones perdidas).
+        const streetSafe =
+          r.address_street?.trim() ||
+          [r.address_street_type, r.address_number].filter(Boolean).join(" ").trim() ||
+          r.address_notes?.trim() ||
+          "Dirección importada";
+        const stEnum = toStreetTypeEnum(r.address_street_type);
         const addrPayload: Record<string, unknown> = {
           company_id: session.company_id,
           customer_id: customerId,
           label: "Importada",
           is_primary: true,
-          street_type: r.address_street_type?.trim() || null,
-          street: r.address_street?.trim() || null,
+          street: streetSafe,
           street_number: r.address_number?.trim() || null,
           portal: r.address_portal?.trim() || null,
           floor: r.address_floor?.trim() || null,
@@ -245,9 +288,12 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
           province: r.address_province?.trim() || null,
           notes: r.address_notes?.trim() || null,
         };
+        if (stEnum) addrPayload.street_type = stEnum;
         let addrRes = await admin.from("addresses").insert(addrPayload).select("id").maybeSingle();
-        if (addrRes.error && /schema cache|Could not find|column/i.test(addrRes.error.message ?? "")) {
-          // Defensa: si algún campo troceado no existe en el cache, caemos a lo básico.
+        if (addrRes.error) {
+          // Defensa ROBUSTA: ante CUALQUIER fallo (columna ausente, enum, etc.)
+          // reintentamos lo mínimo seguro: todo junto en street + cp/ciudad/prov,
+          // sin street_type (usa el default 'calle'). Y dejamos de fallar mudo.
           addrRes = await admin
             .from("addresses")
             .insert({
@@ -255,13 +301,18 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
               customer_id: customerId,
               label: "Importada",
               is_primary: true,
-              street: [r.address_street_type, r.address_street, r.address_number].filter(Boolean).join(" ").trim() || null,
+              street:
+                [r.address_street_type, r.address_street, r.address_number]
+                  .filter(Boolean)
+                  .join(" ")
+                  .trim() || streetSafe,
               postal_code: r.address_postal_code?.trim() || null,
               city: r.address_city?.trim() || null,
               province: r.address_province?.trim() || null,
             })
             .select("id")
             .maybeSingle();
+          if (addrRes.error) console.error("[import] address insert:", addrRes.error.message);
         }
         addressId = (addrRes.data as { id: string } | null)?.id ?? null;
       }
