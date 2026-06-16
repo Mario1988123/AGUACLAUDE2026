@@ -72,7 +72,8 @@ export interface ChurnCustomerInput {
 export async function churnCustomerAction(
   input: ChurnCustomerInput,
 ): Promise<
-  { ok: true; uninstall_installation_id: string | null } | { ok: false; error: string }
+  | { ok: true; uninstall_installation_id: string | null; warning?: string | null }
+  | { ok: false; error: string }
 > {
   try {
     const session = await requireSession();
@@ -115,6 +116,7 @@ export async function churnCustomerAction(
     );
 
     let uninstallInstallationId: string | null = null;
+    let completionWarning: string | null = null;
 
     // === CASO B: RETIRAR ===
     if (removeDecisions.length > 0) {
@@ -160,6 +162,8 @@ export async function churnCustomerAction(
         if (!done.ok) {
           // No abortamos la baja del cliente por esto; queda la orden creada.
           console.error("[churn] complete now:", done.error);
+          completionWarning =
+            "El cliente se dio de baja, pero la retirada no se cerró sola: ciérrala en /instalaciones para dar de baja el equipo y devolver el stock.";
         }
       }
     }
@@ -257,7 +261,11 @@ export async function churnCustomerAction(
     revalidatePath("/clientes");
     revalidatePath(`/clientes/${input.customer_id}`);
     revalidatePath("/ventas-perdidas");
-    return { ok: true, uninstall_installation_id: uninstallInstallationId };
+    return {
+      ok: true,
+      uninstall_installation_id: uninstallInstallationId,
+      warning: completionWarning,
+    };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
@@ -265,9 +273,14 @@ export async function churnCustomerAction(
 
 /**
  * Borra directamente un cliente SIN equipos (creado por error). Requiere
- * escribir "borrar". No pasa por venta perdida. Si el borrado físico choca
- * con datos asociados (propuestas, contratos, facturas), avisa para usar el
- * flujo completo / RGPD.
+ * escribir "borrar". No pasa por venta perdida.
+ *
+ * Reglas (decisión Mario 2026-06-16):
+ *  - Las PROPUESTAS no bloquean: se borran con el cliente (no implican mucho).
+ *  - Un CONTRATO o una INSTALACIÓN sí bloquean: hay que cancelar el contrato
+ *    primero. También una prueba gratuita.
+ *  - Si aún queda algún otro registro (facturas, etc.) que impida el borrado
+ *    físico, avisa para anonimizar desde el panel RGPD.
  */
 export async function deleteEmptyCustomerAction(input: {
   customer_id: string;
@@ -308,6 +321,26 @@ export async function deleteEmptyCustomerAction(input: {
       };
     }
 
+    // BLOQUEAN (registros con valor — primero hay que cancelarlos/gestionarlos):
+    //   contrato → "cancela el contrato primero"; instalación; prueba gratuita.
+    const blockers: Array<{ table: string; label: string }> = [
+      { table: "contracts", label: "un contrato. Cancela el contrato antes de borrar al cliente" },
+      { table: "installations", label: "instalaciones. Gestiónalas o cancela el contrato antes de borrarlo" },
+      { table: "free_trials", label: "una prueba gratuita. Gestiónala antes de borrar al cliente" },
+    ];
+    // Contamos TODAS las filas físicas (incluidas soft-deleted): la FK
+    // 'on delete restrict' bloquea el borrado exista o no deleted_at.
+    for (const b of blockers) {
+      const { count } = await admin
+        .from(b.table)
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", input.customer_id)
+        .eq("company_id", session.company_id);
+      if ((count ?? 0) > 0) {
+        return { ok: false, error: `Este cliente tiene ${b.label}.` };
+      }
+    }
+
     // Auditoría antes del DELETE (después no podríamos referenciar el id).
     try {
       await admin.from("events").insert({
@@ -322,6 +355,22 @@ export async function deleteEmptyCustomerAction(input: {
       /* no-op */
     }
 
+    // Las PROPUESTAS no bloquean: se borran (sus líneas y opciones de pago caen
+    // en cascada). El DELETE es atómico: si alguna no se pudiera borrar, no se
+    // borra ninguna y el borrado del cliente fallará abajo (sin estado parcial).
+    const propDel = await admin
+      .from("proposals")
+      .delete()
+      .eq("customer_id", input.customer_id)
+      .eq("company_id", session.company_id);
+    if (propDel.error) {
+      return {
+        ok: false,
+        error:
+          "El cliente tiene propuestas con dependencias que impiden borrarlo. Anonimízalo desde el panel RGPD de su ficha.",
+      };
+    }
+
     const del = await admin
       .from("customers")
       .delete()
@@ -331,7 +380,7 @@ export async function deleteEmptyCustomerAction(input: {
       return {
         ok: false,
         error:
-          "No se pudo borrar directamente: puede tener propuestas, contratos o facturas asociados. Anonimízalo desde el panel RGPD de su ficha.",
+          "No se pudo borrar: el cliente aún tiene registros asociados (facturas u otros). Anonimízalo desde el panel RGPD de su ficha.",
       };
     }
 

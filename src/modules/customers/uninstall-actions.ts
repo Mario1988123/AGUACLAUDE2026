@@ -106,6 +106,19 @@ export async function createUninstallAction(
       (e) => e.product_id && dispOf(e.id) === "warehouse",
     );
 
+    // SEGURIDAD: el almacén destino llega del navegador. Si se indica (no
+    // aplica cuando todo es perdida/rota/robada), verificar que es de tu
+    // empresa antes de serializarlo y mover stock con él (admin salta RLS).
+    if (input.destination_warehouse_id) {
+      const { assertWarehouseCompany } = await import(
+        "@/modules/warehouses/ownership"
+      );
+      await assertWarehouseCompany(
+        input.destination_warehouse_id,
+        session.company_id,
+      );
+    }
+
     // 2) Reference code I-YYYY-NNNN
     const year = new Date().getFullYear();
     const yearPrefix = `I-${year}-`;
@@ -351,6 +364,7 @@ export async function processUninstallCompletion(
     const { data: existing } = await admin
       .from("warehouse_stock")
       .select("id, quantity")
+      .eq("company_id", i.company_id)
       .eq("warehouse_id", destWarehouseId)
       .eq("product_id", it.product_id)
       .eq("state", stateOnReturn)

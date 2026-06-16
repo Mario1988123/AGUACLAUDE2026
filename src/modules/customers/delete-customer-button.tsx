@@ -146,10 +146,14 @@ export function DeleteCustomerButton({
         notify.error("No se pudo dar de baja al cliente", r.error);
         return;
       }
-      notify.success(
-        "Cliente dado de baja",
-        "Pasa a Ventas perdidas. Allí podrás borrarlo definitivamente.",
-      );
+      if (r.warning) {
+        notify.warning("Cliente dado de baja — atención", r.warning);
+      } else {
+        notify.success(
+          "Cliente dado de baja",
+          "Pasa a Ventas perdidas. Allí podrás borrarlo definitivamente.",
+        );
+      }
       setOpen(false);
       router.push("/ventas-perdidas" as never);
     });
