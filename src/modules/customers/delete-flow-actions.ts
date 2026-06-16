@@ -272,20 +272,21 @@ export async function churnCustomerAction(
 }
 
 /**
- * Borra directamente un cliente SIN equipos (creado por error). Requiere
- * escribir "borrar". No pasa por venta perdida.
+ * Borra un cliente SIN equipos activos. Requiere escribir "borrar".
  *
  * Reglas (decisión Mario 2026-06-16):
+ *  - Solo BLOQUEA si hay un contrato EN VIGOR (no borrado): "cancélalo primero".
+ *    Un contrato CANCELADO ya no bloquea el mensaje (el usuario ya lo canceló).
  *  - Las PROPUESTAS no bloquean: se borran con el cliente (no implican mucho).
- *  - Un CONTRATO o una INSTALACIÓN sí bloquean: hay que cancelar el contrato
- *    primero. También una prueba gratuita.
- *  - Si aún queda algún otro registro (facturas, etc.) que impida el borrado
- *    físico, avisa para anonimizar desde el panel RGPD.
+ *  - Si el borrado FÍSICO choca con histórico protegido (contrato cancelado,
+ *    instalaciones, cobros…) no se borra a lo bruto: se ANONIMIZA + soft-delete
+ *    (el cliente sale de /clientes y se borran sus datos personales,
+ *    conservando el histórico contable anonimizado). Devuelve `anonymized:true`.
  */
 export async function deleteEmptyCustomerAction(input: {
   customer_id: string;
   confirm_word: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; anonymized?: boolean } | { ok: false; error: string }> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
@@ -321,24 +322,22 @@ export async function deleteEmptyCustomerAction(input: {
       };
     }
 
-    // BLOQUEAN (registros con valor — primero hay que cancelarlos/gestionarlos):
-    //   contrato → "cancela el contrato primero"; instalación; prueba gratuita.
-    const blockers: Array<{ table: string; label: string }> = [
-      { table: "contracts", label: "un contrato. Cancela el contrato antes de borrar al cliente" },
-      { table: "installations", label: "instalaciones. Gestiónalas o cancela el contrato antes de borrarlo" },
-      { table: "free_trials", label: "una prueba gratuita. Gestiónala antes de borrar al cliente" },
-    ];
-    // Contamos TODAS las filas físicas (incluidas soft-deleted): la FK
-    // 'on delete restrict' bloquea el borrado exista o no deleted_at.
-    for (const b of blockers) {
-      const { count } = await admin
-        .from(b.table)
-        .select("id", { count: "exact", head: true })
-        .eq("customer_id", input.customer_id)
-        .eq("company_id", session.company_id);
-      if ((count ?? 0) > 0) {
-        return { ok: false, error: `Este cliente tiene ${b.label}.` };
-      }
+    // Solo BLOQUEA un contrato EN VIGOR (deleted_at null). Un contrato
+    // CANCELADO se borra de forma lógica (deleted_at marcado) pero la fila
+    // sigue físicamente en la BD; NO debe dar el mensaje "tiene un contrato"
+    // (eso confundía: el usuario ya lo había cancelado). Si ese histórico
+    // impide el borrado físico, más abajo caemos a anonimizar.
+    const { count: liveContracts } = await admin
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("customer_id", input.customer_id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null);
+    if ((liveContracts ?? 0) > 0) {
+      return {
+        ok: false,
+        error: "Este cliente tiene un contrato en vigor. Cancélalo antes de borrarlo.",
+      };
     }
 
     // Auditoría antes del DELETE (después no podríamos referenciar el id).
@@ -356,19 +355,15 @@ export async function deleteEmptyCustomerAction(input: {
     }
 
     // Las PROPUESTAS no bloquean: se borran (sus líneas y opciones de pago caen
-    // en cascada). El DELETE es atómico: si alguna no se pudiera borrar, no se
-    // borra ninguna y el borrado del cliente fallará abajo (sin estado parcial).
+    // en cascada). Si fallara, no abortamos: intentamos borrar igual y, si no
+    // se puede, anonimizamos abajo.
     const propDel = await admin
       .from("proposals")
       .delete()
       .eq("customer_id", input.customer_id)
       .eq("company_id", session.company_id);
     if (propDel.error) {
-      return {
-        ok: false,
-        error:
-          "El cliente tiene propuestas con dependencias que impiden borrarlo. Anonimízalo desde el panel RGPD de su ficha.",
-      };
+      console.error("[deleteEmptyCustomer] proposals:", propDel.error.message);
     }
 
     const del = await admin
@@ -376,16 +371,25 @@ export async function deleteEmptyCustomerAction(input: {
       .delete()
       .eq("id", input.customer_id)
       .eq("company_id", session.company_id);
-    if (del.error) {
-      return {
-        ok: false,
-        error:
-          "No se pudo borrar: el cliente aún tiene registros asociados (facturas u otros). Anonimízalo desde el panel RGPD de su ficha.",
-      };
+    if (!del.error) {
+      revalidatePath("/clientes");
+      return { ok: true };
     }
 
+    // El borrado FÍSICO falló porque el cliente tiene HISTÓRICO que la base de
+    // datos protege (contrato cancelado que sigue ahí, instalaciones, cobros…).
+    // Eso NO se borra a lo bruto (son registros contables/legales). En su lugar
+    // lo ANONIMIZAMOS + soft-delete: desaparece de /clientes y se borran sus
+    // datos personales, conservando el histórico anonimizado.
+    const { requestCustomerDeletionAction } = await import("./rgpd-actions");
+    const anon = await requestCustomerDeletionAction({
+      customer_id: input.customer_id,
+      reason:
+        "Borrado de cliente con histórico: anonimizado (no borrable físicamente por contratos/cobros)",
+    });
+    if (!anon.ok) return { ok: false, error: anon.error };
     revalidatePath("/clientes");
-    return { ok: true };
+    return { ok: true, anonymized: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }

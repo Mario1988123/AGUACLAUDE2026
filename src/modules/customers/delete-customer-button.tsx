@@ -114,7 +114,14 @@ export function DeleteCustomerButton({
           notify.error("No se pudo borrar", r.error);
           return;
         }
-        notify.success("Cliente borrado");
+        if (r.anonymized) {
+          notify.warning(
+            "Cliente quitado de la lista",
+            "Tenía histórico (contrato cancelado, instalaciones o cobros) que no se puede borrar del todo. Se han borrado sus datos personales y desaparece de Clientes.",
+          );
+        } else {
+          notify.success("Cliente borrado");
+        }
         setOpen(false);
         router.push("/clientes" as never);
       });
