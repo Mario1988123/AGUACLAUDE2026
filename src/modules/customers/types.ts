@@ -10,6 +10,8 @@ export interface CustomerListItem {
   phone_primary: string | null;
   is_active: boolean;
   created_at: string;
+  /** Comercial asignado (para filtrar por comercial). */
+  assigned_user_id: string | null;
   // Dirección primaria
   address_street: string | null;
   address_city: string | null;

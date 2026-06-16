@@ -96,6 +96,7 @@ export async function listCustomers(
     phone_primary: string | null;
     is_active: boolean;
     created_at: string;
+    assigned_user_id?: string | null;
   }>);
 
   // Cargar equipos instalados (sólo activos) en paralelo a direcciones
@@ -315,6 +316,7 @@ export async function listCustomers(
       phone_primary: c.phone_primary,
       is_active: c.is_active,
       created_at: c.created_at,
+      assigned_user_id: c.assigned_user_id ?? null,
       address_street: addr?.street ?? null,
       address_city: addr?.city ?? null,
       address_province: addr?.province ?? null,

@@ -5,6 +5,9 @@ import { Button } from "@/shared/ui/button";
 import {
   STATUS_LABEL,
   LEAD_STATUS,
+  LEAD_ORIGIN,
+  ORIGIN_LABEL,
+  LEAD_POTENTIAL,
 } from "@/modules/leads/schemas";
 import { requireSession } from "@/shared/lib/auth/session";
 import { SelectableLeadsTable } from "@/modules/leads/selectable-list";
@@ -27,9 +30,17 @@ export default async function LeadsPage({
     assigned?: string;
     temp?: string;
     sort?: string;
+    origin?: string;
+    potential?: string;
   }>;
 }) {
   const sp = await searchParams;
+  const originFilter = LEAD_ORIGIN.includes(sp.origin as never)
+    ? (sp.origin as never)
+    : undefined;
+  const potentialFilter = LEAD_POTENTIAL.includes(sp.potential as never)
+    ? (sp.potential as never)
+    : undefined;
   const tempFilter = (["hot", "warm", "cold", "lost"].includes(sp.temp ?? "")
     ? sp.temp
     : undefined) as "hot" | "warm" | "cold" | "lost" | undefined;
@@ -71,9 +82,12 @@ export default async function LeadsPage({
     const ageH = (Date.now() - new Date(l.created_at).getTime()) / 3600000;
     return ageH < 24 ? "warm" : "cold";
   }
-  const leadsFiltered = tempFilter
-    ? leadsAll.filter((l) => classify(l) === tempFilter)
-    : leadsAll;
+  const leadsFiltered = leadsAll.filter((l) => {
+    if (tempFilter && classify(l) !== tempFilter) return false;
+    if (originFilter && l.origin !== originFilter) return false;
+    if (potentialFilter && l.potential !== potentialFilter) return false;
+    return true;
+  });
 
   // Orden 2026-06-02. "oldest" = más antiguos primero (los que más días
   // llevan en cartera, candidatos a caducar / abandono).
@@ -96,6 +110,8 @@ export default async function LeadsPage({
   if (status) baseParams.set("status", status);
   if (sp.q) baseParams.set("q", sp.q);
   if (assignedFilter) baseParams.set("assigned", assignedFilter);
+  if (originFilter) baseParams.set("origin", originFilter);
+  if (potentialFilter) baseParams.set("potential", potentialFilter);
   const baseQuery = baseParams.toString();
 
   return (
@@ -189,6 +205,32 @@ export default async function LeadsPage({
           {LEAD_STATUS.map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s]}
+            </option>
+          ))}
+        </select>
+        <select
+          name="origin"
+          defaultValue={originFilter ?? ""}
+          aria-label="Filtrar por origen"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+        >
+          <option value="">Cualquier origen</option>
+          {LEAD_ORIGIN.map((o) => (
+            <option key={o} value={o}>
+              {ORIGIN_LABEL[o]}
+            </option>
+          ))}
+        </select>
+        <select
+          name="potential"
+          defaultValue={potentialFilter ?? ""}
+          aria-label="Filtrar por potencial"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+        >
+          <option value="">Cualquier potencial</option>
+          {LEAD_POTENTIAL.map((p) => (
+            <option key={p} value={p}>
+              {p === "unknown" ? "Sin clasificar" : `Clase ${p}`}
             </option>
           ))}
         </select>
