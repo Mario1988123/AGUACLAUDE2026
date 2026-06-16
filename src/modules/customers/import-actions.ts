@@ -122,13 +122,20 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
       const taxNorm = r.tax_id?.trim().toUpperCase() ?? null;
       const codeNorm = r.external_code?.trim() ?? null;
 
-      // UPSERT: ¿existe ya? Buscar por código (prioritario), luego DNI/email/tel.
-      // Si existe NO se recrea: se completan dirección/banco/equipos que falten.
-      let customerId =
-        (await findExisting("external_code", codeNorm)) ??
-        (await findExisting("tax_id", taxNorm)) ??
-        (await findExisting("email", emailNorm)) ??
-        (await findExisting("phone_primary", phoneNorm));
+      // UPSERT: ¿existe ya? Si la fila trae CÓDIGO (caso normal de la plantilla)
+      // casamos SOLO por código (es único). NO caemos a email/teléfono porque
+      // hay placeholders compartidos (notiene@gmail.com, teléfonos repetidos…)
+      // que fusionarían por error clientes DISTINTOS. Sin código, usamos
+      // DNI/email/teléfono como antes.
+      let customerId: string | null = null;
+      if (codeNorm) {
+        customerId = await findExisting("external_code", codeNorm);
+      } else {
+        customerId =
+          (await findExisting("tax_id", taxNorm)) ??
+          (await findExisting("email", emailNorm)) ??
+          (await findExisting("phone_primary", phoneNorm));
+      }
 
       if (customerId) {
         result.updated += 1;

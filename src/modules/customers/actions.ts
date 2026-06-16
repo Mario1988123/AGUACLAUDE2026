@@ -41,7 +41,7 @@ export async function listCustomers(
     .select(SELECT_FULL)
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
-    .limit(200);
+    .limit(2000);
   // Scope: nivel 3 ve los suyos; nivel 2 ve los suyos + equipo;
   // nivel 1 ve todos. assigned_user_id es la columna de pertenencia.
   if (visibleUserIds && !forceMine) {
@@ -127,56 +127,74 @@ export async function listCustomers(
   if (baseRows.length > 0) {
     const ids = baseRows.map((c) => c.id);
     const nowIso = new Date().toISOString();
-    const [addrsRes, equipRes, overdueMaintRes, openIncidentsRes, contractsRes] =
+    // Troceamos los IDs: con cientos de clientes, una sola query con todos los
+    // UUID se pasaría del límite de longitud de URL y fallaría (lista enriquecida
+    // vacía). Cada lookup se hace por chunks de 150 y se concatena.
+    const ID_CHUNK = 150;
+    const idChunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      idChunks.push(ids.slice(i, i + ID_CHUNK));
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gather = async (build: (c: string[]) => any): Promise<any[]> => {
+      const parts = await Promise.all(idChunks.map((c) => build(c)));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const out: any[] = [];
+      for (const p of parts) if (p?.data) out.push(...p.data);
+      return out;
+    };
+    const [addrsData, equipData, overdueMaintData, openIncidentsData, contractsData] =
       await Promise.all([
-        supabase
-          .from("addresses")
-          .select(
-            "customer_id, street, city, province, latitude, longitude, is_primary",
-          )
-          .in("customer_id", ids)
-          .order("is_primary", { ascending: false }),
-        // ROBUSTO: sin embeds (products/external). Si el embed falla, PostgREST
-        // devolvía [] y la columna "equipo instalado" salía vacía aunque hubiera
-        // equipos. Resolvemos los nombres por id más abajo.
-        supabase
-          .from("customer_equipment")
-          .select("customer_id, product_id, external_equipment_model_id")
-          .in("customer_id", ids)
-          .eq("is_active", true),
+        gather((c) =>
+          supabase
+            .from("addresses")
+            .select(
+              "customer_id, street, city, province, latitude, longitude, is_primary",
+            )
+            .in("customer_id", c)
+            .order("is_primary", { ascending: false }),
+        ),
+        // ROBUSTO: sin embeds (products/external). Resolvemos nombres por id abajo.
+        gather((c) =>
+          supabase
+            .from("customer_equipment")
+            .select("customer_id, product_id, external_equipment_model_id")
+            .in("customer_id", c)
+            .eq("is_active", true),
+        ),
         // Mantenimientos vencidos: scheduled_at < now Y aún no completados.
-        // Defensive: try/catch envuelve toda la sección below; aquí solo el query.
-        supabase
-          .from("maintenance_jobs")
-          .select("customer_id")
-          .in("customer_id", ids)
-          .lt("scheduled_at", nowIso)
-          .is("completed_at", null),
+        gather((c) =>
+          supabase
+            .from("maintenance_jobs")
+            .select("customer_id")
+            .in("customer_id", c)
+            .lt("scheduled_at", nowIso)
+            .is("completed_at", null),
+        ),
         // Incidencias abiertas (no resueltas / cerradas).
-        supabase
-          .from("incidents")
-          .select("customer_id, status")
-          .in("customer_id", ids)
-          .not("status", "in", "(resolved,closed,cancelled)"),
+        gather((c) =>
+          supabase
+            .from("incidents")
+            .select("customer_id, status")
+            .in("customer_id", c)
+            .not("status", "in", "(resolved,closed,cancelled)"),
+        ),
         // Contratos: para mostrar el tipo (contado/alquiler/renting) en la tabla.
-        supabase
-          .from("contracts")
-          .select("customer_id, plan_type, status, signed_at, created_at")
-          .in("customer_id", ids)
-          .is("deleted_at", null),
+        gather((c) =>
+          supabase
+            .from("contracts")
+            .select("customer_id, plan_type, status, signed_at, created_at")
+            .in("customer_id", c)
+            .is("deleted_at", null),
+        ),
       ]);
     // Marcar avisos
-    for (const r of ((overdueMaintRes.data as Array<{
-      customer_id: string;
-    }> | null) ?? [])) {
+    for (const r of (overdueMaintData as Array<{ customer_id: string }>)) {
       const list = alertsMap.get(r.customer_id) ?? [];
       if (!list.includes("Mantenimiento vencido")) list.push("Mantenimiento vencido");
       alertsMap.set(r.customer_id, list);
     }
-    for (const r of ((openIncidentsRes.data as Array<{
-      customer_id: string;
-      status: string;
-    }> | null) ?? [])) {
+    for (const r of (openIncidentsData as Array<{ customer_id: string; status: string }>)) {
       const list = alertsMap.get(r.customer_id) ?? [];
       if (!list.includes("Incidencia abierta")) list.push("Incidencia abierta");
       alertsMap.set(r.customer_id, list);
@@ -189,13 +207,13 @@ export async function listCustomers(
       string,
       { plan: "cash" | "rental" | "renting"; rank: number; date: string }
     >();
-    for (const k of ((contractsRes.data as Array<{
+    for (const k of (contractsData as Array<{
       customer_id: string;
       plan_type: "cash" | "rental" | "renting" | null;
       status: string | null;
       signed_at: string | null;
       created_at: string | null;
-    }> | null) ?? [])) {
+    }>)) {
       if (!k.plan_type) continue;
       const rank = rankStatus(k.status);
       const date = k.signed_at ?? k.created_at ?? "";
@@ -205,14 +223,14 @@ export async function listCustomers(
       }
     }
     for (const [cid, v] of bestContract) contractMap.set(cid, v.plan);
-    for (const a of ((addrsRes.data as Array<{
+    for (const a of (addrsData as Array<{
       customer_id: string;
       street: string | null;
       city: string | null;
       province: string | null;
       latitude: number | null;
       longitude: number | null;
-    }> | null) ?? [])) {
+    }>)) {
       if (!addressMap.has(a.customer_id)) {
         addressMap.set(a.customer_id, {
           street: a.street,
@@ -224,12 +242,11 @@ export async function listCustomers(
       }
     }
     // Resolver nombres de equipo por id (sin embeds → robusto).
-    const equipRows =
-      (equipRes.data as Array<{
-        customer_id: string;
-        product_id: string | null;
-        external_equipment_model_id: string | null;
-      }> | null) ?? [];
+    const equipRows = equipData as Array<{
+      customer_id: string;
+      product_id: string | null;
+      external_equipment_model_id: string | null;
+    }>;
     const pIds = Array.from(
       new Set(equipRows.map((e) => e.product_id).filter(Boolean)),
     ) as string[];
