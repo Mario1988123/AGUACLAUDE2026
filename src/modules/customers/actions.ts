@@ -556,7 +556,6 @@ export async function createCustomerAction(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const isLevel3 = session.roles.includes("sales_rep");
   const insertPayload: Record<string, unknown> = {
     company_id: session.company_id,
     party_kind: parsed.party_kind,
@@ -572,8 +571,10 @@ export async function createCustomerAction(formData: FormData) {
     tax_id: parsed.tax_id || null,
     notes: parsed.notes || null,
     source_lead_id: parsed.source_lead_id || null,
-    assigned_user_id: isLevel3 ? session.user_id : null,
-    assigned_at: isLevel3 ? new Date().toISOString() : null,
+    // REGLA: todo cliente nace con dueño. Si no se elige comercial, se asigna
+    // a quien lo crea (cualquier nivel), para que nunca quede sin asignar.
+    assigned_user_id: session.user_id,
+    assigned_at: new Date().toISOString(),
     created_by: session.user_id,
   };
   let res = await supabase

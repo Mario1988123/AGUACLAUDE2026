@@ -657,7 +657,9 @@ export async function acceptFreeTrialAction(input: {
           phone_secondary: l.phone_company,
           tax_id: l.tax_id,
           notes: l.notes,
-          assigned_user_id: l.assigned_user_id,
+          // REGLA: hereda el dueño del lead; si no tuviera, quien lo crea. Nunca null.
+          assigned_user_id: l.assigned_user_id ?? session.user_id,
+          assigned_at: new Date().toISOString(),
           source_lead_id: l.id,
           is_active: true,
         })

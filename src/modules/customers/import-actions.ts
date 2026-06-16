@@ -202,6 +202,17 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
           }
           if (up.error) console.error("[import] customer update:", up.error.message);
         }
+        // REGLA: un cliente importado debe tener dueño. Si quedó sin comercial
+        // asignado (imports antiguos), se lo ponemos al admin/director que
+        // importa, SIN pisar una asignación previa (.is null) para no robar
+        // carteras ya repartidas.
+        const owned = await admin
+          .from("customers")
+          .update({ assigned_user_id: session.user_id, assigned_at: new Date().toISOString() })
+          .eq("id", customerId)
+          .eq("company_id", session.company_id)
+          .is("assigned_user_id", null);
+        if (owned.error) console.error("[import] customer assign:", owned.error.message);
       } else {
         const payload: Record<string, unknown> = {
           company_id: session.company_id,
@@ -217,6 +228,9 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
           tax_id: taxNorm,
           notes: r.notes || null,
           is_active: true,
+          // REGLA: imported nace con dueño = quien importa (admin/director).
+          assigned_user_id: session.user_id,
+          assigned_at: new Date().toISOString(),
           created_by: session.user_id,
         };
         let ins = await admin.from("customers").insert(payload).select("id").single();

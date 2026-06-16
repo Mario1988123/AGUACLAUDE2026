@@ -483,7 +483,7 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
   const { data: lead, error: e1 } = await supabase
     .from("leads")
     .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, status, converted_to_customer_id",
+      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, status, converted_to_customer_id, assigned_user_id",
     )
     .eq("id", leadId)
     .is("deleted_at", null)
@@ -503,6 +503,7 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     notes: string | null;
     status: string;
     converted_to_customer_id: string | null;
+    assigned_user_id: string | null;
   };
   // Admin client para todo el flow. La policy customers_insert_by_scope
   // limita el INSERT a roles concretos y un nivel 3 (sales_rep) no
@@ -536,16 +537,10 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
       tax_id: l.tax_id,
       notes: l.notes,
       is_active: true,
-      // Nivel 3: lo asignamos automáticamente al comercial que convierte.
-      // Niveles 1/2 lo dejan sin asignar para que el admin lo redirija.
-      assigned_user_id:
-        session.is_superadmin ||
-        session.roles.includes("company_admin") ||
-        session.roles.includes("commercial_director") ||
-        session.roles.includes("technical_director") ||
-        session.roles.includes("telemarketing_director")
-          ? null
-          : session.user_id,
+      // REGLA: el cliente HEREDA el dueño del lead (quien lo trabajaba). Si el
+      // lead no tuviera comercial asignado, cae a quien convierte. Nunca null.
+      assigned_user_id: l.assigned_user_id ?? session.user_id,
+      assigned_at: new Date().toISOString(),
       created_by: session.user_id,
       source_lead_id: l.id,
     })
