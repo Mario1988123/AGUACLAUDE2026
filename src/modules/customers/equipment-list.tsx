@@ -10,6 +10,7 @@ import {
 import { Badge } from "@/shared/ui/badge";
 import { RelocateEquipmentButton } from "./relocate-button";
 import { OfferMaintenanceContractButton } from "./offer-maintenance-contract-button";
+import { EquipmentModalityButton } from "./modality-button";
 import type { CustomerEquipmentRow } from "./equipment-actions";
 import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
 
@@ -33,6 +34,7 @@ export function CustomerEquipmentList({
   customerId,
   addresses = [],
   canRelocate = false,
+  canEditModality = false,
   equipmentsWithActiveContract,
   maintenancePlans = [],
 }: {
@@ -40,6 +42,8 @@ export function CustomerEquipmentList({
   customerId?: string;
   addresses?: AddressOption[];
   canRelocate?: boolean;
+  /** Si puede editar la modalidad (venta/alquiler/renting) del equipo. */
+  canEditModality?: boolean;
   /** Set de equipment_ids que ya tienen contrato de mantenimiento activo.
    *  Si está, ocultamos el botón "Ofrecer contrato" en esos equipos. */
   equipmentsWithActiveContract?: Set<string>;
@@ -136,6 +140,24 @@ export function CustomerEquipmentList({
                       Garantía: {fmtDate(e.warranty_until)}
                     </span>
                   )}
+                  {canEditModality ? (
+                    <EquipmentModalityButton
+                      equipmentId={e.id}
+                      current={{
+                        type: e.acquisition_type,
+                        amount_cents: e.acquisition_amount_cents,
+                        started_at: e.acquisition_started_at,
+                      }}
+                    />
+                  ) : e.acquisition_type ? (
+                    <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 font-semibold text-violet-800">
+                      {e.acquisition_type === "cash"
+                        ? "Venta"
+                        : e.acquisition_type === "rental"
+                          ? "Alquiler"
+                          : "Renting"}
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="flex flex-col items-end gap-2">

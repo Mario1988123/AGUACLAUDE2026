@@ -49,6 +49,9 @@ export function AddEquipmentButton({
   const [nextMaintenanceAt, setNextMaintenanceAt] = useState("");
   const [periodicityMonths, setPeriodicityMonths] = useState("");
   const [notes, setNotes] = useState("");
+  const [plan, setPlan] = useState<"" | "cash" | "rental" | "renting">("");
+  const [importe, setImporte] = useState("");
+  const [fechaInicio, setFechaInicio] = useState("");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -65,6 +68,9 @@ export function AddEquipmentButton({
     setNextMaintenanceAt("");
     setPeriodicityMonths("");
     setNotes("");
+    setPlan("");
+    setImporte("");
+    setFechaInicio("");
     setAddressId(defaultAddressId);
   }
 
@@ -92,6 +98,11 @@ export function AddEquipmentButton({
           : null,
         notes: notes || null,
         address_id: addressId || null,
+        acquisition_type: plan || null,
+        acquisition_amount_cents: importe.trim()
+          ? Math.round(parseFloat(importe.replace(",", ".")) * 100)
+          : null,
+        acquisition_started_at: fechaInicio || null,
       });
       if (!r.ok) {
         notify.error("No se pudo añadir", r.error);
@@ -273,6 +284,40 @@ export function AddEquipmentButton({
                   <p className="text-[11px] text-muted-foreground">
                     Si la indicas, se generan automáticamente las visitas del próximo año
                     según esa periodicidad (desde el próximo programado o desde la instalación).
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label>Modalidad (cómo lo tiene el cliente)</Label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <select
+                      value={plan}
+                      onChange={(e) =>
+                        setPlan(e.target.value as "" | "cash" | "rental" | "renting")
+                      }
+                      className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">— Sin definir —</option>
+                      <option value="cash">Venta</option>
+                      <option value="rental">Alquiler</option>
+                      <option value="renting">Renting</option>
+                    </select>
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder={plan === "cash" ? "Precio €" : "€/mes"}
+                      value={importe}
+                      onChange={(e) => setImporte(e.target.value)}
+                    />
+                    <Input
+                      type="date"
+                      value={fechaInicio}
+                      onChange={(e) => setFechaInicio(e.target.value)}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Venta / alquiler / renting + importe (€ de venta o €/mes) y
+                    fecha de inicio. Informativo por ahora (contratos en Fase 2).
                   </p>
                 </div>
 

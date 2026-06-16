@@ -549,6 +549,12 @@ export default async function CustomerDetailPage({
                 session.roles.includes("technical_director") ||
                 session.roles.includes("commercial_director")
               }
+              canEditModality={
+                session.is_superadmin ||
+                session.roles.includes("company_admin") ||
+                session.roles.includes("technical_director") ||
+                session.roles.includes("commercial_director")
+              }
               maintenancePlans={maintenancePlans}
               equipmentsWithActiveContract={equipmentsWithActiveContract}
             />

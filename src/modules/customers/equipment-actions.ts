@@ -23,6 +23,10 @@ export interface CustomerEquipmentRow {
   /** Próximo mantenimiento programado (scheduled/preprogrammed) — la
    *  ficha del cliente lo muestra como cuenta atrás "en X días". */
   next_maintenance_at: string | null;
+  /** Modalidad heredada: 'cash' venta | 'rental' alquiler | 'renting'. */
+  acquisition_type: "cash" | "rental" | "renting" | null;
+  acquisition_amount_cents: number | null;
+  acquisition_started_at: string | null;
 }
 
 export async function listCustomerEquipment(customerId: string): Promise<CustomerEquipmentRow[]> {
@@ -159,6 +163,33 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     }
   }
 
+  // Modalidad por equipo (defensivo: si la migración aún no está aplicada el
+  // select falla y queda vacío — NO tumba la lista, que es plana arriba).
+  const acq: Record<
+    string,
+    { type: "cash" | "rental" | "renting" | null; cents: number | null; started: string | null }
+  > = {};
+  {
+    const { data, error } = await supabase
+      .from("customer_equipment")
+      .select("id, acquisition_type, acquisition_amount_cents, acquisition_started_at")
+      .in("id", ids);
+    if (!error) {
+      for (const a of (data ?? []) as Array<{
+        id: string;
+        acquisition_type: "cash" | "rental" | "renting" | null;
+        acquisition_amount_cents: number | null;
+        acquisition_started_at: string | null;
+      }>) {
+        acq[a.id] = {
+          type: a.acquisition_type,
+          cents: a.acquisition_amount_cents,
+          started: a.acquisition_started_at,
+        };
+      }
+    }
+  }
+
   return rows.map((r) => ({
     id: r.id,
     customer_id: r.customer_id,
@@ -177,7 +208,58 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     address_label: r.address_id ? (addressLabel.get(r.address_id) ?? null) : null,
     last_maintenance_at: lastMaintenance[r.id] ?? null,
     next_maintenance_at: nextMaintenance[r.id] ?? null,
+    acquisition_type: acq[r.id]?.type ?? null,
+    acquisition_amount_cents: acq[r.id]?.cents ?? null,
+    acquisition_started_at: acq[r.id]?.started ?? null,
   }));
+}
+
+/**
+ * Guarda/edita la MODALIDAD de un equipo (venta/alquiler/renting + importe +
+ * fecha de inicio) directamente desde la ficha, sin recargar el Excel.
+ * Admin / dir. comercial / dir. técnico.
+ */
+export async function setEquipmentModalityAction(input: {
+  equipment_id: string;
+  acquisition_type: "cash" | "rental" | "renting" | null;
+  acquisition_amount_cents: number | null;
+  acquisition_started_at: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const isUpper =
+      session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("commercial_director") ||
+      session.roles.includes("technical_director");
+    if (!isUpper) return { ok: false, error: "Sin permisos" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: eq } = await admin
+      .from("customer_equipment")
+      .select("id, customer_id, company_id")
+      .eq("id", input.equipment_id)
+      .maybeSingle();
+    const row = eq as { id: string; customer_id: string; company_id: string } | null;
+    if (!row || row.company_id !== session.company_id) {
+      return { ok: false, error: "Equipo no encontrado o no pertenece a tu empresa" };
+    }
+    const r = await admin
+      .from("customer_equipment")
+      .update({
+        acquisition_type: input.acquisition_type,
+        acquisition_amount_cents: input.acquisition_amount_cents,
+        acquisition_started_at: input.acquisition_started_at,
+      })
+      .eq("id", input.equipment_id)
+      .eq("company_id", session.company_id);
+    if (r.error) return { ok: false, error: r.error.message };
+    revalidatePath(`/clientes/${row.customer_id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 /**

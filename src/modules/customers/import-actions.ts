@@ -132,6 +132,36 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
 
       if (customerId) {
         result.updated += 1;
+        // VARIACIONES: sobrescribir con los valores NO vacíos del Excel (es la
+        // fuente durante la migración). No tocamos party_kind para no voltear
+        // empresa↔particular por error.
+        const patch: Record<string, unknown> = {};
+        if (r.legal_name) patch.legal_name = r.legal_name;
+        if (r.trade_name) patch.trade_name = r.trade_name;
+        if (r.first_name) patch.first_name = r.first_name;
+        if (r.last_name) patch.last_name = r.last_name;
+        if (emailNorm) patch.email = emailNorm;
+        if (phoneNorm) patch.phone_primary = phoneNorm;
+        if (r.phone_secondary) patch.phone_secondary = r.phone_secondary;
+        if (taxNorm) patch.tax_id = taxNorm;
+        if (codeNorm) patch.external_code = codeNorm;
+        if (r.notes) patch.notes = r.notes;
+        if (Object.keys(patch).length > 0) {
+          let up = await admin
+            .from("customers")
+            .update(patch)
+            .eq("id", customerId)
+            .eq("company_id", session.company_id);
+          if (up.error && /external_code|schema cache|Could not find/i.test(up.error.message ?? "")) {
+            delete patch.external_code;
+            up = await admin
+              .from("customers")
+              .update(patch)
+              .eq("id", customerId)
+              .eq("company_id", session.company_id);
+          }
+          if (up.error) console.error("[import] customer update:", up.error.message);
+        }
       } else {
         const payload: Record<string, unknown> = {
           company_id: session.company_id,
@@ -172,6 +202,25 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
         .limit(1);
       if ((existAddr ?? []).length > 0) {
         addressId = (existAddr[0] as { id: string }).id;
+        // VARIACIÓN: completar/actualizar la dirección existente con lo no vacío.
+        const ap: Record<string, unknown> = {};
+        if (r.address_street_type?.trim()) ap.street_type = r.address_street_type.trim();
+        if (r.address_street?.trim()) ap.street = r.address_street.trim();
+        if (r.address_number?.trim()) ap.street_number = r.address_number.trim();
+        if (r.address_portal?.trim()) ap.portal = r.address_portal.trim();
+        if (r.address_floor?.trim()) ap.floor = r.address_floor.trim();
+        if (r.address_door?.trim()) ap.door = r.address_door.trim();
+        if (r.address_postal_code?.trim()) ap.postal_code = r.address_postal_code.trim();
+        if (r.address_city?.trim()) ap.city = r.address_city.trim();
+        if (r.address_province?.trim()) ap.province = r.address_province.trim();
+        if (Object.keys(ap).length > 0) {
+          const uA = await admin
+            .from("addresses")
+            .update(ap)
+            .eq("id", addressId)
+            .eq("company_id", session.company_id);
+          if (uA.error) console.error("[import] address update:", uA.error.message);
+        }
       } else if (r.address_street?.trim() || r.address_city?.trim()) {
         const addrPayload: Record<string, unknown> = {
           company_id: session.company_id,
@@ -247,7 +296,27 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
       for (const { r: er } of g.equipmentRows) {
         const name = er.equipment_name!.trim();
         const serial = er.serial_number?.trim() ?? "";
-        if (serial && existSerials.has(serial.toUpperCase())) continue;
+        if (serial && existSerials.has(serial.toUpperCase())) {
+          // VARIACIÓN: el equipo ya existe (por nº serie) → actualizar modalidad.
+          if (er.acquisition_type || er.acquisition_amount_eur != null || er.acquisition_started_at) {
+            try {
+              await admin
+                .from("customer_equipment")
+                .update({
+                  acquisition_type: er.acquisition_type ?? null,
+                  acquisition_amount_cents:
+                    er.acquisition_amount_eur != null ? Math.round(er.acquisition_amount_eur * 100) : null,
+                  acquisition_started_at: er.acquisition_started_at?.trim() || null,
+                })
+                .eq("customer_id", customerId)
+                .eq("company_id", session.company_id)
+                .eq("serial_number", serial);
+            } catch {
+              /* columnas nuevas no en cache: se ignora */
+            }
+          }
+          continue;
+        }
         const ownId = productByName.get(norm(name)) ?? null;
         try {
           await addCustomerEquipmentAction({
