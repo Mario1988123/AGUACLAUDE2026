@@ -139,8 +139,8 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
     const r = g.keyRow;
     const rowNum = g.firstIdx + 1;
     try {
-      if (r.party_kind === "company" && !r.legal_name?.trim()) {
-        result.errors.push({ row: rowNum, message: "Razón social obligatoria para empresas" });
+      if (r.party_kind === "company" && !r.legal_name?.trim() && !r.trade_name?.trim()) {
+        result.errors.push({ row: rowNum, message: "Razón social o nombre comercial obligatorio para empresas" });
         continue;
       }
       if (r.party_kind === "individual" && !r.first_name?.trim()) {
@@ -170,9 +170,12 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
       if (customerId) {
         result.updated += 1;
         // VARIACIONES: sobrescribir con los valores NO vacíos del Excel (es la
-        // fuente durante la migración). No tocamos party_kind para no voltear
-        // empresa↔particular por error.
+        // fuente durante la migración). party_kind SOLO se promociona a empresa
+        // (nunca al revés): si la fila trae razón social/nombre comercial pero
+        // el cliente se había guardado como particular en un import anterior, lo
+        // corregimos a empresa para que su contacto (nombre/apellidos) se vea.
         const patch: Record<string, unknown> = {};
+        if (r.party_kind === "company") patch.party_kind = "company";
         if (r.legal_name) patch.legal_name = r.legal_name;
         if (r.trade_name) patch.trade_name = r.trade_name;
         if (r.first_name) patch.first_name = r.first_name;

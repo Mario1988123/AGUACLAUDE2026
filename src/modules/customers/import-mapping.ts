@@ -60,9 +60,22 @@ const HEADER_MAP: Record<string, Field> = {
   trade_name: "trade_name",
   nombre: "first_name",
   first_name: "first_name",
+  // Persona de contacto de una EMPRESA: variantes de cabecera frecuentes en
+  // exportaciones de otros CRM. Todas caen en first_name (el listado muestra
+  // contact_name = nombre + apellidos). Si el contacto viene en una sola
+  // columna ("Contacto"), el nombre completo va a first_name y se ve igual.
+  contacto: "first_name",
+  contacto_nombre: "first_name",
+  nombre_contacto: "first_name",
+  nombre_de_contacto: "first_name",
+  persona_contacto: "first_name",
+  persona_de_contacto: "first_name",
   apellidos: "last_name",
   apellido: "last_name",
   last_name: "last_name",
+  apellidos_contacto: "last_name",
+  apellido_contacto: "last_name",
+  contacto_apellidos: "last_name",
   dni_cif: "tax_id",
   dni: "tax_id",
   cif: "tax_id",
@@ -217,6 +230,14 @@ export function mapSpreadsheetRows(
       if (!raw) return;
       applyField(row, key, raw);
     });
+    // REGLA: el TIPO de cliente se decide por las columnas de empresa. Si la
+    // fila trae razón social o nombre comercial => es una EMPRESA, y entonces
+    // `nombre`/`apellidos` son la PERSONA DE CONTACTO. Si no trae ninguna de
+    // las dos => es un particular. Esto MANDA sobre la columna `tipo` (que en
+    // exportaciones de otros CRM puede faltar o venir mal y dejaba a las
+    // empresas como particulares: el contacto no se volcaba y no se veía).
+    row.party_kind =
+      row.legal_name?.trim() || row.trade_name?.trim() ? "company" : "individual";
     out.push(row);
   }
   return out;

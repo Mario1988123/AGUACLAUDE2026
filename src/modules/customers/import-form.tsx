@@ -291,9 +291,18 @@ export function ImportCustomersButton() {
                         <td className="px-2 py-1">{r.external_code ?? "—"}</td>
                         <td className="px-2 py-1">{r.party_kind}</td>
                         <td className="px-2 py-1">
-                          {r.party_kind === "company"
-                            ? r.legal_name ?? "—"
-                            : `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "—"}
+                          {r.party_kind === "company" ? (
+                            <div>
+                              <div>{r.legal_name ?? "—"}</div>
+                              {`${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() && (
+                                <div className="text-muted-foreground">
+                                  👤 {`${r.first_name ?? ""} ${r.last_name ?? ""}`.trim()}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            `${r.first_name ?? ""} ${r.last_name ?? ""}`.trim() || "—"
+                          )}
                         </td>
                         <td className="px-2 py-1">{r.tax_id ?? "—"}</td>
                         <td className="px-2 py-1">{r.iban ? "✓" : "—"}</td>
