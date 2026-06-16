@@ -36,6 +36,29 @@ function buildMapsUrl(c: CustomerListItem): string | null {
   return null;
 }
 
+const PLAN_LABEL: Record<string, string> = {
+  cash: "Contado",
+  rental: "Alquiler",
+  renting: "Renting",
+};
+
+const PLAN_CLASS: Record<string, string> = {
+  cash: "bg-emerald-50 border-emerald-200 text-emerald-800",
+  rental: "bg-sky-50 border-sky-200 text-sky-800",
+  renting: "bg-violet-50 border-violet-200 text-violet-800",
+};
+
+function ContractBadge({ type }: { type: CustomerListItem["contract_type"] }) {
+  if (!type) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${PLAN_CLASS[type] ?? ""}`}
+    >
+      {PLAN_LABEL[type] ?? type}
+    </span>
+  );
+}
+
 function buildWhatsappUrl(phone: string): string {
   const clean = phone.replace(/[\s\-.()]/g, "");
   const e164 = clean.startsWith("+")
@@ -113,6 +136,7 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
                   <th className="px-3 py-3 text-left">Ubicación</th>
                   <th className="px-3 py-3 text-left">Provincia</th>
                   <th className="px-3 py-3 text-left">Equipos</th>
+                  <th className="px-3 py-3 text-left">Contrato</th>
                   <th className="px-3 py-3 text-left">Estado</th>
                   <th className="px-3 py-3 text-right">Acciones</th>
                 </tr>
@@ -196,6 +220,9 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
+                      </td>
+                      <td className="px-3 py-2.5 text-xs">
+                        <ContractBadge type={c.contract_type} />
                       </td>
                       <td className="px-3 py-2.5">
                         {c.is_active ? (
@@ -353,15 +380,18 @@ function CustomerCard({
           </Badge>
         )}
       </div>
-      {c.equipment_count > 0 && (
-        <div className="text-xs">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-800"
-            title={c.equipment_summary ?? ""}
-          >
-            <Wrench className="h-3 w-3" />
-            <span className="truncate max-w-[200px]">{c.equipment_summary}</span>
-          </span>
+      {(c.equipment_count > 0 || c.contract_type) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          {c.equipment_count > 0 && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-blue-800"
+              title={c.equipment_summary ?? ""}
+            >
+              <Wrench className="h-3 w-3" />
+              <span className="truncate max-w-[160px]">{c.equipment_summary}</span>
+            </span>
+          )}
+          {c.contract_type && <ContractBadge type={c.contract_type} />}
         </div>
       )}
       <div className="pt-1 border-t border-border/50">

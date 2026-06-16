@@ -1,18 +1,20 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2, Calculator } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
-import { ShowInCalculatorToggle } from "@/modules/products/edit-form";
 import { ProductBulkToolbar, ProductCheckbox } from "@/modules/products/bulk-toolbar";
 import { CatalogModal } from "@/modules/products/catalog-modal";
 import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
-import { deleteProductAction } from "@/modules/products/actions";
+import {
+  deleteProductAction,
+  toggleShowInCalculatorAction,
+} from "@/modules/products/actions";
 
 /**
  * Botón compacto de BORRAR en la lista (icono papelera). Solo aparece en
@@ -66,6 +68,73 @@ function ListDeleteButton({ productId }: { productId: string }) {
       className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
     >
       <Trash2 className="h-4 w-4" />
+    </button>
+  );
+}
+
+/**
+ * Icono de calculadora DELANTE del producto. Resume la antigua columna
+ * "Calculadora": en azul si el producto sale en la calculadora de ahorro,
+ * en gris si no. Para quien puede editar (admin / dir. comercial) es un
+ * botón que lo activa/desactiva al instante; para el resto es solo indicador
+ * (solo se ve si está activo).
+ */
+function CalcIconToggle({
+  productId,
+  value,
+  canEdit,
+}: {
+  productId: string;
+  value: boolean;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [checked, setChecked] = useState(value);
+
+  if (!canEdit) {
+    if (!checked) return null;
+    return (
+      <Calculator
+        className="h-4 w-4 shrink-0 text-sky-600"
+        aria-label="En la calculadora de ahorro"
+      />
+    );
+  }
+
+  function toggle(e: MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = !checked;
+    setChecked(next); // optimista
+    startTransition(async () => {
+      const r = await toggleShowInCalculatorAction(productId, next);
+      if (!r.ok) {
+        notify.error("No se pudo cambiar", r.error);
+        setChecked(value); // rollback
+      }
+      router.refresh();
+    });
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      disabled={pending}
+      title={
+        checked
+          ? "En la calculadora de ahorro — clic para quitar"
+          : "No está en la calculadora — clic para añadir"
+      }
+      aria-pressed={checked}
+      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md transition disabled:opacity-50 ${
+        checked
+          ? "text-sky-600 hover:bg-sky-100"
+          : "text-muted-foreground/40 hover:bg-muted hover:text-muted-foreground"
+      }`}
+    >
+      <Calculator className="h-4 w-4" />
     </button>
   );
 }
@@ -262,7 +331,15 @@ export function ProductsListClient({
                     <div className="text-xs uppercase tracking-wider text-muted-foreground">
                       {KIND_LABEL[p.kind]}
                     </div>
-                    <div className="font-bold truncate">{p.name}</div>
+                    <div className="flex items-center gap-1.5">
+                      {p.show_in_calculator && (
+                        <Calculator
+                          className="h-3.5 w-3.5 shrink-0 text-sky-600"
+                          aria-label="En la calculadora de ahorro"
+                        />
+                      )}
+                      <div className="font-bold truncate">{p.name}</div>
+                    </div>
                     {p.category_name && (
                       <div className="text-xs text-muted-foreground truncate">
                         {p.category_name}
@@ -315,12 +392,19 @@ export function ProductsListClient({
                       />
                     )}
                     <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/productos/${p.id}` as never}
-                        className="font-medium text-primary hover:underline"
-                      >
-                        {p.name}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        <CalcIconToggle
+                          productId={p.id}
+                          value={p.show_in_calculator}
+                          canEdit={canEdit}
+                        />
+                        <Link
+                          href={`/productos/${p.id}` as never}
+                          className="font-medium text-primary hover:underline"
+                        >
+                          {p.name}
+                        </Link>
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {KIND_LABEL[p.kind]}
                         {p.category_name && ` · ${p.category_name}`}
@@ -350,17 +434,7 @@ export function ProductsListClient({
                       )}
                     </div>
                   </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
-                    {canEdit ? (
-                      <ShowInCalculatorToggle
-                        productId={p.id}
-                        value={p.show_in_calculator}
-                      />
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground">
-                        {p.show_in_calculator ? "En calculadora" : ""}
-                      </span>
-                    )}
+                  <div className="mt-2 flex items-center justify-end gap-2 border-t pt-2">
                     <div className="flex items-center gap-1">
                       <Link
                         href={`/productos/${p.id}` as never}
@@ -407,7 +481,6 @@ export function ProductsListClient({
                   <th className="px-4 py-3 text-right">Stock</th>
                   <th className="px-4 py-3 text-left">Ref.</th>
                   <th className="px-4 py-3 text-right">Precio contado</th>
-                  <th className="px-4 py-3 text-left">Calculadora</th>
                   <th className="px-4 py-3 text-left">Estado</th>
                   <th className="px-4 py-3 text-right">Acción</th>
                 </tr>
@@ -416,7 +489,7 @@ export function ProductsListClient({
                 {products.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={canBulk ? 10 : 9}
+                      colSpan={canBulk ? 9 : 8}
                       className="p-8 text-center text-muted-foreground"
                     >
                       Sin productos con esos filtros.
@@ -434,12 +507,19 @@ export function ProductsListClient({
                         </td>
                       )}
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/productos/${p.id}` as never}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {p.name}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <CalcIconToggle
+                            productId={p.id}
+                            value={p.show_in_calculator}
+                            canEdit={canEdit}
+                          />
+                          <Link
+                            href={`/productos/${p.id}` as never}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            {p.name}
+                          </Link>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {KIND_LABEL[p.kind]}
@@ -455,18 +535,6 @@ export function ProductsListClient({
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {formatCents(p.cash_price_cents)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {canEdit ? (
-                          <ShowInCalculatorToggle
-                            productId={p.id}
-                            value={p.show_in_calculator}
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {p.show_in_calculator ? "Sí" : "No"}
-                          </span>
-                        )}
                       </td>
                       <td className="px-4 py-3">
                         {p.is_active ? (

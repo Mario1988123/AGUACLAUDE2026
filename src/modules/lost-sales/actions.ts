@@ -148,3 +148,53 @@ export async function markRecoveredSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+/**
+ * Borrado DEFINITIVO de un cliente desde venta perdida. Requiere escribir la
+ * palabra "borrar". Reutiliza el borrado RGPD: anonimiza al cliente (borra sus
+ * datos personales y lo saca de /clientes) pero CONSERVA la fila de venta
+ * perdida para que las estadísticas sigan cuadrando. Solo administrador.
+ */
+export async function purgeLostSaleCustomerAction(input: {
+  lost_sale_id: string;
+  confirm_word: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireSession();
+  if (!session.company_id) return { ok: false, error: "Sin empresa" };
+  if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+    return { ok: false, error: "Solo el administrador puede borrar definitivamente" };
+  }
+  if ((input.confirm_word ?? "").trim().toLowerCase() !== "borrar") {
+    return { ok: false, error: "Escribe la palabra «borrar» para confirmar" };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: ls } = await supabase
+    .from("lost_sales")
+    .select("id, customer_id, company_id")
+    .eq("id", input.lost_sale_id)
+    .maybeSingle();
+  const row = ls as
+    | { id: string; customer_id: string | null; company_id: string }
+    | null;
+  if (!row) return { ok: false, error: "Venta perdida no encontrada" };
+  if (row.company_id !== session.company_id) {
+    return { ok: false, error: "Otra empresa" };
+  }
+  if (!row.customer_id) {
+    return { ok: false, error: "Esta venta perdida no tiene cliente asociado" };
+  }
+
+  const { requestCustomerDeletionAction } = await import(
+    "@/modules/customers/rgpd-actions"
+  );
+  const r = await requestCustomerDeletionAction({
+    customer_id: row.customer_id,
+    reason: "Borrado definitivo desde venta perdida",
+  });
+  if (!r.ok) return { ok: false, error: r.error };
+
+  revalidatePath("/ventas-perdidas");
+  revalidatePath("/clientes");
+  return { ok: true };
+}

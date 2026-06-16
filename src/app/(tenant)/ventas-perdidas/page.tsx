@@ -18,12 +18,14 @@ const ORIGIN_LABEL: Record<string, string> = {
   lead_lost: "Lead perdido",
   free_trial_rejected: "Prueba rechazada",
   free_trial_removed: "Prueba retirada",
+  customer_churned: "Cliente dado de baja",
 };
 
 interface Row {
   id: string;
   origin: string;
   lead_id: string | null;
+  customer_id: string | null;
   reason: string | null;
   reason_category: string | null;
   amount_cents: number | null;
@@ -32,7 +34,7 @@ interface Row {
   created_at: string;
 }
 
-interface LeadInfo {
+interface PartyInfo {
   id: string;
   party_kind: "individual" | "company";
   legal_name: string | null;
@@ -101,32 +103,76 @@ export default async function VentasPerdidasPage() {
     }
   }
 
-  const { data } = await supabase
+  // Defensivo: si la columna customer_id aún no estuviera en el cache (deploy
+  // antes que la migración), reintentamos sin ella para no ocultar las ventas
+  // perdidas existentes (leads / pruebas).
+  let lsRes = await supabase
     .from("lost_sales")
     .select(
-      "id, origin, lead_id, reason, reason_category, amount_cents, is_recovered, assigned_recovery_user_id, created_at",
+      "id, origin, lead_id, customer_id, reason, reason_category, amount_cents, is_recovered, assigned_recovery_user_id, created_at",
     )
     .order("created_at", { ascending: false })
     .limit(200);
-  const rows = (data ?? []) as Row[];
+  if (
+    lsRes.error &&
+    /customer_id|schema cache|column|Could not find/i.test(
+      lsRes.error.message ?? "",
+    )
+  ) {
+    lsRes = await supabase
+      .from("lost_sales")
+      .select(
+        "id, origin, lead_id, reason, reason_category, amount_cents, is_recovered, assigned_recovery_user_id, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+  }
+  const rows = ((lsRes.data ?? []) as Array<Record<string, unknown>>).map(
+    (r) => ({ customer_id: null, ...r }),
+  ) as unknown as Row[];
   const team = await listTeamMembers().catch(() => []);
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
+
+  function partyLabel(info: PartyInfo | undefined): string {
+    if (!info) return "—";
+    return info.party_kind === "company"
+      ? info.trade_name || info.legal_name || "—"
+      : `${info.first_name ?? ""} ${info.last_name ?? ""}`.trim() || "—";
+  }
 
   const leadIds = Array.from(new Set(rows.map((r) => r.lead_id).filter((v): v is string => !!v)));
-  const leadMap = new Map<string, LeadInfo>();
+  const leadMap = new Map<string, PartyInfo>();
   if (leadIds.length > 0) {
     const { data: leads } = await supabase
       .from("leads")
       .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
       .in("id", leadIds);
-    for (const l of (leads ?? []) as LeadInfo[]) leadMap.set(l.id, l);
+    for (const l of (leads ?? []) as PartyInfo[]) leadMap.set(l.id, l);
   }
-  function leadName(id: string | null): string {
-    if (!id) return "—";
-    const l = leadMap.get(id);
-    if (!l) return "—";
-    return l.party_kind === "company"
-      ? l.trade_name || l.legal_name || "—"
-      : `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "—";
+
+  const customerIds = Array.from(
+    new Set(rows.map((r) => r.customer_id).filter((v): v is string => !!v)),
+  );
+  const customerMap = new Map<string, PartyInfo>();
+  if (customerIds.length > 0) {
+    const { data: custs } = await supabase
+      .from("customers")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
+      .in("id", customerIds);
+    for (const c of (custs ?? []) as PartyInfo[]) customerMap.set(c.id, c);
+  }
+
+  // Nombre + enlace del sujeto de cada fila (lead o cliente).
+  function subjectName(r: Row): string {
+    if (r.customer_id) return partyLabel(customerMap.get(r.customer_id));
+    if (r.lead_id) return partyLabel(leadMap.get(r.lead_id));
+    return "—";
+  }
+  function subjectHref(r: Row): string | null {
+    if (r.customer_id) return `/clientes/${r.customer_id}`;
+    if (r.lead_id) return `/leads/${r.lead_id}`;
+    return null;
   }
   const totalLost = rows
     .filter((r) => !r.is_recovered)
@@ -170,12 +216,12 @@ export default async function VentasPerdidasPage() {
                 <li key={r.id} className="rounded-xl border bg-card p-3 text-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      {r.lead_id ? (
+                      {subjectHref(r) ? (
                         <Link
-                          href={`/leads/${r.lead_id}` as never}
+                          href={subjectHref(r)! as never}
                           className="font-medium text-primary hover:underline"
                         >
-                          {leadName(r.lead_id)}
+                          {subjectName(r)}
                         </Link>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -209,6 +255,9 @@ export default async function VentasPerdidasPage() {
                       isRecovered={r.is_recovered}
                       assignedUserId={r.assigned_recovery_user_id}
                       team={team}
+                      origin={r.origin}
+                      customerId={r.customer_id}
+                      canPurge={isAdmin}
                     />
                   </div>
                 </li>
@@ -220,7 +269,7 @@ export default async function VentasPerdidasPage() {
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Fecha</th>
-                  <th className="py-2 text-left">Lead</th>
+                  <th className="py-2 text-left">Lead / Cliente</th>
                   <th className="py-2 text-left">Origen</th>
                   <th className="py-2 text-left">Motivo</th>
                   <th className="py-2 text-right">Importe</th>
@@ -235,12 +284,12 @@ export default async function VentasPerdidasPage() {
                       {new Date(r.created_at).toLocaleDateString("es-ES")}
                     </td>
                     <td className="py-2">
-                      {r.lead_id ? (
+                      {subjectHref(r) ? (
                         <Link
-                          href={`/leads/${r.lead_id}` as never}
+                          href={subjectHref(r)! as never}
                           className="text-primary hover:underline"
                         >
-                          {leadName(r.lead_id)}
+                          {subjectName(r)}
                         </Link>
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -268,6 +317,9 @@ export default async function VentasPerdidasPage() {
                         isRecovered={r.is_recovered}
                         assignedUserId={r.assigned_recovery_user_id}
                         team={team}
+                        origin={r.origin}
+                        customerId={r.customer_id}
+                        canPurge={isAdmin}
                       />
                     </td>
                   </tr>

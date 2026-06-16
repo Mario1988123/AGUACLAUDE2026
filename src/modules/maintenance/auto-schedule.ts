@@ -58,6 +58,22 @@ export async function ensureMaintenanceWindow(
   };
   if (!c.maintenance_included || !c.maintenance_periodicity_months) return 0;
 
+  // No regenerar mantenimientos si el cliente está dado de baja / inactivo
+  // (flujo "Borrar cliente": dejó de querer nuestro servicio). Sin este freno,
+  // el cron diario volvería a crear las visitas futuras de un cliente perdido.
+  try {
+    const { data: cust } = await a
+      .from("customers")
+      .select("is_active")
+      .eq("id", c.customer_id)
+      .maybeSingle();
+    if ((cust as { is_active: boolean | null } | null)?.is_active === false) {
+      return 0;
+    }
+  } catch {
+    /* fail-soft: si no se pudo comprobar, seguimos como antes */
+  }
+
   const totalMonths = c.maintenance_months_included ?? c.duration_months ?? 12;
   const periodicity = c.maintenance_periodicity_months;
 

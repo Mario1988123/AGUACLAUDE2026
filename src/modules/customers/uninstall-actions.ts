@@ -4,6 +4,17 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 
+/**
+ * Destino de cada equipo retirado:
+ *  - 'warehouse': vuelve a un almacén (suma stock como usado/dañado). Default.
+ *  - 'lost'     : máquina perdida (no se sabe dónde) — no vuelve a stock.
+ *  - 'broken'   : rota, se tira a la basura — no vuelve a stock.
+ *  - 'stolen'   : robada — no vuelve a stock.
+ * En los tres últimos el equipo se da de baja igual, pero NO entra en ningún
+ * almacén (queda registrado el motivo en notas + evento de auditoría).
+ */
+export type EquipmentDisposition = "warehouse" | "lost" | "broken" | "stolen";
+
 export interface UninstallEquipmentInput {
   customer_id: string;
   // Equipos seleccionados a desinstalar (todos del mismo cliente)
@@ -18,6 +29,12 @@ export interface UninstallEquipmentInput {
   // Técnico que hará la retirada (opcional). Si se asigna, la verá en su
   // "Mi día" y agenda como RETIRADA.
   installer_user_id?: string | null;
+  // Destino por equipo (opcional). Si no se indica para un equipo, se asume
+  // 'warehouse' (comportamiento clásico). Permite marcar perdida/rota/robada.
+  equipment_dispositions?: Array<{
+    equipment_id: string;
+    disposition: EquipmentDisposition;
+  }> | null;
 }
 
 /**
@@ -77,8 +94,17 @@ export async function createUninstallAction(
     if (valid.length === 0) {
       return { ok: false, error: "Ningún equipo válido para desinstalar" };
     }
-    // Solo equipos nuestros se devuelven al stock
-    const ours = valid.filter((e) => e.product_id);
+    // Destino por equipo (perdida/rota/robada NO vuelve a stock).
+    const dispMap = new Map<string, EquipmentDisposition>();
+    for (const d of input.equipment_dispositions ?? []) {
+      dispMap.set(d.equipment_id, d.disposition);
+    }
+    const dispOf = (id: string): EquipmentDisposition =>
+      dispMap.get(id) ?? "warehouse";
+    // Solo los equipos NUESTROS marcados 'warehouse' vuelven al stock.
+    const ours = valid.filter(
+      (e) => e.product_id && dispOf(e.id) === "warehouse",
+    );
 
     // 2) Reference code I-YYYY-NNNN
     const year = new Date().getFullYear();
@@ -99,10 +125,19 @@ export async function createUninstallAction(
     }
     const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
 
-    // 3) Notas con el listado de equipos + payload con destino
+    // 3) Notas con el listado de equipos + payload con destino. El destino
+    //    por equipo se etiqueta (PERDIDA/ROTA/ROBADA) para auditoría; el
+    //    #UUID se mantiene SIEMPRE para que la baja del equipo se aplique al
+    //    completar, vuelva o no a stock.
+    const DISP_TAG: Record<EquipmentDisposition, string> = {
+      warehouse: "",
+      lost: " [PERDIDA]",
+      broken: " [ROTA]",
+      stolen: " [ROBADA]",
+    };
     const items = valid.map((e) => {
       const name = e.product?.name ?? "Equipo externo";
-      return `${name}${e.serial_number ? ` (S/N ${e.serial_number})` : ""} #${e.id}`;
+      return `${name}${e.serial_number ? ` (S/N ${e.serial_number})` : ""}${DISP_TAG[dispOf(e.id)]} #${e.id}`;
     });
     const status = input.scheduled_at ? "scheduled" : "unscheduled";
     const notesParts = [
@@ -163,6 +198,7 @@ export async function createUninstallAction(
           equipment_ids: input.equipment_ids,
           destination_warehouse_id: input.destination_warehouse_id,
           default_state: input.default_state ?? "used",
+          dispositions: valid.map((e) => ({ id: e.id, disposition: dispOf(e.id) })),
         },
         actor_user_id: session.user_id,
       });
@@ -289,20 +325,25 @@ export async function processUninstallCompletion(
     | "used"
     | "damaged"
     | "refurbished";
-  if (!destWarehouseId) return { moved: 0, deactivated: 0 };
 
-  // Items a devolver
-  const { data: items } = await admin
-    .from("installation_items")
-    .select("product_id, quantity, serial_number, notes")
-    .eq("installation_id", installationId);
+  // Items a devolver a stock. Solo existen para los equipos marcados
+  // 'warehouse' (los perdida/rota/robada no generan installation_items).
+  // Si no hay destino o no hay items, NO devolvemos stock, pero más abajo
+  // SIEMPRE damos de baja los equipos (clave para el caso "todo perdido").
   type IT = {
     product_id: string;
     quantity: number;
     serial_number: string | null;
     notes: string | null;
   };
-  const list = (items ?? []) as IT[];
+  let list: IT[] = [];
+  if (destWarehouseId) {
+    const { data: items } = await admin
+      .from("installation_items")
+      .select("product_id, quantity, serial_number, notes")
+      .eq("installation_id", installationId);
+    list = (items ?? []) as IT[];
+  }
   let moved = 0;
 
   for (const it of list) {
@@ -458,6 +499,66 @@ export async function changeStockStateAction(input: {
     });
 
     revalidatePath(`/almacenes/${r.warehouse_id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Marca una orden de desinstalación como YA HECHA (cuando el cliente nos dice
+ * que el equipo ya se retiró). Pone la installation en 'completed' con la
+ * fecha indicada y dispara el cierre (devuelve stock de los 'warehouse' y da
+ * de baja TODOS los equipos). Para retiradas que se programan a futuro NO se
+ * usa esto: las cierra el técnico desde /instalaciones como siempre.
+ */
+export async function completeUninstallNowAction(input: {
+  installation_id: string;
+  completed_at?: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (
+      !session.is_superadmin &&
+      !session.roles.includes("company_admin") &&
+      !session.roles.includes("technical_director")
+    ) {
+      return { ok: false, error: "Solo admin o director técnico" };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data: inst } = await admin
+      .from("installations")
+      .select("id, company_id, kind, status")
+      .eq("id", input.installation_id)
+      .maybeSingle();
+    const i = inst as
+      | { id: string; company_id: string; kind: string; status: string }
+      | null;
+    if (!i) return { ok: false, error: "Orden no encontrada" };
+    // SEGURIDAD: admin client salta RLS → comprobar empresa.
+    if (i.company_id !== session.company_id) {
+      return { ok: false, error: "No pertenece a tu empresa" };
+    }
+    if (i.kind !== "uninstall") {
+      return { ok: false, error: "No es una orden de desinstalación" };
+    }
+    const completedAt = input.completed_at || new Date().toISOString();
+    await admin
+      .from("installations")
+      .update({ status: "completed", completed_at: completedAt })
+      .eq("id", i.id)
+      .eq("company_id", session.company_id);
+
+    try {
+      await processUninstallCompletion(i.id);
+    } catch (e) {
+      console.error("[completeUninstallNow] completion:", e);
+    }
+
+    revalidatePath("/instalaciones");
+    revalidatePath(`/instalaciones/${i.id}`);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };

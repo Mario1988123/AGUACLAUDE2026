@@ -12,6 +12,7 @@ import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
 import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
 import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-button";
+import { DeleteCustomerButton } from "@/modules/customers/delete-customer-button";
 import { listInstallers } from "@/modules/agenda/actions";
 import { CustomerConsentsCard } from "@/modules/customers/consents-card";
 import { getCustomerConsents } from "@/modules/customers/consents-actions";
@@ -141,6 +142,28 @@ export default async function CustomerDetailPage({
     listTagsCatalog().catch(() => []),
     listCustomerTags(id).catch(() => []),
   ]);
+
+  // Técnicos (para "programar retirada" en mantenimiento y al borrar cliente).
+  const technicians = await listInstallers().catch(() => []);
+
+  // Datos para "Borrar cliente" (solo admin). Sugerimos retirar la máquina si
+  // el cliente tiene algún contrato de alquiler/renting (la máquina sigue
+  // siendo nuestra); en contado se sugiere "se queda" (la compró).
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
+  const suggestRemove = contracts.some(
+    (k) =>
+      (k as { plan_type?: string }).plan_type === "rental" ||
+      (k as { plan_type?: string }).plan_type === "renting",
+  );
+  const activeEquipmentForDelete = equipment
+    .filter((e) => e.is_active)
+    .map((e) => ({
+      id: e.id,
+      display_name: e.product_name ?? e.external_model_name ?? "Equipo",
+      serial_number: e.serial_number,
+      is_ours: !!e.product_name,
+    }));
 
   // Bandera "cliente en riesgo": incidencia abierta con prioridad
   // critical/high + al menos un contrato activo.
@@ -296,6 +319,15 @@ export default async function CustomerDetailPage({
             >
               🎁 Prueba
             </Link>
+            {isAdmin && (
+              <DeleteCustomerButton
+                customerId={id}
+                equipment={activeEquipmentForDelete}
+                warehouses={warehouseOptions}
+                technicians={technicians}
+                suggestRemove={suggestRemove}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -459,7 +491,7 @@ export default async function CustomerDetailPage({
                             display_name:
                               e.product_name ?? e.external_model_name ?? "Equipo",
                           }))}
-                        technicians={await listInstallers().catch(() => [])}
+                        technicians={technicians}
                       />
                       <UninstallEquipmentButton
                         customerId={id}

@@ -120,10 +120,14 @@ export async function listCustomers(
   // alguna tabla no existe aún en el cache de PostgREST, queda vacío).
   const alertsMap = new Map<string, string[]>();
 
+  // Tipo de contrato por cliente (cash/rental/renting). Se prioriza el
+  // contrato activo/firmado más reciente.
+  const contractMap = new Map<string, "cash" | "rental" | "renting">();
+
   if (baseRows.length > 0) {
     const ids = baseRows.map((c) => c.id);
     const nowIso = new Date().toISOString();
-    const [addrsRes, equipRes, overdueMaintRes, openIncidentsRes] =
+    const [addrsRes, equipRes, overdueMaintRes, openIncidentsRes, contractsRes] =
       await Promise.all([
         supabase
           .from("addresses")
@@ -154,6 +158,12 @@ export async function listCustomers(
           .select("customer_id, status")
           .in("customer_id", ids)
           .not("status", "in", "(resolved,closed,cancelled)"),
+        // Contratos: para mostrar el tipo (contado/alquiler/renting) en la tabla.
+        supabase
+          .from("contracts")
+          .select("customer_id, plan_type, status, signed_at, created_at")
+          .in("customer_id", ids)
+          .is("deleted_at", null),
       ]);
     // Marcar avisos
     for (const r of ((overdueMaintRes.data as Array<{
@@ -171,6 +181,30 @@ export async function listCustomers(
       if (!list.includes("Incidencia abierta")) list.push("Incidencia abierta");
       alertsMap.set(r.customer_id, list);
     }
+    // Tipo de contrato: elegir el más relevante por cliente (prioriza
+    // active > signed > resto; dentro del mismo rango, el más reciente).
+    const rankStatus = (s: string | null) =>
+      s === "active" ? 3 : s === "signed" ? 2 : 1;
+    const bestContract = new Map<
+      string,
+      { plan: "cash" | "rental" | "renting"; rank: number; date: string }
+    >();
+    for (const k of ((contractsRes.data as Array<{
+      customer_id: string;
+      plan_type: "cash" | "rental" | "renting" | null;
+      status: string | null;
+      signed_at: string | null;
+      created_at: string | null;
+    }> | null) ?? [])) {
+      if (!k.plan_type) continue;
+      const rank = rankStatus(k.status);
+      const date = k.signed_at ?? k.created_at ?? "";
+      const cur = bestContract.get(k.customer_id);
+      if (!cur || rank > cur.rank || (rank === cur.rank && date > cur.date)) {
+        bestContract.set(k.customer_id, { plan: k.plan_type, rank, date });
+      }
+    }
+    for (const [cid, v] of bestContract) contractMap.set(cid, v.plan);
     for (const a of ((addrsRes.data as Array<{
       customer_id: string;
       street: string | null;
@@ -272,6 +306,7 @@ export async function listCustomers(
       equipment_summary: equipmentSummary,
       equipment_count: eq?.count ?? 0,
       alerts: alertsMap.get(c.id) ?? [],
+      contract_type: contractMap.get(c.id) ?? null,
     };
   });
 }

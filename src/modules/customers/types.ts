@@ -19,6 +19,9 @@ export interface CustomerListItem {
   /** Equipos instalados — primer producto + cantidad total. */
   equipment_summary: string | null;
   equipment_count: number;
+  /** Tipo de contrato más relevante del cliente: 'cash' | 'rental' | 'renting'
+   *  (o null si no tiene contratos). Se prioriza el activo/firmado más reciente. */
+  contract_type: "cash" | "rental" | "renting" | null;
   /** Avisos abiertos (mantenimiento vencido, incidencia, etc.). Lista
    *  legible para mostrar como badge en la tabla y en el modal de ficha. */
   alerts: string[];
