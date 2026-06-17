@@ -67,11 +67,16 @@ export async function createUninstallAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
-    // 1) Equipos válidos del cliente
+    // 1) Equipos válidos del cliente.
+    // ROBUSTO: SIN embed `product:products(name)`. Un embed puede tumbar toda
+    // la query (regla feedback_postgrest_embeds_fragiles) y dejar 0 equipos
+    // válidos — justo lo que pasaba con equipos EXTERNOS importados (product_id
+    // null): "Ningún equipo válido para desinstalar". El nombre se resuelve por
+    // id más abajo, igual que en listCustomerEquipment.
     const { data: rawEq } = await admin
       .from("customer_equipment")
       .select(
-        "id, company_id, customer_id, product_id, address_id, serial_number, is_active, product:products(name)",
+        "id, company_id, customer_id, product_id, address_id, serial_number, is_active",
       )
       .in("id", input.equipment_ids);
     type EQ = {
@@ -82,7 +87,6 @@ export async function createUninstallAction(
       address_id: string | null;
       serial_number: string | null;
       is_active: boolean;
-      product: { name: string } | null;
     };
     const equipment = (rawEq ?? []) as EQ[];
     const valid = equipment.filter(
@@ -142,6 +146,22 @@ export async function createUninstallAction(
     //    por equipo se etiqueta (PERDIDA/ROTA/ROBADA) para auditoría; el
     //    #UUID se mantiene SIEMPRE para que la baja del equipo se aplique al
     //    completar, vuelva o no a stock.
+    // Nombres de producto por id (sin embed → robusto). Los externos no tienen
+    // product_id → se etiquetan "Equipo externo".
+    const prodIds = Array.from(
+      new Set(valid.map((e) => e.product_id).filter(Boolean)),
+    ) as string[];
+    const nameById = new Map<string, string>();
+    if (prodIds.length > 0) {
+      const { data: prods } = await admin
+        .from("products")
+        .select("id, name")
+        .in("id", prodIds);
+      for (const p of (prods ?? []) as Array<{ id: string; name: string }>) {
+        nameById.set(p.id, p.name);
+      }
+    }
+
     const DISP_TAG: Record<EquipmentDisposition, string> = {
       warehouse: "",
       lost: " [PERDIDA]",
@@ -149,7 +169,7 @@ export async function createUninstallAction(
       stolen: " [ROBADA]",
     };
     const items = valid.map((e) => {
-      const name = e.product?.name ?? "Equipo externo";
+      const name = e.product_id ? nameById.get(e.product_id) ?? "Equipo" : "Equipo externo";
       return `${name}${e.serial_number ? ` (S/N ${e.serial_number})` : ""}${DISP_TAG[dispOf(e.id)]} #${e.id}`;
     });
     const status = input.scheduled_at ? "scheduled" : "unscheduled";
