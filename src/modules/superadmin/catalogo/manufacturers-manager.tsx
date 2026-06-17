@@ -109,15 +109,24 @@ export function ManufacturersManager({ manufacturers }: { manufacturers: Manufac
   function onLogoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !logoTargetId) return;
+    if (file.size > 4 * 1024 * 1024) {
+      notify.warning("Logo demasiado grande", "Máximo 4 MB.");
+      if (logoInputRef.current) logoInputRef.current.value = "";
+      return;
+    }
     const fd = new FormData();
     fd.set("manufacturer_id", logoTargetId);
     fd.set("file", file);
     startTransition(async () => {
-      const r = await uploadManufacturerLogoAction(fd);
-      if (!r.ok) notify.error("No se pudo subir el logo", r.error);
-      else {
-        notify.success("Logo actualizado");
-        router.refresh();
+      try {
+        const r = await uploadManufacturerLogoAction(fd);
+        if (!r.ok) notify.error("No se pudo subir el logo", r.error);
+        else {
+          notify.success("Logo actualizado");
+          router.refresh();
+        }
+      } catch {
+        notify.error("No se pudo subir el logo", "Prueba con una imagen más pequeña.");
       }
       if (logoInputRef.current) logoInputRef.current.value = "";
     });

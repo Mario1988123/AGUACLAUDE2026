@@ -160,6 +160,89 @@ export async function listGlobalAttributesForCategory(
   }));
 }
 
+function slugify(s: string): string {
+  return (
+    s
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 50) || "attr"
+  );
+}
+
+/**
+ * Crea un atributo GLOBAL nuevo y lo engancha a la categoría indicada (para que
+ * a partir de ahora salga en todos los productos de esa categoría). Lo usa el
+ * formulario de producto maestro: "añadir atributo" que migra a la categoría.
+ */
+export async function createGlobalAttributeForCategoryAction(input: {
+  categoryKey: string;
+  name: string;
+  dataType?: string;
+  unit?: string;
+}): Promise<{ ok: true; attribute: GlobalAttributeForm } | { ok: false; error: string }> {
+  try {
+    await ensureSuperadmin();
+    const name = input.name.trim();
+    if (!name) return { ok: false, error: "Escribe el nombre del atributo" };
+    if (!input.categoryKey) return { ok: false, error: "Elige una categoría primero" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const VALID = ["text", "number", "boolean", "enum", "dimension", "date"];
+    const dataType = input.dataType && VALID.includes(input.dataType) ? input.dataType : "text";
+    const unit = input.unit?.trim() || null;
+
+    // key única
+    const base = slugify(name);
+    let key = base;
+    let n = 1;
+    for (;;) {
+      const { data: ex } = await admin
+        .from("product_attributes_global")
+        .select("key")
+        .eq("key", key)
+        .maybeSingle();
+      if (!ex) break;
+      n += 1;
+      key = `${base}_${n}`;
+      if (n > 50) break;
+    }
+
+    const { error } = await admin.from("product_attributes_global").insert({
+      key,
+      name_es: name,
+      data_type: dataType,
+      unit,
+    });
+    if (error) return { ok: false, error: error.message };
+
+    const { error: linkErr } = await admin
+      .from("product_attributes_global_categories")
+      .insert({ attribute_key: key, category_key: input.categoryKey, is_required: false });
+    if (linkErr && !/duplicate|unique/i.test(linkErr.message ?? "")) {
+      return { ok: false, error: linkErr.message };
+    }
+
+    revalidatePath("/superadmin/catalogo");
+    return {
+      ok: true,
+      attribute: {
+        key,
+        name_es: name,
+        data_type: dataType,
+        unit,
+        enum_values: null,
+        is_required: false,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
 // =============================================================================
 // Lectura de productos maestros
 // =============================================================================
@@ -471,8 +554,8 @@ export async function uploadCatalogPhotoAction(
     const file = formData.get("file");
     if (!id) return { ok: false, error: "Falta el producto" };
     if (!(file instanceof File)) return { ok: false, error: "Falta el archivo" };
-    if (file.size > 10 * 1024 * 1024)
-      return { ok: false, error: "Imagen demasiado grande (máx 10 MB)" };
+    if (file.size > 8 * 1024 * 1024)
+      return { ok: false, error: "Imagen demasiado grande (máx 8 MB)" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const ready = await ensureBucket(admin, BUCKET);
@@ -605,8 +688,8 @@ export async function uploadCatalogDocumentAction(
     if (!id) return { ok: false, error: "Falta el producto" };
     if (!title) return { ok: false, error: "Falta el título" };
     if (!(file instanceof File)) return { ok: false, error: "Falta el archivo" };
-    if (file.size > 25 * 1024 * 1024)
-      return { ok: false, error: "Archivo demasiado grande (máx 25 MB)" };
+    if (file.size > 9 * 1024 * 1024)
+      return { ok: false, error: "Archivo demasiado grande (máx 9 MB)" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const ready = await ensureBucket(admin, BUCKET);

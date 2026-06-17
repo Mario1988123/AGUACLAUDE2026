@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Save } from "lucide-react";
+import { Plus, Save } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -13,6 +13,7 @@ import {
   updateCatalogProductSafeAction,
   setCatalogProductAttributesSafeAction,
   listGlobalAttributesForCategory,
+  createGlobalAttributeForCategoryAction,
   type GlobalCategoryOption,
   type GlobalAttributeForm,
   type CatalogProductDetail,
@@ -56,6 +57,12 @@ export function MasterProductForm({
 
   const [attrs, setAttrs] = useState<GlobalAttributeForm[]>([]);
   const [attrLoading, setAttrLoading] = useState(false);
+  // "Añadir atributo nuevo" (crea atributo global + lo engancha a la categoría)
+  const [showAddAttr, setShowAddAttr] = useState(false);
+  const [newAttrName, setNewAttrName] = useState("");
+  const [newAttrType, setNewAttrType] = useState("text");
+  const [newAttrUnit, setNewAttrUnit] = useState("");
+  const [addingAttr, startAddAttr] = useTransition();
   const [attrValues, setAttrValues] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     for (const a of product?.attributes ?? []) {
@@ -169,6 +176,42 @@ export function MasterProductForm({
         await setCatalogProductAttributesSafeAction(product.id, buildAttrPayload());
         notify.success("Cambios guardados");
         router.refresh();
+      }
+    });
+  }
+
+  function addNewAttribute() {
+    if (!categoryKey) {
+      notify.warning("Elige una categoría primero");
+      return;
+    }
+    if (!newAttrName.trim()) {
+      notify.warning("Escribe el nombre del atributo");
+      return;
+    }
+    startAddAttr(async () => {
+      try {
+        const r = await createGlobalAttributeForCategoryAction({
+          categoryKey,
+          name: newAttrName.trim(),
+          dataType: newAttrType,
+          unit: newAttrUnit.trim() || undefined,
+        });
+        if (!r.ok) {
+          notify.error("No se pudo añadir", r.error);
+          return;
+        }
+        setAttrs((prev) =>
+          prev.some((a) => a.key === r.attribute.key) ? prev : [...prev, r.attribute],
+        );
+        setAttrValues((prev) => ({ ...prev, [r.attribute.key]: "" }));
+        setNewAttrName("");
+        setNewAttrUnit("");
+        setNewAttrType("text");
+        setShowAddAttr(false);
+        notify.success("Atributo añadido a la categoría");
+      } catch (e) {
+        notify.error("Error", e instanceof Error ? e.message : "No se pudo añadir");
       }
     });
   }
@@ -323,6 +366,56 @@ export function MasterProductForm({
             </div>
           </div>
         ))}
+
+        {categoryKey &&
+          !attrLoading &&
+          (showAddAttr ? (
+            <div className="space-y-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
+              <div className="grid gap-2 sm:grid-cols-[1fr_10rem]">
+                <Input
+                  placeholder="Nombre del atributo (ej. Caudal)"
+                  value={newAttrName}
+                  onChange={(e) => setNewAttrName(e.target.value)}
+                />
+                <select
+                  value={newAttrType}
+                  onChange={(e) => setNewAttrType(e.target.value)}
+                  className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+                >
+                  <option value="text">Texto</option>
+                  <option value="number">Número</option>
+                  <option value="boolean">Sí/No</option>
+                </select>
+              </div>
+              {newAttrType === "number" && (
+                <Input
+                  placeholder="Unidad (ej. L/min, bar, kg)"
+                  value={newAttrUnit}
+                  onChange={(e) => setNewAttrUnit(e.target.value)}
+                />
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Se añade a la categoría: aparecerá en todos los productos de esta categoría.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddAttr(false)}
+                  disabled={addingAttr}
+                >
+                  Cancelar
+                </Button>
+                <Button variant="success" size="sm" onClick={addNewAttribute} disabled={addingAttr}>
+                  {addingAttr ? "Añadiendo…" : "Añadir"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setShowAddAttr(true)}>
+              <Plus className="h-4 w-4" /> Añadir atributo
+            </Button>
+          ))}
       </div>
 
       <div className="flex justify-end border-t pt-4">

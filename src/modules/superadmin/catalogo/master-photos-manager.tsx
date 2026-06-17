@@ -28,15 +28,26 @@ export function MasterPhotosManager({
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Control de tamaño ANTES de enviar: por encima del límite del servidor la
+    // llamada lanzaría una excepción que tumbaría la página entera.
+    if (file.size > 8 * 1024 * 1024) {
+      notify.warning("Imagen demasiado grande", "Máximo 8 MB. Reduce o recorta la foto.");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     const fd = new FormData();
     fd.set("catalog_product_id", productId);
     fd.set("file", file);
     startTransition(async () => {
-      const r = await uploadCatalogPhotoAction(fd);
-      if (!r.ok) notify.error("No se pudo subir", r.error);
-      else {
-        notify.success("Foto añadida");
-        router.refresh();
+      try {
+        const r = await uploadCatalogPhotoAction(fd);
+        if (!r.ok) notify.error("No se pudo subir", r.error);
+        else {
+          notify.success("Foto añadida");
+          router.refresh();
+        }
+      } catch {
+        notify.error("No se pudo subir la foto", "Prueba con una imagen más pequeña.");
       }
       if (inputRef.current) inputRef.current.value = "";
     });

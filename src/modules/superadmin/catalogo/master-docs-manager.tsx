@@ -43,18 +43,27 @@ export function MasterDocsManager({
       if (inputRef.current) inputRef.current.value = "";
       return;
     }
+    if (file.size > 9 * 1024 * 1024) {
+      notify.warning("Archivo demasiado grande", "Máximo 9 MB.");
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
     const fd = new FormData();
     fd.set("catalog_product_id", productId);
     fd.set("kind", kind);
     fd.set("title", title.trim());
     fd.set("file", file);
     startTransition(async () => {
-      const r = await uploadCatalogDocumentAction(fd);
-      if (!r.ok) notify.error("No se pudo subir", r.error);
-      else {
-        notify.success("Documento añadido");
-        setTitle("");
-        router.refresh();
+      try {
+        const r = await uploadCatalogDocumentAction(fd);
+        if (!r.ok) notify.error("No se pudo subir", r.error);
+        else {
+          notify.success("Documento añadido");
+          setTitle("");
+          router.refresh();
+        }
+      } catch {
+        notify.error("No se pudo subir el documento", "Prueba con un archivo más pequeño.");
       }
       if (inputRef.current) inputRef.current.value = "";
     });
