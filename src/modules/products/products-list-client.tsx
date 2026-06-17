@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Pencil, Trash2, Calculator } from "lucide-react";
+import { Eye, Pencil, Trash2, Calculator, ArrowUpCircle } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { ProductBulkToolbar, ProductCheckbox } from "@/modules/products/bulk-toolbar";
@@ -168,6 +168,20 @@ interface Props {
   canDelete?: boolean;
   /** Solo admin/dir comercial ve la cantidad de stock; el resto "Hay/Sin stock". */
   canSeeStock?: boolean;
+  /** IDs de productos con actualización del catálogo del fabricante disponible. */
+  outdatedIds?: string[];
+}
+
+/** Distintivo "actualización del fabricante disponible". */
+function UpdateBadge() {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800"
+      title="El fabricante ha actualizado este producto. Entra para aplicar o descartar."
+    >
+      <ArrowUpCircle className="h-3 w-3" /> Actualización
+    </span>
+  );
 }
 
 /** Celda de stock total (suma de almacenes). Cantidad solo para admin/dir comercial. */
@@ -240,9 +254,11 @@ export function ProductsListClient({
   canEdit = canBulk,
   canDelete = false,
   canSeeStock = false,
+  outdatedIds,
 }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const outdated = useMemo(() => new Set(outdatedIds ?? []), [outdatedIds]);
 
   const toggle = (id: string) => {
     setSelectedIds((s) => {
@@ -339,6 +355,7 @@ export function ProductsListClient({
                         />
                       )}
                       <div className="font-bold truncate">{p.name}</div>
+                      {outdated.has(p.id) && <UpdateBadge />}
                     </div>
                     {p.category_name && (
                       <div className="text-xs text-muted-foreground truncate">
@@ -392,7 +409,7 @@ export function ProductsListClient({
                       />
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <CalcIconToggle
                           productId={p.id}
                           value={p.show_in_calculator}
@@ -404,6 +421,7 @@ export function ProductsListClient({
                         >
                           {p.name}
                         </Link>
+                        {outdated.has(p.id) && <UpdateBadge />}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {KIND_LABEL[p.kind]}
@@ -507,7 +525,7 @@ export function ProductsListClient({
                         </td>
                       )}
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <CalcIconToggle
                             productId={p.id}
                             value={p.show_in_calculator}
@@ -519,6 +537,7 @@ export function ProductsListClient({
                           >
                             {p.name}
                           </Link>
+                          {outdated.has(p.id) && <UpdateBadge />}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-xs">

@@ -10,6 +10,7 @@ import { ProductsListClient } from "@/modules/products/products-list-client";
 import { ProductsEmptyState } from "@/modules/products/empty-state";
 import { isProductEditor } from "@/modules/products/permissions";
 import { listTagsCatalog } from "@/modules/products/tags-actions";
+import { listOutdatedProductIds } from "@/modules/products/catalog-update-actions";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
@@ -43,11 +44,12 @@ export default async function ProductsPage({
   // Borrar producto: solo admin de empresa (nivel 1) o superadmin.
   const canDelete =
     session.is_superadmin || session.roles.includes("company_admin");
-  const [products, categories, alerts, tagsCatalog] = await Promise.all([
+  const [products, categories, alerts, tagsCatalog, outdatedIds] = await Promise.all([
     listProducts({ kind, category_id: categoryId, q: sp.q, active_only: activeOnly }),
     listCategories().catch(() => []),
     isUpper ? getProductAlerts().catch(() => null) : Promise.resolve(null),
     listTagsCatalog().catch(() => []),
+    canEdit ? listOutdatedProductIds().catch(() => []) : Promise.resolve([]),
   ]);
 
   const tagColors: Record<string, string> = Object.fromEntries(
@@ -259,6 +261,7 @@ export default async function ProductsPage({
         canDelete={canDelete}
         canSeeStock={isUpper}
         tagColors={tagColors}
+        outdatedIds={outdatedIds}
       />
     </div>
   );
