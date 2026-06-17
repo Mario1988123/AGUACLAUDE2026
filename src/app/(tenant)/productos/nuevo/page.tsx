@@ -1,5 +1,6 @@
 import { listCategories } from "@/modules/products/actions";
 import { ProductCreateForm } from "@/modules/products/create-form";
+import { CatalogQuickImport } from "@/modules/products/catalog-quick-import";
 
 export default async function NuevoProductoPage() {
   const categories = await listCategories();
@@ -11,6 +12,7 @@ export default async function NuevoProductoPage() {
           Datos básicos. Atributos, imágenes y planes adicionales se gestionan en la ficha.
         </p>
       </div>
+      <CatalogQuickImport />
       <ProductCreateForm categories={categories} />
     </div>
   );

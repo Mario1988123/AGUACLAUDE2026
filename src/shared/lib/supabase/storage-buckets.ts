@@ -24,6 +24,9 @@ export const STORAGE_BUCKETS = {
   "incident-attachments": { public: false },
   /** Datasheets / hojas técnicas de productos. Públicas. */
   "product-datasheets": { public: true },
+  /** Foto principal/galería de productos de la empresa. Pública (se sirve por
+   *  URL directa en listados y fichas). */
+  "product-images": { public: true },
   /** Logos de empresa para PDF. Públicos. */
   "company-logos": { public: true },
   /** Tickets/recibos de gastos comerciales. Privados. */
