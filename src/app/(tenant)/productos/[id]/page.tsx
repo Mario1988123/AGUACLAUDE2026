@@ -40,6 +40,8 @@ import {
 import { DocsAndCertsPanel } from "@/modules/products/docs-and-certs-panel";
 import { ExtendedFieldsPanel } from "@/modules/products/extended-fields-panel";
 import { listTagsCatalog } from "@/modules/products/tags-actions";
+import { getProductCatalogStatus } from "@/modules/products/catalog-update-actions";
+import { CatalogUpdateBanner } from "@/modules/products/catalog-update-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +85,13 @@ export default async function ProductDetailPage({
     listProductShares(id).catch(() => []),
     getCriticalAttributesState(id).catch(() => ({ isDismissed: true, missing: [] })),
   ]);
+  const catalogStatus = await getProductCatalogStatus(id).catch(() => ({
+    linked: false,
+    hasUpdate: false,
+    masterName: null,
+    fromVersion: null,
+    toVersion: null,
+  }));
   const [filterAssignments, availableFilters, documents, productCerts, certCatalog, tagsCatalog] =
     await Promise.all([
       listFilterAssignmentsByProduct(id).catch(() => []),
@@ -227,6 +236,8 @@ export default async function ProductDetailPage({
           <BackButton href="/productos" />
         </div>
       </div>
+
+      {canEdit && <CatalogUpdateBanner productId={product.id} status={catalogStatus} />}
 
       {canEdit && !criticalState.isDismissed && criticalState.missing.length > 0 && (
         <CriticalAttributesBanner
