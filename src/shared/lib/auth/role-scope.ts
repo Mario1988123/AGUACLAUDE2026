@@ -53,6 +53,74 @@ export async function resolveVisibleUserIds(
 }
 
 /**
+ * ¿El usuario tiene una tarea ASIGNADA y ACTIVA para este cliente?
+ *
+ * Regla (2026-06-18): un técnico/instalador puede ver un cliente mientras tenga
+ * una tarea asignada a él (agenda, instalación o mantenimiento) que NO esté
+ * terminada ni cancelada. Cuando la completa, deja de verlo. Esto permite que el
+ * scope normal (nivel 3 = solo lo suyo) se amplíe puntualmente al cliente de su
+ * tarea, sin abrirle todo el CRM.
+ *
+ * Solo cuenta SUS asignaciones (assigned/installer/technician = session.user_id),
+ * así que no expone clientes de otros. Defensivo: si una tabla/consulta falla,
+ * se ignora (no concede acceso por ese camino).
+ */
+export async function hasActiveTaskForCustomer(
+  session: SessionClaims,
+  customerId: string,
+): Promise<boolean> {
+  if (!session.company_id || !customerId) return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const NOT_DONE = "(completed,cancelled)";
+
+  // Tarea de agenda vinculada directamente al cliente.
+  try {
+    const { count } = await admin
+      .from("agenda_events")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .eq("assigned_user_id", session.user_id)
+      .eq("subject_type", "customer")
+      .eq("subject_id", customerId)
+      .not("status", "in", NOT_DONE);
+    if ((count ?? 0) > 0) return true;
+  } catch {
+    /* ignore */
+  }
+
+  // Instalación asignada al técnico para este cliente.
+  try {
+    const { count } = await admin
+      .from("installations")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .eq("installer_user_id", session.user_id)
+      .eq("customer_id", customerId)
+      .not("status", "in", NOT_DONE);
+    if ((count ?? 0) > 0) return true;
+  } catch {
+    /* ignore */
+  }
+
+  // Mantenimiento asignado al técnico para este cliente.
+  try {
+    const { count } = await admin
+      .from("maintenance_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .eq("technician_user_id", session.user_id)
+      .eq("customer_id", customerId)
+      .not("status", "in", NOT_DONE);
+    if ((count ?? 0) > 0) return true;
+  } catch {
+    /* ignore */
+  }
+
+  return false;
+}
+
+/**
  * Helpers de identificación de nivel (sin BD).
  */
 export function isLevel1(session: SessionClaims): boolean {

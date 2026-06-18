@@ -377,8 +377,12 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   )
     return;
 
+  // ADMIN client a propósito: solo resolvemos nombre/dirección/teléfono de los
+  // subjects de tareas que el usuario YA ve (la lista de eventos se cargó con
+  // RLS por su scope). Sin esto, un instalador (nivel 3) no podría leer el
+  // cliente/dirección por RLS y la tarea salía sin dirección ("no sale").
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const supabase = createAdminClient() as any;
 
   type InstRow = { id: string; reference_code: string | null; customer_id: string | null };
   type MaintRow = { id: string; customer_id: string | null };

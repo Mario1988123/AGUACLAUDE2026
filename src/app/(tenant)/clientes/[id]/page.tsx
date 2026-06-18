@@ -59,31 +59,75 @@ export default async function CustomerDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const fromProposal = sp.from_proposal;
+
+  const session = await requireSession();
+  const { resolveVisibleUserIds, hasActiveTaskForCustomer } = await import(
+    "@/shared/lib/auth/role-scope"
+  );
+  // Regla 2026-06-18: un técnico/instalador puede ver al cliente mientras tenga
+  // una tarea asignada y ACTIVA (agenda/instalación/mantenimiento); al terminarla
+  // deja de verlo. Lo calculamos una vez y lo reusamos para leer (aunque RLS lo
+  // bloquee) y para el scope.
+  const hasTask = await hasActiveTaskForCustomer(session, id);
+
   let customer;
   try {
     customer = await getCustomer(id);
   } catch {
-    notFound();
+    customer = null;
   }
+  // Si RLS bloqueó (típico en instalador con cliente que no creó) pero tiene
+  // tarea activa, leemos con admin client FILTRANDO POR SU EMPRESA (sin fuga
+  // cross-tenant).
+  if (!customer && hasTask && session.company_id) {
+    const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("customers")
+      .select("*")
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (data) customer = data;
+  }
+  if (!customer) notFound();
 
   const displayName =
     customer.party_kind === "company"
       ? customer.trade_name || customer.legal_name || "Sin nombre"
       : `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() || "Sin nombre";
 
-  const session = await requireSession();
-  // Scope check: nivel 2/3 solo accede a sus clientes (created_by ∈ visibleUserIds).
+  // Scope check: nivel 2/3 solo acceden a sus clientes; excepción si tienen una
+  // tarea activa (hasTask).
   {
-    const { resolveVisibleUserIds } = await import("@/shared/lib/auth/role-scope");
     const visibleUserIds = await resolveVisibleUserIds(session);
     if (visibleUserIds !== null) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cust = customer as any;
-      const inScope = cust.created_by && visibleUserIds.includes(cust.created_by);
+      const inScope =
+        (cust.created_by && visibleUserIds.includes(cust.created_by)) || hasTask;
       if (!inScope) notFound();
     }
   }
-  const addresses = await listAddresses({ customer_id: id });
+  let addresses = await listAddresses({ customer_id: id }).catch(() => []);
+  // Si RLS no devolvió direcciones pero el técnico tiene tarea activa, las
+  // leemos con admin client (filtradas por empresa) para que vea la dirección
+  // de instalación en la ficha.
+  if (addresses.length === 0 && hasTask && session.company_id) {
+    const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("addresses")
+      .select("*")
+      .eq("customer_id", id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .order("is_primary", { ascending: false });
+    addresses = (data ?? []) as typeof addresses;
+  }
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
