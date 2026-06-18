@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { getWarehouseSettings } from "./settings-actions";
 
 /**
  * Importación masiva de stock inicial desde CSV.
@@ -185,7 +186,17 @@ export async function importStockCsvAction(input: {
 }
 
 /**
- * Valoración total del inventario por almacén = SUM(quantity × cost_cents).
+ * Valoración total del inventario por almacén.
+ *
+ * El método depende de `warehouse_settings.valuation_method` de la empresa:
+ *  - PMP (por defecto): SUM(quantity × products.cost_cents) = coste medio.
+ *  - FIFO: para cada producto con lotes en el almacén, suma
+ *    remaining_quantity × unit_cost_cents de `stock_lots`. Los productos sin
+ *    lotes caen a cost_cents (PMP) en esa línea.
+ *
+ * Las unidades físicas (`total_units`) salen siempre de `warehouse_stock`.
+ * Defensivo: si la tabla/columnas de `stock_lots` no existen o la consulta
+ * falla, todo cae a cost_cents sin romper.
  */
 export interface InventoryValuation {
   warehouse_id: string;
@@ -235,19 +246,73 @@ export async function getInventoryValuation(): Promise<InventoryValuation[]> {
     }
   }
 
+  // Método de valoración de la empresa (PMP por defecto). Solo FIFO cambia el
+  // cálculo del valor; las unidades físicas salen siempre de warehouse_stock.
+  const { valuation_method } = await getWarehouseSettings();
+
+  // FIFO: valor real de los lotes por almacén+producto
+  // (remaining_quantity × unit_cost_cents). Mapa wh -> (producto -> valor cents).
+  // Defensivo: si stock_lots no existe o la consulta falla, queda vacío y todo
+  // cae a cost_cents.
+  const lotValueByWh = new Map<string, Map<string, number>>();
+  if (valuation_method === "FIFO" && productIds.length > 0) {
+    const { data: lotsRaw, error: lotsErr } = await admin
+      .from("stock_lots")
+      .select("warehouse_id, product_id, remaining_quantity, unit_cost_cents")
+      .in(
+        "warehouse_id",
+        whs.map((w) => w.id),
+      )
+      .gt("remaining_quantity", 0);
+    if (!lotsErr && lotsRaw) {
+      for (const lot of lotsRaw as Array<{
+        warehouse_id: string;
+        product_id: string;
+        remaining_quantity: number | null;
+        unit_cost_cents: number | null;
+      }>) {
+        const qty = Number(lot.remaining_quantity ?? 0);
+        if (!(qty > 0)) continue;
+        const unit = lot.unit_cost_cents ?? 0;
+        let perProduct = lotValueByWh.get(lot.warehouse_id);
+        if (!perProduct) {
+          perProduct = new Map<string, number>();
+          lotValueByWh.set(lot.warehouse_id, perProduct);
+        }
+        perProduct.set(lot.product_id, (perProduct.get(lot.product_id) ?? 0) + qty * unit);
+      }
+    }
+  }
+
   return whs.map((w) => {
     const wsStocks = list.filter((s) => s.warehouse_id === w.id);
     const total_units = wsStocks.reduce((s, r) => s + r.quantity, 0);
-    const total_value_cents = wsStocks.reduce(
-      (s, r) => s + r.quantity * (costMap.get(r.product_id) ?? 0),
-      0,
-    );
+    const lotProds = lotValueByWh.get(w.id);
+
+    // Cantidad física por producto (puede haber varias filas: estado/ubicación).
+    const qtyByProduct = new Map<string, number>();
+    for (const r of wsStocks) {
+      qtyByProduct.set(r.product_id, (qtyByProduct.get(r.product_id) ?? 0) + r.quantity);
+    }
+
+    let total_value_cents = 0;
+    for (const [productId, qty] of qtyByProduct) {
+      const lotVal = lotProds?.get(productId);
+      if (lotVal !== undefined) {
+        // FIFO: valor real de los lotes de este producto en el almacén.
+        total_value_cents += lotVal;
+      } else {
+        // PMP o producto sin lotes → coste medio.
+        total_value_cents += qty * (costMap.get(productId) ?? 0);
+      }
+    }
+
     return {
       warehouse_id: w.id,
       warehouse_name: w.name,
       warehouse_kind: w.kind,
       total_units,
-      total_value_cents,
+      total_value_cents: Math.round(total_value_cents),
     };
   });
 }
