@@ -7,6 +7,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 
 const createSchema = z.object({
   customer_id: z.string().uuid().optional(),
@@ -118,9 +119,14 @@ export async function createFreeTrialAction(input: unknown) {
   if (parsed.customer_id && parsed.lead_id) {
     throw new Error("Solo cliente o lead, no ambos");
   }
+  // La fecha viene de un <input type="datetime-local"> = hora de pared Madrid.
+  // La convertimos al instante UTC correcto (si no, se guarda 1-2 h adelantada).
+  const scheduledIso = parsed.scheduled_at
+    ? madridLocalToUtcISO(parsed.scheduled_at)
+    : null;
   // Validación servidor: no se puede programar para fecha pasada.
-  if (parsed.scheduled_at) {
-    const sched = new Date(parsed.scheduled_at);
+  if (scheduledIso) {
+    const sched = new Date(scheduledIso);
     const minToday = new Date();
     minToday.setHours(0, 0, 0, 0);
     if (sched < minToday) {
@@ -139,10 +145,10 @@ export async function createFreeTrialAction(input: unknown) {
       customer_id: parsed.customer_id ?? null,
       lead_id: parsed.lead_id ?? null,
       installation_address_id: parsed.installation_address_id ?? null,
-      status: parsed.scheduled_at ? "scheduled" : "draft",
+      status: scheduledIso ? "scheduled" : "draft",
       duration_days: parsed.duration_days,
       conditions_text: parsed.conditions_text ?? null,
-      scheduled_at: parsed.scheduled_at ?? null,
+      scheduled_at: scheduledIso,
       assigned_installer_user_id: parsed.assigned_installer_user_id ?? null,
       notes: parsed.notes ?? null,
       created_by: session.user_id,

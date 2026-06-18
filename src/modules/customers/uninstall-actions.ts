@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 
 /**
  * Destino de cada equipo retirado:
@@ -192,7 +193,7 @@ export async function createUninstallAction(
         reference_code: referenceCode,
         customer_id: input.customer_id,
         address_id: firstAddressId,
-        scheduled_at: input.scheduled_at ?? null,
+        scheduled_at: input.scheduled_at ? madridLocalToUtcISO(input.scheduled_at) : null,
         installer_user_id: input.installer_user_id ?? null,
         assigned_at: input.installer_user_id ? new Date().toISOString() : null,
         assigned_by: input.installer_user_id ? session.user_id : null,

@@ -12,6 +12,7 @@ import {
   madridIsoDow,
   madridJsDay,
   madridDayRangeUtc,
+  madridLocalToUtcISO,
 } from "@/shared/lib/format-date";
 
 /**
@@ -1056,9 +1057,14 @@ export async function createAgendaEventAction(input: unknown) {
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const parsed = parseOrFriendly(agendaCreateSchema, input, "Agenda");
 
-  // Calcular fechas de la serie según recurrencia
-  const baseStart = new Date(parsed.starts_at);
-  const baseEnd = parsed.ends_at ? new Date(parsed.ends_at) : null;
+  // Calcular fechas de la serie según recurrencia. Las fechas vienen de un
+  // <input type="datetime-local"> = hora de pared de Madrid. Las convertimos al
+  // instante UTC correcto (si no, el servidor UTC las guarda 1-2 h adelantadas).
+  const startIso = madridLocalToUtcISO(parsed.starts_at);
+  if (!startIso) throw new Error("Fecha de inicio inválida");
+  const baseStart = new Date(startIso);
+  const endIso = parsed.ends_at ? madridLocalToUtcISO(parsed.ends_at) : null;
+  const baseEnd = endIso ? new Date(endIso) : null;
   const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
   const occurrences =
     parsed.recurrence_freq === "none" ? 1 : Math.max(1, parsed.recurrence_count);
@@ -1153,6 +1159,11 @@ async function rescheduleAgendaEventInternal(
   eventId: string,
   newStartsAtIso: string,
 ): Promise<void> {
+  // La nueva hora puede llegar como hora de pared de Madrid (datetime-local del
+  // diálogo de mover) o como ISO con zona (arrastre en el calendario). La
+  // normalizamos al instante UTC correcto (idempotente si ya trae zona) para
+  // no guardarla 1-2 h adelantada.
+  newStartsAtIso = madridLocalToUtcISO(newStartsAtIso) ?? newStartsAtIso;
   // Validación: la nueva fecha no puede estar en el pasado.
   const _newDt = new Date(newStartsAtIso);
   if (!isNaN(_newDt.getTime()) && _newDt.getTime() < Date.now() - 60 * 1000) {

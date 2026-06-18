@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { createMaintenanceSafeAction } from "@/modules/maintenance/actions";
 
 interface EquipmentLite {
@@ -51,7 +52,9 @@ export function CreateMaintenanceButton({
         customer_id: customerId,
         customer_equipment_id: equipmentId || undefined,
         kind,
-        scheduled_at: new Date(scheduledAt).toISOString(),
+        // Hora de pared Madrid → instante UTC correcto (no depende del huso
+        // del navegador). Antes new Date(local) fallaba fuera de España.
+        scheduled_at: madridLocalToUtcISO(scheduledAt) ?? new Date(scheduledAt).toISOString(),
         technician_user_id: technicianId || undefined,
         is_charged: isCharged,
         charge_cents:

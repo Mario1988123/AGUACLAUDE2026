@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 
 export interface ScheduleFreeTrialUninstallInput {
   trial_id: string;
@@ -170,7 +171,7 @@ export async function scheduleFreeTrialUninstallAction(
         free_trial_id: input.trial_id,
         address_id: trial.installation_address_id,
         installer_user_id: installerId,
-        scheduled_at: input.scheduled_at ?? null,
+        scheduled_at: input.scheduled_at ? madridLocalToUtcISO(input.scheduled_at) : null,
         notes: notesParts.join("\n"),
       })
       .select("id, reference_code")
@@ -204,7 +205,7 @@ export async function scheduleFreeTrialUninstallAction(
       kind: "free_trial.uninstall_scheduled",
       payload: {
         installation_id: i.id,
-        scheduled_at: input.scheduled_at ?? null,
+        scheduled_at: input.scheduled_at ? madridLocalToUtcISO(input.scheduled_at) : null,
         destination_warehouse_id: input.destination_warehouse_id,
       },
       actor_user_id: session.user_id,

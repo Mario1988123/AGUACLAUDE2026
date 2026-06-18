@@ -144,6 +144,48 @@ export function madridDateKey(value: string | Date): string {
  * Nota: en los 2 días de cambio de hora el día dura 23 h o 25 h; aquí
  * asumimos 24 h, suficiente para un rango "hoy" (el margen no afecta).
  */
+/**
+ * Convierte una hora "de pared" de Madrid (lo que el usuario teclea en un
+ * `<input type="datetime-local">`, p.ej. "2026-06-18T09:00") al instante UTC
+ * correcto en ISO ("2026-06-18T07:00:00.000Z" en verano).
+ *
+ * POR QUÉ: el servidor (Vercel = UTC) hace `new Date("2026-06-18T09:00")` y lo
+ * interpreta como 09:00 UTC, así que al mostrarlo en Madrid (+1/+2 h) sale 1-2
+ * horas más tarde (el bug "lo pongo a las 9 y sale a las 11"). Esta función
+ * trata el string como hora de Madrid y devuelve el instante real.
+ *
+ * Idempotente: si el string YA trae zona (termina en Z o +hh:mm) se respeta el
+ * instante tal cual. Devuelve null si no es parseable.
+ */
+export function madridLocalToUtcISO(local: string | null | undefined): string | null {
+  if (!local) return null;
+  const s = String(local).trim();
+  if (!s) return null;
+  // Ya trae zona explícita → instante absoluto, respétalo.
+  if (/[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = Number(m[6] ?? "0");
+  // Tratamos las componentes como si fueran UTC y medimos el offset de Madrid
+  // en ese instante para corregirlo (misma técnica que madridDayRangeUtc).
+  const asUtc = Date.UTC(year, month - 1, day, hour, minute, second);
+  const p = madridParts(new Date(asUtc));
+  const madridAsUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, 0);
+  const offsetMs = madridAsUtc - asUtc; // +1h invierno / +2h verano
+  return new Date(asUtc - offsetMs).toISOString();
+}
+
 export function madridDayRangeUtc(value: string | Date): { start: Date; end: Date } {
   const d = typeof value === "string" ? new Date(value) : value;
   const p = madridParts(d);

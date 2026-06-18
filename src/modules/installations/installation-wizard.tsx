@@ -27,6 +27,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import {
   startInstallationAction,
   pauseInstallationAction,
@@ -571,7 +572,7 @@ export function InstallationWizard(props: Props) {
         reason_notes: pauseNotes || undefined,
         scheduled_resume_at:
           pauseReason === "end_of_day" && pauseScheduledAt
-            ? pauseScheduledAt
+            ? madridLocalToUtcISO(pauseScheduledAt)
             : null,
       });
       if (!r.ok) {

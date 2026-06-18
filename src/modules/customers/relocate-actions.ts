@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 
 /**
  * Crea una orden de reubicación de un equipo del cliente.
@@ -121,7 +122,7 @@ export async function relocateEquipmentAction(input: {
         reference_code: referenceCode,
         customer_id: eq.customer_id,
         address_id: input.new_address_id,
-        scheduled_at: input.scheduled_at ?? null,
+        scheduled_at: input.scheduled_at ? madridLocalToUtcISO(input.scheduled_at) : null,
         notes: noteParts.join(" · "),
       })
       .select("id")
