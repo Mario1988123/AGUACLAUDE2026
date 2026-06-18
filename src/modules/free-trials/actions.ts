@@ -11,7 +11,11 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 const createSchema = z.object({
   customer_id: z.string().uuid().optional(),
   lead_id: z.string().uuid().optional(),
-  installation_address_id: z.string().uuid().optional(),
+  // Dirección de instalación OBLIGATORIA: hay que saber dónde se instala la
+  // prueba. Aunque el lead no la tuviera guardada, el form obliga a ponerla.
+  installation_address_id: z
+    .string({ required_error: "Falta la dirección de instalación de la prueba" })
+    .uuid({ message: "Falta la dirección de instalación de la prueba" }),
   duration_days: z.number().int().positive().default(30),
   conditions_text: z.string().optional(),
   scheduled_at: z.string().optional(),

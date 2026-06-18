@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, Plus, Trash2, Save } from "lucide-react";
+import { ChevronLeft, Plus, Trash2, Save, MapPin } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { AddressForm } from "@/modules/addresses/address-form";
 import { createFreeTrialSafeAction } from "./actions";
 
 interface ProductOption {
@@ -54,11 +55,23 @@ export function FreeTrialCreateForm({
     { product_id: "", quantity: "1" },
   ]);
   const [addressId, setAddressId] = useState(addresses[0]?.id ?? "");
+  // Formulario de dirección inline: si el lead/cliente no tiene dirección
+  // guardada, se añade aquí mismo (no hay que ir a la ficha y volver).
+  const [showAddrForm, setShowAddrForm] = useState(false);
   const [installerId, setInstallerId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [durationDays, setDurationDays] = useState(defaultDurationDays);
   const [conditions, setConditions] = useState(defaultConditionsText);
   const [notes, setNotes] = useState("");
+
+  // Cuando se recarga la lista de direcciones (p. ej. tras añadir una inline),
+  // si la seleccionada ya no es válida, elegimos la primera disponible.
+  useEffect(() => {
+    if (addresses.length === 0) return;
+    if (!addresses.some((a) => a.id === addressId)) {
+      setAddressId(addresses[0]!.id);
+    }
+  }, [addresses, addressId]);
 
   function setItem(idx: number, patch: Partial<DraftItem>) {
     setItems((arr) => arr.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -207,14 +220,10 @@ export function FreeTrialCreateForm({
           <div className="space-y-1">
             <Label>Dirección instalación *</Label>
             {addresses.length === 0 ? (
-              <div className="space-y-1.5 rounded-xl border border-dashed border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-                <p>Sin direcciones registradas para este {ownerKind === "customer" ? "cliente" : "lead"}.</p>
-                <Link
-                  href={`/${ownerKind === "customer" ? "clientes" : "leads"}/${ownerId}` as never}
-                  className="inline-block font-bold text-amber-900 underline"
-                >
-                  → Añadir dirección y volver
-                </Link>
+              <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                Sin direcciones registradas para este{" "}
+                {ownerKind === "customer" ? "cliente" : "lead"}. Añádela abajo —
+                es obligatoria para saber dónde instalar la prueba.
               </div>
             ) : (
               <>
@@ -229,16 +238,18 @@ export function FreeTrialCreateForm({
                     </option>
                   ))}
                 </select>
-                {/* La prueba puede instalarse en una dirección distinta a
-                    la principal del cliente (oficina, segunda residencia,
-                    casa de un familiar). Si no está en la lista, se añade
-                    desde la ficha y al volver aparecerá aquí. */}
-                <Link
-                  href={`/${ownerKind === "customer" ? "clientes" : "leads"}/${ownerId}` as never}
-                  className="text-[11px] text-primary hover:underline"
-                >
-                  + Añadir otra dirección
-                </Link>
+                {/* La prueba puede instalarse en una dirección distinta a la
+                    principal (oficina, segunda residencia…). Se añade aquí
+                    mismo, sin salir del alta de la prueba. */}
+                {!showAddrForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddrForm(true)}
+                    className="text-[11px] text-primary hover:underline"
+                  >
+                    + Añadir otra dirección
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -274,6 +285,37 @@ export function FreeTrialCreateForm({
             </p>
           </div>
         </div>
+
+        {/* Alta de dirección inline: obligatoria para la prueba. Reutiliza el
+            AddressForm completo (geocoding, mapa, validación). Al guardar,
+            refrescamos para que la nueva dirección aparezca y quede elegida. */}
+        {(showAddrForm || addresses.length === 0) && (
+          <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm font-bold">
+                <MapPin className="h-4 w-4" /> Dirección de instalación de la prueba
+              </div>
+              {addresses.length > 0 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddrForm(false)}
+                >
+                  Cancelar
+                </Button>
+              )}
+            </div>
+            <AddressForm
+              customerId={ownerKind === "customer" ? ownerId : undefined}
+              leadId={ownerKind === "lead" ? ownerId : undefined}
+              onDone={() => {
+                setShowAddrForm(false);
+                router.refresh();
+              }}
+            />
+          </div>
+        )}
 
         <div className="space-y-1 max-w-xs">
           <Label>Duración (días)</Label>
