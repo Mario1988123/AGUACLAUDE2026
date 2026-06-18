@@ -114,7 +114,26 @@ export async function listSavingsBrands(): Promise<SavingsBrand[]> {
     .eq("company_id", session.company_id)
     .eq("is_active", true)
     .order("display_order");
-  return ((data as SavingsBrand[] | null) ?? []);
+
+  // Red de seguridad: si por una siembra duplicada (carrera entre
+  // getSavingsConfig y listSavingsBrands en empresas nuevas) hay marcas
+  // repetidas con el mismo nombre+tipo, mostramos solo una. Nos quedamos con
+  // la editada más recientemente (updated_at) para no perder ajustes de precio.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = ((data as any[] | null) ?? []);
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const r of rows) {
+    const key = `${(r.name ?? "").trim().toLowerCase()}|${r.kind}`;
+    const prev = byKey.get(key);
+    if (!prev) {
+      byKey.set(key, r);
+      continue;
+    }
+    const prevTs = String(prev.updated_at ?? prev.created_at ?? "");
+    const curTs = String(r.updated_at ?? r.created_at ?? "");
+    if (curTs > prevTs) byKey.set(key, r);
+  }
+  return (Array.from(byKey.values()) as unknown as SavingsBrand[]);
 }
 
 export async function upsertSavingsBrandAction(input: Partial<SavingsBrand> & { id?: string }) {
