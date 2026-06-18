@@ -257,7 +257,9 @@ export async function createQuickLeadFromSavingsAction(input: {
       company_id: session.company_id,
       party_kind: input.party_kind,
       origin: "other",
-      potential: "medium",
+      // El enum app.lead_potential es 'A'|'B'|'C'|'unknown' (no low/medium/high).
+      // Un lead de la calculadora = potencial medio → 'B'.
+      potential: "B",
       assigned_user_id: isLevel3 ? session.user_id : null,
       assigned_at: isLevel3 ? new Date().toISOString() : null,
       created_by: session.user_id,
