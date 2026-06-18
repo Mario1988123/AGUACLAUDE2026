@@ -12,6 +12,10 @@ import {
   UserCog,
   AlertTriangle,
   Tag,
+  MapPin,
+  Navigation,
+  Phone,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
@@ -222,6 +226,56 @@ export function MoveEventDialog({
               <p className="whitespace-pre-wrap pt-1 text-xs text-foreground/80">
                 {ev.description}
               </p>
+            )}
+            {/* Dirección de instalación + Google Maps + contacto, para que el
+                instalador no dependa de abrir la ficha (que su rol puede no
+                permitirle: daba 404). */}
+            {(ev.subject_address ||
+              (ev.subject_lat != null && ev.subject_lng != null) ||
+              ev.subject_phone) && (
+              <div className="space-y-1.5 border-t pt-2">
+                {ev.subject_address && (
+                  <div className="flex items-start gap-1.5 text-xs">
+                    <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                    <span>{ev.subject_address}</span>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {((ev.subject_lat != null && ev.subject_lng != null) ||
+                    ev.subject_address) && (
+                    <a
+                      href={
+                        ev.subject_lat != null && ev.subject_lng != null
+                          ? `https://www.google.com/maps/dir/?api=1&destination=${ev.subject_lat},${ev.subject_lng}`
+                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.subject_address ?? "")}`
+                      }
+                      target="_blank"
+                      rel="noopener"
+                      className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                    >
+                      <Navigation className="h-3.5 w-3.5" /> Ir con Google Maps
+                    </a>
+                  )}
+                  {ev.subject_phone && (
+                    <>
+                      <a
+                        href={`tel:${ev.subject_phone}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted"
+                      >
+                        <Phone className="h-3.5 w-3.5" /> Llamar
+                      </a>
+                      <a
+                        href={`https://wa.me/${ev.subject_phone.replace(/[^0-9+]/g, "")}`}
+                        target="_blank"
+                        rel="noopener"
+                        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold hover:bg-muted"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                      </a>
+                    </>
+                  )}
+                </div>
+              </div>
             )}
             {subjectHref && (
               <Link

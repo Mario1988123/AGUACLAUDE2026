@@ -117,6 +117,14 @@ export interface AgendaItem {
   /** Nombre del cliente/lead vinculado a la tarea (si lo hay), para
    *  mostrarlo en la agenda. Lo rellena enrichTitlesFromSubjects. */
   subject_label?: string | null;
+  /** Dirección de instalación del cliente/lead (texto), para que el instalador
+   *  la vea sin abrir la ficha (que su rol puede no permitirle). */
+  subject_address?: string | null;
+  /** Coordenadas para el botón "Ir con Google Maps". */
+  subject_lat?: number | null;
+  subject_lng?: number | null;
+  /** Teléfono del cliente/lead para llamar / WhatsApp desde la tarea. */
+  subject_phone?: string | null;
 }
 
 export async function listAgendaMonth(year: number, month: number): Promise<AgendaItem[]> {
@@ -398,10 +406,11 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   for (const id of directCustomerIds) custIds.add(id);
 
   const nameMap = new Map<string, string>();
+  const phoneMap = new Map<string, string>();
   if (custIds.size > 0) {
     const { data: cs } = await supabase
       .from("customers")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
       .in("id", Array.from(custIds));
     for (const c of (cs ?? []) as Array<{
       id: string;
@@ -410,6 +419,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
       trade_name: string | null;
       first_name: string | null;
       last_name: string | null;
+      phone_primary: string | null;
     }>) {
       nameMap.set(
         c.id,
@@ -417,6 +427,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
           ? c.trade_name || c.legal_name || "Cliente"
           : `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente",
       );
+      if (c.phone_primary) phoneMap.set(c.id, c.phone_primary);
     }
   }
 
@@ -425,7 +436,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   if (leadIds.size > 0) {
     const { data: ls } = await supabase
       .from("leads")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
       .in("id", Array.from(leadIds));
     for (const l of (ls ?? []) as Array<{
       id: string;
@@ -434,6 +445,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
       trade_name: string | null;
       first_name: string | null;
       last_name: string | null;
+      phone_primary: string | null;
     }>) {
       leadNameMap.set(
         l.id,
@@ -441,11 +453,84 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
           ? l.trade_name || l.legal_name || "Lead"
           : `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "Lead",
       );
+      if (l.phone_primary) phoneMap.set(l.id, l.phone_primary);
     }
+  }
+
+  // Direcciones (con coordenadas) de clientes y leads, para que el instalador
+  // vea dónde ir y abra Google Maps desde la propia tarea sin entrar a la ficha
+  // (que su rol puede no permitirle). Preferimos la principal; si no, la
+  // primera. Defensivo: si falla, no rompe la agenda. Misma clave UUID para
+  // clientes y leads (espacios distintos, sin colisión).
+  const addrMap = new Map<
+    string,
+    { label: string; lat: number | null; lng: number | null }
+  >();
+  const addrLabel = (a: {
+    street_type: string | null;
+    street: string | null;
+    street_number: string | null;
+    city: string | null;
+  }) => [a.street_type, a.street, a.street_number, a.city].filter(Boolean).join(" ").trim();
+  try {
+    if (custIds.size > 0) {
+      const { data: ca } = await supabase
+        .from("addresses")
+        .select("customer_id, street_type, street, street_number, city, latitude, longitude, is_primary")
+        .in("customer_id", Array.from(custIds))
+        .is("deleted_at", null)
+        .order("is_primary", { ascending: false });
+      for (const a of (ca ?? []) as Array<{
+        customer_id: string;
+        street_type: string | null;
+        street: string | null;
+        street_number: string | null;
+        city: string | null;
+        latitude: number | null;
+        longitude: number | null;
+      }>) {
+        if (!a.customer_id || addrMap.has(a.customer_id)) continue;
+        addrMap.set(a.customer_id, { label: addrLabel(a), lat: a.latitude, lng: a.longitude });
+      }
+    }
+    if (leadIds.size > 0) {
+      const { data: la } = await supabase
+        .from("addresses")
+        .select("lead_id, street_type, street, street_number, city, latitude, longitude, is_primary")
+        .in("lead_id", Array.from(leadIds))
+        .is("deleted_at", null)
+        .order("is_primary", { ascending: false });
+      for (const a of (la ?? []) as Array<{
+        lead_id: string;
+        street_type: string | null;
+        street: string | null;
+        street_number: string | null;
+        city: string | null;
+        latitude: number | null;
+        longitude: number | null;
+      }>) {
+        if (!a.lead_id || addrMap.has(a.lead_id)) continue;
+        addrMap.set(a.lead_id, { label: addrLabel(a), lat: a.latitude, lng: a.longitude });
+      }
+    }
+  } catch (e) {
+    console.error("[enrichTitlesFromSubjects] direcciones:", e);
   }
 
   const instById = new Map(insts.map((i) => [i.id, i]));
   const maintById = new Map(maints.map((m) => [m.id, m]));
+
+  function applyContact(e: AgendaItem, ownerId: string | null | undefined): void {
+    if (!ownerId) return;
+    const ph = phoneMap.get(ownerId);
+    if (ph) e.subject_phone = ph;
+    const ad = addrMap.get(ownerId);
+    if (ad) {
+      e.subject_address = ad.label || null;
+      e.subject_lat = ad.lat;
+      e.subject_lng = ad.lng;
+    }
+  }
 
   for (const e of events) {
     if (!e.subject_id) continue;
@@ -458,6 +543,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
       else if (ref) e.title = `Instalación · ${ref}`;
       else if (cust) e.title = `Instalación · ${cust}`;
       if (cust) e.subject_label = cust;
+      applyContact(e, i.customer_id);
     } else if (e.subject_type === "maintenance") {
       const m = maintById.get(e.subject_id);
       if (!m) continue;
@@ -466,6 +552,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
         e.title = `Mantenimiento · ${cust}`;
         e.subject_label = cust;
       }
+      applyContact(e, m.customer_id);
     } else if (e.subject_type === "customer") {
       // Tarea manual vinculada a un cliente: conservamos el título que
       // escribió el usuario y añadimos el nombre del cliente.
@@ -474,12 +561,14 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
         e.subject_label = cust;
         if (!e.title.includes(cust)) e.title = `${e.title} · ${cust}`;
       }
+      applyContact(e, e.subject_id);
     } else if (e.subject_type === "lead") {
       const lead = leadNameMap.get(e.subject_id);
       if (lead) {
         e.subject_label = lead;
         if (!e.title.includes(lead)) e.title = `${e.title} · ${lead}`;
       }
+      applyContact(e, e.subject_id);
     }
   }
 }
