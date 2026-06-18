@@ -1155,6 +1155,47 @@ export async function createAgendaEventAction(input: unknown) {
   // instante UTC correcto (si no, el servidor UTC las guarda 1-2 h adelantadas).
   const startIso = madridLocalToUtcISO(parsed.starts_at);
   if (!startIso) throw new Error("Fecha de inicio inválida");
+
+  // MANTENIMIENTO: una tarea de tipo "maintenance" es un mantenimiento REAL, no
+  // una tarea suelta de agenda. Creamos un maintenance_job (aparece en
+  // /mantenimientos y lo ve el instalador asignado) en vez de un agenda_event;
+  // la agenda ya muestra los mantenimientos como tareas, así que no se duplica.
+  // Exige cliente (la tabla maintenance_jobs requiere customer_id).
+  if (parsed.kind === "maintenance") {
+    if (parsed.subject_type !== "customer" || !parsed.subject_id) {
+      throw new Error(
+        "Para agendar un mantenimiento elige un CLIENTE. Si es un lead (cliente nuevo), conviértelo a cliente primero.",
+      );
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminM = createAdminClient() as any;
+    // Verificar que el cliente es de la empresa (subject_id llega del navegador).
+    const { data: cust } = await adminM
+      .from("customers")
+      .select("id")
+      .eq("id", parsed.subject_id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!cust) throw new Error("Cliente no encontrado o no pertenece a tu empresa");
+    const maintNotes =
+      [parsed.title, parsed.description].filter(Boolean).join(" — ") || null;
+    const { error: mErr } = await adminM.from("maintenance_jobs").insert({
+      company_id: session.company_id,
+      customer_id: parsed.subject_id,
+      kind: "one_off", // correctivo / puntual desde la agenda
+      status: "scheduled",
+      scheduled_at: startIso,
+      technician_user_id: parsed.assigned_user_id || session.user_id,
+      notes: maintNotes,
+      created_by: session.user_id,
+    });
+    if (mErr) throw new Error(mErr.message);
+    revalidatePath("/mantenimientos");
+    revalidatePath("/agenda");
+    return;
+  }
+
   const baseStart = new Date(startIso);
   const endIso = parsed.ends_at ? madridLocalToUtcISO(parsed.ends_at) : null;
   const baseEnd = endIso ? new Date(endIso) : null;
