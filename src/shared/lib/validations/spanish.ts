@@ -6,9 +6,29 @@
 
 const DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE";
 
+/**
+ * DNI "comodín" para ventas al contado en las que NO se pide el DNI real.
+ * Se ACEPTA como válido (no salta el aviso de letra incorrecta) y NUNCA cuenta
+ * como duplicado, así que puede repetirse en tantos clientes como haga falta.
+ * Es una vía de escape acordada para esos casos concretos.
+ */
+export const PLACEHOLDER_TAX_ID = "12345678A";
+
+/** Normaliza un tax_id (mayúsculas, sin espacios ni guiones). */
+function normalizeTaxId(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase().replace(/[\s-]/g, "");
+}
+
+/** ¿Es el DNI comodín de venta al contado? */
+export function isPlaceholderTaxId(value: string | null | undefined): boolean {
+  return normalizeTaxId(value) === PLACEHOLDER_TAX_ID;
+}
+
 /** Valida DNI (8 dígitos + letra). Devuelve la letra correcta si la dada es errónea. */
 export function validateDNI(value: string): { valid: boolean; expectedLetter?: string } {
   const v = value?.trim().toUpperCase().replace(/[\s-]/g, "");
+  // DNI comodín de venta al contado: se admite siempre como válido.
+  if (v === PLACEHOLDER_TAX_ID) return { valid: true };
   if (!/^\d{8}[A-Z]$/.test(v)) return { valid: false };
   const number = parseInt(v.slice(0, 8), 10);
   const expected = DNI_LETTERS[number % 23]!;

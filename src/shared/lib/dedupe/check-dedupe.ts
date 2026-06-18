@@ -2,7 +2,7 @@
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { normalizeSpanishPhone } from "@/shared/lib/validations/spanish";
+import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
 
 export interface DedupeMatch {
   field: "tax_id" | "email" | "phone";
@@ -33,7 +33,10 @@ export async function checkDedupe(input: DedupeInput): Promise<DedupeMatch[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const taxId = input.tax_id?.trim().toUpperCase().replace(/[\s-]/g, "") || null;
+  const taxIdRaw = input.tax_id?.trim().toUpperCase().replace(/[\s-]/g, "") || null;
+  // El DNI comodín de venta al contado (12345678A) puede repetirse: NO se busca
+  // como duplicado. El resto (email/teléfono) sí se sigue comprobando.
+  const taxId = taxIdRaw && !isPlaceholderTaxId(taxIdRaw) ? taxIdRaw : null;
   const email = input.email?.trim().toLowerCase() || null;
   const phoneNorm = input.phone ? normalizeSpanishPhone(input.phone) : null;
   const phoneRaw = input.phone?.trim().replace(/[\s\-\.()]/g, "") || null;

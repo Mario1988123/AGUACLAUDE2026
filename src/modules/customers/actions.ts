@@ -9,7 +9,7 @@ import { customerCreateSchema, customerUpdateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
-import { normalizeSpanishPhone } from "@/shared/lib/validations/spanish";
+import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
 
 // Helper local: normaliza si el formato es válido, sino devuelve original
 function normalizePhoneSafe(v: string | null | undefined): string | null {
@@ -753,8 +753,9 @@ export async function updateCustomerAction(
   }
 
   // Dedupe de tax_id si se está cambiando: validar que no choque con
-  // otro cliente de la misma empresa.
-  if (patch.tax_id) {
+  // otro cliente de la misma empresa. El DNI comodín (venta al contado) se
+  // salta esta comprobación: puede repetirse.
+  if (patch.tax_id && !isPlaceholderTaxId(patch.tax_id)) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dup = createAdminClient() as any;
     const { data: collision } = await dup
