@@ -52,6 +52,19 @@ const SUBJECT_LINK: Record<string, string> = {
   free_trial: "/pruebas-gratuitas",
 };
 
+// Etiqueta en español de cada tipo (antes se mostraba el valor crudo en inglés,
+// p.ej. "Ver customer"/"Ver lead").
+const SUBJECT_LABEL_ES: Record<string, string> = {
+  installation: "instalación",
+  maintenance: "mantenimiento",
+  contract: "contrato",
+  proposal: "propuesta",
+  lead: "lead",
+  customer: "cliente",
+  incident: "incidencia",
+  free_trial: "prueba gratuita",
+};
+
 export function MoveEventDialog({
   open,
   onOpenChange,
@@ -216,13 +229,9 @@ export function MoveEventDialog({
                 className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
               >
                 <ExternalLink className="h-3 w-3" /> Ver{" "}
-                {ev.subject_type === "installation"
-                  ? "instalación"
-                  : ev.subject_type === "maintenance"
-                    ? "mantenimiento"
-                    : ev.subject_type === "contract"
-                      ? "contrato"
-                      : ev.subject_type}
+                {ev.subject_type
+                  ? SUBJECT_LABEL_ES[ev.subject_type] ?? ev.subject_type
+                  : "ficha"}
               </Link>
             )}
           </div>
