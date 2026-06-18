@@ -805,6 +805,18 @@ export async function acceptFreeTrialAction(input: {
         .single();
       if (cErr) return { ok: false, error: `No se pudo crear cliente: ${cErr.message}` };
       customerId = (createdCust as { id: string }).id;
+      // MIGRAR las direcciones del lead al nuevo cliente (igual que
+      // convertLeadToCustomerAction). Sin esto el cliente nuevo se queda SIN
+      // dirección y el contrato no se puede firmar ("Dirección de instalación"
+      // pendiente), aunque la prueba sí tuviera dirección.
+      try {
+        await admin
+          .from("addresses")
+          .update({ customer_id: customerId, lead_id: null })
+          .eq("lead_id", l.id);
+      } catch (e) {
+        console.error("[acceptFreeTrial] migrar direcciones lead→cliente:", e);
+      }
       // Marcar lead convertido y soft-delete (mismo flow que markContractSigned)
       await admin
         .from("leads")
@@ -909,25 +921,52 @@ export async function acceptFreeTrialAction(input: {
             cost_cents: number | null;
           }>).map((p) => [p.id, p]),
         );
-        // Precios cash actuales desde product_pricing_plans para el
-        // unit_price_cents (si no hay, usamos cost_cents como fallback)
+        // Precio por unidad SEGÚN EL PLAN elegido (no siempre cash):
+        //  - cash:           precio total de venta del plan cash.
+        //  - rental/renting: CUOTA MENSUAL del plan del tipo elegido (prefiere
+        //    la duración elegida). Antes se cogía siempre el precio cash, así
+        //    que un contrato de ALQUILER mostraba el precio de VENTA en la
+        //    línea del producto.
         const { data: plans } = await admin
           .from("product_pricing_plans")
-          .select("product_id, total_price_cents")
+          .select(
+            "product_id, plan_type, duration_months, total_price_cents, total_price_individual_cents, monthly_price_cents, monthly_price_individual_cents",
+          )
           .in("product_id", productIds)
-          .eq("plan_type", "cash")
+          .eq("plan_type", planType)
           .eq("is_active", true);
-        const priceMap = new Map(
-          ((plans ?? []) as Array<{
-            product_id: string;
-            total_price_cents: number;
-          }>).map((p) => [p.product_id, p.total_price_cents]),
-        );
+        type PlanRow = {
+          product_id: string;
+          duration_months: number | null;
+          total_price_cents: number | null;
+          total_price_individual_cents: number | null;
+          monthly_price_cents: number | null;
+          monthly_price_individual_cents: number | null;
+        };
+        const priceMap = new Map<string, number>();
+        for (const pl of ((plans ?? []) as PlanRow[])) {
+          const price =
+            planType === "cash"
+              ? pl.total_price_individual_cents ?? pl.total_price_cents
+              : pl.monthly_price_individual_cents ?? pl.monthly_price_cents;
+          if (price == null) continue;
+          // Preferimos el plan cuya duración coincide con la elegida.
+          const matchesDuration =
+            planType === "cash" ||
+            pl.duration_months == null ||
+            pl.duration_months === (input.duration_months ?? null);
+          if (!priceMap.has(pl.product_id) || matchesDuration) {
+            priceMap.set(pl.product_id, price);
+          }
+        }
 
         const rows = list.map((it, idx) => {
           const p = prodMap.get(it.product_id);
-          const unitPrice =
-            priceMap.get(it.product_id) ?? p?.cost_cents ?? 0;
+          // Fallback: en cash usamos el coste; en alquiler/renting NO (un coste
+          // no es una cuota) → 0 si no hay plan. La cuota total real va en
+          // contract.monthly_cents igualmente.
+          const fallback = planType === "cash" ? p?.cost_cents ?? 0 : 0;
+          const unitPrice = priceMap.get(it.product_id) ?? fallback;
           return {
             contract_id: contractId,
             company_id: session.company_id,
