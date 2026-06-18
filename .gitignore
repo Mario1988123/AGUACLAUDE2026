@@ -3,6 +3,11 @@ node_modules/
 .pnp
 .pnp.js
 
+# Este proyecto usa npm (package-lock.json). Ignoramos lockfiles de otros
+# gestores para que Vercel no cambie de gestor por error y rompa el deploy.
+pnpm-lock.yaml
+yarn.lock
+
 # Build outputs
 dist/
 build/
@@ -43,6 +48,7 @@ Thumbs.db
 
 # Claude local
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # Proyecto abandonado (referencia visual/UX únicamente — NO commitear)
 legacy_reference/
