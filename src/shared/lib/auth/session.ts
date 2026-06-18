@@ -73,6 +73,15 @@ export async function requireSession(): Promise<SessionClaims> {
   const claims = accessToken ? decodeJwt(accessToken) : {};
   const meta = (user.app_metadata ?? {}) as Record<string, unknown>;
 
+  const isSuperadmin = Boolean(claims.is_superadmin ?? meta.is_superadmin);
+  const companyId =
+    ((claims.company_id as string | undefined) ?? (meta.company_id as string | null)) ?? null;
+  // Roles base: lo que traiga el JWT (lo pone el Custom Access Token Hook al
+  // iniciar sesión). Más abajo los reconciliamos con la BD.
+  let roles = (claims.roles as string[] | undefined) ?? (meta.roles as string[]) ?? [];
+  const departments =
+    (claims.departments as string[] | undefined) ?? (meta.departments as string[]) ?? [];
+
   // Lectura defensiva de must_change_password + status desde user_profiles. Si
   // la tabla no existe o falla, devolvemos valores neutros (no bloqueamos).
   let mustChangePassword = false;
@@ -89,6 +98,27 @@ export async function requireSession(): Promise<SessionClaims> {
       (data as { must_change_password?: boolean } | null)?.must_change_password,
     );
     profileStatus = (data as { status?: string | null } | null)?.status ?? null;
+
+    // ROBUSTEZ DE ROLES: los roles viven en el JWT, que se "graba" al iniciar
+    // sesión. Si a un usuario lo nombran admin (o le cambian roles) DESPUÉS de
+    // loguearse, su token viejo no lo refleja y quedaría bloqueado ("Solo
+    // admin") hasta cerrar sesión y volver a entrar. Releemos los roles ACTIVOS
+    // de user_roles (la fuente de verdad) y, si los hay, mandan ellos. Así un
+    // admin nunca queda sin permisos por un token caducado, y un rol revocado
+    // deja de funcionar al instante. Defensivo: si la lectura falla, nos
+    // quedamos con los del token. (Superadmin no usa user_roles.)
+    if (!isSuperadmin && companyId) {
+      const { data: roleRows } = await admin
+        .from("user_roles")
+        .select("role_key")
+        .eq("user_id", user.id)
+        .eq("company_id", companyId)
+        .is("revoked_at", null);
+      const dbRoles = ((roleRows ?? []) as Array<{ role_key: string | null }>)
+        .map((r) => r.role_key)
+        .filter((k): k is string => Boolean(k));
+      if (dbRoles.length > 0) roles = dbRoles;
+    }
   } catch {
     /* fail-soft */
   }
@@ -98,7 +128,7 @@ export async function requireSession(): Promise<SessionClaims> {
   // y el ex-empleado seguía dentro hasta que el token caducaba. Superadmin y
   // 'invited' (onboarding) no se bloquean aquí.
   if (
-    !Boolean(claims.is_superadmin ?? meta.is_superadmin) &&
+    !isSuperadmin &&
     (profileStatus === "suspended" || profileStatus === "inactive")
   ) {
     redirect("/login?error=suspended");
@@ -107,12 +137,10 @@ export async function requireSession(): Promise<SessionClaims> {
   return {
     user_id: user.id,
     email: user.email ?? null,
-    is_superadmin: Boolean(claims.is_superadmin ?? meta.is_superadmin),
-    company_id:
-      ((claims.company_id as string | undefined) ?? (meta.company_id as string | null)) ?? null,
-    roles: (claims.roles as string[] | undefined) ?? (meta.roles as string[]) ?? [],
-    departments:
-      (claims.departments as string[] | undefined) ?? (meta.departments as string[]) ?? [],
+    is_superadmin: isSuperadmin,
+    company_id: companyId,
+    roles,
+    departments,
     full_name:
       (claims.full_name as string | null | undefined) ??
       (meta.full_name as string | null) ??
