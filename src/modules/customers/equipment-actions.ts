@@ -482,12 +482,26 @@ export async function addCustomerEquipmentAction(input: {
   return { id: equipmentId };
 }
 
+/**
+ * Da de baja un equipo del cliente (is_active=false). Pensado sobre todo para
+ * equipos EXTERNOS (no nuestros): el cliente se queda la máquina y nosotros solo
+ * quitamos nuestro registro — NO pasa por almacén/stock (no es nuestro). Al
+ * darlo de baja, cancelamos sus mantenimientos futuros (deja de tener
+ * mantenimiento con nosotros). Soft-delete: queda en histórico con badge "Baja".
+ * Solo admin / director técnico o comercial.
+ */
 export async function removeCustomerEquipmentAction(
   equipmentId: string,
   customerId: string,
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  const isUpper =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director");
+  if (!isUpper) throw new Error("Solo admin o director puede dar de baja equipos");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   // SEGURIDAD: admin client salta RLS → filtrar por company_id.
@@ -499,6 +513,33 @@ export async function removeCustomerEquipmentAction(
     .select("id");
   if (r.error) throw new Error(r.error.message);
   if (!r.data?.length) throw new Error("Equipo no encontrado o no pertenece a tu empresa");
+
+  // Cancelar mantenimientos futuros de este equipo (ya no toca: se da de baja).
+  // Defensivo: si falla, no abortamos la baja del equipo.
+  try {
+    await admin
+      .from("maintenance_jobs")
+      .update({ status: "cancelled" })
+      .eq("company_id", session.company_id)
+      .eq("customer_equipment_id", equipmentId)
+      .in("status", ["scheduled", "preprogrammed"]);
+  } catch (e) {
+    console.error("[removeCustomerEquipment] cancelar mantenimientos futuros:", e);
+  }
+
+  try {
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "customer",
+      subject_id: customerId,
+      kind: "customer.equipment_removed",
+      payload: { equipment_id: equipmentId },
+      actor_user_id: session.user_id,
+    });
+  } catch {
+    /* no-op */
+  }
+
   revalidatePath(`/clientes/${customerId}`);
 }
 

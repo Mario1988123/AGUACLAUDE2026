@@ -11,6 +11,7 @@ import { Badge } from "@/shared/ui/badge";
 import { RelocateEquipmentButton } from "./relocate-button";
 import { OfferMaintenanceContractButton } from "./offer-maintenance-contract-button";
 import { EquipmentModalityButton } from "./modality-button";
+import { RemoveEquipmentButton } from "./remove-equipment-button";
 import type { CustomerEquipmentRow } from "./equipment-actions";
 import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
 
@@ -35,6 +36,7 @@ export function CustomerEquipmentList({
   addresses = [],
   canRelocate = false,
   canEditModality = false,
+  canRemove = false,
   equipmentsWithActiveContract,
   maintenancePlans = [],
 }: {
@@ -44,6 +46,8 @@ export function CustomerEquipmentList({
   canRelocate?: boolean;
   /** Si puede editar la modalidad (venta/alquiler/renting) del equipo. */
   canEditModality?: boolean;
+  /** Si puede dar de baja equipos (sobre todo externos). Admin/director. */
+  canRemove?: boolean;
   /** Set de equipment_ids que ya tienen contrato de mantenimiento activo.
    *  Si está, ocultamos el botón "Ofrecer contrato" en esos equipos. */
   equipmentsWithActiveContract?: Set<string>;
@@ -193,6 +197,16 @@ export function CustomerEquipmentList({
                       plans={maintenancePlans}
                     />
                   )}
+                {/* Dar de baja: solo equipos EXTERNOS activos (no son nuestros,
+                    el cliente se los queda → no van a stock). Los nuestros se
+                    retiran por el flujo de desinstalación/baja de cliente. */}
+                {canRemove && e.is_active && customerId && !isOurs && (
+                  <RemoveEquipmentButton
+                    equipmentId={e.id}
+                    customerId={customerId}
+                    equipmentName={name}
+                  />
+                )}
               </div>
             </div>
           </li>
