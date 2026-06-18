@@ -554,21 +554,155 @@ async function _signAndInstallFreeTrialAction(input: {
 }
 
 /**
+ * Importes sugeridos para la ventana "Aceptar prueba". Se autorrellenan desde
+ * los planes de precio del producto (product_pricing_plans) de los equipos de
+ * la prueba. El comercial puede ajustarlos antes de confirmar.
+ */
+export interface FreeTrialAcceptDefaults {
+  items: Array<{ product_id: string; name: string; quantity: number }>;
+  /** Precio total contado (venta) sugerido, en céntimos. */
+  cash_total_cents: number | null;
+  /** Cuota mensual alquiler sugerida, en céntimos. */
+  rental_monthly_cents: number | null;
+  /** Cuota mensual renting sugerida, en céntimos. */
+  renting_monthly_cents: number | null;
+  /** Duraciones (meses) disponibles para alquiler. */
+  rental_durations: number[];
+  /** Duraciones (meses) disponibles para renting. */
+  renting_durations: number[];
+  /** Periodicidad de mantenimiento por defecto (meses). */
+  maintenance_periodicity_months: number;
+}
+
+export async function getFreeTrialAcceptDefaultsAction(
+  trialId: string,
+): Promise<
+  { ok: true; defaults: FreeTrialAcceptDefaults } | { ok: false; error: string }
+> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    const { data: trialRow } = await admin
+      .from("free_trials")
+      .select("id, company_id")
+      .eq("id", trialId)
+      .maybeSingle();
+    const trial = trialRow as { id: string; company_id: string } | null;
+    if (!trial) return { ok: false, error: "Prueba no encontrada" };
+    if (trial.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
+
+    const { data: itemsRaw } = await admin
+      .from("free_trial_items")
+      .select("product_id, quantity, product_name_snapshot")
+      .eq("free_trial_id", trialId);
+    const items = ((itemsRaw ?? []) as Array<{
+      product_id: string;
+      quantity: number;
+      product_name_snapshot: string;
+    }>);
+
+    const defaults: FreeTrialAcceptDefaults = {
+      items: items.map((i) => ({
+        product_id: i.product_id,
+        name: i.product_name_snapshot,
+        quantity: i.quantity,
+      })),
+      cash_total_cents: null,
+      rental_monthly_cents: null,
+      renting_monthly_cents: null,
+      rental_durations: [],
+      renting_durations: [],
+      maintenance_periodicity_months: 12,
+    };
+
+    if (items.length > 0) {
+      const ids = items.map((i) => i.product_id);
+      const { data: plansRaw } = await admin
+        .from("product_pricing_plans")
+        .select(
+          "product_id, plan_type, duration_months, monthly_price_cents, total_price_cents, monthly_price_individual_cents, total_price_individual_cents",
+        )
+        .in("product_id", ids)
+        .eq("is_active", true);
+      const plans = ((plansRaw ?? []) as Array<{
+        product_id: string;
+        plan_type: "cash" | "rental" | "renting";
+        duration_months: number | null;
+        monthly_price_cents: number | null;
+        total_price_cents: number | null;
+        monthly_price_individual_cents: number | null;
+        total_price_individual_cents: number | null;
+      }>);
+
+      // Por producto y tipo, nos quedamos con el plan de MAYOR duración como
+      // representante (oferta típica). Para venta (cash) no hay duración.
+      const repr = new Map<
+        string,
+        { duration: number | null; monthly: number | null; total: number | null }
+      >();
+      const rentalDur = new Set<number>();
+      const rentingDur = new Set<number>();
+      for (const pl of plans) {
+        const key = `${pl.product_id}|${pl.plan_type}`;
+        const monthly = pl.monthly_price_individual_cents ?? pl.monthly_price_cents ?? null;
+        const total = pl.total_price_individual_cents ?? pl.total_price_cents ?? null;
+        const cur = repr.get(key);
+        if (!cur || (pl.duration_months ?? 0) > (cur.duration ?? 0)) {
+          repr.set(key, { duration: pl.duration_months ?? null, monthly, total });
+        }
+        if (pl.plan_type === "rental" && pl.duration_months) rentalDur.add(pl.duration_months);
+        if (pl.plan_type === "renting" && pl.duration_months) rentingDur.add(pl.duration_months);
+      }
+
+      let cashTotal = 0, hasCash = false;
+      let rentalMonthly = 0, hasRental = false;
+      let rentingMonthly = 0, hasRenting = false;
+      for (const it of items) {
+        const cash = repr.get(`${it.product_id}|cash`);
+        if (cash?.total != null) { cashTotal += cash.total * it.quantity; hasCash = true; }
+        const rental = repr.get(`${it.product_id}|rental`);
+        if (rental?.monthly != null) { rentalMonthly += rental.monthly * it.quantity; hasRental = true; }
+        const renting = repr.get(`${it.product_id}|renting`);
+        if (renting?.monthly != null) { rentingMonthly += renting.monthly * it.quantity; hasRenting = true; }
+      }
+      defaults.cash_total_cents = hasCash ? cashTotal : null;
+      defaults.rental_monthly_cents = hasRental ? rentalMonthly : null;
+      defaults.renting_monthly_cents = hasRenting ? rentingMonthly : null;
+      defaults.rental_durations = [...rentalDur].sort((a, b) => a - b);
+      defaults.renting_durations = [...rentingDur].sort((a, b) => a - b);
+    }
+
+    return { ok: true, defaults };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
  * Convierte una prueba aceptada en cliente + contrato real.
  * Si la prueba estaba enlazada a un lead, lo convierte primero a customer.
- * El contrato se crea en estado 'draft' para que el comercial complete
- * planes y precios desde /contratos/[id]. La instalación, si ya estaba
- * hecha, se enlaza al nuevo contract_id.
+ * El contrato se crea en estado 'draft' con el PLAN y los PAGOS elegidos en la
+ * ventana de aceptar (Pago contado / Fianza / 1ª cuota / Instalación) más la
+ * periodicidad de mantenimiento. La instalación, si ya estaba hecha, se enlaza
+ * al nuevo contract_id.
  *
  * Devuelve { contract_id, customer_id }.
  */
 export async function acceptFreeTrialAction(input: {
   trial_id: string;
-  // Plan tentativo (el comercial puede cambiarlo desde la ficha del contrato)
   plan_type?: "cash" | "rental" | "renting";
+  duration_months?: number | null;
   monthly_cents?: number | null;
   total_cents?: number | null;
-  duration_months?: number | null;
+  deposit_cents?: number | null;
+  installation_cents?: number | null;
+  charge_first_payment_now?: boolean;
+  maintenance_included?: boolean;
+  maintenance_periodicity_months?: number | null;
+  maintenance_months_included?: number | null;
 }): Promise<
   { ok: true; contract_id: string; customer_id: string }
   | { ok: false; error: string }
@@ -713,6 +847,8 @@ export async function acceptFreeTrialAction(input: {
     }
 
     // 4) Crear contrato en draft con customer_snapshot
+    const planType = input.plan_type ?? "renting";
+    const maintenanceIncluded = input.maintenance_included ?? false;
     const { data: createdContract, error: kErr } = await admin
       .from("contracts")
       .insert({
@@ -720,10 +856,19 @@ export async function acceptFreeTrialAction(input: {
         customer_id: customerId,
         reference_code: referenceCode,
         status: "draft",
-        plan_type: input.plan_type ?? "renting",
+        plan_type: planType,
         monthly_cents: input.monthly_cents ?? null,
         total_cash_cents: input.total_cents ?? null,
         duration_months: input.duration_months ?? null,
+        permanence_months: planType === "rental" ? input.duration_months ?? null : null,
+        deposit_cents: input.deposit_cents ?? null,
+        maintenance_included: maintenanceIncluded,
+        maintenance_periodicity_months: maintenanceIncluded
+          ? input.maintenance_periodicity_months ?? 12
+          : null,
+        maintenance_months_included: maintenanceIncluded
+          ? input.maintenance_months_included ?? null
+          : null,
         source_free_trial_id: trial.id,
         customer_snapshot: customerSnapshot,
         created_by: session.user_id,
@@ -800,6 +945,76 @@ export async function acceptFreeTrialAction(input: {
       }
     } catch (e) {
       console.warn("[acceptFreeTrial] contract_items copy:", e);
+    }
+
+    // 5.5) Pagos del contrato según el plan elegido. Mismo patrón que
+    // createContractFromProposal (Pago contado / Fianza / 1ª cuota /
+    // Instalación) para que el wizard del contrato los cobre. Idempotente.
+    try {
+      const payments: Array<{
+        concept: string;
+        amount_cents: number;
+        method: string;
+        moment: string;
+      }> = [];
+      if (planType === "cash" && input.total_cents && input.total_cents > 0) {
+        payments.push({
+          concept: "Pago contado",
+          amount_cents: input.total_cents,
+          method: "transfer",
+          moment: "on_signature",
+        });
+      }
+      if (planType === "rental" && input.deposit_cents && input.deposit_cents > 0) {
+        payments.push({
+          concept: "Fianza",
+          amount_cents: input.deposit_cents,
+          method: "transfer",
+          moment: "on_signature",
+        });
+      }
+      if (
+        planType !== "cash" &&
+        input.charge_first_payment_now &&
+        input.monthly_cents &&
+        input.monthly_cents > 0
+      ) {
+        payments.push({
+          concept: "1ª cuota",
+          amount_cents: input.monthly_cents,
+          method: "transfer",
+          moment: "on_signature",
+        });
+      }
+      if (input.installation_cents && input.installation_cents > 0) {
+        payments.push({
+          concept: "Instalación",
+          amount_cents: input.installation_cents,
+          method: "cash",
+          moment: "on_installation",
+        });
+      }
+      if (payments.length > 0) {
+        const { count: existingPayments } = await admin
+          .from("contract_payments")
+          .select("id", { count: "exact", head: true })
+          .eq("contract_id", contractId);
+        if ((existingPayments ?? 0) === 0) {
+          await admin.from("contract_payments").insert(
+            payments.map((pay) => ({
+              contract_id: contractId,
+              company_id: session.company_id,
+              concept: pay.concept,
+              amount_cents: pay.amount_cents,
+              method: pay.method,
+              moment: pay.moment,
+              status: "pending",
+            })),
+          );
+        }
+      }
+    } catch (e) {
+      console.warn("[acceptFreeTrial] contract_payments:", e);
     }
 
     // 6) Si ya hay installation enlazada (vía installations.free_trial_id),

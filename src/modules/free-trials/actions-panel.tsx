@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   X,
-  Check,
   FileSignature,
   FileDown,
   Wrench,
@@ -14,7 +13,8 @@ import {
 import { Button } from "@/shared/ui/button";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { rejectFreeTrialSafeAction, acceptFreeTrialAction } from "./actions";
+import { rejectFreeTrialSafeAction } from "./actions";
+import { AcceptFreeTrialButton } from "./accept-modal";
 import { SignAndInstallButton } from "./sign-install-modal";
 import {
   ScheduleUninstallButton,
@@ -68,21 +68,6 @@ export function FreeTrialActionsPanel({
         "Agenda la desinstalación para retirar el equipo.",
       );
       router.refresh();
-    });
-  }
-
-  function accept() {
-    startTransition(async () => {
-      const r = await acceptFreeTrialAction({ trial_id: trialId });
-      if (!r.ok) {
-        notify.error("No se pudo aceptar", r.error);
-        return;
-      }
-      notify.success(
-        "Prueba aceptada",
-        "Contrato creado en borrador. Te llevamos a la ficha del contrato.",
-      );
-      router.push(`/contratos/${r.contract_id}` as never);
     });
   }
 
@@ -186,21 +171,13 @@ export function FreeTrialActionsPanel({
         >
           <FileDown className="h-4 w-4" /> Albarán de entrega firmado
         </a>
-        <Button
-          onClick={accept}
-          disabled={pending}
-          variant="success"
-          size="lg"
-          className="w-full gap-2"
-        >
-          <Check className="h-5 w-5" />
-          {pending ? "Procesando…" : "Aceptar — generar contrato"}
-        </Button>
+        <AcceptFreeTrialButton trialId={trialId} />
         <p className="text-xs text-muted-foreground">
-          <FileSignature className="inline h-3.5 w-3.5 -mt-0.5" /> Crea un
-          contrato en <strong>borrador</strong> y, si la prueba estaba a un
-          lead, lo convierte en cliente. La instalación ya hecha se enlaza al
-          nuevo contrato.
+          <FileSignature className="inline h-3.5 w-3.5 -mt-0.5" /> Al aceptar
+          eliges el <strong>plan</strong> (venta / alquiler / renting) y las
+          condiciones de pago. Se crea un contrato en <strong>borrador</strong>{" "}
+          y, si la prueba estaba a un lead, lo convierte en cliente. La
+          instalación ya hecha se enlaza al nuevo contrato.
         </p>
 
         <div className="border-t pt-4 space-y-3">
