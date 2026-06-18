@@ -960,13 +960,29 @@ export async function acceptFreeTrialAction(input: {
           }
         }
 
+        // CONDICIONES DEL CONTRATO: lo que se fijó en la ventana de aceptar
+        // manda. cash → precio total; alquiler/renting → cuota mensual. Se
+        // reparte por unidad. Así, si el alquiler es 39,90 €/mes, la línea
+        // refleja 39,90 (NO 0 ni el precio de venta), aunque el producto no
+        // tenga un plan de precio configurado para esa duración.
+        const totalUnits = list.reduce((s, it) => s + (it.quantity || 1), 0);
+        const contractAmount =
+          planType === "cash" ? input.total_cents ?? null : input.monthly_cents ?? null;
+        const perUnitFromContract =
+          contractAmount != null && totalUnits > 0
+            ? Math.round(contractAmount / totalUnits)
+            : null;
+        const singleItem = list.length === 1;
+
         const rows = list.map((it, idx) => {
           const p = prodMap.get(it.product_id);
-          // Fallback: en cash usamos el coste; en alquiler/renting NO (un coste
-          // no es una cuota) → 0 si no hay plan. La cuota total real va en
-          // contract.monthly_cents igualmente.
-          const fallback = planType === "cash" ? p?.cost_cents ?? 0 : 0;
-          const unitPrice = priceMap.get(it.product_id) ?? fallback;
+          const planPrice = priceMap.get(it.product_id) ?? null;
+          const fallbackCost = planType === "cash" ? p?.cost_cents ?? 0 : 0;
+          // Un solo equipo (caso típico): mandan las condiciones del contrato.
+          // Varios: precio por producto del plan y, si falta, reparto del total.
+          const unitPrice = singleItem
+            ? perUnitFromContract ?? planPrice ?? fallbackCost
+            : planPrice ?? perUnitFromContract ?? fallbackCost;
           return {
             contract_id: contractId,
             company_id: session.company_id,
