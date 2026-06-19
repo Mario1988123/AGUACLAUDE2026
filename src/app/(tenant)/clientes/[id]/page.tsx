@@ -35,6 +35,8 @@ import { StreetViewCard } from "@/shared/components/street-view-card";
 import { Plus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { requireSession } from "@/shared/lib/auth/session";
+import { isModuleActive } from "@/shared/lib/auth/module-guard";
+import { CustomerReferralsCard } from "@/modules/referrals/referrals-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { CustomerKPIHeader, getCustomerKPIs } from "@/modules/customers/kpi-header";
@@ -131,6 +133,7 @@ export default async function CustomerDetailPage({
       .order("is_primary", { ascending: false });
     addresses = (data ?? []) as typeof addresses;
   }
+  const referralsActive = await isModuleActive("referrals");
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
@@ -648,6 +651,12 @@ export default async function CustomerDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Referidos: amigos que este cliente nos ha recomendado. Solo si el
+          módulo está activo en la empresa. */}
+      {referralsActive && (
+        <CustomerReferralsCard customerId={id} customerName={displayName} />
+      )}
 
       {/* Mantenimientos por equipo (2026-06-02). Movido aquí, justo
           después de Instalaciones — antes de los bloques RGPD que son

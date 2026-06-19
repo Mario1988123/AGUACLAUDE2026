@@ -76,6 +76,9 @@ export const MODULES: ModuleEntry[] = [
   // ===== 2. COMERCIAL =====
   { key: "leads", label: "Leads", icon: "Contact", href: "/leads", configHref: "/configuracion/leads", group: "sales", rolesAllowed: LEADS_ROLES },
   { key: "customers", label: "Clientes", icon: "Users", href: "/clientes", group: "sales", rolesAllowed: SALES_ROLES },
+  // Referidos — opt-in (default activado). Amigos recomendados por clientes con
+  // equipos entran como leads asociados al cliente recomendador.
+  { key: "referrals", label: "Referidos", icon: "UsersRound", href: "/referidos", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "proposals", label: "Propuestas", icon: "FileText", href: "/propuestas", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "free_trials", label: "Pruebas gratuitas", icon: "Gift", href: "/pruebas-gratuitas", configHref: "/configuracion/pruebas-gratuitas", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "savings_calculator", label: "Calculadora ahorro", icon: "Calculator", href: "/calculadora-ahorro", configHref: "/configuracion/calculadora-ahorro", group: "sales", rolesAllowed: SALES_ROLES },

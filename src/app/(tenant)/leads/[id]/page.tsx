@@ -21,6 +21,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { BackButton } from "@/shared/components/back-button";
+import { getLeadReferrer } from "@/modules/referrals/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -42,11 +43,12 @@ export default async function LeadDetailPage({
       ? lead.trade_name || lead.legal_name || "Sin nombre"
       : `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Sin nombre";
 
-  const [addresses, proposals, session, team] = await Promise.all([
+  const [addresses, proposals, session, team, referrer] = await Promise.all([
     listAddresses({ lead_id: id }),
     listProposalsByLead(id),
     requireSession(),
     listTeamMembers().catch(() => []),
+    getLeadReferrer(id).catch(() => null),
   ]);
   // Scope check para nivel 2/3.
   {
@@ -111,6 +113,20 @@ export default async function LeadDetailPage({
           <span>{lead.party_kind === "company" ? "Empresa" : "Particular"}</span>
           <span aria-hidden="true">·</span>
           <span>Origen: {ORIGIN_LABEL[lead.origin]}</span>
+          {referrer && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>
+                Recomendado por{" "}
+                <Link
+                  href={`/clientes/${referrer.customer_id}` as never}
+                  className="font-semibold text-foreground hover:underline"
+                >
+                  {referrer.name}
+                </Link>
+              </span>
+            </>
+          )}
           {assignedName && (
             <>
               <span aria-hidden="true">·</span>
