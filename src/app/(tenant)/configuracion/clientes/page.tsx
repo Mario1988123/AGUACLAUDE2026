@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { BackButton } from "@/shared/components/back-button";
 import { listTagsCatalog } from "@/modules/customers/tags-actions";
 import { TagsCatalogManager } from "@/modules/customers/tags-catalog-manager";
+import { getCustomerRetentionDays } from "@/modules/config/company/actions";
+import { CustomerRetentionForm } from "@/modules/config/customers/retention-form";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,10 @@ export default async function ConfigClientesPage() {
   if (!isUpper) {
     redirect("/dashboard");
   }
+  // El ajuste de retención es solo para admin (nivel 1).
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
+  const retentionDays = isAdmin ? await getCustomerRetentionDays().catch(() => 0) : 0;
   const tags = await listTagsCatalog().catch(() => []);
   return (
     <div className="space-y-6">
@@ -28,6 +34,24 @@ export default async function ConfigClientesPage() {
         </div>
         <BackButton href="/configuracion" />
       </div>
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Duración de cliente para el comercial
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Cuando un comercial (nivel 3) vende a un cliente, normalmente deja
+              de verlo al reasignarse. Aquí defines cuántos días lo sigue viendo
+              tras la venta para poder recontactarlo y ofrecerle futuras ventas.
+            </p>
+            <CustomerRetentionForm initial={retentionDays} />
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Etiquetas (tags) de cliente</CardTitle>

@@ -22,13 +22,42 @@ export async function listCustomers(
   scope?: "mine" | "all",
 ): Promise<CustomerListItem[]> {
   const session = await requireSession();
-  const { resolveVisibleUserIds, isLevel1 } = await import("@/shared/lib/auth/role-scope");
+  const { resolveVisibleUserIds, isLevel1, getCommercialRetentionCustomerIds } =
+    await import("@/shared/lib/auth/role-scope");
   const visibleUserIds = await resolveVisibleUserIds(session);
   if (visibleUserIds && visibleUserIds.length === 0) return [];
 
   const supabase = await createClient();
   // "mine" fuerza al propio user (override del usuario aunque sea admin).
   const forceMine = scope === "mine" && !isLevel1(session);
+
+  // Ventana de retención comercial: un sales_rep ve ADEMÁS los clientes que
+  // vendió dentro de los X días configurados por el admin (aunque ya no estén
+  // asignados a él). [] para el resto de roles → no cambia su scope.
+  const retentionIds = await getCommercialRetentionCustomerIds(session);
+
+  // Aplica el scope (pertenencia + retención) a un query builder. Centralizado
+  // para no duplicar la lógica entre el SELECT principal y el de reintento.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const applyScope = (qb: any): any => {
+    if (visibleUserIds && !forceMine) {
+      if (retentionIds.length > 0) {
+        return qb.or(
+          `assigned_user_id.in.(${visibleUserIds.join(",")}),id.in.(${retentionIds.join(",")})`,
+        );
+      }
+      return qb.in("assigned_user_id", visibleUserIds);
+    }
+    if (forceMine || (scope === "mine" && !visibleUserIds)) {
+      if (retentionIds.length > 0) {
+        return qb.or(
+          `assigned_user_id.eq.${session.user_id},id.in.(${retentionIds.join(",")})`,
+        );
+      }
+      return qb.eq("assigned_user_id", session.user_id);
+    }
+    return qb; // nivel 1: sin filtro
+  };
 
   // Intentamos cargar `is_autonomo` con un SELECT con coalesce — si la
   // columna no existe en el cache de PostgREST, caemos al SELECT legacy.
@@ -42,13 +71,9 @@ export async function listCustomers(
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(2000);
-  // Scope: nivel 3 ve los suyos; nivel 2 ve los suyos + equipo;
-  // nivel 1 ve todos. assigned_user_id es la columna de pertenencia.
-  if (visibleUserIds && !forceMine) {
-    query = query.in("assigned_user_id", visibleUserIds);
-  } else if (forceMine || (scope === "mine" && !visibleUserIds)) {
-    query = query.eq("assigned_user_id", session.user_id);
-  }
+  // Scope: nivel 3 ve los suyos (+ vendidos recientemente si hay retención);
+  // nivel 2 ve los suyos + equipo; nivel 1 ve todos.
+  query = applyScope(query);
   if (q) {
     const c = q.replace(/[%_]/g, "");
     query = query.or(
@@ -69,11 +94,7 @@ export async function listCustomers(
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(200);
-    if (visibleUserIds && !forceMine) {
-      q2 = q2.in("assigned_user_id", visibleUserIds);
-    } else if (forceMine || (scope === "mine" && !visibleUserIds)) {
-      q2 = q2.eq("assigned_user_id", session.user_id);
-    }
+    q2 = applyScope(q2);
     if (q) {
       const c = q.replace(/[%_]/g, "");
       q2 = q2.or(

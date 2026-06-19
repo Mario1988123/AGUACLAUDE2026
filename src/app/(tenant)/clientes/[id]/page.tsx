@@ -61,9 +61,8 @@ export default async function CustomerDetailPage({
   const fromProposal = sp.from_proposal;
 
   const session = await requireSession();
-  const { resolveVisibleUserIds, hasActiveTaskForCustomer } = await import(
-    "@/shared/lib/auth/role-scope"
-  );
+  const { resolveVisibleUserIds, hasActiveTaskForCustomer, hasRecentSaleForCustomer } =
+    await import("@/shared/lib/auth/role-scope");
   // Regla 2026-06-18: un técnico/instalador puede ver al cliente mientras tenga
   // una tarea asignada y ACTIVA (agenda/instalación/mantenimiento); al terminarla
   // deja de verlo. Lo calculamos una vez y lo reusamos para leer (aunque RLS lo
@@ -99,15 +98,19 @@ export default async function CustomerDetailPage({
       ? customer.trade_name || customer.legal_name || "Sin nombre"
       : `${customer.first_name ?? ""} ${customer.last_name ?? ""}`.trim() || "Sin nombre";
 
-  // Scope check: nivel 2/3 solo acceden a sus clientes; excepción si tienen una
-  // tarea activa (hasTask).
+  // Scope check: nivel 2/3 solo acceden a sus clientes; excepciones: si tienen
+  // una tarea activa (hasTask) o si el comercial vendió a este cliente dentro
+  // de la ventana de retención configurada (hasRecentSale).
   {
     const visibleUserIds = await resolveVisibleUserIds(session);
     if (visibleUserIds !== null) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cust = customer as any;
+      const hasRecentSale = await hasRecentSaleForCustomer(session, id);
       const inScope =
-        (cust.created_by && visibleUserIds.includes(cust.created_by)) || hasTask;
+        (cust.created_by && visibleUserIds.includes(cust.created_by)) ||
+        hasTask ||
+        hasRecentSale;
       if (!inScope) notFound();
     }
   }

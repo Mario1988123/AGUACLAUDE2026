@@ -135,3 +135,62 @@ export async function updateCompanySettingsSafeAction(
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
 }
+
+// ===========================================================================
+// Duración de cliente para el comercial (nivel 3) — 2026-06-19
+// El admin fija cuántos días un comercial sigue viendo a un cliente al que
+// vendió, para recontactarlo. 0 = desactivado. Defensivo: si la columna aún
+// no existe (migración sin aplicar), devuelve 0.
+// ===========================================================================
+
+export async function getCustomerRetentionDays(): Promise<number> {
+  const session = await ensureAdmin();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("company_settings")
+      .select("commercial_retention_days")
+      .eq("company_id", session.company_id!)
+      .maybeSingle();
+    if (error || !data) return 0;
+    return Number((data as { commercial_retention_days: number | null }).commercial_retention_days ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function updateCustomerRetentionDaysAction(days: number): Promise<void> {
+  const session = await ensureAdmin();
+  const n = Math.max(0, Math.min(3650, Math.round(Number(days) || 0)));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: existing } = await supabase
+    .from("company_settings")
+    .select("company_id")
+    .eq("company_id", session.company_id!)
+    .maybeSingle();
+  if (existing) {
+    await supabase
+      .from("company_settings")
+      .update({ commercial_retention_days: n })
+      .eq("company_id", session.company_id!);
+  } else {
+    await supabase.from("company_settings").insert({
+      company_id: session.company_id!,
+      commercial_retention_days: n,
+    });
+  }
+  revalidatePath("/configuracion/clientes");
+}
+
+export async function updateCustomerRetentionDaysSafeAction(
+  days: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await updateCustomerRetentionDaysAction(days);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}

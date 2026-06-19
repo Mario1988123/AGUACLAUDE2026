@@ -121,6 +121,102 @@ export async function hasActiveTaskForCustomer(
 }
 
 /**
+ * Días configurados por la empresa para que un comercial siga viendo a un
+ * cliente tras venderle (company_settings.commercial_retention_days). 0 si no
+ * está configurado o la columna aún no existe (defensivo).
+ */
+export async function getCommercialRetentionDays(companyId: string): Promise<number> {
+  if (!companyId) return 0;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data, error } = await admin
+      .from("company_settings")
+      .select("commercial_retention_days")
+      .eq("company_id", companyId)
+      .maybeSingle();
+    if (error || !data) return 0;
+    return Number((data as { commercial_retention_days: number | null }).commercial_retention_days ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * IDs de clientes que un comercial (sales_rep, nivel 3) puede VER ADEMÁS de
+ * los suyos asignados: aquellos a los que vendió (contrato firmado por él)
+ * dentro de la ventana de retención configurada. Solo aplica a sales_rep puro;
+ * para el resto de roles devuelve [] (no cambia su scope). La fecha de
+ * referencia es contracts.signed_at (la venta). Defensivo ante fallos de BD.
+ */
+export async function getCommercialRetentionCustomerIds(
+  session: SessionClaims,
+): Promise<string[]> {
+  if (!session.company_id) return [];
+  if (session.is_superadmin || session.roles.includes("company_admin")) return [];
+  if (isLevel2(session)) return [];
+  if (!session.roles.includes("sales_rep")) return [];
+  const days = await getCommercialRetentionDays(session.company_id);
+  if (days <= 0) return [];
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("contracts")
+      .select("customer_id")
+      .eq("company_id", session.company_id)
+      .eq("created_by", session.user_id)
+      .not("signed_at", "is", null)
+      .gte("signed_at", cutoff)
+      .is("deleted_at", null)
+      .limit(2000);
+    return Array.from(
+      new Set(
+        ((data ?? []) as Array<{ customer_id: string | null }>)
+          .map((r) => r.customer_id)
+          .filter((x): x is string => Boolean(x)),
+      ),
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ¿El comercial vendió a este cliente dentro de la ventana de retención?
+ * Usado por la ficha de cliente para mantener el acceso del comercial
+ * durante esos días aunque el cliente ya no esté asignado a él.
+ */
+export async function hasRecentSaleForCustomer(
+  session: SessionClaims,
+  customerId: string,
+): Promise<boolean> {
+  if (!session.company_id || !customerId) return false;
+  if (session.is_superadmin || session.roles.includes("company_admin")) return false;
+  if (!session.roles.includes("sales_rep")) return false;
+  const days = await getCommercialRetentionDays(session.company_id);
+  if (days <= 0) return false;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { count } = await admin
+      .from("contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .eq("created_by", session.user_id)
+      .eq("customer_id", customerId)
+      .not("signed_at", "is", null)
+      .gte("signed_at", cutoff)
+      .is("deleted_at", null);
+    return (count ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Helpers de identificación de nivel (sin BD).
  */
 export function isLevel1(session: SessionClaims): boolean {
