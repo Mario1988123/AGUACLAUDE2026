@@ -17,7 +17,7 @@ import { countMaintenanceToConfirm } from "@/modules/maintenance/to-confirm-acti
 import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/installations/constants";
 import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
-import { Calendar, ListTodo, CalendarDays, AlertCircle } from "lucide-react";
+import { Calendar, ListTodo, CalendarDays, AlertCircle, User, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -139,7 +139,10 @@ export default async function AgendaPage({
     pendingMaintenanceCount,
   ] = await Promise.all([
     listAgenda(14, { user_id: userFilter, kind: kindFilter }),
-    listAgendaMonth(now.getFullYear(), now.getMonth()),
+    listAgendaMonth(now.getFullYear(), now.getMonth(), {
+      user_id: userFilter,
+      kind: kindFilter,
+    }),
     weekEventsPromise,
     listResultPromise,
     listTeamMembers(),
@@ -250,6 +253,40 @@ export default async function AgendaPage({
           </ul>
         </div>
       )}
+
+      {/* Atajo nivel 1/2: ver SOLO mi agenda sin tener que abrir el desplegable
+          y buscarse. El desplegable "Asignado a" sigue ahí para ver el trabajo
+          de un nivel 2/3 concreto. viewParam preserva la vista (mes/semana/
+          listado) al alternar. */}
+      {canReassign &&
+        (() => {
+          const viewParam = view === "calendar" ? undefined : view;
+          const viewingMine = userFilter === session.user_id;
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={
+                  buildHref({ user: session.user_id, view: viewParam }) as never
+                }
+                className={`inline-flex h-10 items-center gap-2 rounded-xl border-2 px-4 text-sm font-semibold ${
+                  viewingMine
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card hover:bg-muted"
+                }`}
+              >
+                <User className="h-4 w-4" /> Ver mi agenda
+              </Link>
+              {viewingMine && (
+                <Link
+                  href={buildHref({ user: undefined, view: viewParam }) as never}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-border bg-card px-4 text-sm font-semibold hover:bg-muted"
+                >
+                  <Users className="h-4 w-4" /> Ver toda la agenda
+                </Link>
+              )}
+            </div>
+          );
+        })()}
 
       <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
         {view !== "calendar" && <input type="hidden" name="view" value={view} />}

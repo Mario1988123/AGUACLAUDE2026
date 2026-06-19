@@ -127,7 +127,11 @@ export interface AgendaItem {
   subject_phone?: string | null;
 }
 
-export async function listAgendaMonth(year: number, month: number): Promise<AgendaItem[]> {
+export async function listAgendaMonth(
+  year: number,
+  month: number,
+  filters?: { user_id?: string; kind?: string },
+): Promise<AgendaItem[]> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -148,50 +152,67 @@ export async function listAgendaMonth(year: number, month: number): Promise<Agen
     .gte("starts_at", start)
     .lte("starts_at", end)
     .order("starts_at");
+  // Scope + filtro "Asignado a". Nivel 3 (sales_rep/tmk/installer) solo ve lo
+  // suyo. Nivel 1/2 puede acotar el calendario a un miembro concreto vía
+  // ?user=... — sin esto el calendario del MES ignoraba el filtro y "salía
+  // todo" aunque eligieras a una persona (el listado sí filtraba, el mes no).
   if (!isLevel1or2) {
     query = query.eq("assigned_user_id", session.user_id);
+  } else if (filters?.user_id) {
+    query = query.eq("assigned_user_id", filters.user_id);
+  }
+  if (filters?.kind) {
+    query = query.eq("kind", filters.kind);
   }
   const { data, error } = await query;
   if (error) throw error;
   const events = (data ?? []) as AgendaItem[];
 
-  // Añadir instalaciones y mantenimientos programados (bug 2026-05-11:
-  // si markContractSigned NO consigue crear el row de agenda_events por
-  // fail-soft, la instalación tenía scheduled_at pero NO aparecía en
-  // agenda. Ahora las leemos directas de installations + maintenance_jobs).
-  const virtuals = await loadVirtualAgendaItems({
-    from: start,
-    to: end,
-    restrictToUserId: isLevel1or2 ? null : session.user_id,
-    companyId: session.company_id ?? null,
-  });
+  // Si se filtra por un kind tradicional de agenda_events (visit/call/...) no
+  // añadimos virtuales: esos virtuales son installation/maintenance, kinds
+  // distintos. Mismo criterio que listAgendaRangeFull.
+  let merged: AgendaItem[] = events;
+  if (!filters?.kind) {
+    // Añadir instalaciones y mantenimientos programados (bug 2026-05-11:
+    // si markContractSigned NO consigue crear el row de agenda_events por
+    // fail-soft, la instalación tenía scheduled_at pero NO aparecía en
+    // agenda. Ahora las leemos directas de installations + maintenance_jobs).
+    // Respetamos el mismo filtro "Asignado a" que aplicamos arriba.
+    const restrictUid = !isLevel1or2 ? session.user_id : filters?.user_id ?? null;
+    const virtuals = await loadVirtualAgendaItems({
+      from: start,
+      to: end,
+      restrictToUserId: restrictUid,
+      companyId: session.company_id ?? null,
+    });
 
-  // Dedupe: clave primaria subject_type:subject_id, secundaria por
-  // (reference_code en title + starts_at) para cubrir agenda_events
-  // antiguos sin subject_id.
-  const existingKey = new Set(
-    events
-      .filter((e) => e.subject_type && e.subject_id)
-      .map((e) => `${e.subject_type}:${e.subject_id}`),
-  );
-  const refRegex = /\b([IM]-\d{4}-\d{4})\b/;
-  const existingRefAt = new Set(
-    events
-      .map((e) => {
-        const m = refRegex.exec(e.title);
-        return m ? `${m[1]}@${e.starts_at}` : null;
-      })
-      .filter((k): k is string => !!k),
-  );
-  const merged = [
-    ...events,
-    ...virtuals.filter((v) => {
-      if (existingKey.has(`${v.subject_type}:${v.subject_id}`)) return false;
-      const m = refRegex.exec(v.title);
-      if (m && existingRefAt.has(`${m[1]}@${v.starts_at}`)) return false;
-      return true;
-    }),
-  ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    // Dedupe: clave primaria subject_type:subject_id, secundaria por
+    // (reference_code en title + starts_at) para cubrir agenda_events
+    // antiguos sin subject_id.
+    const existingKey = new Set(
+      events
+        .filter((e) => e.subject_type && e.subject_id)
+        .map((e) => `${e.subject_type}:${e.subject_id}`),
+    );
+    const refRegex = /\b([IM]-\d{4}-\d{4})\b/;
+    const existingRefAt = new Set(
+      events
+        .map((e) => {
+          const m = refRegex.exec(e.title);
+          return m ? `${m[1]}@${e.starts_at}` : null;
+        })
+        .filter((k): k is string => !!k),
+    );
+    merged = [
+      ...events,
+      ...virtuals.filter((v) => {
+        if (existingKey.has(`${v.subject_type}:${v.subject_id}`)) return false;
+        const m = refRegex.exec(v.title);
+        if (m && existingRefAt.has(`${m[1]}@${v.starts_at}`)) return false;
+        return true;
+      }),
+    ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  }
 
   await enrichTitlesFromSubjects(merged);
   return await recomputeOutsideHoursForList(merged, session.company_id);
