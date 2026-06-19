@@ -166,6 +166,11 @@ export default async function AgendaPage({
     session.roles.includes("commercial_director") ||
     session.roles.includes("technical_director") ||
     session.roles.includes("telemarketing_director");
+  // Atajo "Ver mi agenda": SOLO admin (nivel 1). El admin hace de todos los
+  // roles, así que necesita poder quedarse con lo suyo de un clic. Los
+  // directores (nivel 2) tienen el desplegable "Asignado a" para acotar.
+  const isAdmin =
+    session.is_superadmin || session.roles.includes("company_admin");
 
   function buildHref(extra: Record<string, string | undefined>): string {
     const params = new URLSearchParams();
@@ -254,11 +259,12 @@ export default async function AgendaPage({
         </div>
       )}
 
-      {/* Atajo nivel 1/2: ver SOLO mi agenda sin tener que abrir el desplegable
-          y buscarse. El desplegable "Asignado a" sigue ahí para ver el trabajo
-          de un nivel 2/3 concreto. viewParam preserva la vista (mes/semana/
-          listado) al alternar. */}
-      {canReassign &&
+      {/* Atajo SOLO admin (nivel 1): ver SOLO mi agenda sin abrir el desplegable
+          y buscarse. Por defecto la agenda sale con TODO (todos); este botón
+          la acota a uno mismo. El desplegable "Asignado a" sigue ahí para ver
+          el trabajo de un nivel 2/3 concreto. viewParam preserva la vista
+          (mes/semana/listado) al alternar. */}
+      {isAdmin &&
         (() => {
           const viewParam = view === "calendar" ? undefined : view;
           const viewingMine = userFilter === session.user_id;
