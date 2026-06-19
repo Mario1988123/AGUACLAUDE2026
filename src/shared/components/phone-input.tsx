@@ -1,8 +1,14 @@
 "use client";
 
-import { CheckCircle2, AlertCircle, Phone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle2, AlertCircle } from "lucide-react";
 import { Input } from "@/shared/ui/input";
-import { validateSpanishPhone } from "@/shared/lib/validations/spanish";
+import {
+  EUROPE_PHONE_PREFIXES,
+  DEFAULT_PHONE_PREFIX,
+  parsePhoneValue,
+  combinePhoneValue,
+} from "@/shared/lib/phone/prefixes";
 
 interface Props {
   id?: string;
@@ -11,20 +17,22 @@ interface Props {
   onChange: (v: string) => void;
   required?: boolean;
   placeholder?: string;
-  /** Si true, no muestra el icono de teléfono a la izquierda */
+  /** Compat: se acepta pero ya no se pinta icono (el prefijo ocupa su sitio). */
   hideLeadingIcon?: boolean;
 }
 
 /**
- * Input para teléfono español con validación en tiempo real.
- * Acepta móviles (6/7) y fijos (8/9), 9 dígitos. Permite +34 / 0034
- * y separadores visuales (espacios, guiones).
+ * Input de teléfono con selector de prefijo europeo (por defecto +34 España)
+ * y validación en tiempo real según el país elegido.
+ *
+ * El valor que sube por onChange es el combinado "+34 612345678" (prefijo +
+ * número), que es lo que se guarda en BD. Parsea valores legados sin prefijo.
  *
  * Estados visuales:
  *  · empty       → neutral
- *  · incomplete  → neutral con hint suave (mientras escribe)
+ *  · incomplete  → neutral mientras escribe
  *  · valid       → borde verde + check
- *  · invalid     → borde rojo + alert + hint del error
+ *  · invalid     → borde rojo + alert + hint
  */
 export function PhoneInput({
   id,
@@ -33,65 +41,95 @@ export function PhoneInput({
   onChange,
   required,
   placeholder,
-  hideLeadingIcon = false,
 }: Props) {
-  // Limpiamos para chequear, pero conservamos lo escrito por el usuario
-  const stripped = value
-    .trim()
-    .replace(/[\s\-.()]/g, "")
-    .replace(/^\+34/, "")
-    .replace(/^0034/, "");
+  const parsed = parsePhoneValue(value);
+  const national = parsed.national;
 
+  // El prefijo vive en estado para que NO se reinicie a +34 cuando el número
+  // está vacío (el usuario elige país y luego teclea). Se re-sincroniza desde
+  // el valor cuando éste trae un número (ej. al cargar un cliente para editar).
+  const [prefix, setPrefix] = useState(parsed.code || DEFAULT_PHONE_PREFIX);
+  useEffect(() => {
+    if (value && value.trim()) setPrefix(parsePhoneValue(value).code);
+  }, [value]);
+
+  const digits = national.replace(/\D/g, "");
   let status: "empty" | "incomplete" | "valid" | "invalid" = "empty";
   let hint: string | null = null;
 
-  if (!value.trim()) {
+  if (!national.trim()) {
     status = "empty";
-  } else if (stripped.length < 9) {
-    status = "incomplete";
-  } else if (stripped.length > 9) {
-    status = "invalid";
-    hint = "Demasiados dígitos (máx 9 sin prefijo)";
-  } else if (!/^[6789]/.test(stripped)) {
-    status = "invalid";
-    hint = "Debe empezar por 6, 7, 8 o 9";
-  } else if (validateSpanishPhone(value)) {
-    status = "valid";
+  } else if (prefix === DEFAULT_PHONE_PREFIX) {
+    if (digits.length < 9) status = "incomplete";
+    else if (digits.length > 9) {
+      status = "invalid";
+      hint = "Demasiados dígitos (9 en España)";
+    } else if (!/^[6789]/.test(digits)) {
+      status = "invalid";
+      hint = "En España empieza por 6, 7, 8 o 9";
+    } else {
+      status = "valid";
+    }
   } else {
-    status = "invalid";
-    hint = "Formato inválido";
+    // Resto de Europa: validación laxa (6–14 dígitos).
+    if (digits.length < 6) status = "incomplete";
+    else if (digits.length > 14) {
+      status = "invalid";
+      hint = "Demasiados dígitos";
+    } else {
+      status = "valid";
+    }
+  }
+
+  function handlePrefixChange(newCode: string) {
+    setPrefix(newCode);
+    onChange(combinePhoneValue(newCode, national));
+  }
+  function handleNationalChange(newNational: string) {
+    onChange(combinePhoneValue(prefix, newNational));
   }
 
   return (
     <div className="space-y-1">
-      <div className="relative">
-        {!hideLeadingIcon && (
-          <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-        )}
-        <Input
-          id={id}
-          name={name}
-          type="tel"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={required}
-          placeholder={placeholder ?? "612 345 678"}
-          inputMode="tel"
-          autoComplete="tel"
-          className={`${hideLeadingIcon ? "" : "pl-9"} ${
-            status === "invalid"
-              ? "border-destructive pr-10"
-              : status === "valid"
-                ? "border-success pr-10"
-                : ""
-          }`}
-        />
-        {status === "valid" && (
-          <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-success" />
-        )}
-        {status === "invalid" && (
-          <AlertCircle className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
-        )}
+      <div className="flex gap-2">
+        <select
+          value={prefix}
+          onChange={(e) => handlePrefixChange(e.target.value)}
+          aria-label="Prefijo de país"
+          className="h-12 w-[108px] shrink-0 rounded-xl border border-border bg-card px-2 text-sm"
+        >
+          {EUROPE_PHONE_PREFIXES.map((p) => (
+            <option key={p.code + p.iso} value={p.code}>
+              {p.flag} {p.code}
+            </option>
+          ))}
+        </select>
+        <div className="relative flex-1">
+          <Input
+            id={id}
+            name={name}
+            type="tel"
+            value={national}
+            onChange={(e) => handleNationalChange(e.target.value)}
+            required={required}
+            placeholder={placeholder ?? "612 345 678"}
+            inputMode="tel"
+            autoComplete="tel"
+            className={
+              status === "invalid"
+                ? "border-destructive pr-10"
+                : status === "valid"
+                  ? "border-success pr-10"
+                  : ""
+            }
+          />
+          {status === "valid" && (
+            <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-success" />
+          )}
+          {status === "invalid" && (
+            <AlertCircle className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
+          )}
+        </div>
       </div>
       {hint && status === "invalid" && (
         <p className="text-xs font-semibold text-destructive">{hint}</p>

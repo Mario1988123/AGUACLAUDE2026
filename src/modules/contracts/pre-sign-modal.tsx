@@ -32,8 +32,8 @@ import { checkIbanLive, isPendingIban } from "@/shared/lib/validations/iban-part
 import {
   validateDNIorNIE,
   validateCIF,
-  validateSpanishPhone,
 } from "@/shared/lib/validations/spanish";
+import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
 import {
   getContractPreSignReadiness,
   type PreSignReadiness,
@@ -819,7 +819,7 @@ function CustomerEditForm({
         }
       }
     }
-    if (form.phone_primary?.trim() && !validateSpanishPhone(form.phone_primary)) {
+    if (form.phone_primary?.trim() && !validatePhoneWithPrefix(form.phone_primary)) {
       warn = (warn ? warn + " · " : "") + "Teléfono con formato no estándar.";
     }
     if (

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { notify } from "@/shared/hooks/use-toast";
+import { PhoneInput } from "@/shared/components/phone-input";
 import { updateCustomerSafeAction } from "./actions";
 
 export interface EditCustomerInitial {
@@ -163,17 +164,16 @@ export function EditCustomerDataButton({
             </div>
             <div className="space-y-1.5">
               <Label>Teléfono</Label>
-              <Input
+              <PhoneInput
                 value={v.phone_primary ?? ""}
-                onChange={(e) => set("phone_primary", e.target.value || null)}
-                placeholder="+34 6XX XXX XXX"
+                onChange={(val) => set("phone_primary", val || null)}
               />
             </div>
             <div className="space-y-1.5">
               <Label>Tel. secundario</Label>
-              <Input
+              <PhoneInput
                 value={v.phone_secondary ?? ""}
-                onChange={(e) => set("phone_secondary", e.target.value || null)}
+                onChange={(val) => set("phone_secondary", val || null)}
               />
             </div>
             <div className="space-y-1.5 sm:col-span-2">

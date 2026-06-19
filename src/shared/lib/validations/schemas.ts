@@ -4,8 +4,8 @@ import {
   validateCIF,
   validateIBAN,
   validateSpanishPostalCode,
-  validateSpanishPhone,
 } from "./spanish";
+import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
 
 export const taxIdSchema = z
   .string()
@@ -22,6 +22,6 @@ export const spanishPostalCodeSchema = z
 
 export const spanishPhoneSchema = z
   .string()
-  .refine(validateSpanishPhone, { message: "Teléfono español no válido" });
+  .refine(validatePhoneWithPrefix, { message: "Teléfono no válido" });
 
 export const emailSchema = z.string().email("Email no válido");

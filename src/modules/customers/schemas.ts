@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zBoolean } from "@/shared/lib/zod-friendly";
-import { validateSpanishPhone } from "@/shared/lib/validations/spanish";
+import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
 
 export const customerCreateSchema = z
   .object({
@@ -37,11 +37,11 @@ export const customerCreateSchema = z
   // entidades extranjeras…) y la validación estricta rechazaba muchas
   // empresas reales. El TaxIdInput avisa visualmente, pero el envío
   // sólo limpia. Admin es responsable.
-  .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
-    message: "Teléfono principal con formato inválido (móvil/fijo español, 9 dígitos)",
+  .refine((v) => !v.phone_primary?.trim() || validatePhoneWithPrefix(v.phone_primary), {
+    message: "Teléfono principal con formato inválido (España: 9 dígitos; resto de Europa, con su prefijo)",
     path: ["phone_primary"],
   })
-  .refine((v) => !v.phone_secondary?.trim() || validateSpanishPhone(v.phone_secondary), {
+  .refine((v) => !v.phone_secondary?.trim() || validatePhoneWithPrefix(v.phone_secondary), {
     message: "Teléfono secundario con formato inválido",
     path: ["phone_secondary"],
   });
@@ -65,11 +65,11 @@ export const customerUpdateSchema = z
     notes: z.string().optional(),
   })
   // Tax ID: NO bloqueamos por formato — TaxIdInput avisa, admin responsable.
-  .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
+  .refine((v) => !v.phone_primary?.trim() || validatePhoneWithPrefix(v.phone_primary), {
     message: "Teléfono principal con formato inválido",
     path: ["phone_primary"],
   })
-  .refine((v) => !v.phone_secondary?.trim() || validateSpanishPhone(v.phone_secondary), {
+  .refine((v) => !v.phone_secondary?.trim() || validatePhoneWithPrefix(v.phone_secondary), {
     message: "Teléfono secundario con formato inválido",
     path: ["phone_secondary"],
   });

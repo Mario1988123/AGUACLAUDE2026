@@ -1,9 +1,7 @@
 import { z } from "zod";
 import { zBoolean } from "@/shared/lib/zod-friendly";
-import {
-  validateSpanishPhone,
-  validateSpanishPostalCode,
-} from "@/shared/lib/validations/spanish";
+import { validateSpanishPostalCode } from "@/shared/lib/validations/spanish";
+import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
 
 export const PARTY_KIND = ["individual", "company"] as const;
 export const LEAD_STATUS = [
@@ -113,11 +111,11 @@ export const leadCreateSchema = z
   // responsable). El usuario reportó CIFs reales rechazados (hay muchas
   // variantes y casos límite). El TaxIdInput sí muestra aviso visual si
   // el formato no es estándar, pero el envío al servidor sólo limpia.
-  .refine((v) => !v.phone_primary?.trim() || validateSpanishPhone(v.phone_primary), {
-    message: "Teléfono principal con formato inválido (móvil/fijo, 9 dígitos)",
+  .refine((v) => !v.phone_primary?.trim() || validatePhoneWithPrefix(v.phone_primary), {
+    message: "Teléfono principal con formato inválido (España: 9 dígitos; resto de Europa, con su prefijo)",
     path: ["phone_primary"],
   })
-  .refine((v) => !v.phone_company?.trim() || validateSpanishPhone(v.phone_company), {
+  .refine((v) => !v.phone_company?.trim() || validatePhoneWithPrefix(v.phone_company), {
     message: "Teléfono de empresa con formato inválido",
     path: ["phone_company"],
   })

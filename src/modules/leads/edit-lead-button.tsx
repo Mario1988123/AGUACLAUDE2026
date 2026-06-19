@@ -9,6 +9,7 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { updateLeadSafeAction } from "./actions";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
+import { PhoneInput } from "@/shared/components/phone-input";
 import { LEAD_POTENTIAL } from "./schemas";
 
 interface Props {
@@ -106,10 +107,9 @@ export function EditLeadButton({ leadId, initial }: Props) {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Tel. empresa</Label>
-                    <Input
-                      type="tel"
+                    <PhoneInput
                       value={form.phone_company ?? ""}
-                      onChange={(e) => setForm({ ...form, phone_company: e.target.value })}
+                      onChange={(v) => setForm({ ...form, phone_company: v })}
                     />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
@@ -170,10 +170,9 @@ export function EditLeadButton({ leadId, initial }: Props) {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Teléfono</Label>
-                  <Input
-                    type="tel"
+                  <PhoneInput
                     value={form.phone_primary ?? ""}
-                    onChange={(e) => setForm({ ...form, phone_primary: e.target.value })}
+                    onChange={(v) => setForm({ ...form, phone_primary: v })}
                   />
                 </div>
               </div>
