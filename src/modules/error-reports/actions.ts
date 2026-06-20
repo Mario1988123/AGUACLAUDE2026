@@ -22,10 +22,16 @@ export interface ErrorReportRow {
   route: string | null;
   severity: "low" | "medium" | "high" | "critical";
   status: "new" | "triaged" | "in_progress" | "resolved" | "closed" | "wont_fix";
+  /** 'manual' = lo escribió el usuario · 'auto_toast' = capturado al saltar un toast de error. */
+  source: "manual" | "auto_toast";
   message: string;
   steps_to_reproduce: string | null;
   technical_payload: Record<string, unknown>;
   internal_notes: string | null;
+  /** Veces que se ha visto este mismo error (agrupado por huella). */
+  occurrences: number;
+  /** Última vez que se vio (errores automáticos agrupados). */
+  last_seen_at: string | null;
   created_at: string;
   resolved_at: string | null;
 }
@@ -76,6 +82,7 @@ export async function listErrorReports(filters?: {
   status?: string;
   severity?: string;
   company_id?: string;
+  source?: string;
   days?: number;
 }): Promise<ErrorReportRow[]> {
   const session = await requireSession();
@@ -83,22 +90,34 @@ export async function listErrorReports(filters?: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   try {
-    let q = admin
-      .from("error_reports")
-      .select(
-        "id, company_id, reported_by, route, severity, status, message, steps_to_reproduce, technical_payload, internal_notes, created_at, resolved_at",
-      )
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (filters?.status) q = q.eq("status", filters.status);
-    if (filters?.severity) q = q.eq("severity", filters.severity);
-    if (filters?.company_id) q = q.eq("company_id", filters.company_id);
-    if (filters?.days) {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - filters.days);
-      q = q.gte("created_at", cutoff.toISOString());
+    // Columnas nuevas (migración 20260702200000). Lectura defensiva: si la
+    // migración aún no está aplicada, reintentamos sin ellas.
+    const COLS_NEW =
+      "id, company_id, reported_by, route, severity, status, source, message, steps_to_reproduce, technical_payload, internal_notes, occurrences, last_seen_at, created_at, resolved_at";
+    const COLS_LEGACY =
+      "id, company_id, reported_by, route, severity, status, message, steps_to_reproduce, technical_payload, internal_notes, created_at, resolved_at";
+    const buildQuery = (cols: string, withSource: boolean) => {
+      let q = admin
+        .from("error_reports")
+        .select(cols)
+        .order("created_at", { ascending: false })
+        .limit(500);
+      if (filters?.status) q = q.eq("status", filters.status);
+      if (filters?.severity) q = q.eq("severity", filters.severity);
+      if (filters?.company_id) q = q.eq("company_id", filters.company_id);
+      if (withSource && filters?.source) q = q.eq("source", filters.source);
+      if (filters?.days) {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - filters.days);
+        q = q.gte("created_at", cutoff.toISOString());
+      }
+      return q;
+    };
+    let res = await buildQuery(COLS_NEW, true);
+    if (res.error) {
+      res = await buildQuery(COLS_LEGACY, false);
     }
-    const { data } = await q;
+    const data = res.data;
     type Row = Omit<ErrorReportRow, "company_name" | "reported_by_name"> & {
       reported_by: string | null;
     };
@@ -137,10 +156,13 @@ export async function listErrorReports(filters?: {
       route: r.route,
       severity: r.severity,
       status: r.status,
+      source: (r.source ?? "manual") as "manual" | "auto_toast",
       message: r.message,
       steps_to_reproduce: r.steps_to_reproduce,
       technical_payload: r.technical_payload,
       internal_notes: r.internal_notes,
+      occurrences: r.occurrences ?? 1,
+      last_seen_at: r.last_seen_at ?? null,
       created_at: r.created_at,
       resolved_at: r.resolved_at,
     }));
@@ -230,5 +252,186 @@ export async function updateErrorReportAction(
       ok: false,
       error: err instanceof Error ? err.message : "Error desconocido",
     };
+  }
+}
+
+// ============================================================================
+// Captura AUTOMÁTICA de errores (toasts) — 2026-07-02
+// ============================================================================
+
+const autoLogSchema = z.object({
+  message: z.string().trim().min(1).max(2000),
+  route: z.string().max(500).nullish(),
+  technical_payload: z.record(z.unknown()).nullish(),
+});
+
+/**
+ * "Huella" de un error para agrupar repetidos: mensaje + ruta, normalizados
+ * (se quitan uuids y números variables) para que dos errores "iguales pero con
+ * ids distintos" cuenten como el mismo. Sin esto el panel se llenaría de
+ * duplicados.
+ */
+function buildFingerprint(message: string, route: string | null): string {
+  const UUID =
+    /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  const normMsg = message
+    .toLowerCase()
+    .replace(UUID, "#id")
+    .replace(/\d+/g, "#")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
+  const normRoute = (route ?? "").replace(UUID, "#id").replace(/\d+/g, "#");
+  return `${normRoute}::${normMsg}`.slice(0, 400);
+}
+
+/**
+ * Registra AUTOMÁTICAMENTE un toast de error. La llama `notify.error` en el
+ * cliente (fire-and-forget). Agrupa repetidos: si ya existe una fila abierta
+ * con la misma huella, incrementa el contador en vez de crear otra.
+ *
+ * NUNCA lanza ni molesta al usuario: ante cualquier problema devuelve
+ * { ok:false } en silencio. Registrar un error jamás debe romper la UI.
+ */
+export async function logClientErrorAction(
+  input: unknown,
+): Promise<{ ok: boolean }> {
+  try {
+    const session = await requireSession();
+    const parsed = autoLogSchema.safeParse(input);
+    if (!parsed.success) return { ok: false };
+    const message = parsed.data.message.trim().slice(0, 2000);
+    if (message.length < 3) return { ok: false };
+    const route = parsed.data.route?.trim().slice(0, 500) || null;
+    const fingerprint = buildFingerprint(message, route);
+    const companyId = session.company_id ?? null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+
+    // ¿Existe ya una fila ABIERTA con esta huella? → incrementar contador.
+    let existingQ = admin
+      .from("error_reports")
+      .select("id, occurrences")
+      .eq("source", "auto_toast")
+      .eq("fingerprint", fingerprint)
+      .in("status", ["new", "triaged", "in_progress"])
+      .limit(1);
+    existingQ = companyId
+      ? existingQ.eq("company_id", companyId)
+      : existingQ.is("company_id", null);
+    const { data: existing } = await existingQ.maybeSingle();
+    const ex = existing as { id: string; occurrences: number } | null;
+    const nowIso = new Date().toISOString();
+    if (ex) {
+      await admin
+        .from("error_reports")
+        .update({
+          occurrences: (ex.occurrences ?? 1) + 1,
+          last_seen_at: nowIso,
+        })
+        .eq("id", ex.id);
+      return { ok: true };
+    }
+    await admin.from("error_reports").insert({
+      company_id: companyId,
+      reported_by: session.user_id,
+      route,
+      severity: "low",
+      source: "auto_toast",
+      message,
+      fingerprint,
+      occurrences: 1,
+      last_seen_at: nowIso,
+      technical_payload: parsed.data.technical_payload ?? {},
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export interface TopAutoError {
+  fingerprint: string;
+  message: string;
+  route: string | null;
+  total_occurrences: number;
+  companies_affected: number;
+  last_seen_at: string | null;
+}
+
+/**
+ * Ranking "errores más frecuentes" para el panel del superadmin. Agrupa los
+ * errores automáticos por huella (sumando ocurrencias y empresas afectadas,
+ * también entre empresas) y los ordena de más a menos veces.
+ */
+export async function getTopAutoErrors(days = 30): Promise<TopAutoError[]> {
+  const session = await requireSession();
+  if (!session.is_superadmin) return [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const { data, error } = await admin
+      .from("error_reports")
+      .select(
+        "fingerprint, message, route, occurrences, company_id, last_seen_at, created_at",
+      )
+      .eq("source", "auto_toast")
+      .gte("created_at", cutoff.toISOString())
+      .limit(2000);
+    if (error) return [];
+    type Row = {
+      fingerprint: string | null;
+      message: string;
+      route: string | null;
+      occurrences: number | null;
+      company_id: string | null;
+      last_seen_at: string | null;
+      created_at: string;
+    };
+    const rows = (data ?? []) as Row[];
+    const map = new Map<
+      string,
+      TopAutoError & { _companies: Set<string> }
+    >();
+    for (const r of rows) {
+      const key = r.fingerprint ?? r.message;
+      const occ = r.occurrences ?? 1;
+      const last = r.last_seen_at ?? r.created_at;
+      const cur = map.get(key);
+      if (cur) {
+        cur.total_occurrences += occ;
+        if (r.company_id) cur._companies.add(r.company_id);
+        if (last && (!cur.last_seen_at || last > cur.last_seen_at)) {
+          cur.last_seen_at = last;
+        }
+      } else {
+        const s = new Set<string>();
+        if (r.company_id) s.add(r.company_id);
+        map.set(key, {
+          fingerprint: key,
+          message: r.message,
+          route: r.route,
+          total_occurrences: occ,
+          companies_affected: 0,
+          last_seen_at: last,
+          _companies: s,
+        });
+      }
+    }
+    return [...map.values()]
+      .map((v) => ({
+        fingerprint: v.fingerprint,
+        message: v.message,
+        route: v.route,
+        total_occurrences: v.total_occurrences,
+        companies_affected: v._companies.size,
+        last_seen_at: v.last_seen_at,
+      }))
+      .sort((a, b) => b.total_occurrences - a.total_occurrences)
+      .slice(0, 25);
+  } catch {
+    return [];
   }
 }

@@ -1,18 +1,70 @@
 "use client";
 
 import { toast } from "sonner";
+import { logClientErrorAction } from "@/modules/error-reports/actions";
 
 /**
  * Wrapper unificado del sistema de toast. Cuatro variantes alineadas a los
  * colores corporativos: success/error/warning/info.
+ *
+ * Además, CADA error que se muestre se registra automáticamente (en silencio)
+ * en error_reports para que el superadmin identifique qué falla y con qué
+ * frecuencia. Ver captureError() más abajo.
  */
 export const notify = {
   success: (msg: string, description?: string) => toast.success(msg, { description }),
-  error: (msg: string, description?: string) =>
-    toast.error(msg, { description: cleanDescription(description) }),
+  error: (msg: string, description?: string) => {
+    const clean = cleanDescription(description);
+    captureError(msg, clean); // fire-and-forget, nunca rompe la UI
+    return toast.error(msg, { description: clean });
+  },
   warning: (msg: string, description?: string) => toast.warning(msg, { description }),
   info: (msg: string, description?: string) => toast.info(msg, { description }),
 };
+
+// ---------------------------------------------------------------------------
+// Captura automática de errores → superadmin
+// ---------------------------------------------------------------------------
+// Anti-spam en el cliente: no reenviamos el mismo error más de una vez cada
+// 30 s, y como mucho 50 envíos por carga de página. El agrupado "de verdad"
+// (contador de ocurrencias) lo hace el servidor por huella.
+const recentlySent = new Map<string, number>();
+let sentCount = 0;
+const THROTTLE_MS = 30_000;
+const MAX_PER_PAGE = 50;
+
+function captureError(msg: string, description?: string): void {
+  try {
+    if (typeof window === "undefined") return;
+    if (sentCount >= MAX_PER_PAGE) return;
+    const text = [msg, description].filter(Boolean).join(" — ").slice(0, 2000);
+    if (text.length < 3) return;
+    const now = Date.now();
+    const last = recentlySent.get(text) ?? 0;
+    if (now - last < THROTTLE_MS) return;
+    recentlySent.set(text, now);
+    sentCount += 1;
+    const payload = {
+      message: text,
+      route: window.location?.pathname ?? null,
+      technical_payload: {
+        url: window.location?.href ?? null,
+        user_agent:
+          typeof navigator !== "undefined" ? navigator.userAgent : null,
+        viewport:
+          typeof window.innerWidth === "number"
+            ? `${window.innerWidth}x${window.innerHeight}`
+            : null,
+        captured_at: new Date().toISOString(),
+      },
+    };
+    // No esperamos la respuesta ni propagamos errores: registrar un fallo
+    // jamás debe provocar otro toast ni frenar al usuario.
+    void Promise.resolve(logClientErrorAction(payload)).catch(() => {});
+  } catch {
+    /* nunca propagar */
+  }
+}
 
 /**
  * Limpia mensajes de error que llegan redactados por Next.js o con
