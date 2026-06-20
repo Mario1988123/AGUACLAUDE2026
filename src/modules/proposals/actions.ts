@@ -425,7 +425,12 @@ export async function createProposalAction(input: unknown) {
   const supaAny = supabase as any;
   const year = new Date().getFullYear();
   const yearPrefix = `P-${year}-`;
-  const { data: lastCoded } = await supaAny
+  // El MAX se lee con cliente admin (sin RLS): con el cliente de usuario, un
+  // comercial scope 'own' solo ve SUS propuestas y recalcula un número ya usado
+  // por otro → duplicados. Mismo patrón que installations/savings. (Auditoría 2026-06-21)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const adminForCode = createAdminClient() as any;
+  const { data: lastCoded } = await adminForCode
     .from("proposals")
     .select("reference_code")
     .eq("company_id", session.company_id)

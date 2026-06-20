@@ -353,10 +353,15 @@ export async function createContractFromProposal(proposalId: string) {
         : null;
   const durationMonths = p.chosen_duration_months;
 
-  // Generar reference_code C-YYYY-NNNN único por empresa+año
+  // Generar reference_code C-YYYY-NNNN único por empresa+año.
+  // El MAX se lee con cliente admin (sin RLS): con el cliente de usuario, un
+  // comercial scope 'own' solo ve SUS contratos y recalcula un número ya usado
+  // por otro → duplicados. Mismo patrón que installations/savings. (Auditoría 2026-06-21)
   const year = new Date().getFullYear();
   const yearPrefix = `C-${year}-`;
-  const { data: lastCoded } = await supaAny
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const adminForCode = createAdminClient() as any;
+  const { data: lastCoded } = await adminForCode
     .from("contracts")
     .select("reference_code")
     .eq("company_id", session.company_id)
