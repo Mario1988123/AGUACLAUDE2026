@@ -1,5 +1,5 @@
 import { requireSession } from "@/shared/lib/auth/session";
-import { MODULES } from "@/shared/lib/modules";
+import { MODULES, defaultBottomNavKeysForRoles } from "@/shared/lib/modules";
 import { createClient } from "@/shared/lib/supabase/server";
 import { getMyModuleOverrides } from "@/modules/tenant/users/permissions-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
@@ -65,7 +65,10 @@ export default async function MenuMovilConfigPage() {
           <CardTitle className="text-base">Iconos disponibles</CardTitle>
         </CardHeader>
         <CardContent>
-          <MenuMovilForm availableItems={availableItems} />
+          <MenuMovilForm
+            availableItems={availableItems}
+            defaultKeys={defaultBottomNavKeysForRoles(session.roles)}
+          />
         </CardContent>
       </Card>
     </div>

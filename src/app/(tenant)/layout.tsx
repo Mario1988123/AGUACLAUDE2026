@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { headers } from "next/headers";
 import { requireSession, enforcePasswordChange } from "@/shared/lib/auth/session";
-import { MODULES } from "@/shared/lib/modules";
+import { MODULES, defaultBottomNavKeysForRoles } from "@/shared/lib/modules";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Sidebar } from "@/shared/components/sidebar";
 import { Header } from "@/shared/components/header";
@@ -154,7 +154,11 @@ export default async function TenantLayout({ children }: { children: React.React
           <BottomNavSpacer />
         </main>
       </div>
-      <BottomNav unreadCount={unread} availableItems={availableBottomNavItems} />
+      <BottomNav
+        unreadCount={unread}
+        availableItems={availableBottomNavItems}
+        defaultKeys={defaultBottomNavKeysForRoles(session.roles)}
+      />
       <OnboardingTour steps={onboardingSteps} enabled={!seenOnboarding} />
       <ShiftReminders enabled={activeModuleKeys.includes("time_tracking")} />
     </div>

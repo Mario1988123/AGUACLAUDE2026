@@ -15,6 +15,8 @@ interface Item {
 
 interface Props {
   availableItems: Item[];
+  /** Iconos por defecto según el rol (lo calcula el server). */
+  defaultKeys?: string[];
 }
 
 const STORAGE_KEY = "bottom-nav.modules.v1";
@@ -32,7 +34,11 @@ const NOTIFICATIONS_ITEM: Item = {
  * dispositivo, no por usuario en BD — es como los iconos del escritorio del
  * móvil: el usuario los ordena en cada dispositivo).
  */
-export function MenuMovilForm({ availableItems }: Props) {
+export function MenuMovilForm({ availableItems, defaultKeys }: Props) {
+  const effectiveDefaults = useMemo(
+    () => (defaultKeys && defaultKeys.length > 0 ? defaultKeys : DEFAULT_KEYS),
+    [defaultKeys],
+  );
   // Mapa de keys disponibles + notificaciones siempre
   const lookup = useMemo(() => {
     const m = new Map<string, Item>();
@@ -67,13 +73,13 @@ export function MenuMovilForm({ availableItems }: Props) {
       setOrder([...validSaved, ...rest]);
       setPinned(new Set(validSaved));
     } else {
-      // Default: 5 actuales + el resto detrás
-      const defaults = DEFAULT_KEYS.filter((k) => lookup.has(k));
+      // Default por rol + el resto detrás
+      const defaults = effectiveDefaults.filter((k) => lookup.has(k));
       const rest = allKeys.filter((k) => !defaults.includes(k));
       setOrder([...defaults, ...rest]);
       setPinned(new Set(defaults));
     }
-  }, [lookup]);
+  }, [lookup, effectiveDefaults]);
 
   function togglePin(key: string) {
     setPinned((prev) => {
@@ -123,7 +129,7 @@ export function MenuMovilForm({ availableItems }: Props) {
       /* */
     }
     const allKeys = Array.from(lookup.keys());
-    const defaults = DEFAULT_KEYS.filter((k) => lookup.has(k));
+    const defaults = effectiveDefaults.filter((k) => lookup.has(k));
     const rest = allKeys.filter((k) => !defaults.includes(k));
     setOrder([...defaults, ...rest]);
     setPinned(new Set(defaults));

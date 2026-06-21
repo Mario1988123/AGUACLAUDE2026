@@ -139,3 +139,40 @@ export const MODULES: ModuleEntry[] = [
   { key: "social_media", label: "RRSS", icon: "Megaphone", href: "/rrss", configHref: "/configuracion/rrss", group: "system", rolesAllowed: LEVEL_1_2 },
   { key: "settings", label: "Configuración", icon: "Settings", href: "/configuracion", group: "system", rolesAllowed: ["company_admin"] },
 ];
+
+/**
+ * Iconos por defecto del menú inferior del MÓVIL (BottomNav) según el rol.
+ * El nivel 3 usa el móvil mucho más que el 1/2, así que le ponemos arriba lo
+ * que más usa. El usuario puede reordenarlo/cambiarlo en
+ * /configuracion/menu-movil. "notifications" es un pseudo-módulo (la campana).
+ *
+ * Los componentes filtran luego estas keys contra los módulos a los que el
+ * usuario tiene acceso real, así que sobra con listar las preferentes.
+ */
+export function defaultBottomNavKeysForRoles(roles: string[]): string[] {
+  const has = (r: string) => roles.includes(r);
+  const isLeader = roles.some((r) => LEVEL_1_2.includes(r));
+  if (!isLeader) {
+    // Nivel 3 TÉCNICO (instalador): agenda + instalaciones + mantenimientos.
+    if (has("installer")) {
+      return [
+        "agenda",
+        "installations",
+        "maintenance",
+        "my_day",
+        "dashboard",
+        "notifications",
+      ];
+    }
+    // Nivel 3 COMERCIAL.
+    if (has("sales_rep")) {
+      return ["agenda", "leads", "customers", "my_day", "dashboard", "notifications"];
+    }
+    // Nivel 3 TELEMARKETING.
+    if (has("telemarketer")) {
+      return ["agenda", "leads", "my_day", "dashboard", "notifications"];
+    }
+  }
+  // Niveles 1/2 (admin/directores) y cualquier otro: default general histórico.
+  return ["dashboard", "my_day", "installations", "leads", "notifications"];
+}

@@ -22,6 +22,8 @@ interface Props {
    * preferencias guardadas siguen siendo accesibles tras un cambio de rol.
    */
   availableItems: BottomNavItem[];
+  /** Iconos por defecto según el rol del usuario (si aún no ha personalizado). */
+  defaultKeys?: string[];
 }
 
 /** Default si el usuario aún no ha personalizado. Mismo orden histórico. */
@@ -42,9 +44,14 @@ const NOTIFICATIONS_ITEM: BottomNavItem = {
  * por el usuario desde /configuracion/menu-movil (preferencia en localStorage).
  * Sólo visible en pantallas <md (en tablet ya hay sidebar permanente icono).
  */
-export function BottomNav({ unreadCount = 0, availableItems }: Props) {
+export function BottomNav({ unreadCount = 0, availableItems, defaultKeys }: Props) {
   const pathname = usePathname();
-  const [pinnedKeys, setPinnedKeys] = useState<readonly string[]>(DEFAULT_KEYS);
+  // Default por rol (viene del server). Si no llega, el histórico general.
+  const defaults = useMemo<readonly string[]>(
+    () => (defaultKeys && defaultKeys.length > 0 ? defaultKeys : DEFAULT_KEYS),
+    [defaultKeys],
+  );
+  const [pinnedKeys, setPinnedKeys] = useState<readonly string[]>(defaults);
   const [hydrated, setHydrated] = useState(false);
 
   // Mapa de keys disponibles para validar la preferencia guardada
@@ -63,7 +70,7 @@ export function BottomNav({ unreadCount = 0, availableItems }: Props) {
       try {
         const raw = window.localStorage.getItem(STORAGE_KEY);
         if (!raw) {
-          setPinnedKeys(DEFAULT_KEYS);
+          setPinnedKeys(defaults);
           setHydrated(true);
           return;
         }
@@ -76,7 +83,7 @@ export function BottomNav({ unreadCount = 0, availableItems }: Props) {
         }
         setHydrated(true);
       } catch {
-        setPinnedKeys(DEFAULT_KEYS);
+        setPinnedKeys(defaults);
         setHydrated(true);
       }
     }
@@ -93,7 +100,7 @@ export function BottomNav({ unreadCount = 0, availableItems }: Props) {
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("bottom-nav-changed", onCustom);
     };
-  }, []);
+  }, [defaults]);
 
   // Filtrar keys válidas (las que existen para este usuario), respetar el
   // orden guardado. Si tras filtrar queda vacío, caer en default.
@@ -102,12 +109,12 @@ export function BottomNav({ unreadCount = 0, availableItems }: Props) {
       .map((k) => lookup.get(k))
       .filter((x): x is BottomNavItem => Boolean(x));
     if (filtered.length === 0) {
-      return DEFAULT_KEYS
+      return defaults
         .map((k) => lookup.get(k))
         .filter((x): x is BottomNavItem => Boolean(x));
     }
     return filtered;
-  }, [pinnedKeys, lookup]);
+  }, [pinnedKeys, lookup, defaults]);
 
   // Evitar parpadeo durante hidratación: hasta que sepamos qué pintar,
   // pintamos los defaults. (SSR ve defaults; cliente puede ver custom).
