@@ -26,7 +26,7 @@ import {
   createProductDatasheetShareAction,
   type ProductShareItem,
 } from "./share-actions";
-import { generateProductDatasheetV2 } from "./datasheet-pdf-v2";
+import { generateProductDatasheetAuto } from "./datasheet-pick";
 import { sendEmailViaResend } from "@/modules/mailing/resend";
 
 // ---------------------------------------------------------------------------
@@ -232,7 +232,7 @@ export async function sendProductDatasheetEmailAction(input: {
     const bodyText = tpl.body_text ? renderTemplate(tpl.body_text, vars) : undefined;
 
     // 4) Generar PDF y convertirlo a base64
-    const pdfBytes = await generateProductDatasheetV2(input.productId);
+    const pdfBytes = await generateProductDatasheetAuto(input.productId);
     const pdfBase64 = Buffer.from(pdfBytes).toString("base64");
 
     // 5) Sender

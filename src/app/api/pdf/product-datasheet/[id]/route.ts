@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { generateProductDatasheet } from "@/modules/products/datasheet-pdf";
 import { generateProductDatasheetV2 } from "@/modules/products/datasheet-pdf-v2";
+import { generateProductDatasheetIagua } from "@/modules/products/datasheet-iagua";
+import { generateProductDatasheetAuto } from "@/modules/products/datasheet-pick";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +19,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const url = new URL(req.url);
   const wantsV1 =
     url.searchParams.get("v") === "1" || process.env.DATASHEET_USE_V1 === "true";
+  // Override de plantilla por query para previsualizar: ?t=iagua | ?t=standard
+  const forced = url.searchParams.get("t");
   try {
     const bytes = wantsV1
       ? await generateProductDatasheet(id)
-      : await generateProductDatasheetV2(id);
+      : forced === "iagua"
+        ? await generateProductDatasheetIagua(id)
+        : forced === "standard"
+          ? await generateProductDatasheetV2(id)
+          : await generateProductDatasheetAuto(id);
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
