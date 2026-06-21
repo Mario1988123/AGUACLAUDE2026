@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 import { Eye } from "lucide-react";
 import { listMaintenance } from "@/modules/maintenance/actions";
 import { STATUS_LABEL } from "@/modules/maintenance/constants";
@@ -275,7 +276,8 @@ export default async function MantenimientosPage({
         )}
       </form>
 
-      <Card>
+      <ScrollToOnMount targetId="mant-content" />
+      <Card id="mant-content" className="scroll-mt-20">
         <CardHeader>
           <CardTitle>Listado</CardTitle>
         </CardHeader>

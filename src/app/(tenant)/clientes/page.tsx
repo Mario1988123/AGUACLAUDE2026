@@ -42,12 +42,12 @@ export default async function CustomersPage({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Clientes</h1>
           <p className="text-sm text-muted-foreground">{customersAll.length} clientes</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {isUpperLevel && <ImportCustomersButton />}
           {(session.is_superadmin || session.roles.includes("company_admin")) && (
             <GenerateLegacyContractsButton />

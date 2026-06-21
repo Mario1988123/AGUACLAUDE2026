@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 import { Plus, Download } from "lucide-react";
 import { listLeads } from "@/modules/leads/actions";
 import { Button } from "@/shared/ui/button";
@@ -265,13 +266,16 @@ export default async function LeadsPage({
         </Button>
       </form>
 
-      <SelectableLeadsTable
-        leads={leads}
-        team={team}
-        canBulkReassign={
-          session.is_superadmin || session.roles.includes("company_admin")
-        }
-      />
+      <ScrollToOnMount targetId="leads-content" />
+      <div id="leads-content" className="scroll-mt-20">
+        <SelectableLeadsTable
+          leads={leads}
+          team={team}
+          canBulkReassign={
+            session.is_superadmin || session.roles.includes("company_admin")
+          }
+        />
+      </div>
     </div>
   );
 }

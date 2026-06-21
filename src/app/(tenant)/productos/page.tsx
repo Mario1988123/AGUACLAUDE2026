@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 import { listProducts, listCategories } from "@/modules/products/actions";
 import { Button } from "@/shared/ui/button";
 import { KIND_LABEL } from "@/modules/products/schemas";
@@ -90,7 +91,7 @@ export default async function ProductsPage({
               : `${products.length} productos`}
           </p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
           <div className="flex rounded-xl border border-input bg-card overflow-hidden">
             <Link
               href={`/productos?${new URLSearchParams({ ...(sp.q ? { q: sp.q } : {}), ...(kind ? { kind } : {}), ...(categoryId ? { cat: categoryId } : {}), ...(activeOnly ? { active: "1" } : {}) }).toString()}` as never}
@@ -240,6 +241,8 @@ export default async function ProductsPage({
         )}
       </form>
 
+      <ScrollToOnMount targetId="prod-content" />
+      <div id="prod-content" className="scroll-mt-20" />
       <ProductsListClient
         products={filteredProducts.map((p) => ({
           id: p.id,

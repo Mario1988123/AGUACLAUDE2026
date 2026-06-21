@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 import { Eye, Download, Home, AlertCircle } from "lucide-react";
 import { listContracts } from "@/modules/contracts/actions";
 import { StatusPill } from "@/shared/components/status-pill";
@@ -224,6 +225,8 @@ export default async function ContratosPage({
         )}
       </form>
 
+      <ScrollToOnMount targetId="contratos-content" />
+      <div id="contratos-content" className="scroll-mt-20" />
       {/* Mobile: cards apiladas */}
       <ul className="space-y-2 md:hidden">
         {contracts.length === 0 ? (

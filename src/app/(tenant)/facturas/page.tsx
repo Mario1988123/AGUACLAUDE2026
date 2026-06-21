@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 import { Eye, Download } from "lucide-react";
 import { listInvoices } from "@/modules/invoices/actions";
 import { listPendingInvoiceWalletEntries } from "@/modules/wallet/actions";
@@ -296,7 +297,8 @@ export default async function InvoicesPage({
         </Card>
       )}
 
-      <Card>
+      <ScrollToOnMount targetId="fact-content" />
+      <Card id="fact-content" className="scroll-mt-20">
         <CardHeader>
           <CardTitle>Listado</CardTitle>
         </CardHeader>
