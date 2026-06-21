@@ -79,8 +79,22 @@ Server actions con `createAdminClient()` (salta RLS) sin filtrar por `company_id
 
 ## 🎨 UX — estado
 
-- ✅ **Autoscroll** hecho en `/agenda` (al calendario) y `/clientes` (a la tabla) con el componente reutilizable `ScrollToOnMount` (`src/shared/components/scroll-to-on-mount.tsx`). Se puede aplicar igual a más páginas (leads, instalaciones, productos, etc.) añadiendo `<ScrollToOnMount targetId="x"/>` + un `<div id="x" className="scroll-mt-20">`.
-- 🔸 **Responsive tablet/móvil (botones fila entera, tablas anchas)**: la auditoría detallada (informe `04_ux_responsive.md`) NO llegó a generarse (los agentes se cortaron por el límite de sesión). **Pendiente**: relanzar la auditoría UX y aplicar el "plan por patrón" (botones `w-full sm:w-auto`, `flex-wrap`, usar `ResponsiveTableWrapper`). Es de bajo riesgo pero conviene revisarlo en pantalla.
+Auditorías UX completas: `04_ux_responsive.md` y `05_ux_flujos.md`.
+
+### ✅ Hecho (commits `15c20f9` + `121458a`)
+- Componente reutilizable `ScrollToOnMount` (`src/shared/components/scroll-to-on-mount.tsx`).
+- **Autoscroll al contenido** en 7 páginas: `/agenda`, `/clientes`, `/productos`, `/facturas`, `/mantenimientos`, `/leads`, `/contratos`.
+- `flex-wrap` en cabeceras de `/clientes` y `/productos` (botones ya no ocupan fila entera ni se salen en móvil).
+
+### 🔸 Pendiente UX (todo de bajo riesgo, listo para aplicar)
+- **Autoscroll en el resto** (mismo patrón): `propuestas` (ancla antes de `proposals.length===0`, id `prop-content`), `pruebas-gratuitas` (Card "Listado" :147, id `pruebas-content`), `incidencias` (Card "Listado" :76, id `incid-content`), `wallet` (:428), `gastos`, `comisiones`, `contratos/alquileres`. NO en `dashboard` ni fichas. `instalaciones` tiene varias vistas → anclar con cuidado.
+- **Plan responsive por patrón** (informe 04, aplicar y revisar en pantalla):
+  - P1: `w-full sm:w-auto` en submits/selects de las barras de filtros (instalaciones, mantenimientos, contratos, wallet, agenda, productos).
+  - P2: botones-icono de fila a 44px en móvil (`h-10 w-10 sm:h-8 sm:w-8`) — 66 ocurrencias; mejor crear un componente compartido.
+  - P4: `min-w-[680-720px]` a tablas en `overflow-x-auto` sin min-w.
+  - P5: envolver tablas desnudas (`/ventas`, `/comisiones`, histórico wallet) en `ResponsiveTableWrapper`.
+- **Flujos / menos clics** (informe 05): mover acciones de cabecera a menú overflow en fichas con 5 botones; plegar filtros de leads/productos/wallet en `<details>`; revisar dobles modales (agendar tarea, equipo en ficha cliente).
+- **Adopción de primitivas**: `src/shared/ui/layout/` (PageHeader/FilterBar) apenas se usa; migrar páginas a ellas unificaría el responsive (revisar caso a caso).
 
 ---
 
