@@ -383,7 +383,7 @@ function ChatMessageItem({
   return (
     <div
       className={cn(
-        "group flex flex-col",
+        "group flex w-full flex-col",
         message.is_mine ? "items-end" : "items-start",
       )}
     >
@@ -434,7 +434,7 @@ function ChatMessageItem({
           )}
           <div
             className={cn(
-              "max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
+              "w-fit max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
               message.is_mine ? "bg-primary text-primary-foreground" : "bg-muted",
             )}
           >
