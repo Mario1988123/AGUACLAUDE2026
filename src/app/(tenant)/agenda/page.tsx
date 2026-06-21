@@ -18,6 +18,7 @@ import { STATUS_LABEL, STATUS_VARIANT } from "@/modules/installations/constants"
 import { Badge } from "@/shared/ui/badge";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Calendar, ListTodo, CalendarDays, AlertCircle, User, Users } from "lucide-react";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 
 export const dynamic = "force-dynamic";
 
@@ -406,7 +407,10 @@ export default async function AgendaPage({
         )}
       </form>
 
-      <div className="flex gap-2">
+      {/* Autoscroll al contenido útil (vistas + calendario), saltándose
+          cabecera, banners y filtros. Sobre todo para tablet/móvil. */}
+      <ScrollToOnMount targetId="agenda-content" />
+      <div id="agenda-content" className="flex gap-2 scroll-mt-20">
         <Link
           href={buildHref({ view: undefined }) as never}
           className={`inline-flex h-10 items-center gap-2 rounded-xl border-2 px-4 text-sm font-semibold ${

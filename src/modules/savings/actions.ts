@@ -644,7 +644,7 @@ export async function listWizardExtras(filters: {
       .eq("is_active", true),
     supabase
       .from("product_attribute_values")
-      .select("product_id, value, product_attributes(key, label)")
+      .select("product_id, value_text, value_number, product_attributes(key, name)")
       .in("product_id", productIds),
   ]);
 
@@ -662,7 +662,7 @@ export async function listWizardExtras(filters: {
       const attrs: Record<string, string | number | null> = {};
       for (const a of attrsList.filter((x) => x.product_id === p.id)) {
         const k = a.product_attributes?.key;
-        if (k) attrs[k] = a.value;
+        if (k) attrs[k] = a.value_text ?? a.value_number ?? null;
       }
       return {
         id: p.id,

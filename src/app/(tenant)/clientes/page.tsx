@@ -10,6 +10,7 @@ import {
   CustomerSmartAlerts,
   getCustomerAlerts,
 } from "@/modules/customers/smart-alerts";
+import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 
 export const dynamic = "force-dynamic";
 
@@ -102,13 +103,18 @@ export default async function CustomersPage({
 
       {isUpperLevel && alerts && <CustomerSmartAlerts alerts={alerts} />}
 
-      <CustomersFilteredView
-        customers={customersAll}
-        team={team}
-        canBulkReassign={
-          session.is_superadmin || session.roles.includes("company_admin")
-        }
-      />
+      {/* Autoscroll a la tabla, saltándose cabecera, pestañas y alertas
+          (siguen accesibles subiendo). Sobre todo para tablet/móvil. */}
+      <ScrollToOnMount targetId="clientes-content" />
+      <div id="clientes-content" className="scroll-mt-20">
+        <CustomersFilteredView
+          customers={customersAll}
+          team={team}
+          canBulkReassign={
+            session.is_superadmin || session.roles.includes("company_admin")
+          }
+        />
+      </div>
     </div>
   );
 }
