@@ -24,6 +24,7 @@ const SECTIONS = [
   { href: "/configuracion/notificaciones", label: "Notificaciones", icon: "Bell", desc: "Opt-in por evento y canal" },
   { href: "/configuracion/dashboard", label: "Dashboard", icon: "LayoutDashboard", desc: "KPIs por rol y período" },
   { href: "/configuracion/productos", label: "Productos", icon: "Package", desc: "Categorías y atributos" },
+  { href: "/configuracion/pdf", label: "Fichas PDF", icon: "FileText", desc: "Plantilla de ficha técnica (Estándar / IAGUA) y colores" },
   { href: "/configuracion/pruebas-gratuitas", label: "Pruebas gratuitas", icon: "Gift", desc: "Duración y condiciones" },
   { href: "/configuracion/objetivos", label: "Objetivos", icon: "Target", desc: "Metas mensuales por dpto y usuario" },
   { href: "/configuracion/puntos", label: "Programa de puntos", icon: "Trophy", desc: "Puntos, hitos y comisiones €" },
