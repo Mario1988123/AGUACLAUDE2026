@@ -32,12 +32,14 @@ export default async function PublicInstallationConfirmationPage({
   const { job } = view;
   const scheduledDate = new Date(job.scheduled_at);
   const dateLabel = scheduledDate.toLocaleDateString("es-ES", {
+    timeZone: "Europe/Madrid",
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
   });
   const timeLabel = scheduledDate.toLocaleTimeString("es-ES", {
+    timeZone: "Europe/Madrid",
     hour: "2-digit",
     minute: "2-digit",
   });

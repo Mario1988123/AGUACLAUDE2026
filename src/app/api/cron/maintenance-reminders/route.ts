@@ -230,6 +230,7 @@ async function sendMaintenanceReminder(
     company_name: (company as { name: string | null } | null)?.name ?? "",
     appointment_date: scheduled.toISOString(),
     appointment_time: scheduled.toLocaleTimeString("es-ES", {
+      timeZone: "Europe/Madrid",
       hour: "2-digit",
       minute: "2-digit",
     }),

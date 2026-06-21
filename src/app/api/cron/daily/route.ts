@@ -440,6 +440,7 @@ export async function GET(req: NextRequest) {
   }>) {
     if (offInstallations.has(inst.company_id)) continue;
     const time = new Date(inst.scheduled_at).toLocaleTimeString("es-ES", {
+      timeZone: "Europe/Madrid",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -585,6 +586,7 @@ export async function GET(req: NextRequest) {
   }>) {
     if (offMaintenance.has(j.company_id)) continue;
     const time = new Date(j.scheduled_at).toLocaleTimeString("es-ES", {
+      timeZone: "Europe/Madrid",
       hour: "2-digit",
       minute: "2-digit",
     });

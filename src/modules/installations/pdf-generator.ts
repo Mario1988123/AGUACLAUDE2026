@@ -89,6 +89,7 @@ function wrap(font: PDFFont, text: string, size: number, maxW: number): string[]
 function fmtDateOnly(d: string | null | undefined): string {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("es-ES", {
+    timeZone: "Europe/Madrid",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -98,6 +99,7 @@ function fmtDateOnly(d: string | null | undefined): string {
 function fmtTimeOnly(d: string | null | undefined): string {
   if (!d) return "—";
   return new Date(d).toLocaleTimeString("es-ES", {
+    timeZone: "Europe/Madrid",
     hour: "2-digit",
     minute: "2-digit",
   });
