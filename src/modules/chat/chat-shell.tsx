@@ -604,7 +604,12 @@ function ChatMessageItem({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5">
+        <div
+          className={cn(
+            "flex w-full items-center gap-1.5",
+            message.is_mine ? "justify-end" : "justify-start",
+          )}
+        >
           {message.is_mine && (
             <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
               {!message.audio_url && (
