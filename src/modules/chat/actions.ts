@@ -29,6 +29,12 @@ export interface ChatMessageRow {
   audio_url: string | null;
   /** Duración de la nota de voz en milisegundos. */
   audio_duration_ms: number | null;
+  /** URL firmada del adjunto (imagen/archivo) si lo hay. */
+  attachment_url: string | null;
+  attachment_name: string | null;
+  attachment_mime: string | null;
+  /** Datos estructurados: contacto compartido o ubicación. */
+  meta: Record<string, unknown> | null;
 }
 
 export interface DirectoryUser {
@@ -253,7 +259,7 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
   let rowsRes = await admin
     .from("chat_messages")
     .select(
-      "id, thread_id, sender_id, body, created_at, edited_at, audio_path, audio_duration_ms",
+      "id, thread_id, sender_id, body, created_at, edited_at, audio_path, audio_duration_ms, attachment_path, attachment_name, attachment_mime, meta",
     )
     .eq("thread_id", threadId)
     .is("deleted_at", null)
@@ -279,6 +285,10 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     edited_at: string | null;
     audio_path?: string | null;
     audio_duration_ms?: number | null;
+    attachment_path?: string | null;
+    attachment_name?: string | null;
+    attachment_mime?: string | null;
+    meta?: Record<string, unknown> | null;
   };
   const items = (rows ?? []) as R[];
   const senderIds = Array.from(new Set(items.map((r) => r.sender_id)));
@@ -313,6 +323,27 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     }
   }
 
+  // URLs firmadas para adjuntos (bucket privado chat-files).
+  const filePaths = items
+    .map((r) => r.attachment_path)
+    .filter((p): p is string => !!p);
+  const fileSignedMap = new Map<string, string>();
+  if (filePaths.length > 0) {
+    try {
+      const { data: signed } = await admin.storage
+        .from("chat-files")
+        .createSignedUrls(filePaths, 3600);
+      for (const s of (signed ?? []) as Array<{
+        path: string | null;
+        signedUrl: string | null;
+      }>) {
+        if (s.path && s.signedUrl) fileSignedMap.set(s.path, s.signedUrl);
+      }
+    } catch {
+      /* fail-soft */
+    }
+  }
+
   return items.map((r) => ({
     id: r.id,
     thread_id: r.thread_id,
@@ -324,6 +355,12 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     is_mine: r.sender_id === session.user_id,
     audio_url: r.audio_path ? signedMap.get(r.audio_path) ?? null : null,
     audio_duration_ms: r.audio_duration_ms ?? null,
+    attachment_url: r.attachment_path
+      ? fileSignedMap.get(r.attachment_path) ?? null
+      : null,
+    attachment_name: r.attachment_name ?? null,
+    attachment_mime: r.attachment_mime ?? null,
+    meta: (r.meta as Record<string, unknown> | null) ?? null,
   }));
 }
 
@@ -778,6 +815,236 @@ export async function sendChatVoiceMessageSafeAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await sendChatVoiceMessageAction(threadId, audioDataUrl, durationMs);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+// ---- Helpers compartidos para adjuntos/contacto/ubicación ----
+
+interface ChatSession {
+  user_id: string;
+  company_id: string | null;
+  roles: string[];
+  is_superadmin: boolean;
+}
+
+/** Verifica que el usuario puede publicar en el hilo (mismos permisos que texto). */
+async function assertThreadAccess(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  threadId: string,
+  session: ChatSession,
+): Promise<void> {
+  const { data: thread } = await admin
+    .from("chat_threads")
+    .select("id, kind, company_id, created_by")
+    .eq("id", threadId)
+    .maybeSingle();
+  if (!thread) throw new Error("Hilo no encontrado");
+  const t = thread as {
+    id: string;
+    kind: ChatThreadKind;
+    company_id: string;
+    created_by: string;
+  };
+  if (t.company_id !== session.company_id) throw new Error("Sin acceso");
+  if (t.kind === "broadcast") {
+    if (
+      !isAdmin(session.roles, session.is_superadmin) &&
+      t.created_by !== session.user_id
+    ) {
+      throw new Error("Solo admin puede enviar avisos generales");
+    }
+  } else {
+    const { data: m } = await admin
+      .from("chat_thread_members")
+      .select("user_id")
+      .eq("thread_id", threadId)
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    if (!m) throw new Error("No eres miembro de este hilo");
+  }
+}
+
+async function touchRead(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  threadId: string,
+  userId: string,
+): Promise<void> {
+  await admin.from("chat_thread_members").upsert(
+    {
+      thread_id: threadId,
+      user_id: userId,
+      role: "member",
+      last_read_at: new Date().toISOString(),
+    },
+    { onConflict: "thread_id,user_id" },
+  );
+}
+
+/** Sube una imagen o archivo y crea un mensaje con el adjunto. */
+export async function sendChatAttachmentAction(
+  threadId: string,
+  fileDataUrl: string,
+  fileName: string,
+  mime: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!fileDataUrl?.startsWith("data:")) throw new Error("Archivo no válido");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await assertThreadAccess(admin, threadId, session);
+
+  const { ensureBucket } = await import("@/shared/lib/supabase/storage-buckets");
+  const BUCKET = "chat-files";
+  const ok = await ensureBucket(admin, BUCKET);
+  if (!ok) throw new Error("No se pudo preparar el almacenamiento");
+
+  const base64 = fileDataUrl.split(",")[1] ?? "";
+  if (!base64) throw new Error("Archivo vacío");
+  const buffer = Buffer.from(base64, "base64");
+  if (buffer.byteLength > 8 * 1024 * 1024) {
+    throw new Error("El archivo es demasiado grande (máx. 8 MB)");
+  }
+  const safeName = (fileName || "archivo")
+    .replace(/[^\w.\-]+/g, "_")
+    .slice(0, 80);
+  const path = `${session.company_id}/${threadId}/${Date.now()}-${Math.round(
+    Math.random() * 1e6,
+  )}-${safeName}`;
+  const up = await admin.storage.from(BUCKET).upload(path, buffer, {
+    contentType: mime || "application/octet-stream",
+    upsert: false,
+  });
+  if (up.error) throw new Error(up.error.message);
+
+  const ins = await admin.from("chat_messages").insert({
+    thread_id: threadId,
+    sender_id: session.user_id,
+    body: "",
+    attachment_path: path,
+    attachment_name: safeName,
+    attachment_mime: mime || "application/octet-stream",
+  });
+  if (ins.error) throw new Error(ins.error.message);
+  await touchRead(admin, threadId, session.user_id);
+  revalidatePath("/chat");
+}
+
+/** Comparte una ficha de cliente/lead como tarjeta en el chat. */
+export async function sendChatContactAction(
+  threadId: string,
+  subjectType: "customer" | "lead",
+  subjectId: string,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await assertThreadAccess(admin, threadId, session);
+
+  const table = subjectType === "customer" ? "customers" : "leads";
+  const { data: subj } = await admin
+    .from(table)
+    .select(
+      "id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary",
+    )
+    .eq("id", subjectId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!subj) throw new Error("Contacto no encontrado");
+  const s = subj as {
+    trade_name?: string | null;
+    legal_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    phone_primary?: string | null;
+  };
+  const name =
+    s.trade_name ||
+    s.legal_name ||
+    `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim() ||
+    "Contacto";
+
+  const ins = await admin.from("chat_messages").insert({
+    thread_id: threadId,
+    sender_id: session.user_id,
+    body: "",
+    meta: {
+      type: "contact",
+      subject_type: subjectType,
+      subject_id: subjectId,
+      name,
+      phone: s.phone_primary ?? null,
+    },
+  });
+  if (ins.error) throw new Error(ins.error.message);
+  await touchRead(admin, threadId, session.user_id);
+  revalidatePath("/chat");
+}
+
+/** Comparte la ubicación actual como tarjeta con enlace a Google Maps. */
+export async function sendChatLocationAction(
+  threadId: string,
+  lat: number,
+  lng: number,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!Number.isFinite(lat) || !Number.isFinite(lng))
+    throw new Error("Ubicación no válida");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  await assertThreadAccess(admin, threadId, session);
+  const ins = await admin.from("chat_messages").insert({
+    thread_id: threadId,
+    sender_id: session.user_id,
+    body: "",
+    meta: { type: "location", lat, lng },
+  });
+  if (ins.error) throw new Error(ins.error.message);
+  await touchRead(admin, threadId, session.user_id);
+  revalidatePath("/chat");
+}
+
+export async function sendChatAttachmentSafeAction(
+  threadId: string,
+  fileDataUrl: string,
+  fileName: string,
+  mime: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sendChatAttachmentAction(threadId, fileDataUrl, fileName, mime);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function sendChatContactSafeAction(
+  threadId: string,
+  subjectType: "customer" | "lead",
+  subjectId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sendChatContactAction(threadId, subjectType, subjectId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export async function sendChatLocationSafeAction(
+  threadId: string,
+  lat: number,
+  lng: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sendChatLocationAction(threadId, lat, lng);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };

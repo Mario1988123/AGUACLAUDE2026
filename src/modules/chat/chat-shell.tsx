@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient as createBrowserSupabase } from "@/shared/lib/supabase/client";
 import {
@@ -11,6 +11,10 @@ import {
   Plus,
   ArrowLeft,
   Mic,
+  Paperclip,
+  MapPin,
+  UserPlus,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -29,6 +33,9 @@ import {
   markChatThreadRead,
   sendChatMessageSafeAction,
   sendChatVoiceMessageSafeAction,
+  sendChatAttachmentSafeAction,
+  sendChatContactSafeAction,
+  sendChatLocationSafeAction,
   createBroadcastThreadSafeAction,
   createTeamThreadSafeAction,
   getOrCreateDirectThreadSafeAction,
@@ -39,6 +46,8 @@ import {
   type DirectoryUser,
 } from "./actions";
 import { Pencil, Trash2 } from "lucide-react";
+import { SubjectPickerModal } from "@/modules/agenda/subject-picker-modal";
+import type { AgendaSubjectHit } from "@/modules/agenda/actions";
 
 interface Props {
   threads: ChatThreadRow[];
@@ -126,6 +135,11 @@ export function ChatShell({
   const recStartRef = useRef(0);
   const recCancelRef = useRef(false);
 
+  // Adjuntos / contacto / ubicación
+  const [attachOpen, setAttachOpen] = useState(false);
+  const [contactPickerOpen, setContactPickerOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Pedir permiso de notificaciones del navegador una vez.
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
@@ -175,6 +189,8 @@ export function ChatShell({
             sender_id: string;
             body: string | null;
             audio_path?: string | null;
+            attachment_path?: string | null;
+            meta?: { type?: string } | null;
           };
           if (row.thread_id === activeId) {
             getChatMessages(activeId).then(setMessages).catch(() => {});
@@ -188,7 +204,13 @@ export function ChatShell({
                 ?.full_name ?? "Nuevo mensaje";
             const preview = row.audio_path
               ? "🎤 Nota de voz"
-              : (row.body ?? "").slice(0, 80) || "Nuevo mensaje";
+              : row.attachment_path
+                ? "📎 Archivo adjunto"
+                : row.meta?.type === "contact"
+                  ? "👤 Contacto"
+                  : row.meta?.type === "location"
+                    ? "📍 Ubicación"
+                    : (row.body ?? "").slice(0, 80) || "Nuevo mensaje";
             notify.info(senderName, preview);
             playChatBeep();
             try {
@@ -249,6 +271,92 @@ export function ChatShell({
       setMessages(rows);
       router.refresh();
     });
+  }
+
+  async function onFilePicked(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !activeId) return;
+    if (file.size > 8 * 1024 * 1024) {
+      notify.error("Archivo muy grande", "El máximo es 8 MB.");
+      return;
+    }
+    const threadId = activeId;
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onloadend = () => resolve(fr.result as string);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+    startTransition(async () => {
+      const r = await sendChatAttachmentSafeAction(
+        threadId,
+        dataUrl,
+        file.name,
+        file.type,
+      );
+      if (!r.ok) {
+        notify.error("No se pudo adjuntar", r.error);
+        return;
+      }
+      const rows = await getChatMessages(threadId);
+      setMessages(rows);
+      router.refresh();
+    });
+  }
+
+  function shareContact(hit: AgendaSubjectHit) {
+    if (!activeId) return;
+    const threadId = activeId;
+    startTransition(async () => {
+      const r = await sendChatContactSafeAction(
+        threadId,
+        hit.subject_type as "customer" | "lead",
+        hit.subject_id,
+      );
+      if (!r.ok) {
+        notify.error("No se pudo compartir", r.error);
+        return;
+      }
+      const rows = await getChatMessages(threadId);
+      setMessages(rows);
+      router.refresh();
+    });
+  }
+
+  function shareLocation() {
+    if (!activeId) return;
+    if (!navigator.geolocation) {
+      notify.error("Ubicación", "Tu navegador no permite compartir ubicación.");
+      return;
+    }
+    const threadId = activeId;
+    notify.info("Ubicación", "Obteniendo tu ubicación…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        startTransition(async () => {
+          const r = await sendChatLocationSafeAction(
+            threadId,
+            latitude,
+            longitude,
+          );
+          if (!r.ok) {
+            notify.error("No se pudo compartir", r.error);
+            return;
+          }
+          const rows = await getChatMessages(threadId);
+          setMessages(rows);
+          router.refresh();
+        });
+      },
+      () =>
+        notify.error(
+          "Ubicación",
+          "No se pudo obtener tu ubicación. Revisa los permisos.",
+        ),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   }
 
   function stopRecording() {
@@ -473,6 +581,64 @@ export function ChatShell({
                   </div>
                 ) : (
                   <div className="flex items-end gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,application/pdf"
+                      className="hidden"
+                      onChange={onFilePicked}
+                    />
+                    <div className="relative shrink-0">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setAttachOpen((o) => !o)}
+                        title="Adjuntar"
+                        aria-label="Adjuntar"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                      {attachOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setAttachOpen(false)}
+                          />
+                          <div className="absolute bottom-12 left-0 z-20 w-48 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachOpen(false);
+                                fileInputRef.current?.click();
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted"
+                            >
+                              <Paperclip className="h-4 w-4" /> Foto o archivo
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachOpen(false);
+                                setContactPickerOpen(true);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted"
+                            >
+                              <UserPlus className="h-4 w-4" /> Compartir contacto
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAttachOpen(false);
+                                shareLocation();
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted"
+                            >
+                              <MapPin className="h-4 w-4" /> Mi ubicación
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <textarea
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
@@ -525,6 +691,12 @@ export function ChatShell({
           router.refresh();
         }}
       />
+      <SubjectPickerModal
+        open={contactPickerOpen}
+        onClose={() => setContactPickerOpen(false)}
+        onSelect={shareContact}
+        title="Compartir contacto en el chat"
+      />
     </>
   );
 }
@@ -574,6 +746,15 @@ function ChatMessageItem({
     });
   }
 
+  const meta = (message.meta ?? null) as {
+    type?: string;
+    subject_type?: string;
+    subject_id?: string;
+    name?: string;
+    lat?: number | string;
+    lng?: number | string;
+  } | null;
+
   return (
     <div
       className={cn(
@@ -612,7 +793,7 @@ function ChatMessageItem({
         >
           {message.is_mine && (
             <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-              {!message.audio_url && (
+              {!message.audio_url && !message.attachment_url && !meta && (
                 <button
                   onClick={() => setEditing(true)}
                   className="rounded p-1 text-muted-foreground hover:bg-muted"
@@ -645,6 +826,49 @@ function ChatMessageItem({
                 src={message.audio_url}
                 className="h-9 w-[230px] max-w-full"
               />
+            ) : message.attachment_url &&
+              message.attachment_mime?.startsWith("image/") ? (
+              <a
+                href={message.attachment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={message.attachment_url}
+                  alt={message.attachment_name ?? "imagen"}
+                  className="max-h-60 max-w-full rounded-lg"
+                />
+              </a>
+            ) : message.attachment_url ? (
+              <a
+                href={message.attachment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 underline"
+              >
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="truncate">
+                  {message.attachment_name ?? "Archivo"}
+                </span>
+              </a>
+            ) : meta?.type === "contact" ? (
+              <a
+                href={`/${meta.subject_type === "lead" ? "leads" : "clientes"}/${meta.subject_id}`}
+                className="flex items-center gap-2 underline"
+              >
+                <UserIcon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{meta.name ?? "Contacto"}</span>
+              </a>
+            ) : meta?.type === "location" ? (
+              <a
+                href={`https://www.google.com/maps?q=${meta.lat},${meta.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 underline"
+              >
+                <MapPin className="h-4 w-4 shrink-0" /> Ver ubicación
+              </a>
             ) : (
               <>
                 {message.body}

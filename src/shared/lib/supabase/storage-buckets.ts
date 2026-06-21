@@ -45,6 +45,8 @@ export const STORAGE_BUCKETS = {
   "catalog-global": { public: false },
   /** Notas de voz del chat interno. Privadas — se sirven con URL firmada. */
   "chat-audio": { public: false },
+  /** Imágenes y archivos adjuntos del chat interno. Privados — URL firmada. */
+  "chat-files": { public: false },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;
