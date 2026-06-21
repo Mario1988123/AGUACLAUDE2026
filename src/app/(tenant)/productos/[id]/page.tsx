@@ -39,6 +39,8 @@ import {
 } from "@/modules/products/certifications-actions";
 import { DocsAndCertsPanel } from "@/modules/products/docs-and-certs-panel";
 import { ExtendedFieldsPanel } from "@/modules/products/extended-fields-panel";
+import { DatasheetIaguaPanel } from "@/modules/products/datasheet-iagua-panel";
+import { getPdfSettings } from "@/modules/config/pdf/actions";
 import { listTagsCatalog } from "@/modules/products/tags-actions";
 import { getProductCatalogStatus } from "@/modules/products/catalog-update-actions";
 import { CatalogUpdateBanner } from "@/modules/products/catalog-update-banner";
@@ -131,6 +133,10 @@ export default async function ProductDetailPage({
   // Borrar producto: solo admin de empresa (nivel 1) o superadmin.
   const canDelete = session.is_superadmin || session.roles.includes("company_admin");
   const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+  // Plantilla de ficha PDF de la empresa: el editor IAGUA solo se muestra si la
+  // empresa usa esa plantilla.
+  const pdfSettings = canEdit ? await getPdfSettings().catch(() => null) : null;
+  const isIaguaTemplate = pdfSettings?.datasheet_template === "iagua";
 
   // Etiqueta de stock al lado del título.
   // - Comerciales (level 3): solo "Hay stock" / "Sin stock", sin cantidad.
@@ -269,6 +275,21 @@ export default async function ProductDetailPage({
               color_hex: t.color_hex,
             }))}
             otherProducts={otherProducts}
+          />
+        </CollapsibleCard>
+      )}
+
+      {canEdit && isIaguaTemplate && (
+        <CollapsibleCard
+          title="🎨 Ficha IAGUA — contenido del PDF (portada + ventajas)"
+          defaultOpen={false}
+        >
+          <DatasheetIaguaPanel
+            productId={product.id}
+            initial={
+              (product as { datasheet_extra?: Record<string, unknown> | null })
+                .datasheet_extra ?? null
+            }
           />
         </CollapsibleCard>
       )}

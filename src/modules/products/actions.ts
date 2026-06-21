@@ -692,6 +692,8 @@ export async function updateProductAction(
     replaced_by_product_id?: string | null;
     installation_diagram_url?: string | null;
     datasheet_color_accent?: string | null;
+    /** Contenido editable de la página 2 de la ficha IAGUA (jsonb). */
+    datasheet_extra?: Record<string, unknown> | null;
     // Fase B (Plan FIX 2026-06-09): papeles adicionales del producto.
     roles?: string[] | null;
   },
@@ -745,6 +747,7 @@ export async function updateProductAction(
         "replaced_by_product_id",
         "installation_diagram_url",
         "datasheet_color_accent",
+        "datasheet_extra",
         "roles",
       ];
       const re = new RegExp(`(${newCols.join("|")})`, "i");
