@@ -4,13 +4,6 @@ import { ChatShell } from "@/modules/chat/chat-shell";
 
 export const dynamic = "force-dynamic";
 
-const LEADER_ROLES = new Set([
-  "company_admin",
-  "technical_director",
-  "commercial_director",
-  "telemarketing_director",
-]);
-
 export default async function ChatPage() {
   const session = await requireSession();
   const [threads, directory] = await Promise.all([
@@ -19,8 +12,8 @@ export default async function ChatPage() {
   ]);
 
   const canBroadcast = session.is_superadmin || session.roles.includes("company_admin");
-  const canTeam =
-    session.is_superadmin || session.roles.some((r) => LEADER_ROLES.has(r));
+  // Grupos: cualquier usuario puede crear un grupo con varias personas.
+  const canTeam = true;
 
   return (
     <div className="space-y-4">
@@ -35,6 +28,7 @@ export default async function ChatPage() {
         directory={directory}
         canBroadcast={canBroadcast}
         canTeam={canTeam}
+        currentUserId={session.user_id}
       />
     </div>
   );

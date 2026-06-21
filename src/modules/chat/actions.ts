@@ -25,6 +25,10 @@ export interface ChatMessageRow {
   created_at: string;
   edited_at: string | null;
   is_mine: boolean;
+  /** URL firmada del audio si es una nota de voz (si no, null). */
+  audio_url: string | null;
+  /** Duración de la nota de voz en milisegundos. */
+  audio_duration_ms: number | null;
 }
 
 export interface DirectoryUser {
@@ -167,7 +171,7 @@ export async function listChatThreads(): Promise<ChatThreadRow[]> {
     } else if (t.kind === "broadcast") {
       display_name = t.name ?? "Avisos generales";
     } else if (t.kind === "team") {
-      display_name = t.name ?? "Equipo";
+      display_name = t.name ?? "Grupo";
     }
     result.push({
       id: t.id,
@@ -246,13 +250,26 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     if (!m) return [];
   }
 
-  const { data: rows } = await admin
+  let rowsRes = await admin
     .from("chat_messages")
-    .select("id, thread_id, sender_id, body, created_at, edited_at")
+    .select(
+      "id, thread_id, sender_id, body, created_at, edited_at, audio_path, audio_duration_ms",
+    )
     .eq("thread_id", threadId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
     .limit(500);
+  if (rowsRes.error) {
+    // Migración de notas de voz aún no aplicada → leer sin esas columnas.
+    rowsRes = await admin
+      .from("chat_messages")
+      .select("id, thread_id, sender_id, body, created_at, edited_at")
+      .eq("thread_id", threadId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true })
+      .limit(500);
+  }
+  const rows = rowsRes.data;
   type R = {
     id: string;
     thread_id: string;
@@ -260,6 +277,8 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     body: string;
     created_at: string;
     edited_at: string | null;
+    audio_path?: string | null;
+    audio_duration_ms?: number | null;
   };
   const items = (rows ?? []) as R[];
   const senderIds = Array.from(new Set(items.map((r) => r.sender_id)));
@@ -273,6 +292,27 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
       nameMap.set(p.user_id, p.full_name ?? p.user_id.slice(0, 8));
     }
   }
+  // URLs firmadas para las notas de voz (bucket privado chat-audio).
+  const audioPaths = items
+    .map((r) => r.audio_path)
+    .filter((p): p is string => !!p);
+  const signedMap = new Map<string, string>();
+  if (audioPaths.length > 0) {
+    try {
+      const { data: signed } = await admin.storage
+        .from("chat-audio")
+        .createSignedUrls(audioPaths, 3600);
+      for (const s of (signed ?? []) as Array<{
+        path: string | null;
+        signedUrl: string | null;
+      }>) {
+        if (s.path && s.signedUrl) signedMap.set(s.path, s.signedUrl);
+      }
+    } catch {
+      /* fail-soft: sin URL el cliente simplemente no muestra el reproductor */
+    }
+  }
+
   return items.map((r) => ({
     id: r.id,
     thread_id: r.thread_id,
@@ -282,6 +322,8 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     created_at: r.created_at,
     edited_at: r.edited_at,
     is_mine: r.sender_id === session.user_id,
+    audio_url: r.audio_path ? signedMap.get(r.audio_path) ?? null : null,
+    audio_duration_ms: r.audio_duration_ms ?? null,
   }));
 }
 
@@ -518,8 +560,8 @@ export async function createTeamThreadAction(
 ): Promise<string> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  if (!isLeader(session.roles, session.is_superadmin))
-    throw new Error("Solo líderes de equipo pueden crear hilos de equipo");
+  // Grupos: cualquier usuario de la empresa puede crear un grupo con varias
+  // personas (antes solo responsables nivel 2). Decisión Mario 2026-06-21.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data, error } = await admin
@@ -527,7 +569,7 @@ export async function createTeamThreadAction(
     .insert({
       company_id: session.company_id,
       kind: "team",
-      name: name.trim() || "Equipo",
+      name: name.trim() || "Grupo",
       created_by: session.user_id,
     })
     .select("id")
@@ -643,6 +685,103 @@ export async function listCompanyDirectory(): Promise<DirectoryUser[]> {
       };
     })
     .sort((a, b) => a.full_name.localeCompare(b.full_name));
+}
+
+/**
+ * Envía una NOTA DE VOZ a un hilo. Recibe el audio como data URL (base64),
+ * lo sube al bucket privado `chat-audio` y crea un mensaje con audio_path
+ * (body vacío). Mismos permisos que un mensaje de texto.
+ */
+export async function sendChatVoiceMessageAction(
+  threadId: string,
+  audioDataUrl: string,
+  durationMs: number,
+): Promise<void> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!audioDataUrl?.startsWith("data:audio/"))
+    throw new Error("Audio no válido");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const { data: thread } = await admin
+    .from("chat_threads")
+    .select("id, kind, company_id, created_by")
+    .eq("id", threadId)
+    .maybeSingle();
+  if (!thread) throw new Error("Hilo no encontrado");
+  const t = thread as {
+    id: string;
+    kind: ChatThreadKind;
+    company_id: string;
+    created_by: string;
+  };
+  if (t.company_id !== session.company_id) throw new Error("Sin acceso");
+  if (t.kind === "broadcast") {
+    if (
+      !isAdmin(session.roles, session.is_superadmin) &&
+      t.created_by !== session.user_id
+    ) {
+      throw new Error("Solo admin puede enviar avisos generales");
+    }
+  } else {
+    const { data: m } = await admin
+      .from("chat_thread_members")
+      .select("user_id")
+      .eq("thread_id", threadId)
+      .eq("user_id", session.user_id)
+      .maybeSingle();
+    if (!m) throw new Error("No eres miembro de este hilo");
+  }
+
+  const { ensureBucket } = await import("@/shared/lib/supabase/storage-buckets");
+  const BUCKET = "chat-audio";
+  const ok = await ensureBucket(admin, BUCKET);
+  if (!ok) throw new Error("No se pudo preparar el almacenamiento de audio");
+
+  const base64 = audioDataUrl.split(",")[1] ?? "";
+  if (!base64) throw new Error("Audio vacío");
+  const buffer = Buffer.from(base64, "base64");
+  const path = `${session.company_id}/${threadId}/${Date.now()}-${Math.round(
+    Math.random() * 1e6,
+  )}.webm`;
+  const up = await admin.storage
+    .from(BUCKET)
+    .upload(path, buffer, { contentType: "audio/webm", upsert: false });
+  if (up.error) throw new Error(up.error.message);
+
+  const ins = await admin.from("chat_messages").insert({
+    thread_id: threadId,
+    sender_id: session.user_id,
+    body: "",
+    audio_path: path,
+    audio_duration_ms: Math.max(0, Math.round(durationMs || 0)),
+  });
+  if (ins.error) throw new Error(ins.error.message);
+
+  await admin.from("chat_thread_members").upsert(
+    {
+      thread_id: threadId,
+      user_id: session.user_id,
+      role: "member",
+      last_read_at: new Date().toISOString(),
+    },
+    { onConflict: "thread_id,user_id" },
+  );
+  revalidatePath("/chat");
+}
+
+export async function sendChatVoiceMessageSafeAction(
+  threadId: string,
+  audioDataUrl: string,
+  durationMs: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await sendChatVoiceMessageAction(threadId, audioDataUrl, durationMs);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
 
 // =================== Safe wrappers ===================

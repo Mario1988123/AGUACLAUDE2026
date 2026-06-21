@@ -43,6 +43,8 @@ export const STORAGE_BUCKETS = {
    *  documentación de los productos maestros. Privado — se sirve con URL
    *  firmada; al importar a una empresa se COPIA a sus buckets propios. */
   "catalog-global": { public: false },
+  /** Notas de voz del chat interno. Privadas — se sirven con URL firmada. */
+  "chat-audio": { public: false },
 } as const;
 
 export type BucketName = keyof typeof STORAGE_BUCKETS;

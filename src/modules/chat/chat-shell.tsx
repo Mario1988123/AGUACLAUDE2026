@@ -10,6 +10,7 @@ import {
   Send,
   Plus,
   ArrowLeft,
+  Mic,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -27,6 +28,7 @@ import {
   getChatMessages,
   markChatThreadRead,
   sendChatMessageSafeAction,
+  sendChatVoiceMessageSafeAction,
   createBroadcastThreadSafeAction,
   createTeamThreadSafeAction,
   getOrCreateDirectThreadSafeAction,
@@ -43,6 +45,7 @@ interface Props {
   directory: DirectoryUser[];
   canBroadcast: boolean;
   canTeam: boolean;
+  currentUserId: string;
 }
 
 const KIND_ICON = {
@@ -65,7 +68,39 @@ function formatTime(iso: string | null): string {
   return d.toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
 }
 
-export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) {
+/** Pitido corto al recibir un mensaje (Web Audio, sin archivo de sonido). */
+function playChatBeep() {
+  try {
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.26);
+    osc.onended = () => ctx.close();
+  } catch {
+    /* silencio */
+  }
+}
+
+export function ChatShell({
+  threads,
+  directory,
+  canBroadcast,
+  canTeam,
+  currentUserId,
+}: Props) {
   const router = useRouter();
   const [activeId, setActiveId] = useState<string | null>(threads[0]?.id ?? null);
   const [messages, setMessages] = useState<ChatMessageRow[]>([]);
@@ -74,6 +109,30 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
   const [pending, startTransition] = useTransition();
   const [newOpen, setNewOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Refs con los últimos threads/directory para el handler de tiempo real
+  // (evita re-suscribir el canal en cada mensaje).
+  const threadsRef = useRef(threads);
+  threadsRef.current = threads;
+  const directoryRef = useRef(directory);
+  directoryRef.current = directory;
+
+  // Estado de grabación de nota de voz
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recStartRef = useRef(0);
+  const recCancelRef = useRef(false);
+
+  // Pedir permiso de notificaciones del navegador una vez.
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
 
   const active = threads.find((t) => t.id === activeId) ?? null;
 
@@ -111,11 +170,38 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
         { event: "INSERT", schema: "public", table: "chat_messages" },
         (payload) => {
           if (cancelled) return;
-          const row = payload.new as { thread_id: string };
+          const row = payload.new as {
+            thread_id: string;
+            sender_id: string;
+            body: string | null;
+            audio_path?: string | null;
+          };
           if (row.thread_id === activeId) {
-            getChatMessages(activeId)
-              .then(setMessages)
-              .catch(() => {});
+            getChatMessages(activeId).then(setMessages).catch(() => {});
+          } else if (
+            row.sender_id !== currentUserId &&
+            threadsRef.current.some((t) => t.id === row.thread_id)
+          ) {
+            // Mensaje entrante en otro hilo mío → aviso pop-up + sonido.
+            const senderName =
+              directoryRef.current.find((u) => u.user_id === row.sender_id)
+                ?.full_name ?? "Nuevo mensaje";
+            const preview = row.audio_path
+              ? "🎤 Nota de voz"
+              : (row.body ?? "").slice(0, 80) || "Nuevo mensaje";
+            notify.info(senderName, preview);
+            playChatBeep();
+            try {
+              if (
+                document.hidden &&
+                "Notification" in window &&
+                Notification.permission === "granted"
+              ) {
+                new Notification(senderName, { body: preview });
+              }
+            } catch {
+              /* notificaciones no disponibles */
+            }
           }
           // Refrescar layout (sidebar badges, lista de hilos)
           router.refresh();
@@ -126,7 +212,7 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [activeId, router]);
+  }, [activeId, router, currentUserId]);
 
   function send() {
     if (!activeId || !draft.trim()) return;
@@ -143,6 +229,76 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
       setMessages(rows);
       router.refresh();
     });
+  }
+
+  async function sendVoice(blob: Blob, durationMs: number) {
+    if (!activeId) return;
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onloadend = () => resolve(fr.result as string);
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+    startTransition(async () => {
+      const r = await sendChatVoiceMessageSafeAction(activeId, dataUrl, durationMs);
+      if (!r.ok) {
+        notify.error("No se pudo enviar la nota de voz", r.error);
+        return;
+      }
+      const rows = await getChatMessages(activeId);
+      setMessages(rows);
+      router.refresh();
+    });
+  }
+
+  function stopRecording() {
+    recCancelRef.current = false;
+    mediaRecorderRef.current?.stop();
+  }
+  function cancelRecording() {
+    recCancelRef.current = true;
+    mediaRecorderRef.current?.stop();
+  }
+  async function startRecording() {
+    if (!activeId) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recCancelRef.current = false;
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (recTimerRef.current) {
+          clearInterval(recTimerRef.current);
+          recTimerRef.current = null;
+        }
+        const durationMs = Date.now() - recStartRef.current;
+        const wasCancelled = recCancelRef.current;
+        setRecording(false);
+        setRecSeconds(0);
+        if (wasCancelled || audioChunksRef.current.length === 0) return;
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        void sendVoice(blob, durationMs);
+      };
+      mediaRecorderRef.current = mr;
+      recStartRef.current = Date.now();
+      mr.start();
+      setRecording(true);
+      setRecSeconds(0);
+      recTimerRef.current = setInterval(() => {
+        const s = Math.floor((Date.now() - recStartRef.current) / 1000);
+        setRecSeconds(s);
+        if (s >= 120) stopRecording(); // tope 2 min (límite de tamaño)
+      }, 250);
+    } catch {
+      notify.error(
+        "Micrófono",
+        "No se pudo acceder al micrófono. Revisa los permisos del navegador.",
+      );
+    }
   }
 
   const canSend =
@@ -210,7 +366,7 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
                         {t.kind === "broadcast"
                           ? "Aviso general"
                           : t.kind === "team"
-                            ? "Equipo"
+                            ? "Grupo"
                             : "Privado"}
                       </div>
                     </div>
@@ -253,7 +409,7 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
                     {active.kind === "broadcast"
                       ? "Aviso general · visible para toda la empresa"
                       : active.kind === "team"
-                        ? "Hilo de equipo"
+                        ? "Grupo"
                         : "Conversación privada"}
                   </div>
                 </div>
@@ -288,6 +444,33 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
                   <div className="text-center text-xs text-muted-foreground">
                     Sólo el admin puede escribir en este aviso.
                   </div>
+                ) : recording ? (
+                  <div className="flex items-center gap-2">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-destructive">
+                      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-destructive" />
+                      Grabando… {Math.floor(recSeconds / 60)}:
+                      {String(recSeconds % 60).padStart(2, "0")}
+                    </span>
+                    <div className="ml-auto flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={cancelRecording}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={stopRecording}
+                        disabled={pending}
+                        className="gap-1"
+                      >
+                        <Send className="h-4 w-4" /> Enviar voz
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex items-end gap-2">
                     <textarea
@@ -303,6 +486,17 @@ export function ChatShell({ threads, directory, canBroadcast, canTeam }: Props) 
                       rows={1}
                       className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={startRecording}
+                      disabled={pending}
+                      title="Grabar nota de voz"
+                      aria-label="Grabar nota de voz"
+                      className="shrink-0"
+                    >
+                      <Mic className="h-4 w-4" />
+                    </Button>
                     <Button
                       onClick={send}
                       disabled={pending || !draft.trim()}
@@ -413,14 +607,16 @@ function ChatMessageItem({
         <div className="flex items-center gap-1.5">
           {message.is_mine && (
             <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-              <button
-                onClick={() => setEditing(true)}
-                className="rounded p-1 text-muted-foreground hover:bg-muted"
-                title="Editar"
-                aria-label="Editar"
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
+              {!message.audio_url && (
+                <button
+                  onClick={() => setEditing(true)}
+                  className="rounded p-1 text-muted-foreground hover:bg-muted"
+                  title="Editar"
+                  aria-label="Editar"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
               <button
                 onClick={remove}
                 className="rounded p-1 text-muted-foreground hover:bg-muted"
@@ -438,9 +634,19 @@ function ChatMessageItem({
               message.is_mine ? "bg-primary text-primary-foreground" : "bg-muted",
             )}
           >
-            {message.body}
-            {message.edited_at && (
-              <span className="ml-1 text-[10px] opacity-70">(editado)</span>
+            {message.audio_url ? (
+              <audio
+                controls
+                src={message.audio_url}
+                className="h-9 w-[230px] max-w-full"
+              />
+            ) : (
+              <>
+                {message.body}
+                {message.edited_at && (
+                  <span className="ml-1 text-[10px] opacity-70">(editado)</span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -542,6 +748,7 @@ function NewThreadDialog({
             <UserIcon className="mr-1 inline h-3.5 w-3.5" /> Privado
           </button>
           {canTeam && (
+            // "Grupo" = hilo con varias personas (kind team en BD).
             <button
               onClick={() => setTab("team")}
               className={cn(
@@ -551,7 +758,7 @@ function NewThreadDialog({
                   : "bg-muted text-muted-foreground hover:bg-muted/70",
               )}
             >
-              <Users className="mr-1 inline h-3.5 w-3.5" /> Equipo
+              <Users className="mr-1 inline h-3.5 w-3.5" /> Grupo
             </button>
           )}
           {canBroadcast && (
@@ -577,7 +784,7 @@ function NewThreadDialog({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={
-                  tab === "broadcast" ? "Avisos generales" : "Equipo de instalación"
+                  tab === "broadcast" ? "Avisos generales" : "Grupo de ventas"
                 }
               />
             </div>
@@ -586,7 +793,7 @@ function NewThreadDialog({
           {tab !== "broadcast" && (
             <div className="space-y-1.5">
               <Label>
-                {tab === "direct" ? "Usuario" : "Miembros del equipo"}
+                {tab === "direct" ? "Usuario" : "Miembros del grupo"}
               </Label>
               <div className="max-h-64 overflow-y-auto rounded-xl border">
                 {directory.length === 0 && (
