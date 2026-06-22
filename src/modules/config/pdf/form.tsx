@@ -66,10 +66,17 @@ function ColorField({
   );
 }
 
-export function PdfSettingsForm({ initial }: { initial: PdfSettings }) {
+export function PdfSettingsForm({
+  initial,
+  sampleProductId,
+}: {
+  initial: PdfSettings;
+  sampleProductId?: string | null;
+}) {
   const [template, setTemplate] = useState<DatasheetTemplate>(initial.datasheet_template);
   const [brand, setBrand] = useState(initial.pdf_brand_color);
   const [accent, setAccent] = useState(initial.pdf_accent_color);
+  const [reloadKey, setReloadKey] = useState(0);
   const [pending, startTransition] = useTransition();
 
   function save() {
@@ -83,6 +90,7 @@ export function PdfSettingsForm({ initial }: { initial: PdfSettings }) {
         notify.error("No se pudo guardar", r.error);
         return;
       }
+      setReloadKey((k) => k + 1);
       notify.success("Guardado", "El formato de las fichas PDF se ha actualizado.");
     });
   }
@@ -155,6 +163,30 @@ export function PdfSettingsForm({ initial }: { initial: PdfSettings }) {
           (campo «color de acento»), para que cada equipo tenga su tono — como el dorado del
           Golden Eye frente al azul del resto.
         </p>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+          Vista previa
+        </div>
+        {sampleProductId ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Cambia la plantilla arriba para ver el diseño al instante. Los colores se
+              actualizan al pulsar «Guardar cambios».
+            </p>
+            <iframe
+              key={`${template}-${reloadKey}`}
+              title="Vista previa de la ficha técnica"
+              src={`/api/pdf/product-datasheet/${sampleProductId}?t=${template}&r=${reloadKey}`}
+              className="h-[560px] w-full rounded-xl border border-border bg-muted"
+            />
+          </>
+        ) : (
+          <p className="rounded-xl border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+            Crea al menos un producto para ver aquí la vista previa de la ficha.
+          </p>
+        )}
       </div>
 
       <div className="flex justify-end border-t pt-4">

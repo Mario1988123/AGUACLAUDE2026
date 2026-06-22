@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/shared/lib/auth/session";
+import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { BackButton } from "@/shared/components/back-button";
 import { getPdfSettings } from "@/modules/config/pdf/actions";
@@ -13,6 +14,24 @@ export default async function ConfiguracionPdfPage() {
     redirect("/dashboard");
   }
   const settings = await getPdfSettings();
+
+  // Producto de muestra para la vista previa (el más reciente de la empresa).
+  let sampleProductId: string | null = null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const { data } = await supabase
+      .from("products")
+      .select("id")
+      .eq("company_id", session.company_id!)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    sampleProductId = (data as { id: string } | null)?.id ?? null;
+  } catch {
+    /* fail-soft: sin muestra no se muestra la vista previa */
+  }
 
   return (
     <div className="space-y-4">
@@ -32,7 +51,7 @@ export default async function ConfiguracionPdfPage() {
           <CardTitle className="text-base">Formato y colores</CardTitle>
         </CardHeader>
         <CardContent>
-          <PdfSettingsForm initial={settings} />
+          <PdfSettingsForm initial={settings} sampleProductId={sampleProductId} />
         </CardContent>
       </Card>
     </div>
