@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, Pencil, Trash2, Calculator, ArrowUpCircle } from "lucide-react";
+import { Eye, Pencil, Trash2, Calculator, ArrowUpCircle, FileText } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { ProductBulkToolbar, ProductCheckbox } from "@/modules/products/bulk-toolbar";
@@ -461,6 +461,15 @@ export function ProductsListClient({
                       >
                         <Eye className="h-4 w-4" />
                       </Link>
+                      <a
+                        href={`/api/pdf/product-datasheet/${p.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Ficha técnica (PDF)"
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sky-100 hover:text-sky-700"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </a>
                       {canEdit && (
                         <Link
                           href={`/productos/${p.id}?edit=1` as never}
@@ -571,6 +580,15 @@ export function ProductsListClient({
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
+                          <a
+                            href={`/api/pdf/product-datasheet/${p.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ficha técnica (PDF)"
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sky-100 hover:text-sky-700"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </a>
                           {canEdit && (
                             <Link
                               href={`/productos/${p.id}?edit=1` as never}

@@ -107,12 +107,11 @@ function hexToRgb(hex: string): RGB {
   return rgb(((v >> 16) & 0xff) / 255, ((v >> 8) & 0xff) / 255, (v & 0xff) / 255);
 }
 
+// amount positivo aclara; negativo oscurece. Limitamos cada canal a [0,1] para
+// que oscurecer un color ya oscuro no genere un valor negativo (pdf-lib peta).
 function lighten(c: RGB, amount: number): RGB {
-  return rgb(
-    Math.min(1, c.red + amount),
-    Math.min(1, c.green + amount),
-    Math.min(1, c.blue + amount),
-  );
+  const clamp = (n: number) => Math.max(0, Math.min(1, n));
+  return rgb(clamp(c.red + amount), clamp(c.green + amount), clamp(c.blue + amount));
 }
 
 function eur(c: number | null): string {

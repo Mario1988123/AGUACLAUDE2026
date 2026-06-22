@@ -45,12 +45,14 @@ export interface SidebarGroupDef {
   label: string;
 }
 
+// Orden de los bloques (decisión usuario 2026-06-22):
+//  Inicio → Comercial → Catálogo y stock → Operaciones → Ventas → resto.
 export const SIDEBAR_GROUPS: SidebarGroupDef[] = [
   { key: "main", label: "Inicio" },
   { key: "sales", label: "Comercial" },
-  { key: "revenue", label: "Ventas" },
-  { key: "operations", label: "Operaciones" },
   { key: "catalog", label: "Catálogo y stock" },
+  { key: "operations", label: "Operaciones" },
+  { key: "revenue", label: "Ventas" },
   { key: "billing", label: "Cobros y facturación" },
   { key: "personal", label: "Personal" },
   { key: "system", label: "Sistema" },

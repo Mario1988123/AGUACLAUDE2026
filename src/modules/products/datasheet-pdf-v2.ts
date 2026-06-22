@@ -130,12 +130,12 @@ function hexToRgb(hex: string): RGB {
 }
 
 // Aclarar / oscurecer un RGB para fondos suaves o textos contraste.
+// amount positivo = aclara; negativo = oscurece. Limitamos cada canal a [0,1]
+// porque un color oscuro (p. ej. el rojo bajo de #2563EB) al oscurecer se iría
+// por debajo de 0 y pdf-lib lanzaría "red must be at least 0 and at most 1".
 function lighten(c: RGB, amount: number): RGB {
-  return rgb(
-    Math.min(1, c.red + amount),
-    Math.min(1, c.green + amount),
-    Math.min(1, c.blue + amount),
-  );
+  const clamp = (n: number) => Math.max(0, Math.min(1, n));
+  return rgb(clamp(c.red + amount), clamp(c.green + amount), clamp(c.blue + amount));
 }
 
 // =============================================================================

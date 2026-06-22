@@ -166,6 +166,7 @@ export function Sidebar({
           {groupedModules.map((g) => (
             <SidebarGroup
               key={g.key}
+              groupKey={g.key}
               label={g.label}
               items={g.items}
               pathname={pathname}
@@ -235,6 +236,7 @@ export function Sidebar({
 }
 
 function SidebarGroup({
+  groupKey,
   label,
   items,
   pathname,
@@ -242,6 +244,7 @@ function SidebarGroup({
   badges,
   onItemClick,
 }: {
+  groupKey: string;
   label: string;
   items: ModuleEntry[];
   pathname: string;
@@ -251,17 +254,64 @@ function SidebarGroup({
    *  item para cerrar el sidebar y volver a la página. */
   onItemClick?: () => void;
 }) {
+  // Plegado por bloque (solo en modo expandido). Se recuerda en localStorage.
+  // En modo icono (collapsed) los items se ven siempre, no hay título que plegar.
+  const [open, setOpen] = useState(true);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      if (window.localStorage.getItem(`sidebar.group.${groupKey}`) === "0") {
+        setOpen(false);
+      }
+    } catch {
+      /* no-op */
+    }
+  }, [groupKey]);
+
+  function toggleOpen() {
+    setOpen((o) => {
+      const next = !o;
+      try {
+        window.localStorage.setItem(`sidebar.group.${groupKey}`, next ? "1" : "0");
+      } catch {
+        /* no-op */
+      }
+      return next;
+    });
+  }
+
   if (items.length === 0) return null;
+  // Suma de avisos del bloque: si está plegado, lo mostramos en la cabecera
+  // para que ningún badge rojo quede escondido.
+  const groupBadge = items.reduce((s, m) => s + (badges?.[m.key] ?? 0), 0);
   return (
     <div className="space-y-0.5">
       {!collapsed ? (
-        <div className="px-3 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/50">
-          {label}
-        </div>
+        <button
+          type="button"
+          onClick={toggleOpen}
+          aria-expanded={open}
+          className="group/hdr flex w-full items-center gap-1 rounded-md px-3 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+        >
+          <Icons.ChevronDown
+            className={cn(
+              "h-3 w-3 shrink-0 transition-transform duration-150",
+              open ? "" : "-rotate-90",
+            )}
+          />
+          <span className="flex-1 text-left">{label}</span>
+          {!open && groupBadge > 0 && (
+            <span className="shrink-0 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold leading-none text-white">
+              {groupBadge > 99 ? "99+" : groupBadge}
+            </span>
+          )}
+        </button>
       ) : (
         <div className="my-1 mx-2 h-px bg-sidebar-border/50" />
       )}
-      {items.map((m) => {
+      {(collapsed || open) &&
+        items.map((m) => {
         const Icon =
           (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[
             m.icon
