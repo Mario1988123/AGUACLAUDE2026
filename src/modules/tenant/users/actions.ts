@@ -417,23 +417,36 @@ export async function updateUserRoles(userId: string, roles: RoleKey[]) {
     }
   }
 
-  // Revocar todos los roles actuales y crear los nuevos
+  const nowIso = new Date().toISOString();
+
+  // 1) Revocar todos los roles activos actuales.
   await admin
     .from("user_roles")
-    .update({ revoked_at: new Date().toISOString() })
+    .update({ revoked_at: nowIso })
     .eq("user_id", userId)
     .eq("company_id", session.company_id!)
     .is("revoked_at", null);
 
+  // 2) Re-activar / crear los nuevos con UPSERT por (user_id, company_id,
+  //    role_key). La restricción unique NO distingue por revoked_at, así que un
+  //    insert chocaba si el usuario YA tuvo ese rol alguna vez (fila revocada
+  //    presente) → fallaba al reasignar un rol (p.ej. instalador) con una
+  //    "incidencia" genérica, y como el error no se comprobaba, el usuario podía
+  //    quedarse sin roles. El upsert reactiva la fila (revoked_at=null) en vez
+  //    de chocar, y ahora SÍ comprobamos el error.
   if (roles.length > 0) {
-    await admin.from("user_roles").insert(
+    const { error: upsertErr } = await admin.from("user_roles").upsert(
       roles.map((role_key) => ({
         user_id: userId,
         company_id: session.company_id!,
         role_key,
         assigned_by: session.user_id,
+        assigned_at: nowIso,
+        revoked_at: null,
       })),
+      { onConflict: "user_id,company_id,role_key" },
     );
+    if (upsertErr) throw new Error(upsertErr.message);
   }
 
   revalidatePath("/configuracion/usuarios");
