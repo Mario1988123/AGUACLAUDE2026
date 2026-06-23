@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { agendaCreateSchema } from "./schemas";
+import { agendaCreateSchema, AGENDA_KIND } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import {
   madridHour,
@@ -1729,6 +1729,144 @@ export async function updateAgendaStatusSafeAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     await updateAgendaStatus(id, status);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Borra (deja fuera de la agenda) una tarea creada por error, sea real o
+ * virtual. Reutiliza el patrón de prefijos de reagendar:
+ *   · agenda_events   → soft-delete (deleted_at).
+ *   · virtual-inst-   → instalación real: soft-delete (deleted_at + cancelled)
+ *                       si NO está completada/cancelada. Si ya está instalada,
+ *                       remite a la desinstalación (no se borra a lo loco).
+ *   · virtual-maint-  → mantenimiento real: status='cancelled' (no tiene
+ *                       deleted_at) si NO está completado/cancelado.
+ * Admin client salta RLS → SIEMPRE se filtra por company_id (anti cross-tenant).
+ */
+export async function deleteAgendaTaskSafeAction(
+  id: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) throw new Error("Sin empresa");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const nowIso = new Date().toISOString();
+
+    // --- Instalación real ---
+    if (id.startsWith("virtual-inst-")) {
+      const realId = id.slice("virtual-inst-".length);
+      const { data: inst } = await admin
+        .from("installations")
+        .select("status, company_id")
+        .eq("id", realId)
+        .maybeSingle();
+      if (!inst) throw new Error("Instalación no encontrada");
+      if ((inst as { company_id: string }).company_id !== session.company_id) {
+        throw new Error("Esa instalación no pertenece a tu empresa");
+      }
+      if (["completed", "cancelled"].includes((inst as { status: string }).status)) {
+        throw new Error(
+          "Esa instalación ya está completada o cancelada. Si está instalada, usa la desinstalación.",
+        );
+      }
+      const { error } = await admin
+        .from("installations")
+        .update({ deleted_at: nowIso, status: "cancelled" })
+        .eq("id", realId)
+        .eq("company_id", session.company_id);
+      if (error) throw new Error(error.message);
+      revalidatePath("/agenda");
+      revalidatePath("/instalaciones");
+      return { ok: true };
+    }
+
+    // --- Mantenimiento real ---
+    if (id.startsWith("virtual-maint-")) {
+      const realId = id.slice("virtual-maint-".length);
+      const { data: mj } = await admin
+        .from("maintenance_jobs")
+        .select("status, company_id")
+        .eq("id", realId)
+        .maybeSingle();
+      if (!mj) throw new Error("Mantenimiento no encontrado");
+      if ((mj as { company_id: string }).company_id !== session.company_id) {
+        throw new Error("Ese mantenimiento no pertenece a tu empresa");
+      }
+      if (["completed", "cancelled"].includes((mj as { status: string }).status)) {
+        throw new Error("Ese mantenimiento ya está completado o cancelado.");
+      }
+      const { error } = await admin
+        .from("maintenance_jobs")
+        .update({ status: "cancelled" })
+        .eq("id", realId)
+        .eq("company_id", session.company_id);
+      if (error) throw new Error(error.message);
+      revalidatePath("/agenda");
+      revalidatePath("/mantenimientos");
+      return { ok: true };
+    }
+
+    // --- Tarea normal de agenda ---
+    const { data, error } = await admin
+      .from("agenda_events")
+      .update({ deleted_at: nowIso, status: "cancelled" })
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (!data?.length) {
+      throw new Error("Tarea no encontrada o no pertenece a tu empresa");
+    }
+    revalidatePath("/agenda");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/**
+ * Cambia el TIPO (kind) de una tarea NORMAL de agenda (corrige "lo agendé como
+ * instalación y era una visita/llamada"). NO aplica a instalaciones ni
+ * mantenimientos reales (virtuales): esos son fichas de trabajo con técnico,
+ * furgoneta y stock; para cambiarlos, se borra y se crea el correcto. Filtra
+ * por company_id (admin client salta RLS).
+ */
+export async function changeAgendaEventKindSafeAction(
+  id: string,
+  newKind: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if (id.startsWith("virtual-")) {
+      return {
+        ok: false,
+        error:
+          "Esta tarea es una instalación o un mantenimiento real. Para cambiarlo, bórralo y crea el correcto.",
+      };
+    }
+    if (!(AGENDA_KIND as readonly string[]).includes(newKind)) {
+      return { ok: false, error: "Tipo de tarea no válido" };
+    }
+    const session = await requireSession();
+    if (!session.company_id) throw new Error("Sin empresa");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data, error } = await admin
+      .from("agenda_events")
+      .update({ kind: newKind })
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (!data?.length) {
+      throw new Error("Tarea no encontrada o no pertenece a tu empresa");
+    }
+    revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };

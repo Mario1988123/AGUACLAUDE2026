@@ -16,6 +16,8 @@ import {
   Navigation,
   Phone,
   MessageCircle,
+  Repeat,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/shared/ui/dialog";
@@ -25,7 +27,10 @@ import { notify } from "@/shared/hooks/use-toast";
 import {
   rescheduleAgendaEventSafeAction,
   reassignAgendaEventSafeAction,
+  deleteAgendaTaskSafeAction,
+  changeAgendaEventKindSafeAction,
 } from "./actions";
+import { AGENDA_KIND } from "./schemas";
 import { KIND_LABEL, STATUS_LABEL, STATUS_VARIANT } from "./constants";
 import type { AgendaItem } from "./actions";
 
@@ -113,12 +118,16 @@ export function MoveEventDialog({
   const [date, setDate] = useState(ev ? fmtDate(ev.starts_at) : "");
   const [time, setTime] = useState(ev ? fmtTime(ev.starts_at) : "");
   const [newAssigned, setNewAssigned] = useState<string>(ev?.assigned_user_id ?? "");
+  const [newKind, setNewKind] = useState<string>(ev?.kind ?? "manual");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (open && ev) {
       setDate(fmtDate(ev.starts_at));
       setTime(fmtTime(ev.starts_at));
       setNewAssigned(ev.assigned_user_id ?? "");
+      setNewKind(ev.kind);
+      setConfirmDelete(false);
     }
   }, [open, ev]);
 
@@ -164,7 +173,41 @@ export function MoveEventDialog({
     });
   }
 
+  function saveKind() {
+    if (!ev) return;
+    if (newKind === ev.kind) {
+      notify.warning("Elige un tipo distinto al actual");
+      return;
+    }
+    startTransition(async () => {
+      const r = await changeAgendaEventKindSafeAction(ev.id, newKind);
+      if (!r.ok) {
+        notify.error("No se pudo cambiar el tipo", r.error);
+        return;
+      }
+      notify.success("Tipo de tarea cambiado");
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  function doDelete() {
+    if (!ev) return;
+    startTransition(async () => {
+      const r = await deleteAgendaTaskSafeAction(ev.id);
+      if (!r.ok) {
+        notify.error("No se pudo borrar", r.error);
+        return;
+      }
+      notify.success("Tarea borrada");
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
   if (!ev) return null;
+
+  const isVirtual = ev.id.startsWith("virtual-");
 
   const subjectHref =
     ev.subject_type && ev.subject_id && SUBJECT_LINK[ev.subject_type]
@@ -350,6 +393,89 @@ export function MoveEventDialog({
               </div>
             </div>
           )}
+
+          {/* Cambiar tipo — solo tareas normales (no instalaciones/mant. reales).
+              Corrige "lo agendé como instalación y era una visita/llamada". */}
+          {!isVirtual && (
+            <div className="space-y-2 rounded-xl border border-border bg-card p-3">
+              <h3 className="flex items-center gap-1.5 text-sm font-bold">
+                <Repeat className="h-3.5 w-3.5" /> Cambiar tipo
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                ¿La agendaste como el tipo equivocado? Cámbialo aquí.
+              </p>
+              <select
+                value={newKind}
+                onChange={(e) => setNewKind(e.target.value)}
+                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              >
+                {AGENDA_KIND.map((k) => (
+                  <option key={k} value={k}>
+                    {KIND_LABEL[k] ?? k}
+                  </option>
+                ))}
+              </select>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={saveKind}
+                  disabled={pending || newKind === ev.kind}
+                >
+                  Cambiar tipo
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Borrar tarea — con confirmación en dos pasos (sin diálogo anidado). */}
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+            {!confirmDelete ? (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="flex items-center gap-1.5 text-sm font-bold text-destructive">
+                    <Trash2 className="h-3.5 w-3.5" /> Borrar tarea
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    La quita de la agenda. Úsalo si la creaste por error.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-destructive/40 text-destructive hover:bg-destructive/10"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={pending}
+                >
+                  Borrar
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-destructive">
+                  ¿Seguro que quieres borrarla?
+                </span>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={pending}
+                  >
+                    No
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={doDelete}
+                    disabled={pending}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Sí, borrar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-end gap-2 border-t pt-3">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
