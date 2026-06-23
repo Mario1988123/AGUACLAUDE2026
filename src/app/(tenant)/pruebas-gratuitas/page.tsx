@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Eye, FileCheck, PackageMinus } from "lucide-react";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
@@ -65,9 +66,16 @@ function fmt(d: string | null | undefined) {
 }
 
 export default async function PruebasGratuitasPage() {
-  await requireSession();
+  const session = await requireSession();
+  const companyId = session.company_id;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  // Los nombres de cliente/lead se resuelven con el cliente admin filtrando por
+  // empresa. Con el cliente RLS volvían vacíos en esta página (salía el genérico
+  // "Cliente"/"Lead" en vez del nombre real). El filtro por company_id mantiene
+  // el aislamiento entre empresas y solo se consultan ids ya visibles en la tabla.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
   const [{ data }, alerts] = await Promise.all([
     supabase
       .from("free_trials")
@@ -89,16 +97,18 @@ export default async function PruebasGratuitasPage() {
   const trialIds = rows.map((r) => r.id);
 
   const [custRes, leadRes, itemsRes] = await Promise.all([
-    customerIds.length
-      ? supabase
+    customerIds.length && companyId
+      ? admin
           .from("customers")
           .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+          .eq("company_id", companyId)
           .in("id", customerIds)
       : Promise.resolve({ data: [] }),
-    leadIds.length
-      ? supabase
+    leadIds.length && companyId
+      ? admin
           .from("leads")
           .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+          .eq("company_id", companyId)
           .in("id", leadIds)
       : Promise.resolve({ data: [] }),
     trialIds.length
