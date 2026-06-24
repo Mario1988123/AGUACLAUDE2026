@@ -471,23 +471,42 @@ export async function createMaintenanceAction(input: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
-  // Dirección del mantenimiento: la elegida a mano o, por defecto, la del equipo
-  // concreto. Si queda null se resuelve al leer (equipo.address_id → principal
-  // del cliente), así no rompe nada para mantenimientos sin equipo.
-  let addressId: string | null = parsed.address_id ?? null;
-  if (!addressId && parsed.customer_equipment_id) {
+  // Equipo concreto (opcional): validamos que es de ESTE cliente; si no cuadra
+  // se ignora (no guardamos un equipo ajeno). De paso cogemos su dirección.
+  let equipmentId: string | null = null;
+  let eqAddressId: string | null = null;
+  if (parsed.customer_equipment_id) {
     const { data: eq } = await supabase
       .from("customer_equipment")
-      .select("address_id")
+      .select("id, address_id, customer_id")
       .eq("id", parsed.customer_equipment_id)
       .maybeSingle();
-    addressId = (eq as { address_id: string | null } | null)?.address_id ?? null;
+    const e = eq as { id: string; address_id: string | null; customer_id: string } | null;
+    if (e && e.customer_id === parsed.customer_id) {
+      equipmentId = e.id;
+      eqAddressId = e.address_id;
+    }
   }
+
+  // Dirección del mantenimiento: la elegida a mano (válida solo si es de este
+  // cliente) o, por defecto, la del equipo. Si queda null se resuelve al leer
+  // (equipo.address_id → principal del cliente).
+  let addressId: string | null = null;
+  if (parsed.address_id) {
+    const { data: ad } = await supabase
+      .from("addresses")
+      .select("customer_id")
+      .eq("id", parsed.address_id)
+      .maybeSingle();
+    const a = ad as { customer_id: string | null } | null;
+    if (a && a.customer_id === parsed.customer_id) addressId = parsed.address_id;
+  }
+  if (!addressId) addressId = eqAddressId;
 
   const payload: Record<string, unknown> = {
     company_id: session.company_id,
     customer_id: parsed.customer_id,
-    customer_equipment_id: parsed.customer_equipment_id || null,
+    customer_equipment_id: equipmentId,
     address_id: addressId,
     contract_id: parsed.contract_id || null,
     kind: parsed.kind,

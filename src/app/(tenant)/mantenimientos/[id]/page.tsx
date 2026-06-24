@@ -127,6 +127,7 @@ export default async function MaintenanceDetailPage({
       .from("addresses")
       .select(addrCols)
       .eq("id", targetAddrId)
+      .is("deleted_at", null)
       .maybeSingle();
     addrRow = (data as AddrRow | null) ?? null;
   }
