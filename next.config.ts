@@ -19,6 +19,17 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typedRoutes: true,
+  // satori (HTML→SVG) y sharp (SVG→PNG) generan la ficha técnica IAGUA. Se
+  // marcan como externos para no romper su bundling (sharp es nativo; satori
+  // lleva wasm). Y empaquetamos las fuentes Poppins + el asset del hero en la
+  // función del endpoint de la ficha (si no, en Vercel faltan en runtime).
+  serverExternalPackages: ["satori", "sharp"],
+  outputFileTracingIncludes: {
+    "/api/pdf/product-datasheet/[id]": [
+      "./src/modules/products/fonts/**",
+      "./src/modules/products/assets/**",
+    ],
+  },
   // El default de Next es 1 MB para Server Actions. Subimos a 10 MB porque
   // recibimos firmas (PNG base64), DNIs y fotos del wizard de instalación/
   // pruebas gratuitas y se reventaba con "Body exceeded 1 MB limit".
