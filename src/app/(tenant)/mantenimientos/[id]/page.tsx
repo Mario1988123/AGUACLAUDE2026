@@ -52,6 +52,121 @@ export default async function MaintenanceDetailPage({
       ? cu.trade_name || cu.legal_name || "—"
       : `${cu.first_name ?? ""} ${cu.last_name ?? ""}`.trim() || "—";
 
+  // Equipo del mantenimiento (nombre) + su dirección, para que el técnico vea
+  // DÓNDE va sin entrar a la ficha del cliente.
+  let equipmentName: string | null = null;
+  let equipmentAddrId: string | null = null;
+  if (job.customer_equipment_id) {
+    const { data: eq } = await supabase
+      .from("customer_equipment")
+      .select("product_id, external_equipment_model_id, address_id, serial_number")
+      .eq("id", job.customer_equipment_id)
+      .maybeSingle();
+    const e = eq as {
+      product_id: string | null;
+      external_equipment_model_id: string | null;
+      address_id: string | null;
+      serial_number: string | null;
+    } | null;
+    if (e) {
+      equipmentAddrId = e.address_id;
+      if (e.product_id) {
+        const { data: p } = await supabase
+          .from("products")
+          .select("name")
+          .eq("id", e.product_id)
+          .maybeSingle();
+        equipmentName = (p as { name: string } | null)?.name ?? null;
+      } else if (e.external_equipment_model_id) {
+        const { data: m } = await supabase
+          .from("external_equipment_models")
+          .select("brand, model")
+          .eq("id", e.external_equipment_model_id)
+          .maybeSingle();
+        const mm = m as { brand: string | null; model: string | null } | null;
+        if (mm) equipmentName = `${mm.brand ?? ""} ${mm.model ?? ""}`.trim() || null;
+      }
+      if (e.serial_number) equipmentName = `${equipmentName ?? "Equipo"} · ${e.serial_number}`;
+    }
+  }
+
+  // Dirección concreta del job (defensivo: address_id es columna nueva).
+  let jobAddressId: string | null = null;
+  try {
+    const { data } = await supabase
+      .from("maintenance_jobs")
+      .select("address_id")
+      .eq("id", id)
+      .maybeSingle();
+    jobAddressId = (data as { address_id: string | null } | null)?.address_id ?? null;
+  } catch {
+    /* columna aún no disponible */
+  }
+
+  // Dirección a mostrar: job.address_id → equipo.address_id → principal cliente.
+  type AddrRow = {
+    label: string | null;
+    street_type: string | null;
+    street: string | null;
+    street_number: string | null;
+    portal: string | null;
+    floor: string | null;
+    door: string | null;
+    postal_code: string | null;
+    city: string | null;
+    province: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  };
+  const addrCols =
+    "label, street_type, street, street_number, portal, floor, door, postal_code, city, province, latitude, longitude";
+  let addrRow: AddrRow | null = null;
+  const targetAddrId = jobAddressId ?? equipmentAddrId ?? null;
+  if (targetAddrId) {
+    const { data } = await supabase
+      .from("addresses")
+      .select(addrCols)
+      .eq("id", targetAddrId)
+      .maybeSingle();
+    addrRow = (data as AddrRow | null) ?? null;
+  }
+  if (!addrRow && job.customer_id) {
+    const { data } = await supabase
+      .from("addresses")
+      .select(addrCols)
+      .eq("customer_id", job.customer_id)
+      .is("deleted_at", null)
+      .order("is_primary", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    addrRow = (data as AddrRow | null) ?? null;
+  }
+  const addressText = addrRow
+    ? (() => {
+        const street = [
+          addrRow.street_type,
+          addrRow.street,
+          addrRow.street_number,
+          addrRow.portal,
+          addrRow.floor,
+          addrRow.door,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+        const locality = [addrRow.postal_code, addrRow.city, addrRow.province]
+          .filter(Boolean)
+          .join(" ");
+        return [street, locality].filter(Boolean).join(", ") || null;
+      })()
+    : null;
+  const mapsUrl =
+    addrRow && addrRow.latitude != null && addrRow.longitude != null
+      ? `https://www.google.com/maps/search/?api=1&query=${addrRow.latitude},${addrRow.longitude}`
+      : addressText
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText)}`
+        : null;
+
   const products = await listProducts().catch(() => []);
   const session = await requireSession();
   const canReassign =
@@ -136,6 +251,28 @@ export default async function MaintenanceDetailPage({
               <CardTitle>Datos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
+              {equipmentName && (
+                <div>
+                  <strong>Equipo:</strong> {equipmentName}
+                </div>
+              )}
+              {addressText && (
+                <div>
+                  <strong>Dirección:</strong>{" "}
+                  {addrRow?.label ? `${addrRow.label} · ` : ""}
+                  {addressText}
+                  {mapsUrl && (
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-2 text-primary underline"
+                    >
+                      Ver en Google Maps
+                    </a>
+                  )}
+                </div>
+              )}
               {job.started_at && (
                 <div>
                   <strong>Iniciado:</strong> {new Date(job.started_at).toLocaleString("es-ES")}

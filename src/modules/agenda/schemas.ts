@@ -25,6 +25,10 @@ export const agendaCreateSchema = z.object({
   assigned_user_id: z.string().uuid().optional(),
   subject_type: z.string().optional(),
   subject_id: z.string().uuid().optional(),
+  // Solo aplican cuando kind="maintenance": equipo concreto del cliente y
+  // dirección donde se hace. Forms mandan null explícito => .nullish().
+  subject_equipment_id: z.string().uuid().nullish(),
+  subject_address_id: z.string().uuid().nullish(),
   reminders_min_before: z.array(z.number().int().min(0)).default([60]),
   recurrence_freq: z.enum(RECURRENCE_FREQ).default("none"),
   recurrence_count: z.coerce.number().int().min(1).max(52).default(1),

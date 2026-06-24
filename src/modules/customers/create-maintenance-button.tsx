@@ -13,6 +13,13 @@ import { createMaintenanceSafeAction } from "@/modules/maintenance/actions";
 interface EquipmentLite {
   id: string;
   display_name: string;
+  /** Dirección donde está instalado este equipo (puede no ser la principal). */
+  address_id: string | null;
+}
+interface AddressLite {
+  id: string;
+  label: string;
+  is_primary: boolean;
 }
 interface TechnicianLite {
   user_id: string;
@@ -22,16 +29,20 @@ interface TechnicianLite {
 export function CreateMaintenanceButton({
   customerId,
   equipment,
+  addresses,
   technicians,
 }: {
   customerId: string;
   equipment: EquipmentLite[];
+  addresses: AddressLite[];
   technicians: TechnicianLite[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [equipmentId, setEquipmentId] = useState(equipment[0]?.id ?? "");
+  // "" = usar la dirección del equipo (por defecto). Un id = dirección manual.
+  const [addressId, setAddressId] = useState("");
   const [technicianId, setTechnicianId] = useState("");
   const [scheduledAt, setScheduledAt] = useState(() => {
     const d = new Date();
@@ -51,6 +62,9 @@ export function CreateMaintenanceButton({
       const r = await createMaintenanceSafeAction({
         customer_id: customerId,
         customer_equipment_id: equipmentId || undefined,
+        // "" => el server pone la dirección del equipo (o, sin equipo, la deja
+        // nula y se resuelve a la principal del cliente al leer).
+        address_id: addressId || undefined,
         kind,
         // Hora de pared Madrid → instante UTC correcto (no depende del huso
         // del navegador). Antes new Date(local) fallaba fuera de España.
@@ -72,6 +86,16 @@ export function CreateMaintenanceButton({
       router.refresh();
     });
   }
+
+  // Dirección que se usará cuando la opción está en "Automática": la del equipo
+  // elegido o, si ese equipo no tiene dirección propia, la principal del cliente.
+  const selectedEq = equipment.find((e) => e.id === equipmentId);
+  const eqAddrId = selectedEq?.address_id ?? null;
+  const autoAddr =
+    (eqAddrId ? addresses.find((a) => a.id === eqAddrId) : null) ??
+    addresses.find((a) => a.is_primary) ??
+    null;
+  const autoAddrLabel = autoAddr ? autoAddr.label : "principal del cliente";
 
   return (
     <>
@@ -95,7 +119,12 @@ export function CreateMaintenanceButton({
                 <Label>Equipo (opcional)</Label>
                 <select
                   value={equipmentId}
-                  onChange={(e) => setEquipmentId(e.target.value)}
+                  onChange={(e) => {
+                    setEquipmentId(e.target.value);
+                    // Al cambiar de equipo, la dirección vuelve a "automática"
+                    // (la de ese equipo). El usuario puede luego forzar otra.
+                    setAddressId("");
+                  }}
                   className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
                 >
                   <option value="">— Sin equipo concreto —</option>
@@ -105,6 +134,26 @@ export function CreateMaintenanceButton({
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-1">
+                <Label>Dirección del servicio</Label>
+                <select
+                  value={addressId}
+                  onChange={(e) => setAddressId(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">Automática ({autoAddrLabel})</option>
+                  {addresses.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.label}
+                      {a.is_primary ? " (principal)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground">
+                  Por defecto se usa la dirección del equipo elegido. Cámbiala si
+                  el servicio es en otra dirección.
+                </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">

@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
 import { createAgendaEventSafeAction, type AgendaSubjectHit } from "./actions";
+import {
+  listCustomerMaintenanceTargets,
+  type MaintenanceTargets,
+} from "@/modules/maintenance/actions";
 import { SubjectPickerModal } from "./subject-picker-modal";
 import { AGENDA_KIND } from "./schemas";
 import { KIND_LABEL } from "./constants";
@@ -63,10 +67,56 @@ export function CreateAgendaButton({
   const [subject, setSubject] = useState<AgendaSubjectHit | null>(presetHit);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Mantenimiento desde la agenda: si el tipo es "maintenance" y hay un CLIENTE
+  // elegido, cargamos sus equipos + direcciones para poder fijar dónde se hace.
+  const isMaint = form.kind === "maintenance";
+  const maintCustomerId =
+    isMaint && subject?.subject_type === "customer" ? subject.subject_id : null;
+  const [targets, setTargets] = useState<MaintenanceTargets | null>(null);
+  const [loadingTargets, setLoadingTargets] = useState(false);
+  const [equipmentId, setEquipmentId] = useState("");
+  const [addressId, setAddressId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!maintCustomerId) {
+      setTargets(null);
+      setEquipmentId("");
+      setAddressId("");
+      return;
+    }
+    setLoadingTargets(true);
+    listCustomerMaintenanceTargets(maintCustomerId)
+      .then((t) => {
+        if (cancelled) return;
+        setTargets(t);
+        setEquipmentId("");
+        setAddressId("");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTargets(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [maintCustomerId]);
+
+  // Dirección que se usará en "Automática": la del equipo elegido o, si no tiene,
+  // la principal del cliente.
+  const selectedEq = targets?.equipment.find((e) => e.id === equipmentId);
+  const eqAddrId = selectedEq?.address_id ?? null;
+  const autoAddr =
+    (eqAddrId ? targets?.addresses.find((a) => a.id === eqAddrId) : null) ??
+    targets?.addresses.find((a) => a.is_primary) ??
+    null;
+  const autoAddrLabel = autoAddr ? autoAddr.label : "principal del cliente";
+
   function resetAll() {
     setForm(emptyForm(presetTitle));
     setSubject(presetHit);
     setPickerOpen(false);
+    setEquipmentId("");
+    setAddressId("");
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -81,6 +131,10 @@ export function CreateAgendaButton({
         assigned_user_id: form.assigned_user_id || undefined,
         subject_type: subject?.subject_type,
         subject_id: subject?.subject_id,
+        // Solo aplican para mantenimiento. "" => el server usa la dirección del
+        // equipo (o la principal del cliente si no hay equipo).
+        subject_equipment_id: isMaint ? equipmentId || undefined : undefined,
+        subject_address_id: isMaint ? addressId || undefined : undefined,
         recurrence_freq: form.recurrence_freq,
         recurrence_count: form.recurrence_count,
       });
@@ -191,6 +245,64 @@ export function CreateAgendaButton({
               </div>
             )}
           </div>
+
+          {/* Mantenimiento: equipo concreto + dirección (carga al elegir cliente) */}
+          {isMaint && (
+            <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3">
+              {!maintCustomerId ? (
+                <p className="text-xs text-muted-foreground">
+                  Para un mantenimiento elige primero un <strong>cliente</strong>{" "}
+                  (no un lead). Así podrás indicar el equipo y la dirección
+                  concreta.
+                </p>
+              ) : loadingTargets ? (
+                <p className="text-xs text-muted-foreground">
+                  Cargando equipos y direcciones…
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Equipo (opcional)</Label>
+                    <select
+                      value={equipmentId}
+                      onChange={(e) => {
+                        setEquipmentId(e.target.value);
+                        setAddressId("");
+                      }}
+                      className="flex h-12 w-full rounded-xl border border-border bg-card px-4 text-base"
+                    >
+                      <option value="">— Sin equipo concreto —</option>
+                      {(targets?.equipment ?? []).map((eq) => (
+                        <option key={eq.id} value={eq.id}>
+                          {eq.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Dirección del servicio</Label>
+                    <select
+                      value={addressId}
+                      onChange={(e) => setAddressId(e.target.value)}
+                      className="flex h-12 w-full rounded-xl border border-border bg-card px-4 text-base"
+                    >
+                      <option value="">Automática ({autoAddrLabel})</option>
+                      {(targets?.addresses ?? []).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.label}
+                          {a.is_primary ? " (principal)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">
+                      Por defecto se usa la dirección del equipo elegido. Cámbiala
+                      si el servicio es en otra dirección.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="title">Título *</Label>

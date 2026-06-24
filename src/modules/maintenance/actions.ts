@@ -470,24 +470,52 @@ export async function createMaintenanceAction(input: unknown) {
   const parsed = parseOrFriendly(maintenanceCreateSchema, input, "Mantenimiento");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: created, error } = await supabase
-    .from("maintenance_jobs")
-    .insert({
-      company_id: session.company_id,
-      customer_id: parsed.customer_id,
-      customer_equipment_id: parsed.customer_equipment_id || null,
-      contract_id: parsed.contract_id || null,
-      kind: parsed.kind,
-      status: "scheduled",
-      scheduled_at: parsed.scheduled_at,
-      technician_user_id: parsed.technician_user_id || null,
-      is_charged: parsed.is_charged,
-      charge_cents: parsed.charge_cents ?? null,
-      notes: parsed.notes || null,
-      created_by: session.user_id,
-    })
-    .select("id")
-    .single();
+
+  // Dirección del mantenimiento: la elegida a mano o, por defecto, la del equipo
+  // concreto. Si queda null se resuelve al leer (equipo.address_id → principal
+  // del cliente), así no rompe nada para mantenimientos sin equipo.
+  let addressId: string | null = parsed.address_id ?? null;
+  if (!addressId && parsed.customer_equipment_id) {
+    const { data: eq } = await supabase
+      .from("customer_equipment")
+      .select("address_id")
+      .eq("id", parsed.customer_equipment_id)
+      .maybeSingle();
+    addressId = (eq as { address_id: string | null } | null)?.address_id ?? null;
+  }
+
+  const payload: Record<string, unknown> = {
+    company_id: session.company_id,
+    customer_id: parsed.customer_id,
+    customer_equipment_id: parsed.customer_equipment_id || null,
+    address_id: addressId,
+    contract_id: parsed.contract_id || null,
+    kind: parsed.kind,
+    status: "scheduled",
+    scheduled_at: parsed.scheduled_at,
+    technician_user_id: parsed.technician_user_id || null,
+    is_charged: parsed.is_charged,
+    charge_cents: parsed.charge_cents ?? null,
+    notes: parsed.notes || null,
+    created_by: session.user_id,
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let created: any = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let error: any = null;
+  {
+    const r = await supabase.from("maintenance_jobs").insert(payload).select("id").single();
+    created = r.data;
+    error = r.error;
+  }
+  // Defensa: si address_id aún no está en el cache del esquema, reintentar sin
+  // ella (no bloquear el alta del mantenimiento por la migración).
+  if (error && /address_id|schema cache|Could not find/i.test(error.message ?? "")) {
+    delete payload.address_id;
+    const r = await supabase.from("maintenance_jobs").insert(payload).select("id").single();
+    created = r.data;
+    error = r.error;
+  }
   if (error) throw new Error(error.message);
   const id = (created as { id: string }).id;
 
@@ -955,5 +983,125 @@ export async function createMaintenanceSafeAction(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+export interface MaintenanceTargets {
+  equipment: { id: string; label: string; address_id: string | null }[];
+  addresses: { id: string; label: string; is_primary: boolean }[];
+}
+
+/**
+ * Equipos activos + direcciones de un cliente, para que el alta de mantenimiento
+ * (p. ej. desde la agenda) deje elegir el equipo y cargue por defecto SU
+ * dirección, no siempre la principal. Lectura por RLS (solo clientes que el
+ * usuario ya puede ver). Defensivo: nunca lanza, devuelve listas vacías.
+ */
+export async function listCustomerMaintenanceTargets(
+  customerId: string,
+): Promise<MaintenanceTargets> {
+  const empty: MaintenanceTargets = { equipment: [], addresses: [] };
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return empty;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+
+    const fmtAddr = (a: {
+      label?: string | null;
+      street_type?: string | null;
+      street?: string | null;
+      street_number?: string | null;
+      city?: string | null;
+    }): string => {
+      const line = [a.street_type, a.street, a.street_number, a.city]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      if (a.label && line) return `${a.label} · ${line}`;
+      return a.label || line || "Dirección";
+    };
+
+    // Direcciones del cliente (principal primero)
+    const addresses: MaintenanceTargets["addresses"] = [];
+    {
+      const { data } = await supabase
+        .from("addresses")
+        .select("id, label, street_type, street, street_number, city, is_primary")
+        .eq("customer_id", customerId)
+        .is("deleted_at", null)
+        .order("is_primary", { ascending: false })
+        .order("created_at");
+      for (const a of (data ?? []) as Array<{
+        id: string;
+        label: string | null;
+        street_type: string | null;
+        street: string | null;
+        street_number: string | null;
+        city: string | null;
+        is_primary: boolean;
+      }>) {
+        addresses.push({ id: a.id, label: fmtAddr(a), is_primary: !!a.is_primary });
+      }
+    }
+
+    // Equipos activos del cliente (nombre + su dirección). SELECT plano + lookups
+    // por id (mismo patrón anti "listado vacío" de listCustomerEquipment).
+    const equipment: MaintenanceTargets["equipment"] = [];
+    {
+      const { data: rows } = await supabase
+        .from("customer_equipment")
+        .select(
+          "id, product_id, external_equipment_model_id, address_id, serial_number, is_active, installed_at",
+        )
+        .eq("customer_id", customerId)
+        .eq("is_active", true)
+        .order("installed_at", { ascending: false });
+      const list = (rows ?? []) as Array<{
+        id: string;
+        product_id: string | null;
+        external_equipment_model_id: string | null;
+        address_id: string | null;
+        serial_number: string | null;
+      }>;
+      const uniq = (xs: Array<string | null>) =>
+        Array.from(new Set(xs.filter(Boolean))) as string[];
+      const prodName = new Map<string, string>();
+      const extName = new Map<string, string>();
+      const prodIds = uniq(list.map((r) => r.product_id));
+      const extIds = uniq(list.map((r) => r.external_equipment_model_id));
+      if (prodIds.length) {
+        const { data } = await supabase.from("products").select("id, name").in("id", prodIds);
+        for (const p of (data ?? []) as Array<{ id: string; name: string }>)
+          prodName.set(p.id, p.name);
+      }
+      if (extIds.length) {
+        const { data } = await supabase
+          .from("external_equipment_models")
+          .select("id, brand, model")
+          .in("id", extIds);
+        for (const e of (data ?? []) as Array<{
+          id: string;
+          brand: string | null;
+          model: string | null;
+        }>) {
+          const l = `${e.brand ?? ""} ${e.model ?? ""}`.trim();
+          if (l) extName.set(e.id, l);
+        }
+      }
+      for (const r of list) {
+        const base = r.product_id
+          ? prodName.get(r.product_id)
+          : r.external_equipment_model_id
+            ? extName.get(r.external_equipment_model_id)
+            : null;
+        const label = `${base ?? "Equipo"}${r.serial_number ? ` · ${r.serial_number}` : ""}`;
+        equipment.push({ id: r.id, label, address_id: r.address_id });
+      }
+    }
+
+    return { equipment, addresses };
+  } catch {
+    return empty;
   }
 }

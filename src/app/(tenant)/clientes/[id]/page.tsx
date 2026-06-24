@@ -541,7 +541,28 @@ export default async function CustomerDetailPage({
                             id: e.id,
                             display_name:
                               e.product_name ?? e.external_model_name ?? "Equipo",
+                            address_id: e.address_id,
                           }))}
+                        addresses={addresses.map((a) => {
+                          const line = [
+                            a.street_type,
+                            a.street,
+                            a.street_number,
+                            a.city,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")
+                            .trim();
+                          return {
+                            id: a.id,
+                            label: a.label
+                              ? line
+                                ? `${a.label} · ${line}`
+                                : a.label
+                              : line || "Dirección",
+                            is_primary: a.is_primary,
+                          };
+                        })}
                         technicians={technicians}
                       />
                       <UninstallEquipmentButton

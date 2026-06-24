@@ -406,7 +406,11 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   const supabase = createAdminClient() as any;
 
   type InstRow = { id: string; reference_code: string | null; customer_id: string | null };
-  type MaintRow = { id: string; customer_id: string | null };
+  type MaintRow = {
+    id: string;
+    customer_id: string | null;
+    customer_equipment_id: string | null;
+  };
 
   const [instRes, maintRes] = await Promise.all([
     installationIds.size > 0
@@ -418,7 +422,7 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
     maintenanceIds.size > 0
       ? supabase
           .from("maintenance_jobs")
-          .select("id, customer_id")
+          .select("id, customer_id, customer_equipment_id")
           .in("id", Array.from(maintenanceIds))
       : Promise.resolve({ data: [] as MaintRow[] }),
   ]);
@@ -542,6 +546,71 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
     console.error("[enrichTitlesFromSubjects] direcciones:", e);
   }
 
+  // Dirección CONCRETA de cada mantenimiento (un cliente puede tener equipos en
+  // direcciones distintas). Prioridad al leer: job.address_id → equipo.address_id
+  // → (fallback) principal del cliente. Beneficia también a mantenimientos
+  // creados ANTES de esta mejora (resuelven por la dirección del equipo).
+  const addrById = new Map<
+    string,
+    { label: string; lat: number | null; lng: number | null }
+  >();
+  const eqAddrMap = new Map<string, string>(); // customer_equipment_id → address_id
+  const maintAddrId = new Map<string, string>(); // maintenance_job_id → address_id
+  try {
+    if (maints.length > 0) {
+      // address_id de cada job (defensivo: la columna es nueva).
+      try {
+        const { data: mAddr } = await supabase
+          .from("maintenance_jobs")
+          .select("id, address_id")
+          .in(
+            "id",
+            maints.map((m) => m.id),
+          );
+        for (const r of (mAddr ?? []) as Array<{ id: string; address_id: string | null }>) {
+          if (r.address_id) maintAddrId.set(r.id, r.address_id);
+        }
+      } catch {
+        /* columna address_id aún no disponible: caemos a equipo/principal */
+      }
+    }
+    // address_id de cada equipo referenciado por los jobs.
+    const eqIds = Array.from(
+      new Set(maints.map((m) => m.customer_equipment_id).filter(Boolean)),
+    ) as string[];
+    if (eqIds.length > 0) {
+      const { data: eqRows } = await supabase
+        .from("customer_equipment")
+        .select("id, address_id")
+        .in("id", eqIds);
+      for (const r of (eqRows ?? []) as Array<{ id: string; address_id: string | null }>) {
+        if (r.address_id) eqAddrMap.set(r.id, r.address_id);
+      }
+    }
+    // Cargar las direcciones concretas necesarias (por id) con coordenadas.
+    const specificIds = Array.from(new Set([...maintAddrId.values(), ...eqAddrMap.values()]));
+    if (specificIds.length > 0) {
+      const { data: aRows } = await supabase
+        .from("addresses")
+        .select("id, street_type, street, street_number, city, latitude, longitude")
+        .in("id", specificIds)
+        .is("deleted_at", null);
+      for (const a of (aRows ?? []) as Array<{
+        id: string;
+        street_type: string | null;
+        street: string | null;
+        street_number: string | null;
+        city: string | null;
+        latitude: number | null;
+        longitude: number | null;
+      }>) {
+        addrById.set(a.id, { label: addrLabel(a), lat: a.latitude, lng: a.longitude });
+      }
+    }
+  } catch (e) {
+    console.error("[enrichTitlesFromSubjects] dirección de equipo:", e);
+  }
+
   const instById = new Map(insts.map((i) => [i.id, i]));
   const maintById = new Map(maints.map((m) => [m.id, m]));
 
@@ -577,7 +646,23 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
         e.title = `Mantenimiento · ${cust}`;
         e.subject_label = cust;
       }
-      applyContact(e, m.customer_id);
+      // Dirección concreta del trabajo: la fijada en el job, o la del equipo;
+      // si no hay, caemos a la principal del cliente (applyContact).
+      const directAddrId = maintAddrId.get(m.id);
+      let specific = directAddrId ? addrById.get(directAddrId) : undefined;
+      if (!specific && m.customer_equipment_id) {
+        const eqAddrId = eqAddrMap.get(m.customer_equipment_id);
+        if (eqAddrId) specific = addrById.get(eqAddrId);
+      }
+      if (specific) {
+        e.subject_address = specific.label || null;
+        e.subject_lat = specific.lat;
+        e.subject_lng = specific.lng;
+        const ph = m.customer_id ? phoneMap.get(m.customer_id) : null;
+        if (ph) e.subject_phone = ph;
+      } else {
+        applyContact(e, m.customer_id);
+      }
     } else if (e.subject_type === "customer") {
       // Tarea manual vinculada a un cliente: conservamos el título que
       // escribió el usuario y añadimos el nombre del cliente.
@@ -1199,18 +1284,71 @@ export async function createAgendaEventAction(input: unknown) {
       .is("deleted_at", null)
       .maybeSingle();
     if (!cust) throw new Error("Cliente no encontrado o no pertenece a tu empresa");
+
+    // Equipo concreto (opcional): verificamos que es de ESTE cliente y empresa
+    // (subject_equipment_id llega del navegador). Si no cuadra, se ignora.
+    let equipmentId: string | null = null;
+    let eqAddressId: string | null = null;
+    if (parsed.subject_equipment_id) {
+      const { data: eq } = await adminM
+        .from("customer_equipment")
+        .select("id, address_id, customer_id, company_id")
+        .eq("id", parsed.subject_equipment_id)
+        .maybeSingle();
+      const e = eq as
+        | { id: string; address_id: string | null; customer_id: string; company_id: string }
+        | null;
+      if (e && e.company_id === session.company_id && e.customer_id === parsed.subject_id) {
+        equipmentId = e.id;
+        eqAddressId = e.address_id;
+      }
+    }
+
+    // Dirección: la elegida a mano (validada del mismo cliente) o, por defecto,
+    // la del equipo. NULL => se resuelve al leer (principal del cliente).
+    let addressId: string | null = null;
+    if (parsed.subject_address_id) {
+      const { data: ad } = await adminM
+        .from("addresses")
+        .select("id, customer_id, company_id")
+        .eq("id", parsed.subject_address_id)
+        .maybeSingle();
+      const a = ad as
+        | { id: string; customer_id: string | null; company_id: string }
+        | null;
+      if (a && a.company_id === session.company_id && a.customer_id === parsed.subject_id) {
+        addressId = a.id;
+      }
+    }
+    if (!addressId) addressId = eqAddressId;
+
     const maintNotes =
       [parsed.title, parsed.description].filter(Boolean).join(" — ") || null;
-    const { error: mErr } = await adminM.from("maintenance_jobs").insert({
+    const mPayload: Record<string, unknown> = {
       company_id: session.company_id,
       customer_id: parsed.subject_id,
+      customer_equipment_id: equipmentId,
+      address_id: addressId,
       kind: "one_off", // correctivo / puntual desde la agenda
       status: "scheduled",
       scheduled_at: startIso,
       technician_user_id: parsed.assigned_user_id || session.user_id,
       notes: maintNotes,
       created_by: session.user_id,
-    });
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let mErr: any = null;
+    {
+      const r = await adminM.from("maintenance_jobs").insert(mPayload);
+      mErr = r.error;
+    }
+    // Defensa: si address_id aún no está en el cache del esquema, reintentar sin
+    // ella (no bloquear el alta por la migración).
+    if (mErr && /address_id|schema cache|Could not find/i.test(mErr.message ?? "")) {
+      delete mPayload.address_id;
+      const r = await adminM.from("maintenance_jobs").insert(mPayload);
+      mErr = r.error;
+    }
     if (mErr) throw new Error(mErr.message);
     revalidatePath("/mantenimientos");
     revalidatePath("/agenda");
