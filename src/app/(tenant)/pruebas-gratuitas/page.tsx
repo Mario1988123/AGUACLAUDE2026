@@ -192,21 +192,15 @@ export default async function PruebasGratuitasPage() {
                   <li key={r.id} className="rounded-xl border bg-card p-3 text-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/pruebas-gratuitas/${r.id}` as never}
-                          className="font-mono text-[11px] text-primary hover:underline font-semibold"
-                        >
-                          {r.reference_code ?? `#${r.id.slice(0, 8)}`}
-                        </Link>
                         {partyHref ? (
                           <Link
                             href={partyHref as never}
-                            className="block font-medium text-primary hover:underline truncate"
+                            className="block font-semibold text-primary hover:underline truncate"
                           >
                             {partyLabel}
                           </Link>
                         ) : (
-                          <span className="block text-muted-foreground">{partyLabel}</span>
+                          <span className="block font-semibold text-muted-foreground">{partyLabel}</span>
                         )}
                         <div className="mt-0.5 truncate text-xs text-muted-foreground" title={equiposLabel}>
                           {equiposLabel}
@@ -261,7 +255,6 @@ export default async function PruebasGratuitasPage() {
               <table className="w-full text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="py-2 text-left">Ref.</th>
                     <th className="py-2 text-left">Cliente / Lead</th>
                     <th className="py-2 text-left">Equipos</th>
                     <th className="py-2 text-left">Estado</th>
@@ -294,14 +287,6 @@ export default async function PruebasGratuitasPage() {
                             .join(", ");
                     return (
                       <tr key={r.id} className="hover:bg-muted/50">
-                        <td className="py-2 font-mono text-xs">
-                          <Link
-                            href={`/pruebas-gratuitas/${r.id}` as never}
-                            className="text-primary hover:underline font-semibold"
-                          >
-                            {r.reference_code ?? `#${r.id.slice(0, 8)}`}
-                          </Link>
-                        </td>
                         <td className="py-2">
                           <div className="flex flex-col gap-0.5">
                             {partyHref ? (
