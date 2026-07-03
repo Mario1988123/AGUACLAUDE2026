@@ -61,16 +61,38 @@ export function CustomerEquipmentList({
       </p>
     );
   }
+  // Orden de pack: cada equipo PRINCIPAL seguido de sus EXTRAS (indentados). Los
+  // extras huérfanos (cuyo principal no está en la lista) se muestran normales.
+  const byId = new Set(equipment.map((e) => e.id));
+  const childrenByParent = new Map<string, CustomerEquipmentRow[]>();
+  for (const e of equipment) {
+    if (e.parent_equipment_id && byId.has(e.parent_equipment_id)) {
+      const arr = childrenByParent.get(e.parent_equipment_id) ?? [];
+      arr.push(e);
+      childrenByParent.set(e.parent_equipment_id, arr);
+    }
+  }
+  const ordered: Array<{ e: CustomerEquipmentRow; isExtra: boolean }> = [];
+  for (const e of equipment) {
+    if (e.parent_equipment_id && byId.has(e.parent_equipment_id)) continue; // bajo su principal
+    ordered.push({ e, isExtra: false });
+    for (const child of childrenByParent.get(e.id) ?? []) {
+      ordered.push({ e: child, isExtra: true });
+    }
+  }
+
   return (
     <ul className="space-y-2">
-      {equipment.map((e) => {
+      {ordered.map(({ e, isExtra }) => {
         const name = e.product_name ?? e.external_model_name ?? "Equipo";
         const isOurs = !!e.product_name;
         const warrantyActive = isWarrantyActive(e.warranty_until);
         return (
           <li
             key={e.id}
-            className="rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted/50"
+            className={`rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted/50${
+              isExtra ? " ml-4 border-l-4 border-l-sky-300 sm:ml-8" : ""
+            }`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 space-y-1">
@@ -82,6 +104,7 @@ export function CustomerEquipmentList({
                   ) : (
                     <Badge variant="secondary">Externo</Badge>
                   )}
+                  {isExtra && <Badge variant="outline">Extra del pack</Badge>}
                   {!e.is_active && <Badge variant="destructive">Baja</Badge>}
                 </div>
                 {e.serial_number && (

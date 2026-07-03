@@ -126,14 +126,29 @@ export async function ensureMaintenanceWindow(
     return existingDates.some((e) => Math.abs(e - t) < tolerance);
   }
 
-  // Equipment (opcional, mismo criterio que antes)
-  const { data: equipment } = await a
-    .from("customer_equipment")
-    .select("id")
-    .eq("customer_id", c.customer_id)
-    .eq("is_active", true);
-  const eqList = (equipment ?? []) as Array<{ id: string }>;
-  const equipmentId = eqList[0]?.id ?? null;
+  // Equipment (opcional). Packs: preferimos colgar el mantenimiento del equipo
+  // PRINCIPAL del cliente (parent_equipment_id null), no de un extra del pack.
+  // Defensivo: si la columna parent_equipment_id no existe aún, cae al criterio
+  // anterior (primer equipo activo).
+  let eqList: Array<{ id: string; parent_equipment_id?: string | null }> = [];
+  {
+    const withParent = await a
+      .from("customer_equipment")
+      .select("id, parent_equipment_id")
+      .eq("customer_id", c.customer_id)
+      .eq("is_active", true);
+    if (!withParent.error) {
+      eqList = (withParent.data ?? []) as Array<{ id: string; parent_equipment_id: string | null }>;
+    } else {
+      const plain = await a
+        .from("customer_equipment")
+        .select("id")
+        .eq("customer_id", c.customer_id)
+        .eq("is_active", true);
+      eqList = (plain.data ?? []) as Array<{ id: string }>;
+    }
+  }
+  const equipmentId = (eqList.find((e) => !e.parent_equipment_id) ?? eqList[0])?.id ?? null;
 
   const toCreate = candidates.filter((cd) => !alreadyExists(cd.scheduledAt.getTime()));
   if (toCreate.length === 0) return 0;

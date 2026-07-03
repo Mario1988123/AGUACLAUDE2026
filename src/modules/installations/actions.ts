@@ -13,6 +13,7 @@ import {
   completeInstallationSchema,
 } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { relinkCopiedItems } from "@/shared/lib/packs/link-items";
 import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
@@ -744,16 +745,39 @@ export async function createInstallationFromContract(input: unknown) {
   type CI = { product_id: string; quantity: number; display_order: number; notes: string | null };
   const list = (items ?? []) as CI[];
   if (list.length > 0) {
-    await admin.from("installation_items").insert(
-      list.map((it) => ({
-        installation_id: installationId,
-        company_id: session.company_id,
-        product_id: it.product_id,
-        quantity: it.quantity,
-        display_order: it.display_order,
-        notes: it.notes,
-      })),
-    );
+    const insIt = await admin
+      .from("installation_items")
+      .insert(
+        list.map((it) => ({
+          installation_id: installationId,
+          company_id: session.company_id,
+          product_id: it.product_id,
+          quantity: it.quantity,
+          display_order: it.display_order,
+          notes: it.notes,
+        })),
+      )
+      .select("id, display_order");
+    // Pack: propagar vínculo padre-hijo de contract_items a installation_items.
+    if (!insIt.error) {
+      const parentSrc = await admin
+        .from("contract_items")
+        .select("id, display_order, parent_item_id")
+        .eq("contract_id", c.id);
+      if (!parentSrc.error) {
+        await relinkCopiedItems(
+          admin,
+          "installation_items",
+          session.company_id,
+          insIt.data as Array<{ id: string; display_order: number | null }>,
+          (parentSrc.data ?? []) as Array<{
+            id: string;
+            display_order: number | null;
+            parent_item_id: string | null;
+          }>,
+        );
+      }
+    }
   }
 
   // Si tiene scheduled_at + installer, crear evento agenda
@@ -1698,24 +1722,94 @@ export async function completeInstallation(input: unknown) {
   }
 
   if (i.customer_id) {
-    const { data: items } = await admin
-      .from("installation_items")
-      .select("product_id, serial_number")
-      .eq("installation_id", parsed.id);
-    type II = { product_id: string; serial_number: string | null };
-    const list = (items ?? []) as II[];
-    if (list.length > 0) {
-      await admin.from("customer_equipment").insert(
-        list.map((it) => ({
-          company_id: session.company_id,
-          customer_id: i.customer_id,
-          product_id: it.product_id,
-          installation_id: parsed.id,
-          address_id: i.address_id,
-          serial_number: it.serial_number,
-          installed_at: now.toISOString().slice(0, 10),
-        })),
-      );
+    // Cargar items con info de pack (parent_item_id) y cantidad. Defensivo: si la
+    // columna parent_item_id no existe todavía, caemos al SELECT básico de siempre.
+    type II = {
+      id: string;
+      product_id: string;
+      serial_number: string | null;
+      quantity: number;
+      parent_item_id: string | null;
+      display_order: number | null;
+    };
+    let list: II[] = [];
+    {
+      const rich = await admin
+        .from("installation_items")
+        .select("id, product_id, serial_number, quantity, parent_item_id, display_order")
+        .eq("installation_id", parsed.id)
+        .order("display_order");
+      if (!rich.error) {
+        list = (rich.data ?? []) as II[];
+      } else {
+        const basic = await admin
+          .from("installation_items")
+          .select("id, product_id, serial_number, quantity")
+          .eq("installation_id", parsed.id);
+        list = ((basic.data ?? []) as Array<{
+          id: string;
+          product_id: string;
+          serial_number: string | null;
+          quantity: number;
+        }>).map((r) => ({ ...r, parent_item_id: null, display_order: null }));
+      }
+    }
+
+    // Modalidad heredada del contrato (plan de pago) para todos los equipos del pack.
+    let acquisitionType: "cash" | "rental" | "renting" | null = null;
+    if (i.contract_id) {
+      const { data: ctr } = await admin
+        .from("contracts")
+        .select("plan_type")
+        .eq("id", i.contract_id)
+        .maybeSingle();
+      const pt = (ctr as { plan_type?: string } | null)?.plan_type;
+      if (pt === "cash" || pt === "rental" || pt === "renting") acquisitionType = pt;
+    }
+
+    // Insertar PRINCIPALES antes que EXTRAS para que el padre exista al enlazar.
+    const ordered = [...list].sort(
+      (a, b) => (a.parent_item_id ? 1 : 0) - (b.parent_item_id ? 1 : 0),
+    );
+    const eqIdByItem = new Map<string, string>(); // installation_item.id -> 1er equipo creado
+    for (const it of ordered) {
+      const qty = Math.max(1, it.quantity ?? 1);
+      const parentEqId = it.parent_item_id ? eqIdByItem.get(it.parent_item_id) ?? null : null;
+      // Respetar quantity: un equipo por unidad. Solo la 1ª unidad conserva el nº de
+      // serie (evita series duplicadas).
+      const rows: Array<Record<string, unknown>> = Array.from({ length: qty }, (_, k) => ({
+        company_id: session.company_id,
+        customer_id: i.customer_id,
+        product_id: it.product_id,
+        installation_id: parsed.id,
+        address_id: i.address_id,
+        serial_number: k === 0 ? it.serial_number : null,
+        installed_at: now.toISOString().slice(0, 10),
+        acquisition_type: acquisitionType,
+        parent_equipment_id: parentEqId,
+      }));
+      let ins = await admin.from("customer_equipment").insert(rows).select("id");
+      // Defensivo: si acquisition_type/parent_equipment_id no existen aún, reintentar sin ellos.
+      if (
+        ins.error &&
+        /acquisition_|parent_equipment_id|schema cache|Could not find|42703/i.test(
+          ins.error.message ?? "",
+        )
+      ) {
+        const rowsBasic = rows.map((r) => {
+          const c = { ...r };
+          delete c.acquisition_type;
+          delete c.parent_equipment_id;
+          return c;
+        });
+        ins = await admin.from("customer_equipment").insert(rowsBasic).select("id");
+      }
+      if (!ins.error) {
+        const created = (ins.data ?? []) as Array<{ id: string }>;
+        if (created[0]) eqIdByItem.set(it.id, created[0].id);
+      } else {
+        console.error("[completeInstallation] customer_equipment insert:", ins.error.message);
+      }
     }
   }
 

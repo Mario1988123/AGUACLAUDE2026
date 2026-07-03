@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { proposalCreateSchema } from "./schemas";
+import { linkItemsByParentIndex } from "@/shared/lib/packs/link-items";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
@@ -538,7 +539,18 @@ export async function createProposalAction(input: unknown) {
     charge_first_payment_now: isRental ? it.charge_first_payment_now : false,
     display_order: i,
   }));
-  await supabase.from("proposal_items").insert(itemRows);
+  const { data: insertedItems } = await supabase
+    .from("proposal_items")
+    .insert(itemRows)
+    .select("id, display_order");
+  // Pack: enlazar extras a su equipo principal (parent_index del cliente).
+  await linkItemsByParentIndex(
+    supabase,
+    "proposal_items",
+    session.company_id,
+    insertedItems,
+    parsed.items.map((it) => it.parent_index ?? null),
+  );
 
   await supabase.from("events").insert({
     company_id: session.company_id,
@@ -768,7 +780,17 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
     display_order: i,
   }));
   if (itemRows.length > 0) {
-    await admin.from("proposal_items").insert(itemRows);
+    const { data: insertedItems } = await admin
+      .from("proposal_items")
+      .insert(itemRows)
+      .select("id, display_order");
+    await linkItemsByParentIndex(
+      admin,
+      "proposal_items",
+      session.company_id,
+      insertedItems,
+      parsed.items.map((it) => it.parent_index ?? null),
+    );
   }
 
   await admin.from("events").insert({

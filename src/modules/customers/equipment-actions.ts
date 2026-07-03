@@ -27,6 +27,8 @@ export interface CustomerEquipmentRow {
   acquisition_type: "cash" | "rental" | "renting" | null;
   acquisition_amount_cents: number | null;
   acquisition_started_at: string | null;
+  /** Pack: id del equipo principal si este equipo es un extra. NULL = principal/suelto. */
+  parent_equipment_id: string | null;
 }
 
 export async function listCustomerEquipment(customerId: string): Promise<CustomerEquipmentRow[]> {
@@ -190,6 +192,21 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     }
   }
 
+  // Vínculo de pack (defensivo: si la columna parent_equipment_id no existe aún
+  // porque la migración no se aplicó, se ignora y todos quedan como principales).
+  const parentByEq: Record<string, string | null> = {};
+  {
+    const { data, error } = await supabase
+      .from("customer_equipment")
+      .select("id, parent_equipment_id")
+      .in("id", ids);
+    if (!error) {
+      for (const p of (data ?? []) as Array<{ id: string; parent_equipment_id: string | null }>) {
+        parentByEq[p.id] = p.parent_equipment_id;
+      }
+    }
+  }
+
   return rows.map((r) => ({
     id: r.id,
     customer_id: r.customer_id,
@@ -211,6 +228,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     acquisition_type: acq[r.id]?.type ?? null,
     acquisition_amount_cents: acq[r.id]?.cents ?? null,
     acquisition_started_at: acq[r.id]?.started ?? null,
+    parent_equipment_id: parentByEq[r.id] ?? null,
   }));
 }
 
@@ -525,6 +543,34 @@ export async function removeCustomerEquipmentAction(
       .in("status", ["scheduled", "preprogrammed"]);
   } catch (e) {
     console.error("[removeCustomerEquipment] cancelar mantenimientos futuros:", e);
+  }
+
+  // Pack: si este equipo es un PRINCIPAL, dar de baja también sus EXTRAS (van
+  // físicamente con él) y cancelar sus mantenimientos. Defensivo: si la columna
+  // parent_equipment_id no existe todavía, no rompe la baja del principal.
+  try {
+    const { data: kids } = await admin
+      .from("customer_equipment")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("parent_equipment_id", equipmentId)
+      .eq("is_active", true);
+    const kidIds = ((kids ?? []) as Array<{ id: string }>).map((k) => k.id);
+    if (kidIds.length > 0) {
+      await admin
+        .from("customer_equipment")
+        .update({ is_active: false })
+        .in("id", kidIds)
+        .eq("company_id", session.company_id);
+      await admin
+        .from("maintenance_jobs")
+        .update({ status: "cancelled" })
+        .eq("company_id", session.company_id)
+        .in("customer_equipment_id", kidIds)
+        .in("status", ["scheduled", "preprogrammed"]);
+    }
+  } catch (e) {
+    console.error("[removeCustomerEquipment] cascada extras:", e);
   }
 
   try {

@@ -9,6 +9,7 @@ import { isModuleActiveForCompany } from "@/shared/lib/auth/module-guard";
 import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
+import { relinkCopiedItems } from "@/shared/lib/packs/link-items";
 
 export async function listContracts(filters?: {
   status?: string;
@@ -518,7 +519,31 @@ export async function createContractFromProposal(proposalId: string) {
       unit_price_cents: it.unit_price_cash_cents ?? 0,
       display_order: idx,
     }));
-    await supabase.from("contract_items").insert(rows as never);
+    const { data: insertedContractItems } = await supabase
+      .from("contract_items")
+      .insert(rows as never)
+      .select("id, display_order");
+    // Pack: propagar el vínculo padre-hijo de proposal_items a contract_items.
+    // Fetch defensivo aparte para NO romper la copia si la columna no existe.
+    {
+      const parentSrc = await supabase
+        .from("proposal_items")
+        .select("id, display_order, parent_item_id")
+        .eq("proposal_id", p.id);
+      if (!parentSrc.error) {
+        await relinkCopiedItems(
+          supabase,
+          "contract_items",
+          session.company_id!,
+          insertedContractItems as Array<{ id: string; display_order: number | null }>,
+          (parentSrc.data ?? []) as Array<{
+            id: string;
+            display_order: number | null;
+            parent_item_id: string | null;
+          }>,
+        );
+      }
+    }
 
     // Propagar flags de mantenimiento al CONTRATO (no se hizo en el insert
     // inicial porque ps se carga después). Agregamos: maintenance_included
@@ -1054,16 +1079,39 @@ export async function markContractSigned(id: string) {
           notes: string | null;
         }>;
         if (list.length > 0) {
-          const insIt = await admin.from("installation_items").insert(
-            list.map((it) => ({
-              installation_id: newInstId,
-              company_id: session.company_id!,
-              product_id: it.product_id,
-              quantity: it.quantity,
-              display_order: it.display_order,
-              notes: it.notes,
-            })),
-          );
+          const insIt = await admin
+            .from("installation_items")
+            .insert(
+              list.map((it) => ({
+                installation_id: newInstId,
+                company_id: session.company_id!,
+                product_id: it.product_id,
+                quantity: it.quantity,
+                display_order: it.display_order,
+                notes: it.notes,
+              })),
+            )
+            .select("id, display_order");
+          if (!insIt.error) {
+            // Pack: propagar vínculo padre-hijo de contract_items a installation_items.
+            const parentSrc = await admin
+              .from("contract_items")
+              .select("id, display_order, parent_item_id")
+              .eq("contract_id", id);
+            if (!parentSrc.error) {
+              await relinkCopiedItems(
+                admin,
+                "installation_items",
+                session.company_id!,
+                insIt.data as Array<{ id: string; display_order: number | null }>,
+                (parentSrc.data ?? []) as Array<{
+                  id: string;
+                  display_order: number | null;
+                  parent_item_id: string | null;
+                }>,
+              );
+            }
+          }
           if (insIt.error) {
             console.error("[markContractSigned] installation_items insert:", insIt.error);
             try {

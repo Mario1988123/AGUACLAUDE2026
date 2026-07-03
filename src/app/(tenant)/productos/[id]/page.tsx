@@ -39,6 +39,8 @@ import {
 } from "@/modules/products/certifications-actions";
 import { DocsAndCertsPanel } from "@/modules/products/docs-and-certs-panel";
 import { ExtendedFieldsPanel } from "@/modules/products/extended-fields-panel";
+import { ExtraTargetsPanel } from "@/modules/products/extra-targets-panel";
+import { listExtraTargets, listEquipmentProducts } from "@/modules/products/extra-targets-actions";
 import { DatasheetIaguaPanel } from "@/modules/products/datasheet-iagua-panel";
 import { getPdfSettings } from "@/modules/config/pdf/actions";
 import { listTagsCatalog } from "@/modules/products/tags-actions";
@@ -137,6 +139,18 @@ export default async function ProductDetailPage({
   // empresa usa esa plantilla.
   const pdfSettings = canEdit ? await getPdfSettings().catch(() => null) : null;
   const isIaguaTemplate = pdfSettings?.datasheet_template === "iagua";
+
+  // Packs: si este producto es un EXTRA del configurador, cargamos sus objetivos
+  // (categorías/equipos) y el listado de equipos para poder configurarlos.
+  const productRoles = ((product as { roles?: string[] | null }).roles ?? []) as string[];
+  const isConfiguratorExtra = productRoles.includes("configurator_extra");
+  const [extraTargets, equipmentProductsForTargets] =
+    isConfiguratorExtra && canEdit
+      ? await Promise.all([
+          listExtraTargets(id).catch(() => ({ categoryIds: [], equipmentProductIds: [] })),
+          listEquipmentProducts().catch(() => []),
+        ])
+      : [{ categoryIds: [] as string[], equipmentProductIds: [] as string[] }, [] as Array<{ id: string; name: string; category_id: string | null }>];
 
   // Etiqueta de stock al lado del título.
   // - Comerciales (level 3): solo "Hay stock" / "Sin stock", sin cantidad.
@@ -277,6 +291,19 @@ export default async function ProductDetailPage({
             otherProducts={otherProducts}
           />
         </CollapsibleCard>
+      )}
+
+      {canEdit && isConfiguratorExtra && (
+        <ExtraTargetsPanel
+          productId={product.id}
+          categories={categories}
+          equipmentProducts={equipmentProductsForTargets.map((p) => ({
+            id: p.id,
+            name: p.name,
+          }))}
+          initialCategoryIds={extraTargets.categoryIds}
+          initialEquipmentIds={extraTargets.equipmentProductIds}
+        />
       )}
 
       {canEdit && isIaguaTemplate && (

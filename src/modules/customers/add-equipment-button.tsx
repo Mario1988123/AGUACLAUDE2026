@@ -1,14 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Save } from "lucide-react";
+import { Plus, X, Save, Trash2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { addCustomerEquipmentSafeAction } from "./equipment-actions";
+import { addCustomerEquipmentPackAction } from "./equipment-pack-actions";
+import { listCompatibleExtras } from "@/modules/products/extra-targets-actions";
 import { AddressForm } from "@/modules/addresses/address-form";
+
+interface ExtraLine {
+  product_id: string;
+  serial: string;
+  periodicity: string;
+}
 
 interface ProductOption {
   id: string;
@@ -52,8 +60,45 @@ export function AddEquipmentButton({
   const [plan, setPlan] = useState<"" | "cash" | "rental" | "renting">("");
   const [importe, setImporte] = useState("");
   const [fechaInicio, setFechaInicio] = useState("");
+  // Pack: extras que cuelgan del equipo principal (solo catálogo, sin stock).
+  const [extras, setExtras] = useState<ExtraLine[]>([]);
+  const [compatibleExtras, setCompatibleExtras] = useState<{ id: string; name: string }[]>([]);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  // Al cambiar el equipo principal (catálogo), cargamos sus extras compatibles.
+  useEffect(() => {
+    if (source !== "own" || !productId) {
+      setCompatibleExtras([]);
+      return;
+    }
+    let alive = true;
+    listCompatibleExtras({ equipmentProductId: productId, categoryId: null })
+      .then((opts) => {
+        if (alive) setCompatibleExtras(opts.map((o) => ({ id: o.id, name: o.name })));
+      })
+      .catch(() => {
+        if (alive) setCompatibleExtras([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [source, productId]);
+
+  function addExtra() {
+    const first = compatibleExtras[0];
+    if (!first) {
+      notify.warning("Este equipo no tiene extras compatibles configurados");
+      return;
+    }
+    setExtras((prev) => [...prev, { product_id: first.id, serial: "", periodicity: "" }]);
+  }
+  function updateExtra(idx: number, patch: Partial<ExtraLine>) {
+    setExtras((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+  }
+  function removeExtra(idx: number) {
+    setExtras((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   function close() {
     setOpen(false);
@@ -71,6 +116,8 @@ export function AddEquipmentButton({
     setPlan("");
     setImporte("");
     setFechaInicio("");
+    setExtras([]);
+    setCompatibleExtras([]);
     setAddressId(defaultAddressId);
   }
 
@@ -83,26 +130,56 @@ export function AddEquipmentButton({
       notify.warning("Indica marca y modelo");
       return;
     }
+    const validExtras = source === "own" ? extras.filter((e) => e.product_id) : [];
+    const mainLine = {
+      product_id: source === "own" ? productId : null,
+      external_brand: source === "external" ? brand : undefined,
+      external_model: source === "external" ? model : undefined,
+      serial_number: serial || null,
+      installed_at: installedAt || null,
+      last_maintenance_at: lastMaintenanceAt || null,
+      next_maintenance_at: nextMaintenanceAt || null,
+      maintenance_periodicity_months: periodicityMonths ? Number(periodicityMonths) : null,
+      notes: notes || null,
+      acquisition_type: (plan || null) as "cash" | "rental" | "renting" | null,
+      acquisition_amount_cents: importe.trim()
+        ? Math.round(parseFloat(importe.replace(",", ".")) * 100)
+        : null,
+      acquisition_started_at: fechaInicio || null,
+    };
+
     startTransition(async () => {
+      // Con extras => alta como PACK (principal + extras enlazados). Sin extras =>
+      // alta de equipo suelto de siempre.
+      if (validExtras.length > 0) {
+        const r = await addCustomerEquipmentPackAction({
+          customer_id: customerId,
+          address_id: addressId || null,
+          main: mainLine,
+          extras: validExtras.map((e) => ({
+            product_id: e.product_id,
+            serial_number: e.serial || null,
+            installed_at: installedAt || null,
+            maintenance_periodicity_months: e.periodicity ? Number(e.periodicity) : null,
+            // El extra hereda la modalidad del principal (informativo).
+            acquisition_type: mainLine.acquisition_type,
+            acquisition_started_at: fechaInicio || null,
+          })),
+        });
+        if (!r.ok) {
+          notify.error("No se pudo añadir el pack", r.error);
+          return;
+        }
+        notify.success(`Pack añadido (1 principal + ${r.extraIds.length} extra(s))`);
+        close();
+        router.refresh();
+        return;
+      }
+
       const r = await addCustomerEquipmentSafeAction({
         customer_id: customerId,
-        product_id: source === "own" ? productId : null,
-        external_brand: source === "external" ? brand : undefined,
-        external_model: source === "external" ? model : undefined,
-        serial_number: serial || null,
-        installed_at: installedAt || null,
-        last_maintenance_at: lastMaintenanceAt || null,
-        next_maintenance_at: nextMaintenanceAt || null,
-        maintenance_periodicity_months: periodicityMonths
-          ? Number(periodicityMonths)
-          : null,
-        notes: notes || null,
+        ...mainLine,
         address_id: addressId || null,
-        acquisition_type: plan || null,
-        acquisition_amount_cents: importe.trim()
-          ? Math.round(parseFloat(importe.replace(",", ".")) * 100)
-          : null,
-        acquisition_started_at: fechaInicio || null,
       });
       if (!r.ok) {
         notify.error("No se pudo añadir", r.error);
@@ -233,6 +310,87 @@ export function AddEquipmentButton({
                       <Label>Modelo *</Label>
                       <Input value={model} onChange={(e) => setModel(e.target.value)} />
                     </div>
+                  </div>
+                )}
+
+                {source === "own" && productId && (
+                  <div className="space-y-2 rounded-xl border-2 border-sky-200 bg-sky-50/40 p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-bold text-sky-900">
+                          🧩 Extras del pack
+                        </div>
+                        <p className="text-[11px] text-sky-800">
+                          Añade complementos que se instalan con este equipo (ej. enfriador,
+                          grifo). Se registran enlazados al equipo principal.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addExtra}
+                        disabled={compatibleExtras.length === 0}
+                      >
+                        <Plus className="h-3 w-3" /> Extra
+                      </Button>
+                    </div>
+
+                    {compatibleExtras.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Este equipo no tiene extras compatibles configurados. Márcalos en la
+                        ficha del extra (rol «Extra del configurador» → «¿De qué equipos es
+                        extra?»).
+                      </p>
+                    )}
+
+                    {extras.map((ex, idx) => (
+                      <div
+                        key={idx}
+                        className="flex flex-wrap items-end gap-2 rounded-lg border border-sky-200 bg-card p-2"
+                      >
+                        <div className="min-w-[160px] flex-1 space-y-1">
+                          <Label className="text-[11px]">Extra</Label>
+                          <select
+                            value={ex.product_id}
+                            onChange={(e) => updateExtra(idx, { product_id: e.target.value })}
+                            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                          >
+                            {compatibleExtras.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-28 space-y-1">
+                          <Label className="text-[11px]">Nº serie</Label>
+                          <Input
+                            value={ex.serial}
+                            onChange={(e) => updateExtra(idx, { serial: e.target.value })}
+                          />
+                        </div>
+                        <div className="w-24 space-y-1">
+                          <Label className="text-[11px]">Mant. (meses)</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={60}
+                            inputMode="numeric"
+                            value={ex.periodicity}
+                            onChange={(e) => updateExtra(idx, { periodicity: e.target.value })}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeExtra(idx)}
+                          className="rounded-lg p-2 text-destructive hover:bg-muted"
+                          aria-label="Quitar extra"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 

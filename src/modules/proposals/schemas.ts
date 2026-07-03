@@ -59,6 +59,12 @@ const proposalItemSchema = z.object({
   maintenance_periodicity_months: z.coerce.number().int().nullable().default(null),
   deposit_cents: z.coerce.number().int().min(0).nullable().default(null),
   charge_first_payment_now: zBoolean().default(false),
+  /**
+   * Pack: índice (dentro de este array de items) del EQUIPO PRINCIPAL del que
+   * cuelga este extra. null = línea principal o suelta. Se resuelve a
+   * parent_item_id tras insertar (no conocemos los ids en cliente).
+   */
+  parent_index: z.coerce.number().int().min(0).nullable().default(null),
 });
 
 export const proposalCreateSchema = z
