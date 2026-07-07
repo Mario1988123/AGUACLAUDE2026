@@ -9,6 +9,25 @@ Estado marcado como **[VERIFICADO]** = abrí el código y lo confirmé en person
 **[ANÁLISIS]** = hallazgo de agente con evidencia file:line, pendiente de blindar
 con test.
 
+## Estado de remediación (actualizado 2026-07-07)
+
+| Hallazgo | Estado |
+|---|---|
+| S1 · Fuga PII agenda (CRÍTICO) | ✅ **CORREGIDO** (commit d54679b): `scoped()` acota las 9 lecturas admin a `company_id` |
+| S2 · IDOR free-trials (IMPORTANTE) | ⚪ **FALSO POSITIVO**: el SELECT usa cliente RLS y `ft_select_by_scope` exige `company_id` como AND obligatorio → nunca devuelve trial ajeno. No requiere fix |
+| S3 · Scope maintenance (MENOR) | ✅ **CORREGIDO** (commit 7c089aa): `.eq("company_id")` en `isLastContractedMaintenance` |
+| S4 · product-datasheet sin auth (MENOR) | ✅ **CORREGIDO** (commit 50e771e): `requireSession` + validación de pertenencia |
+| S5 · SSRF motor ficha (MENOR) | ✅ **CORREGIDO** (commit 50e771e): `isSafeRemoteUrl()` bloquea metadata/localhost/privadas |
+| S6 · chat miembro sin validar (MENOR) | ⬜ Pendiente (sin fuga de lectura; solo notificaciones de mención) |
+| S7 · chat sin allow-list MIME (MENOR) | ⬜ Pendiente (riesgo bajo: bucket privado, path con company_id) |
+
+**Fase A (higiene):** A2 migración aplicada (owner). A3 Next→15.5.20 (commit 157b730).
+A1 (tipos + quitar `as any`) **descartado**: los tipos reales rompen el build por
+TS2349 de supabase-js con 176+ tablas; `Database = any` es un workaround deliberado.
+
+**Pendiente de mayor calado:** §4 (atomicidad dinero/stock — sin transacciones),
+§6 (0 tests). No abordado en esta tanda por riesgo/tamaño; requiere decisión.
+
 ---
 
 ## 0. Resumen ejecutivo
