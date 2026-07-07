@@ -214,7 +214,7 @@ export async function listAgendaMonth(
     ].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   }
 
-  await enrichTitlesFromSubjects(merged);
+  await enrichTitlesFromSubjects(merged, session.company_id);
   return await recomputeOutsideHoursForList(merged, session.company_id);
 }
 
@@ -361,7 +361,7 @@ export async function listAgendaRangeFull(
   const truncated = totalBeforeLimit > limit;
   if (truncated) merged = merged.slice(0, limit);
 
-  await enrichTitlesFromSubjects(merged);
+  await enrichTitlesFromSubjects(merged, session.company_id);
   const finalEvents = await recomputeOutsideHoursForList(merged, session.company_id);
   return {
     events: finalEvents,
@@ -376,7 +376,10 @@ export async function listAgendaRangeFull(
  *  installation/maintenance + customer actuales. Así eventos antiguos
  *  con título "Instalación · I-2026-0007" pasan a mostrar también el
  *  cliente sin necesidad de backfill. */
-async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
+async function enrichTitlesFromSubjects(
+  events: AgendaItem[],
+  companyId: string | null,
+): Promise<void> {
   if (events.length === 0) return;
   const installationIds = new Set<string>();
   const maintenanceIds = new Set<string>();
@@ -405,6 +408,13 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createAdminClient() as any;
 
+  // SEGURIDAD (audit 2026-07-06): el admin client salta RLS. Acotamos SIEMPRE a la
+  // empresa de la sesión para que un subject_id de otra empresa (una tarea creada
+  // apuntando a un UUID ajeno) NO filtre nombre/teléfono/dirección/GPS ajenos.
+  // companyId null (superadmin sin empresa concreta) => sin filtro, como antes.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scoped = (q: any) => (companyId ? q.eq("company_id", companyId) : q);
+
   type InstRow = { id: string; reference_code: string | null; customer_id: string | null };
   type MaintRow = {
     id: string;
@@ -414,16 +424,20 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
 
   const [instRes, maintRes] = await Promise.all([
     installationIds.size > 0
-      ? supabase
-          .from("installations")
-          .select("id, reference_code, customer_id")
-          .in("id", Array.from(installationIds))
+      ? scoped(
+          supabase
+            .from("installations")
+            .select("id, reference_code, customer_id")
+            .in("id", Array.from(installationIds)),
+        )
       : Promise.resolve({ data: [] as InstRow[] }),
     maintenanceIds.size > 0
-      ? supabase
-          .from("maintenance_jobs")
-          .select("id, customer_id, customer_equipment_id")
-          .in("id", Array.from(maintenanceIds))
+      ? scoped(
+          supabase
+            .from("maintenance_jobs")
+            .select("id, customer_id, customer_equipment_id")
+            .in("id", Array.from(maintenanceIds)),
+        )
       : Promise.resolve({ data: [] as MaintRow[] }),
   ]);
   const insts = (instRes.data ?? []) as InstRow[];
@@ -437,10 +451,12 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   const nameMap = new Map<string, string>();
   const phoneMap = new Map<string, string>();
   if (custIds.size > 0) {
-    const { data: cs } = await supabase
-      .from("customers")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
-      .in("id", Array.from(custIds));
+    const { data: cs } = await scoped(
+      supabase
+        .from("customers")
+        .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
+        .in("id", Array.from(custIds)),
+    );
     for (const c of (cs ?? []) as Array<{
       id: string;
       party_kind: "individual" | "company";
@@ -463,10 +479,12 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   // Nombres de leads vinculados directamente a una tarea.
   const leadNameMap = new Map<string, string>();
   if (leadIds.size > 0) {
-    const { data: ls } = await supabase
-      .from("leads")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
-      .in("id", Array.from(leadIds));
+    const { data: ls } = await scoped(
+      supabase
+        .from("leads")
+        .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
+        .in("id", Array.from(leadIds)),
+    );
     for (const l of (ls ?? []) as Array<{
       id: string;
       party_kind: "individual" | "company";
@@ -503,12 +521,14 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
   }) => [a.street_type, a.street, a.street_number, a.city].filter(Boolean).join(" ").trim();
   try {
     if (custIds.size > 0) {
-      const { data: ca } = await supabase
-        .from("addresses")
-        .select("customer_id, street_type, street, street_number, city, latitude, longitude, is_primary")
-        .in("customer_id", Array.from(custIds))
-        .is("deleted_at", null)
-        .order("is_primary", { ascending: false });
+      const { data: ca } = await scoped(
+        supabase
+          .from("addresses")
+          .select("customer_id, street_type, street, street_number, city, latitude, longitude, is_primary")
+          .in("customer_id", Array.from(custIds))
+          .is("deleted_at", null)
+          .order("is_primary", { ascending: false }),
+      );
       for (const a of (ca ?? []) as Array<{
         customer_id: string;
         street_type: string | null;
@@ -523,12 +543,14 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
       }
     }
     if (leadIds.size > 0) {
-      const { data: la } = await supabase
-        .from("addresses")
-        .select("lead_id, street_type, street, street_number, city, latitude, longitude, is_primary")
-        .in("lead_id", Array.from(leadIds))
-        .is("deleted_at", null)
-        .order("is_primary", { ascending: false });
+      const { data: la } = await scoped(
+        supabase
+          .from("addresses")
+          .select("lead_id, street_type, street, street_number, city, latitude, longitude, is_primary")
+          .in("lead_id", Array.from(leadIds))
+          .is("deleted_at", null)
+          .order("is_primary", { ascending: false }),
+      );
       for (const a of (la ?? []) as Array<{
         lead_id: string;
         street_type: string | null;
@@ -560,13 +582,15 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
     if (maints.length > 0) {
       // address_id de cada job (defensivo: la columna es nueva).
       try {
-        const { data: mAddr } = await supabase
-          .from("maintenance_jobs")
-          .select("id, address_id")
-          .in(
-            "id",
-            maints.map((m) => m.id),
-          );
+        const { data: mAddr } = await scoped(
+          supabase
+            .from("maintenance_jobs")
+            .select("id, address_id")
+            .in(
+              "id",
+              maints.map((m) => m.id),
+            ),
+        );
         for (const r of (mAddr ?? []) as Array<{ id: string; address_id: string | null }>) {
           if (r.address_id) maintAddrId.set(r.id, r.address_id);
         }
@@ -579,10 +603,12 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
       new Set(maints.map((m) => m.customer_equipment_id).filter(Boolean)),
     ) as string[];
     if (eqIds.length > 0) {
-      const { data: eqRows } = await supabase
-        .from("customer_equipment")
-        .select("id, address_id")
-        .in("id", eqIds);
+      const { data: eqRows } = await scoped(
+        supabase
+          .from("customer_equipment")
+          .select("id, address_id")
+          .in("id", eqIds),
+      );
       for (const r of (eqRows ?? []) as Array<{ id: string; address_id: string | null }>) {
         if (r.address_id) eqAddrMap.set(r.id, r.address_id);
       }
@@ -590,11 +616,13 @@ async function enrichTitlesFromSubjects(events: AgendaItem[]): Promise<void> {
     // Cargar las direcciones concretas necesarias (por id) con coordenadas.
     const specificIds = Array.from(new Set([...maintAddrId.values(), ...eqAddrMap.values()]));
     if (specificIds.length > 0) {
-      const { data: aRows } = await supabase
-        .from("addresses")
-        .select("id, street_type, street, street_number, city, latitude, longitude")
-        .in("id", specificIds)
-        .is("deleted_at", null);
+      const { data: aRows } = await scoped(
+        supabase
+          .from("addresses")
+          .select("id, street_type, street, street_number, city, latitude, longitude")
+          .in("id", specificIds)
+          .is("deleted_at", null),
+      );
       for (const a of (aRows ?? []) as Array<{
         id: string;
         street_type: string | null;
