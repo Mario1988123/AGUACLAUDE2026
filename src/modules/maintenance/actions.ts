@@ -747,13 +747,18 @@ export async function isLastContractedMaintenance(
   customer_equipment_id: string | null;
 }> {
   try {
-    await requireSession();
+    const session = await requireSession();
+    if (!session.company_id)
+      return { isLast: false, contract_id: null, customer_equipment_id: null };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // SEGURIDAD (audit 2026-07-06): admin salta RLS → acotar por empresa para no
+    // filtrar contract_id/customer_equipment_id de un job de otra empresa.
     const { data: job } = await admin
       .from("maintenance_jobs")
       .select("id, contract_id, kind, customer_id, customer_equipment_id")
       .eq("id", jobId)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     if (!job)
       return {
