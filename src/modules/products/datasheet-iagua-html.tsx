@@ -83,8 +83,42 @@ async function loadFonts(): Promise<FontSpec[]> {
   return FONT_CACHE;
 }
 
+// SEGURIDAD (audit 2026-07-06): las URLs (logo/imagen) vienen de la BD y las
+// edita un admin de tenant. Antes de hacer el fetch server-side bloqueamos SSRF
+// a endpoints internos (metadata cloud 169.254.169.254, localhost, rangos
+// privados). No cubre DNS rebinding (hostname que resuelve a IP privada), pero
+// el vector real —IP literal interna en la URL— sí queda bloqueado.
+function isSafeRemoteUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host.endsWith(".local") ||
+    host === "0.0.0.0" ||
+    host === "::1"
+  )
+    return false;
+  if (
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  )
+    return false;
+  return true;
+}
+
 async function fetchDataUri(url: string | null | undefined): Promise<string | null> {
-  if (!url) return null;
+  if (!url || !isSafeRemoteUrl(url)) return null;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
