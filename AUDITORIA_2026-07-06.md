@@ -25,8 +25,16 @@ con test.
 A1 (tipos + quitar `as any`) **descartado**: los tipos reales rompen el build por
 TS2349 de supabase-js con 176+ tablas; `Database = any` es un workaround deliberado.
 
-**Pendiente de mayor calado:** §4 (atomicidad dinero/stock — sin transacciones),
-§6 (0 tests). No abordado en esta tanda por riesgo/tamaño; requiere decisión.
+**Fase D (tests) — ARRANCADA** (commit 30853bd): infraestructura vitest + 24 tests
+de lógica pura de dinero (`computeSavings`, `formatEur`, mapeo de packs
+`link-items`). `npm test` verde. Falta ampliar a numeración fiscal (verifactu),
+haversine y ciclos de comisiones (todas puras), y a los flujos con BD cuando haya
+entorno de test.
+
+**Pendiente de mayor calado (requiere DECISIÓN):** §4 atomicidad dinero/stock —
+sin transacciones (doble cobro / stock perdido). Es reescritura de flujos de
+dinero → no se aborda en automático; hacer PRIMERO más tests de caracterización y
+luego el refactor a RPC transaccional.
 
 ---
 
