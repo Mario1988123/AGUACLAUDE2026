@@ -32,29 +32,56 @@ interface DecrementInput {
 export async function decrementStock(input: DecrementInput): Promise<number> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data: rows } = await admin
-    .from("warehouse_stock")
-    .select("id, quantity, state, location_id")
-    .eq("warehouse_id", input.warehouse_id)
-    .eq("product_id", input.product_id)
-    // Solo stock VENDIBLE ('new'). Antes consumía también used/damaged/
-    // refurbished/reservado en salidas por instalación/transferencia.
-    .eq("state", "new")
-    .order("quantity", { ascending: false });
-  type Row = { id: string; quantity: number; state: string; location_id: string | null };
-  const list = (rows ?? []) as Row[];
-  let remaining = input.quantity;
+
+  // Descuento ATÓMICO repartido por ubicaciones (RPC decrement_stock_spread):
+  // recorre las celdas 'new' del (warehouse, product) con FOR UPDATE → sin lost
+  // updates. Es lenient (mueve lo que puede). Si la RPC no está aplicada o falla,
+  // caemos al bucle clásico read-modify-write → nunca peor que hoy.
   let moved = 0;
-  for (const r of list) {
-    if (remaining <= 0) break;
-    const take = Math.min(r.quantity, remaining);
-    if (take <= 0) continue;
-    await admin
+  let usedAtomic = false;
+  try {
+    const { data, error } = await admin.rpc("decrement_stock_spread", {
+      p_company_id: input.company_id,
+      p_warehouse_id: input.warehouse_id,
+      p_product_id: input.product_id,
+      p_state: "new",
+      p_quantity: input.quantity,
+    });
+    if (error) throw new Error(error.message);
+    moved = typeof data === "number" ? data : Number(data ?? 0);
+    usedAtomic = true;
+  } catch (e) {
+    console.error(
+      "[decrementStock] RPC decrement_stock_spread no disponible, fallback:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
+  if (!usedAtomic) {
+    // ---- Camino clásico (read-modify-write, no atómico): solo si la RPC no está ----
+    const { data: rows } = await admin
       .from("warehouse_stock")
-      .update({ quantity: r.quantity - take, updated_at: new Date().toISOString() })
-      .eq("id", r.id);
-    remaining -= take;
-    moved += take;
+      .select("id, quantity, state, location_id")
+      .eq("warehouse_id", input.warehouse_id)
+      .eq("product_id", input.product_id)
+      // Solo stock VENDIBLE ('new'). Antes consumía también used/damaged/
+      // refurbished/reservado en salidas por instalación/transferencia.
+      .eq("state", "new")
+      .order("quantity", { ascending: false });
+    type Row = { id: string; quantity: number; state: string; location_id: string | null };
+    const list = (rows ?? []) as Row[];
+    let remaining = input.quantity;
+    for (const r of list) {
+      if (remaining <= 0) break;
+      const take = Math.min(r.quantity, remaining);
+      if (take <= 0) continue;
+      await admin
+        .from("warehouse_stock")
+        .update({ quantity: r.quantity - take, updated_at: new Date().toISOString() })
+        .eq("id", r.id);
+      remaining -= take;
+      moved += take;
+    }
   }
   // FIFO automático sobre stock_lots: descontar del lote más antiguo
   // primero hasta cubrir `moved`. Si la tabla no existe (migración
