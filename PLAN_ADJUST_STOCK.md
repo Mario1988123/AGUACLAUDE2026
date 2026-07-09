@@ -211,13 +211,22 @@ evapora stock ni sufre lost updates**.
 - `20260709130000_decrement_stock_spread.sql`
 - `20260709140000_adjust_stock_batch_reason.sql`
 
+- ✅ Sitio #4 `markReturnedAction` (devolución de prueba gratuita) — usa
+  `adjust_stock_batch`, sin migración nueva.
+
 **⚠️ CHECKPOINT recomendado:** validar en producción (una transferencia + una
 instalación + una desinstalación reales) que las RPC funcionan, ANTES de migrar el
-resto. Todo el SQL está sin probar en local (stack roto) y estamos replicando el
-patrón; conviene confirmar la base antes de seguir.
+resto. Todo el SQL está sin probar en local (stack roto).
 
-- ⬜ Sitios restantes: free-trials, purchase, loading-request, stock-count, import,
-  inventory, invoices, products/stock-actions, alert-actions.
+**Sitios restantes — por complejidad:**
+- SIMPLES (increment/decrement puro, patrón ya probado): `products/stock-actions`
+  (ajuste manual), `alert-actions`.
+- ENREDADOS (mezclan stock con otra lógica → migrar con cuidado, uno a uno):
+  · `purchase-actions` — stock + **CMP** (coste medio ponderado) + lotes FIFO.
+  · `stock-count` — fija cantidades ABSOLUTAS (delta = contado − actual), no suma.
+  · `loading-request` — es una transferencia (2 patas) a la furgoneta.
+  · `import` — alta masiva (N filas), con ubicaciones.
+  · `inventory-actions`, `invoices`.
 
 ---
 
