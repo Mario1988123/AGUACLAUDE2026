@@ -1461,6 +1461,37 @@ export async function reportDamageOrDrilling(input: unknown) {
   revalidatePath(`/instalaciones/${parsed.installation_id}`);
 }
 
+/**
+ * Registra en error_reports un fallo de "bookkeeping" de una instalación que,
+ * POR DISEÑO, NO debe tumbar la finalización (stock / alta de equipo). Convierte
+ * lo que antes era un console.error invisible en un incidente visible y
+ * reconciliable (aparece en el ranking de auto-errores del superadmin), SIN
+ * cambiar el flujo. Nunca lanza (try/catch propio).
+ */
+async function recordInstallDataIssue(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  companyId: string | null,
+  userId: string | null,
+  fingerprint: string,
+  message: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await admin.from("error_reports").insert({
+      company_id: companyId,
+      reported_by: userId,
+      severity: "high",
+      source: "auto_toast",
+      fingerprint, // estable por tipo de fallo → agrupa en el ranking de auto-errores
+      message: message.slice(0, 2000),
+      technical_payload: payload,
+    });
+  } catch (e) {
+    console.error("[recordInstallDataIssue] no se pudo registrar el incidente:", e);
+  }
+}
+
 export async function completeInstallation(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -1717,8 +1748,17 @@ export async function completeInstallation(input: unknown) {
   // ===== Flujo normal: decrementar stock + crear customer_equipment =====
   try {
     await decrementStockForInstallation(parsed.id);
-  } catch {
-    /* no-op: stock no debe tumbar finalización */
+  } catch (e) {
+    // Por diseño el stock NO tumba la finalización, pero registramos el fallo
+    // para poder reconciliarlo (antes era un catch silencioso).
+    await recordInstallDataIssue(
+      admin,
+      session.company_id,
+      session.user_id,
+      "install_stock_decrement_failed",
+      `Fallo al decrementar stock al completar la instalación ${parsed.id}`,
+      { installation_id: parsed.id, error: e instanceof Error ? e.message : String(e) },
+    );
   }
 
   if (i.customer_id) {
@@ -1809,6 +1849,19 @@ export async function completeInstallation(input: unknown) {
         if (created[0]) eqIdByItem.set(it.id, created[0].id);
       } else {
         console.error("[completeInstallation] customer_equipment insert:", ins.error.message);
+        await recordInstallDataIssue(
+          admin,
+          session.company_id,
+          session.user_id,
+          "install_equipment_insert_failed",
+          `Fallo al crear el equipo del cliente al completar la instalación ${parsed.id}`,
+          {
+            installation_id: parsed.id,
+            installation_item_id: it.id,
+            product_id: it.product_id,
+            error: ins.error.message,
+          },
+        );
       }
     }
   }
