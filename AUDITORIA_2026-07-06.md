@@ -25,14 +25,14 @@ con test.
 A1 (tipos + quitar `as any`) **descartado**: los tipos reales rompen el build por
 TS2349 de supabase-js con 176+ tablas; `Database = any` es un workaround deliberado.
 
-**Fase D (tests) — EN CURSO** (commits 30853bd, 26f329e): infraestructura vitest +
-**46 tests** de lógica pura sin BD, todos verdes:
+**Fase D (tests) — EN CURSO** (commits 30853bd, 26f329e, 0396d4b): infraestructura
+vitest + **82 tests** de lógica pura sin BD, todos verdes:
 - `computeSavings` (calc de ahorro), `formatEur`, mapeo de packs `link-items`.
 - `computeVerifactuHash` (golden del formato AEAT), `buildVerifactuQrUrl`.
-- `haversineKm` / `nearestNeighborRoute` (rutas), `computeCycleRange` (ciclos
-  de comisión).
-Pendiente opcional: `validations` (DNI/NIF/IBAN), `computeMaintenanceJobAlerts`,
-y los flujos CON BD (necesitan entorno de test / mocks).
+- `haversineKm` / `nearestNeighborRoute` (rutas), `computeCycleRange` (ciclos).
+- Validaciones ES: DNI/NIE/CIF/IBAN (mod-97)/CP/teléfono/provincias + IBAN parcial.
+Cobertura de lógica pura de alto valor prácticamente completa. Pendiente: flujos
+CON BD (necesitan mocks/entorno) y `computeMaintenanceJobAlerts` (menor).
 
 **Pendiente de mayor calado (requiere DECISIÓN):** §4 atomicidad dinero/stock —
 sin transacciones (doble cobro / stock perdido). Es reescritura de flujos de
