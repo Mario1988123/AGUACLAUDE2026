@@ -198,10 +198,16 @@ evapora stock ni sufre lost updates**.
 3. **D3 — `contract_id`/`lot_id`:** ✅ dados por aplicados (migración
    `20260515100000`); la función los incluye normal.
 
-**Estado (commit de esta tanda):** hechos la migración `20260709120000_adjust_stock_batch.sql`,
-el wrapper `adjust-stock.ts` (+5 tests) y migrado `transferStockAction` con fallback
-al camino clásico si la RPC no está. PENDIENTE por ti: aplicar la migración en un
-BRANCH de Supabase y probarla; luego a prod. Después seguimos con `decrementStock`.
+**Estado:**
+- ✅ Sitio #1 `transferStockAction` — migración `20260709120000_adjust_stock_batch.sql`
+  (APLICADA por el owner) + wrapper `adjust-stock.ts` (+5 tests) + fallback.
+- ✅ Sitio #2 `decrementStock` (instalaciones) — migración
+  `20260709130000_decrement_stock_spread.sql` (**PENDIENTE de aplicar**) + wiring con
+  fallback; lots/movimiento intactos. Incluye D1 (aviso al admin de la empresa).
+- ⬜ PENDIENTE por ti: **aplicar `20260709130000`** al remoto. Y confirmar con una
+  transferencia/instalación real que la RPC va bien (valida el SQL en tu BD).
+- ⬜ Resto de sitios (free-trials, uninstall, purchase, loading-request,
+  stock-count, import, inventory, invoices, products/stock-actions, alert-actions).
 
 ---
 
