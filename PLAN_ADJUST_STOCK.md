@@ -200,14 +200,24 @@ evapora stock ni sufre lost updates**.
 
 **Estado:**
 - ✅ Sitio #1 `transferStockAction` — migración `20260709120000_adjust_stock_batch.sql`
-  (APLICADA por el owner) + wrapper `adjust-stock.ts` (+5 tests) + fallback.
+  (APLICADA) + wrapper `adjust-stock.ts` (+5 tests) + fallback.
 - ✅ Sitio #2 `decrementStock` (instalaciones) — migración
-  `20260709130000_decrement_stock_spread.sql` (**PENDIENTE de aplicar**) + wiring con
-  fallback; lots/movimiento intactos. Incluye D1 (aviso al admin de la empresa).
-- ⬜ PENDIENTE por ti: **aplicar `20260709130000`** al remoto. Y confirmar con una
-  transferencia/instalación real que la RPC va bien (valida el SQL en tu BD).
-- ⬜ Resto de sitios (free-trials, uninstall, purchase, loading-request,
-  stock-count, import, inventory, invoices, products/stock-actions, alert-actions).
+  `20260709130000_decrement_stock_spread.sql` + wiring + D1 (aviso al admin).
+- ✅ Sitio #3 `processUninstallCompletion` (devolución de stock) — usa
+  `adjust_stock_batch`; migración `20260709140000_adjust_stock_batch_reason.sql`
+  amplía la función con reason/purchase_id.
+
+**MIGRACIONES PENDIENTES DE APLICAR (por el owner):**
+- `20260709130000_decrement_stock_spread.sql`
+- `20260709140000_adjust_stock_batch_reason.sql`
+
+**⚠️ CHECKPOINT recomendado:** validar en producción (una transferencia + una
+instalación + una desinstalación reales) que las RPC funcionan, ANTES de migrar el
+resto. Todo el SQL está sin probar en local (stack roto) y estamos replicando el
+patrón; conviene confirmar la base antes de seguir.
+
+- ⬜ Sitios restantes: free-trials, purchase, loading-request, stock-count, import,
+  inventory, invoices, products/stock-actions, alert-actions.
 
 ---
 
