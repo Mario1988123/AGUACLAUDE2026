@@ -34,10 +34,20 @@ vitest + **82 tests** de lógica pura sin BD, todos verdes:
 Cobertura de lógica pura de alto valor prácticamente completa. Pendiente: flujos
 CON BD (necesitan mocks/entorno) y `computeMaintenanceJobAlerts` (menor).
 
-**Pendiente de mayor calado (requiere DECISIÓN):** §4 atomicidad dinero/stock —
-sin transacciones (doble cobro / stock perdido). Es reescritura de flujos de
-dinero → no se aborda en automático; hacer PRIMERO más tests de caracterización y
-luego el refactor a RPC transaccional.
+**§4b (fallos silenciosos) — MITIGADO PARCIAL** (commit 11755f2): en
+`completeInstallation`, el fallo de decremento de stock y el de alta de equipo NO
+tumban la finalización **por diseño** ("stock no debe tumbar finalización" — para
+no bloquear al instalador en campo). No se cambia esa decisión de negocio; lo que
+se corrige es el SILENCIO: ahora ambos catch registran un incidente en
+`error_reports` (severity high, fingerprint por tipo) → visible/reconciliable.
+
+**Pendiente de mayor calado (requiere DECISIÓN):** §4a atomicidad dinero/stock —
+sin transacciones (doble cobro en `post-sign`, stock evaporado en
+`transfer-actions`). Es reescritura de flujos de dinero y, además, un refactor
+all-or-nothing CAMBIARÍA la decisión de "no bloquear al instalador" → decisión de
+negocio. No se aborda en automático; con la red de 82 tests ya es más seguro
+abordarlo guiado, empezando por un `adjustStock()` central (bug replicado en ~20
+sitios).
 
 ---
 
