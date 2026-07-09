@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { adjustStockBatch, isInsufficientStockError } from "./adjust-stock";
 
 interface TransferArgs {
   from_warehouse_id: string;
@@ -30,72 +31,110 @@ export async function transferStockAction(args: TransferArgs): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  // Validar stock en origen (state='new' por defecto)
-  const { data: src } = await admin
-    .from("warehouse_stock")
-    .select("id, quantity")
-    .eq("warehouse_id", args.from_warehouse_id)
-    .eq("product_id", args.product_id)
-    .eq("state", "new")
-    .is("location_id", null)
-    .maybeSingle();
-  const srcRow = src as { id: string; quantity: number } | null;
-  if (!srcRow || srcRow.quantity < args.quantity)
-    throw new Error("Stock insuficiente en almacén origen");
-
-  // Decrementar origen
-  await admin
-    .from("warehouse_stock")
-    .update({ quantity: srcRow.quantity - args.quantity })
-    .eq("id", srcRow.id);
-
-  // Incrementar destino (upsert)
-  const { data: dst } = await admin
-    .from("warehouse_stock")
-    .select("id, quantity")
-    .eq("warehouse_id", args.to_warehouse_id)
-    .eq("product_id", args.product_id)
-    .eq("state", "new")
-    .is("location_id", null)
-    .maybeSingle();
-  const dstRow = dst as { id: string; quantity: number } | null;
-  if (dstRow) {
-    await admin
-      .from("warehouse_stock")
-      .update({ quantity: dstRow.quantity + args.quantity })
-      .eq("id", dstRow.id);
-  } else {
-    await admin.from("warehouse_stock").insert({
-      company_id: session.company_id,
-      warehouse_id: args.to_warehouse_id,
-      product_id: args.product_id,
-      quantity: args.quantity,
-      state: "new",
-    });
+  // Mutación de stock ATÓMICA (adjust_stock_batch): las dos patas — salida del
+  // origen + entrada al destino — se aplican en UNA transacción → sin evaporación
+  // de stock ni lost updates. Ambos almacenes usan la celda location=null (montón
+  // general), igual que hasta ahora. Si la RPC aún no está en la BD (migración sin
+  // aplicar) o falla por un motivo que NO sea de negocio, caemos al camino clásico
+  // → nunca peor que hoy; se auto-mejora en cuanto la migración esté aplicada.
+  let usedAtomic = false;
+  try {
+    await adjustStockBatch(session.company_id, session.user_id, [
+      {
+        warehouse_id: args.from_warehouse_id,
+        product_id: args.product_id,
+        delta: -args.quantity,
+        movement_type: "transfer_out",
+        destination_warehouse_id: args.to_warehouse_id,
+        notes: args.notes ?? null,
+      },
+      {
+        warehouse_id: args.to_warehouse_id,
+        product_id: args.product_id,
+        delta: args.quantity,
+        movement_type: "transfer_in",
+        notes: args.notes ?? null,
+      },
+    ]);
+    usedAtomic = true;
+  } catch (e) {
+    // Stock insuficiente = error de negocio real → NO hacemos fallback.
+    if (isInsufficientStockError(e)) {
+      throw new Error("Stock insuficiente en almacén origen");
+    }
+    // Cualquier otro fallo (RPC ausente, etc.) → camino clásico (legacy).
+    usedAtomic = false;
   }
 
-  // Movimientos
-  await admin.from("stock_movements").insert([
-    {
-      company_id: session.company_id,
-      product_id: args.product_id,
-      warehouse_id: args.from_warehouse_id,
-      destination_warehouse_id: args.to_warehouse_id,
-      movement_type: "transfer_out",
-      quantity: args.quantity,
-      performed_by: session.user_id,
-      notes: args.notes ?? null,
-    },
-    {
-      company_id: session.company_id,
-      product_id: args.product_id,
-      warehouse_id: args.to_warehouse_id,
-      movement_type: "transfer_in",
-      quantity: args.quantity,
-      performed_by: session.user_id,
-      notes: args.notes ?? null,
-    },
-  ]);
+  if (!usedAtomic) {
+    // ---- Camino clásico (legacy, no atómico): solo si la RPC no está disponible ----
+    // Validar stock en origen (state='new' por defecto)
+    const { data: src } = await admin
+      .from("warehouse_stock")
+      .select("id, quantity")
+      .eq("warehouse_id", args.from_warehouse_id)
+      .eq("product_id", args.product_id)
+      .eq("state", "new")
+      .is("location_id", null)
+      .maybeSingle();
+    const srcRow = src as { id: string; quantity: number } | null;
+    if (!srcRow || srcRow.quantity < args.quantity)
+      throw new Error("Stock insuficiente en almacén origen");
+
+    // Decrementar origen
+    await admin
+      .from("warehouse_stock")
+      .update({ quantity: srcRow.quantity - args.quantity })
+      .eq("id", srcRow.id);
+
+    // Incrementar destino (upsert)
+    const { data: dst } = await admin
+      .from("warehouse_stock")
+      .select("id, quantity")
+      .eq("warehouse_id", args.to_warehouse_id)
+      .eq("product_id", args.product_id)
+      .eq("state", "new")
+      .is("location_id", null)
+      .maybeSingle();
+    const dstRow = dst as { id: string; quantity: number } | null;
+    if (dstRow) {
+      await admin
+        .from("warehouse_stock")
+        .update({ quantity: dstRow.quantity + args.quantity })
+        .eq("id", dstRow.id);
+    } else {
+      await admin.from("warehouse_stock").insert({
+        company_id: session.company_id,
+        warehouse_id: args.to_warehouse_id,
+        product_id: args.product_id,
+        quantity: args.quantity,
+        state: "new",
+      });
+    }
+
+    // Movimientos
+    await admin.from("stock_movements").insert([
+      {
+        company_id: session.company_id,
+        product_id: args.product_id,
+        warehouse_id: args.from_warehouse_id,
+        destination_warehouse_id: args.to_warehouse_id,
+        movement_type: "transfer_out",
+        quantity: args.quantity,
+        performed_by: session.user_id,
+        notes: args.notes ?? null,
+      },
+      {
+        company_id: session.company_id,
+        product_id: args.product_id,
+        warehouse_id: args.to_warehouse_id,
+        movement_type: "transfer_in",
+        quantity: args.quantity,
+        performed_by: session.user_id,
+        notes: args.notes ?? null,
+      },
+    ]);
+  }
 
   // Notificar admin
   const { data: admins } = await admin

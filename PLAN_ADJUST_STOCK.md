@@ -187,18 +187,21 @@ Es decir: en la instalación seguimos con "el stock no tumba la finalización" (
 hicimos observable en el commit 11755f2), pero **ahora la mutación en sí ya no
 evapora stock ni sufre lost updates**.
 
-**Decisiones que necesito de ti antes de escribir código de verdad:**
-1. **D1 — Instalación:** ¿confirmas `allow_partial:true` + continuar (comportamiento
-   actual) en vez de bloquear? (recomendado)
-2. **D2 — Multi-ubicación:** hoy `decrementStock` reparte el descuento entre varias
-   filas `new` de distintas `location`. ¿Estandarizamos en `location_id = null`
-   (como ya hace la transferencia) o el batch debe seguir repartiendo por ubicación?
-   (Simplifica mucho estandarizar; hay que confirmar que no rompe la gestión por
-   ubicaciones/furgonetas.)
-3. **D3 — `contract_id`/`lot_id` en el movimiento:** el `stock_movements` base no los
-   tiene (son columnas añadidas después, con código defensivo). La RPC no puede
-   "reintentar sin columna". ¿La damos por aplicadas (están en tu remoto) e
-   incluimos `contract_id`/`lot_id` en la función?
+**Decisiones (CONFIRMADAS 2026-07-09):**
+1. **D1 — Instalación:** ✅ `allow_partial:true` + continuar (no bloquear). El fallo
+   TÉCNICO (no el "falta stock" normal) se registra en `error_reports`
+   (`/superadmin/errores`) y, además, avisará al admin/técnico de la empresa
+   (pendiente de aplicar al migrar `decrementStock`).
+2. **D2 — Multi-ubicación:** ✅ **respetar ubicaciones** (no aplanar a null). La
+   función opera sobre celda concreta; el reparto entre ubicaciones lo arma el
+   wrapper pasando varias celdas en el mismo lote (todas en una transacción).
+3. **D3 — `contract_id`/`lot_id`:** ✅ dados por aplicados (migración
+   `20260515100000`); la función los incluye normal.
+
+**Estado (commit de esta tanda):** hechos la migración `20260709120000_adjust_stock_batch.sql`,
+el wrapper `adjust-stock.ts` (+5 tests) y migrado `transferStockAction` con fallback
+al camino clásico si la RPC no está. PENDIENTE por ti: aplicar la migración en un
+BRANCH de Supabase y probarla; luego a prod. Después seguimos con `decrementStock`.
 
 ---
 
