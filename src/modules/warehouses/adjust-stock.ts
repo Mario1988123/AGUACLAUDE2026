@@ -33,6 +33,8 @@ export interface StockAdjustment {
   loading_request_id?: string | null;
   contract_id?: string | null;
   lot_id?: string | null;
+  purchase_id?: string | null;
+  reason?: string | null;
   notes?: string | null;
   /** En decrementos: si no cabe, coge lo disponible en vez de fallar. */
   allow_partial?: boolean;

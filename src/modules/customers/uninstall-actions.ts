@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
+import { adjustStockBatch } from "@/modules/warehouses/adjust-stock";
 
 /**
  * Destino de cada equipo retirado:
@@ -380,45 +381,79 @@ export async function processUninstallCompletion(
   }
   let moved = 0;
 
-  for (const it of list) {
-    // Sumar stock en destino con el state acordado (location_id = null)
-    const { data: existing } = await admin
-      .from("warehouse_stock")
-      .select("id, quantity")
-      .eq("company_id", i.company_id)
-      .eq("warehouse_id", destWarehouseId)
-      .eq("product_id", it.product_id)
-      .eq("state", stateOnReturn)
-      .is("location_id", null)
-      .maybeSingle();
-    const row = existing as { id: string; quantity: number } | null;
-    if (row) {
-      await admin
-        .from("warehouse_stock")
-        .update({ quantity: row.quantity + it.quantity })
-        .eq("id", row.id);
-    } else {
-      await admin.from("warehouse_stock").insert({
-        company_id: i.company_id,
-        warehouse_id: destWarehouseId,
-        product_id: it.product_id,
-        quantity: it.quantity,
-        state: stateOnReturn,
-      });
+  if (list.length > 0 && destWarehouseId) {
+    // Reincorporación de stock ATÓMICA (adjust_stock_batch): todas las entradas se
+    // aplican en UNA transacción → ya no queda el equipo desinstalado con el stock
+    // a medio devolver si falla un paso intermedio. Si la RPC no está aplicada o
+    // falla, camino clásico → nunca peor que hoy.
+    let usedAtomic = false;
+    try {
+      await adjustStockBatch(
+        i.company_id,
+        null,
+        list.map((it) => ({
+          warehouse_id: destWarehouseId,
+          product_id: it.product_id,
+          state: stateOnReturn,
+          delta: it.quantity,
+          movement_type: "return",
+          installation_id: i.id,
+          notes: it.notes ?? null,
+          reason: `Desinstalación cliente — entra como ${stateOnReturn}`,
+        })),
+      );
+      moved = list.reduce((s, it) => s + it.quantity, 0);
+      usedAtomic = true;
+    } catch (e) {
+      console.error(
+        "[processUninstallCompletion] adjust_stock_batch no disponible, fallback:",
+        e instanceof Error ? e.message : e,
+      );
     }
-    // Movement type return + reason "uninstall"
-    await admin.from("stock_movements").insert({
-      company_id: i.company_id,
-      product_id: it.product_id,
-      warehouse_id: destWarehouseId,
-      movement_type: "return",
-      quantity: it.quantity,
-      state_after: stateOnReturn,
-      installation_id: i.id,
-      notes: it.notes ?? null,
-      reason: `Desinstalación cliente — entra como ${stateOnReturn}`,
-    });
-    moved += it.quantity;
+
+    if (!usedAtomic) {
+      // ---- Camino clásico (no atómico): solo si la RPC no está disponible ----
+      for (const it of list) {
+        // Sumar stock en destino con el state acordado (location_id = null)
+        const { data: existing } = await admin
+          .from("warehouse_stock")
+          .select("id, quantity")
+          .eq("company_id", i.company_id)
+          .eq("warehouse_id", destWarehouseId)
+          .eq("product_id", it.product_id)
+          .eq("state", stateOnReturn)
+          .is("location_id", null)
+          .maybeSingle();
+        const row = existing as { id: string; quantity: number } | null;
+        if (row) {
+          await admin
+            .from("warehouse_stock")
+            .update({ quantity: row.quantity + it.quantity })
+            .eq("id", row.id);
+        } else {
+          await admin.from("warehouse_stock").insert({
+            company_id: i.company_id,
+            warehouse_id: destWarehouseId,
+            product_id: it.product_id,
+            quantity: it.quantity,
+            state: stateOnReturn,
+          });
+        }
+        // Movement type return + reason "uninstall"
+        await admin.from("stock_movements").insert({
+          company_id: i.company_id,
+          product_id: it.product_id,
+          warehouse_id: destWarehouseId,
+          movement_type: "return",
+          quantity: it.quantity,
+          state_after: stateOnReturn,
+          installation_id: i.id,
+          notes: it.notes ?? null,
+          reason: `Desinstalación cliente — entra como ${stateOnReturn}`,
+        });
+        moved += it.quantity;
+      }
+    }
   }
 
   // Desactivar equipos del cliente referenciados en notes
