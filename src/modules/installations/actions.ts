@@ -1490,6 +1490,28 @@ async function recordInstallDataIssue(
   } catch (e) {
     console.error("[recordInstallDataIssue] no se pudo registrar el incidente:", e);
   }
+
+  // D1 (audit 2026-07-09): además de error_reports (visible al superadmin en
+  // /superadmin/errores), avisar al admin/técnico de la EMPRESA para que
+  // reconcilien su inventario. Fail-soft: nunca tumba la finalización.
+  if (companyId) {
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      const installId =
+        typeof payload.installation_id === "string" ? payload.installation_id : null;
+      await notifyByRoles(companyId, ["company_admin", "technical_director"], {
+        kind: "installation.data_issue",
+        severity: "warning",
+        title: "Descuadre al completar una instalación",
+        body: message.slice(0, 300),
+        subject_type: "installation",
+        subject_id: installId,
+        action_url: installId ? `/instalaciones/${installId}` : null,
+      });
+    } catch (e) {
+      console.error("[recordInstallDataIssue] no se pudo notificar al admin:", e);
+    }
+  }
 }
 
 export async function completeInstallation(input: unknown) {
