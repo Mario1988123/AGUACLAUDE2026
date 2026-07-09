@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
+import { adjustStockBatch } from "@/modules/warehouses/adjust-stock";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 
@@ -1294,41 +1295,72 @@ export async function markReturnedAction(id: string) {
       .from("free_trial_items")
       .select("product_id, quantity")
       .eq("free_trial_id", id);
-    for (const it of ((items ?? []) as Array<{ product_id: string; quantity: number }>)) {
-      const { data: existing } = await admin
-        .from("warehouse_stock")
-        .select("id, quantity")
-        .eq("warehouse_id", warehouseId)
-        .eq("product_id", it.product_id)
-        .eq("state", "used")
-        .is("location_id", null)
-        .maybeSingle();
-      const ex = existing as { id: string; quantity: number } | null;
-      if (ex) {
-        await admin
+    const itemsList = (items ?? []) as Array<{ product_id: string; quantity: number }>;
+    // Devolución de stock ATÓMICA (adjust_stock_batch): todas las líneas en UNA
+    // transacción. Si la RPC no está aplicada o falla, camino clásico.
+    let usedAtomic = false;
+    try {
+      if (itemsList.length > 0) {
+        await adjustStockBatch(
+          session.company_id,
+          session.user_id,
+          itemsList.map((it) => ({
+            warehouse_id: warehouseId,
+            product_id: it.product_id,
+            state: "used",
+            delta: it.quantity,
+            movement_type: "return",
+            free_trial_id: id,
+            notes: "Devolución prueba gratuita",
+          })),
+        );
+      }
+      usedAtomic = true;
+    } catch (e) {
+      console.error(
+        "[markReturnedAction] adjust_stock_batch no disponible, fallback:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+
+    if (!usedAtomic) {
+      // ---- Camino clásico (no atómico): solo si la RPC no está disponible ----
+      for (const it of itemsList) {
+        const { data: existing } = await admin
           .from("warehouse_stock")
-          .update({ quantity: ex.quantity + it.quantity, updated_at: new Date().toISOString() })
-          .eq("id", ex.id);
-      } else {
-        await admin.from("warehouse_stock").insert({
-          warehouse_id: warehouseId,
-          product_id: it.product_id,
+          .select("id, quantity")
+          .eq("warehouse_id", warehouseId)
+          .eq("product_id", it.product_id)
+          .eq("state", "used")
+          .is("location_id", null)
+          .maybeSingle();
+        const ex = existing as { id: string; quantity: number } | null;
+        if (ex) {
+          await admin
+            .from("warehouse_stock")
+            .update({ quantity: ex.quantity + it.quantity, updated_at: new Date().toISOString() })
+            .eq("id", ex.id);
+        } else {
+          await admin.from("warehouse_stock").insert({
+            warehouse_id: warehouseId,
+            product_id: it.product_id,
+            company_id: session.company_id,
+            quantity: it.quantity,
+            state: "used",
+          });
+        }
+        await admin.from("stock_movements").insert({
           company_id: session.company_id,
+          product_id: it.product_id,
+          warehouse_id: warehouseId,
+          movement_type: "return",
           quantity: it.quantity,
-          state: "used",
+          free_trial_id: id,
+          performed_by: session.user_id,
+          notes: "Devolución prueba gratuita",
+          state_after: "used",
         });
       }
-      await admin.from("stock_movements").insert({
-        company_id: session.company_id,
-        product_id: it.product_id,
-        warehouse_id: warehouseId,
-        movement_type: "return",
-        quantity: it.quantity,
-        free_trial_id: id,
-        performed_by: session.user_id,
-        notes: "Devolución prueba gratuita",
-        state_after: "used",
-      });
     }
   }
 
