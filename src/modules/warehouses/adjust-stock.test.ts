@@ -10,6 +10,7 @@ vi.mock("@/shared/lib/supabase/admin", () => ({
 import {
   adjustStockBatch,
   isInsufficientStockError,
+  isFunctionMissingError,
   type StockAdjustment,
 } from "./adjust-stock";
 
@@ -53,5 +54,22 @@ describe("isInsufficientStockError", () => {
   it("no confunde otros errores (p.ej. RPC ausente)", () => {
     expect(isInsufficientStockError(new Error("function adjust_stock_batch does not exist"))).toBe(false);
     expect(isInsufficientStockError(null)).toBe(false);
+  });
+});
+
+describe("isFunctionMissingError (C3: solo esto habilita el fallback)", () => {
+  it("detecta código PostgREST/Postgres de función inexistente", () => {
+    expect(isFunctionMissingError({ code: "PGRST202", message: "..." })).toBe(true);
+    expect(isFunctionMissingError({ code: "42883", message: "..." })).toBe(true);
+  });
+  it("detecta por mensaje (schema cache / does not exist)", () => {
+    expect(isFunctionMissingError(new Error("Could not find the function ..."))).toBe(true);
+    expect(isFunctionMissingError(new Error("... not found in schema cache"))).toBe(true);
+  });
+  it("NO trata errores de transporte/negocio como función inexistente", () => {
+    expect(isFunctionMissingError({ code: "57014", message: "canceling statement due to timeout" })).toBe(false);
+    expect(isFunctionMissingError(new Error("INSUFFICIENT_STOCK: ..."))).toBe(false);
+    expect(isFunctionMissingError(new Error("fetch failed"))).toBe(false);
+    expect(isFunctionMissingError(null)).toBe(false);
   });
 });

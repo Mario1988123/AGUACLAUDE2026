@@ -54,6 +54,19 @@ export function isInsufficientStockError(e: unknown): boolean {
 }
 
 /**
+ * La RPC NO existe todavía (migración sin aplicar). SOLO en este caso es seguro
+ * hacer fallback al camino clásico. Cualquier OTRO error (transporte, timeout,
+ * reset de conexión) NO debe reintentar por legacy: la RPC pudo haber commiteado
+ * y reejecutar el camino no atómico DUPLICARÍA el stock (auditoría Fable C3).
+ */
+export function isFunctionMissingError(e: unknown): boolean {
+  const err = e as { code?: string; message?: string } | null;
+  if (err?.code === "PGRST202" || err?.code === "42883") return true;
+  const msg = (err?.message ?? "").toLowerCase();
+  return /could not find the function|does not exist|schema cache/.test(msg);
+}
+
+/**
  * Aplica N ajustes de stock de forma ATÓMICA. Lanza si la operación no cabe
  * (INSUFFICIENT_STOCK, en ajustes estrictos) o si la RPC no está disponible
  * (migración sin aplicar) — el llamador decide entre propagar o hacer fallback.
@@ -70,6 +83,14 @@ export async function adjustStockBatch(
     p_performed_by: performedBy,
     p_adjustments: adjustments,
   });
-  if (error) throw new Error(error.message ?? "adjust_stock_batch error");
+  if (error) {
+    // Preservamos el code de PostgREST/Postgres para poder distinguir
+    // "función inexistente" (fallback seguro) de un error real (no reintentar).
+    const err = new Error(error.message ?? "adjust_stock_batch error") as Error & {
+      code?: string;
+    };
+    err.code = error.code;
+    throw err;
+  }
   return (data ?? []) as StockAdjustmentResult[];
 }

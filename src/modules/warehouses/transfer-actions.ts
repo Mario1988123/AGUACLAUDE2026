@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { adjustStockBatch, isInsufficientStockError } from "./adjust-stock";
+import { adjustStockBatch, isInsufficientStockError, isFunctionMissingError } from "./adjust-stock";
 
 interface TransferArgs {
   from_warehouse_id: string;
@@ -62,7 +62,10 @@ export async function transferStockAction(args: TransferArgs): Promise<void> {
     if (isInsufficientStockError(e)) {
       throw new Error("Stock insuficiente en almacén origen");
     }
-    // Cualquier otro fallo (RPC ausente, etc.) → camino clásico (legacy).
+    // Solo caemos al camino clásico si la RPC NO existe (migración sin aplicar).
+    // Cualquier otro error (transporte/timeout): la RPC pudo haber commiteado →
+    // NO reintentamos por legacy (duplicaría la transferencia), propagamos.
+    if (!isFunctionMissingError(e)) throw e instanceof Error ? e : new Error(String(e));
     usedAtomic = false;
   }
 

@@ -6,7 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
-import { adjustStockBatch } from "@/modules/warehouses/adjust-stock";
+import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 
@@ -1317,8 +1317,11 @@ export async function markReturnedAction(id: string) {
       }
       usedAtomic = true;
     } catch (e) {
+      // Solo fallback si la RPC no existe; otro error → propagar (evita doble
+      // abono de stock). audit Fable C3.
+      if (!isFunctionMissingError(e)) throw e instanceof Error ? e : new Error(String(e));
       console.error(
-        "[markReturnedAction] adjust_stock_batch no disponible, fallback:",
+        "[markReturnedAction] adjust_stock_batch no aplicada, fallback:",
         e instanceof Error ? e.message : e,
       );
     }

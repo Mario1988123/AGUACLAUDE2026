@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { isFunctionMissingError } from "./adjust-stock";
 
 interface DecrementInput {
   company_id: string;
@@ -47,12 +48,19 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
       p_state: "new",
       p_quantity: input.quantity,
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      const err = new Error(error.message) as Error & { code?: string };
+      err.code = error.code;
+      throw err;
+    }
     moved = typeof data === "number" ? data : Number(data ?? 0);
     usedAtomic = true;
   } catch (e) {
+    // Solo fallback si la RPC no existe; otro error (transporte) → propagar para
+    // NO doble-descontar (la RPC pudo haber commiteado). audit Fable C3.
+    if (!isFunctionMissingError(e)) throw e instanceof Error ? e : new Error(String(e));
     console.error(
-      "[decrementStock] RPC decrement_stock_spread no disponible, fallback:",
+      "[decrementStock] RPC decrement_stock_spread no aplicada, fallback:",
       e instanceof Error ? e.message : e,
     );
   }
