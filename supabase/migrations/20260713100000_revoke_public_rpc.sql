@@ -14,6 +14,11 @@
 --   verifactu-actions.ts:660. (La app ya valida la serie por company_id antes.)
 -- · autoclose_stale_punches(): cierra fichajes; la llaman solo crons/admin.
 --   Higiene (evita que un authenticated dispare el cierre masivo).
+--   ⚠️ Verificado 2026-07-13: el wrapper public de la migración 20260522110000
+--   NUNCA llegó al remoto (solo existe app.autoclose_stale_punches, y PostgREST
+--   solo expone `public`), así que el autocierre vía rpc() llevaba fallando en
+--   silencio. Aquí se CREA el wrapper y se deja solo para service_role: arregla
+--   el cron y cierra la higiene de golpe.
 --
 -- NO se tocan los seed_* : seed_default_clauses se llama con cliente RLS
 -- (contracts/actions.ts:331) y revocarlo lo rompería; además son de bajo impacto.
@@ -22,6 +27,14 @@
 revoke execute on function public.allocate_next_invoice_number(uuid) from public, anon, authenticated;
 grant  execute on function public.allocate_next_invoice_number(uuid) to service_role;
 
+create or replace function public.autoclose_stale_punches()
+returns integer
+language sql
+security definer
+set search_path = public, app
+as $$
+  select app.autoclose_stale_punches();
+$$;
 revoke execute on function public.autoclose_stale_punches() from public, anon, authenticated;
 grant  execute on function public.autoclose_stale_punches() to service_role;
 
