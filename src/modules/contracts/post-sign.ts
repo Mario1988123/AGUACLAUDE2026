@@ -82,27 +82,42 @@ export async function runPostSignSideEffects(opts: {
       wallet_entry_id: string | null;
       contract_id: string;
     }>;
+    const { findLiveWalletEntryForPayment } = await import(
+      "@/modules/wallet/entry-for-payment"
+    );
     for (const p of list) {
-      const { data: created } = await admin
-        .from("wallet_entries")
-        .insert({
-          company_id: companyId,
-          contract_id: p.contract_id,
-          contract_payment_id: p.id,
-          customer_id: contractCustomerId,
-          concept: p.concept,
-          amount_cents: p.amount_cents,
-          method: p.method,
-          status: "pending",
-        })
-        .select("id")
-        .single();
-      if (created) {
-        await admin
-          .from("contract_payments")
-          .update({ wallet_entry_id: (created as { id: string }).id })
-          .eq("id", p.id);
+      // Idempotencia (auditoría doble cobro): si una ejecución anterior insertó
+      // la entry pero falló al enlazarla, reutilizamos esa entry y reparamos el
+      // enlace en vez de duplicar el cobro.
+      let entryId = await findLiveWalletEntryForPayment(admin, companyId, p.id);
+      if (!entryId) {
+        const { data: created, error: insErr } = await admin
+          .from("wallet_entries")
+          .insert({
+            company_id: companyId,
+            contract_id: p.contract_id,
+            contract_payment_id: p.id,
+            customer_id: contractCustomerId,
+            concept: p.concept,
+            amount_cents: p.amount_cents,
+            method: p.method,
+            status: "pending",
+          })
+          .select("id")
+          .single();
+        if (insErr || !created) {
+          console.error("[post-sign] wallet insert:", insErr?.message);
+          continue;
+        }
+        entryId = (created as { id: string }).id;
         walletCreated++;
+      }
+      const { error: linkErr } = await admin
+        .from("contract_payments")
+        .update({ wallet_entry_id: entryId })
+        .eq("id", p.id);
+      if (linkErr) {
+        console.error("[post-sign] wallet link:", linkErr.message);
       }
     }
   } catch (e) {

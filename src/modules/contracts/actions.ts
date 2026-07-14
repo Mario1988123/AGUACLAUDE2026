@@ -941,30 +941,43 @@ export async function markContractSigned(id: string) {
     contract_id: string;
   };
   const list = (payments ?? []) as CP[];
+  const { findLiveWalletEntryForPayment } = await import(
+    "@/modules/wallet/entry-for-payment"
+  );
   for (const p of list) {
-    const { data: created } = await supabase
-      .from("wallet_entries")
-      .insert({
-        company_id: session.company_id!,
-        contract_id: p.contract_id,
-        contract_payment_id: p.id,
-        // Bug 2026-05-25: faltaba customer_id → en /wallet salía "—"
-        // en columna Cliente para los pagos creados al firmar el
-        // contrato (no cuando el comercial usaba "Cobrar" después).
-        customer_id: contractCustomerId,
-        concept: p.concept,
-        amount_cents: p.amount_cents,
-        method: p.method,
-        status: "pending",
-      })
-      .select("id")
-      .single();
-    if (created) {
-      await supabase
-        .from("contract_payments")
-        .update({ wallet_entry_id: (created as { id: string }).id })
-        .eq("id", p.id);
+    // Idempotencia (auditoría doble cobro): si una ejecución anterior insertó
+    // la entry pero falló al enlazarla, reutilizamos esa entry y reparamos el
+    // enlace en vez de duplicar el cobro.
+    let entryId = await findLiveWalletEntryForPayment(
+      supabase,
+      session.company_id!,
+      p.id,
+    );
+    if (!entryId) {
+      const { data: created } = await supabase
+        .from("wallet_entries")
+        .insert({
+          company_id: session.company_id!,
+          contract_id: p.contract_id,
+          contract_payment_id: p.id,
+          // Bug 2026-05-25: faltaba customer_id → en /wallet salía "—"
+          // en columna Cliente para los pagos creados al firmar el
+          // contrato (no cuando el comercial usaba "Cobrar" después).
+          customer_id: contractCustomerId,
+          concept: p.concept,
+          amount_cents: p.amount_cents,
+          method: p.method,
+          status: "pending",
+        })
+        .select("id")
+        .single();
+      if (!created) continue;
+      entryId = (created as { id: string }).id;
     }
+    await supabase
+      .from("contract_payments")
+      .update({ wallet_entry_id: entryId })
+      .eq("id", p.id);
   }
 
   // Generar mantenimientos automáticos según frecuencia del contrato.
@@ -1957,6 +1970,19 @@ export async function collectContractPaymentAction(
   const walletStatus = effectiveMethod === "cash" ? "pending_settlement" : "collected";
 
   let walletEntryId = p.wallet_entry_id;
+  if (!walletEntryId) {
+    // Idempotencia (auditoría doble cobro): puede existir una entry creada al
+    // firmar cuyo enlace a contract_payments falló — reutilizarla en vez de
+    // insertar una segunda (el cpUpdates de abajo repara el enlace).
+    const { findLiveWalletEntryForPayment } = await import(
+      "@/modules/wallet/entry-for-payment"
+    );
+    walletEntryId = await findLiveWalletEntryForPayment(
+      admin,
+      session.company_id!,
+      p.id,
+    );
+  }
   if (walletEntryId) {
     await admin
       .from("wallet_entries")
