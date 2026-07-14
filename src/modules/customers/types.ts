@@ -32,6 +32,9 @@ export interface CustomerListItem {
 export interface CustomerDetail {
   id: string;
   party_kind: "individual" | "company";
+  /** Solo aplica si party_kind=company (autónomo: tributa como persona
+   *  física pero se trata como empresa a efectos de precio/IVA). */
+  is_autonomo?: boolean;
   /** Nº de cliente del sistema antiguo (importación). */
   external_code?: string | null;
   legal_name: string | null;

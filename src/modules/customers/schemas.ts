@@ -75,3 +75,33 @@ export const customerUpdateSchema = z
   });
 
 export type CustomerUpdateInput = z.infer<typeof customerUpdateSchema>;
+
+/**
+ * Schema para CONVERTIR un cliente particular en autónomo o empresa
+ * (o un autónomo en empresa). Transición one-way con acción dedicada —
+ * updateCustomerAction sigue sin aceptar party_kind a propósito.
+ */
+export const customerConvertSchema = z
+  .object({
+    mode: z.enum(["autonomo", "empresa"]),
+    /** Solo mode=empresa: razón social nueva (obligatoria). */
+    legal_name: z.string().optional().default(""),
+    trade_name: z.string().optional().default(""),
+    /** Solo mode=empresa: CIF nuevo (obligatorio). Aviso de formato en
+     *  TaxIdInput pero NO se bloquea (política actual: admin responsable). */
+    tax_id: z.string().optional().default(""),
+    /** Solo mode=empresa: persona de contacto. Vacío = se conserva el
+     *  titular actual como contacto (first_name/last_name de la fila). */
+    contact_first_name: z.string().optional().default(""),
+    contact_last_name: z.string().optional().default(""),
+  })
+  .refine((v) => v.mode !== "empresa" || Boolean(v.legal_name?.trim()), {
+    message: "La razón social es obligatoria",
+    path: ["legal_name"],
+  })
+  .refine((v) => v.mode !== "empresa" || Boolean(v.tax_id?.trim()), {
+    message: "El CIF es obligatorio",
+    path: ["tax_id"],
+  });
+
+export type CustomerConvertInput = z.infer<typeof customerConvertSchema>;

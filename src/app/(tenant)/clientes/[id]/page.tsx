@@ -29,6 +29,7 @@ import { CustomerContractsCard } from "@/modules/customers/contracts-card";
 import { CustomerInstallationsCard } from "@/modules/customers/installations-card";
 import { CustomerContactButtons } from "@/modules/customers/contact-buttons";
 import { EditCustomerDataButton } from "@/modules/customers/edit-data-button";
+import { ConvertToCompanyButton } from "@/modules/customers/convert-to-company-button";
 import { FromProposalBanner } from "@/modules/customers/from-proposal-banner";
 import { Timeline } from "@/modules/events/timeline";
 import { StreetViewCard } from "@/shared/components/street-view-card";
@@ -396,6 +397,20 @@ export default async function CustomerDetailPage({
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
               <CardTitle>Datos</CardTitle>
+              <div className="flex flex-wrap items-center gap-2">
+              {isAdmin &&
+                (customer.party_kind === "individual" || customer.is_autonomo) && (
+                  <ConvertToCompanyButton
+                    customerId={id}
+                    current={{
+                      party_kind: customer.party_kind,
+                      is_autonomo: Boolean(customer.is_autonomo),
+                      first_name: customer.first_name,
+                      last_name: customer.last_name,
+                      tax_id: customer.tax_id,
+                    }}
+                  />
+                )}
               <EditCustomerDataButton
                 customerId={id}
                 initial={{
@@ -411,10 +426,20 @@ export default async function CustomerDetailPage({
                   notes: customer.notes,
                 }}
               />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <Row label="Tipo" value={customer.party_kind === "company" ? "Empresa" : "Particular"} />
+            <Row
+              label="Tipo"
+              value={
+                customer.party_kind === "company"
+                  ? customer.is_autonomo
+                    ? "Autónomo"
+                    : "Empresa"
+                  : "Particular"
+              }
+            />
             {customer.party_kind === "company" ? (
               <>
                 <Row label="Razón social" value={customer.legal_name} />
