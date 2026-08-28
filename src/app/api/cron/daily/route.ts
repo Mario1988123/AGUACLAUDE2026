@@ -7,7 +7,7 @@ import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * Cron diario (Vercel Cron). Procesa para todas las empresas activas:

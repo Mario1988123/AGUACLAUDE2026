@@ -3,10 +3,19 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "framework": "nextjs",
+  "regions": ["cdg1"],
   "crons": [
     {
       "path": "/api/cron/daily",
       "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/hourly",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/verifactu-send",
+      "schedule": "0,15,30,45 * * * *"
     },
     {
       "path": "/api/cron/boe-check",

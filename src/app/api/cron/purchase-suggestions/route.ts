@@ -5,7 +5,7 @@ import { recomputeSuggestionsForCompany } from "@/modules/warehouses/purchase-su
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * Cron diario a las 06:00 (vercel.json). Para cada empresa con módulo
