@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/shared/ui/badge";
 import { CustomerBulkToolbar } from "./bulk-toolbar";
 import type { CustomerListItem } from "./types";
+import { buildMapsSearchUrl } from "@/shared/lib/maps/maps-url";
 
 interface Props {
   customers: CustomerListItem[];
@@ -24,16 +25,16 @@ interface Props {
 }
 
 function buildMapsUrl(c: CustomerListItem): string | null {
-  if (c.address_lat != null && c.address_lng != null) {
-    return `https://www.google.com/maps/search/?api=1&query=${c.address_lat},${c.address_lng}`;
-  }
-  if (c.address_city) {
-    const q = [c.address_street, c.address_city, c.address_province, "España"]
-      .filter(Boolean)
-      .join(", ");
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
-  }
-  return null;
+  // Antes exigía address_city: un cliente con calle pero sin población se
+  // quedaba SIN botón de Maps. Ahora basta con cualquier parte de la
+  // dirección (queja del equipo comercial, 2026-08-28).
+  return buildMapsSearchUrl({
+    lat: c.address_lat,
+    lng: c.address_lng,
+    street: c.address_street,
+    city: c.address_city,
+    province: c.address_province,
+  });
 }
 
 const PLAN_LABEL: Record<string, string> = {

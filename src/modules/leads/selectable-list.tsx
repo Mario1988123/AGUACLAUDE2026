@@ -23,6 +23,7 @@ import { Button } from "@/shared/ui/button";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
 import { deleteLeadSafeAction, markLeadAsLostSafeAction } from "./actions";
+import { buildMapsSearchUrl } from "@/shared/lib/maps/maps-url";
 import type { LeadListItem } from "./types";
 
 const LEAD_TONE: Record<
@@ -204,16 +205,13 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
           </li>
         ) : (
           visible.map((l) => {
-            const mapsUrl =
-              l.address_lat != null && l.address_lng != null
-                ? `https://www.google.com/maps/search/?api=1&query=${l.address_lat},${l.address_lng}`
-                : l.address_city
-                  ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                      [l.address_street, l.address_city, l.address_province, "España"]
-                        .filter(Boolean)
-                        .join(", "),
-                    )}`
-                  : null;
+            const mapsUrl = buildMapsSearchUrl({
+                  lat: l.address_lat,
+                  lng: l.address_lng,
+                  street: l.address_street,
+                  city: l.address_city,
+                  province: l.address_province,
+                });
             const isCompany = l.party_kind === "company";
             const isAutonomo = isCompany && Boolean(l.is_autonomo);
             const KindIcon = isAutonomo ? IdCard : isCompany ? Briefcase : User;
@@ -396,21 +394,13 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
               </tr>
             ) : (
               visible.map((l) => {
-                const mapsUrl =
-                  l.address_lat != null && l.address_lng != null
-                    ? `https://www.google.com/maps/search/?api=1&query=${l.address_lat},${l.address_lng}`
-                    : l.address_city
-                      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                          [
-                            l.address_street,
-                            l.address_city,
-                            l.address_province,
-                            "España",
-                          ]
-                            .filter(Boolean)
-                            .join(", "),
-                        )}`
-                      : null;
+                const mapsUrl = buildMapsSearchUrl({
+                  lat: l.address_lat,
+                  lng: l.address_lng,
+                  street: l.address_street,
+                  city: l.address_city,
+                  province: l.address_province,
+                });
                 const isCompany = l.party_kind === "company";
                 const isAutonomo = isCompany && Boolean(l.is_autonomo);
                 const kindLabel = isAutonomo

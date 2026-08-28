@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { MapPin, Pencil, Trash2, Plus, Star, Package } from "lucide-react";
+import { MapPin, Navigation, Pencil, Trash2, Plus, Star, Package } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
@@ -10,6 +10,7 @@ import { useConfirm } from "@/shared/components/confirm-dialog";
 import { AddressForm } from "./address-form";
 import { deleteAddressSafeAction, type AddressRow } from "./actions";
 import { KIND_LABEL, STREET_TYPE_LABEL } from "./schemas";
+import { buildMapsDirectionsUrl } from "@/shared/lib/maps/maps-url";
 
 interface Props {
   customerId?: string;
@@ -139,6 +140,34 @@ export function AddressList({
               )}
             </div>
             <div className="flex shrink-0 gap-1.5">
+              {(() => {
+                // Botón "Cómo llegar": abre Google Maps con la ruta hasta la
+                // dirección. Faltaba en la ficha de cliente/lead — el equipo
+                // comercial sólo lo tenía en el listado (2026-08-28).
+                const mapsUrl = buildMapsDirectionsUrl({
+                  lat: a.latitude,
+                  lng: a.longitude,
+                  street: a.street,
+                  street_number: a.street_number,
+                  postal_code: a.postal_code,
+                  city: a.city,
+                  province: a.province,
+                });
+                if (!mapsUrl) return null;
+                return (
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Cómo llegar"
+                    title="Cómo llegar (Google Maps)"
+                  >
+                    <a href={mapsUrl} target="_blank" rel="noopener noreferrer">
+                      <Navigation className="h-4 w-4 text-primary" />
+                    </a>
+                  </Button>
+                );
+              })()}
               <Button variant="ghost" size="icon" onClick={() => setEditing(a)} aria-label="Editar">
                 <Pencil className="h-4 w-4" />
               </Button>

@@ -105,7 +105,7 @@ export async function listCustomers(
   }
   const { data, error } = res;
   if (error) throw error;
-  const baseRows = (data as Array<{
+  let baseRows = (data as Array<{
     id: string;
     party_kind: "individual" | "company";
     is_autonomo?: boolean | null;
@@ -119,6 +119,61 @@ export async function listCustomers(
     created_at: string;
     assigned_user_id?: string | null;
   }>);
+
+  // VENTANA DE RETENCIÓN — arreglo 2026-08-28.
+  // applyScope añade los clientes vendidos recientemente con `.or(id.in.(...))`,
+  // pero esta query va por el cliente RLS y la policy customers_select_by_scope
+  // sólo concede a un sales_rep `assigned_user_id = auth.uid()`. Resultado: la
+  // retención que configura el admin NO surtía efecto en el listado (el
+  // comercial dejaba de ver al cliente en cuanto se le reasignaba), aunque la
+  // ficha sí la respeta vía hasRecentSaleForCustomer. Los releemos con admin
+  // filtrando por empresa: el acceso ya está justificado (son clientes que
+  // ESTE comercial vendió dentro de la ventana configurada).
+  if (retentionIds.length > 0 && session.company_id) {
+    const present = new Set(baseRows.map((r) => r.id));
+    const missing = retentionIds.filter((x) => !present.has(x));
+    if (missing.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const admin = createAdminClient() as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const extra: any[] = [];
+      for (let i = 0; i < missing.length; i += 150) {
+        const chunk = missing.slice(i, i + 150);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const build = (sel: string): any => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let aq: any = admin
+            .from("customers")
+            .select(sel)
+            .eq("company_id", session.company_id)
+            .in("id", chunk)
+            .is("deleted_at", null);
+          if (q) {
+            const c = q.replace(/[%_]/g, "");
+            aq = aq.or(
+              `legal_name.ilike.%${c}%,trade_name.ilike.%${c}%,first_name.ilike.%${c}%,last_name.ilike.%${c}%,email.ilike.%${c}%,phone_primary.ilike.%${c}%`,
+            );
+          }
+          return aq;
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let r: any = await build(SELECT_FULL);
+        if (r.error && /is_autonomo|schema cache|Could not find/i.test(r.error.message ?? "")) {
+          r = await build(SELECT_LEGACY);
+        }
+        if (r.error) {
+          console.error("[listCustomers] retención:", r.error.message);
+          continue;
+        }
+        if (r.data) extra.push(...r.data);
+      }
+      if (extra.length > 0) {
+        baseRows = [...baseRows, ...extra].sort((a, b) =>
+          (b.created_at ?? "").localeCompare(a.created_at ?? ""),
+        );
+      }
+    }
+  }
 
   // Cargar equipos instalados (sólo activos) en paralelo a direcciones
   const equipmentMap = new Map<
@@ -158,6 +213,8 @@ export async function listCustomers(
       idChunks.push(ids.slice(i, i + ID_CHUNK));
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminRead = createAdminClient() as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const gather = async (build: (c: string[]) => any): Promise<any[]> => {
       const parts = await Promise.all(idChunks.map((c) => build(c)));
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,15 +224,30 @@ export async function listCustomers(
     };
     const [addrsData, equipData, overdueMaintData, openIncidentsData, contractsData] =
       await Promise.all([
-        gather((c) =>
-          supabase
+        // Direcciones: con admin + filtro de empresa (NO con el cliente RLS).
+        // La policy addresses_select_inherit resuelve la visibilidad con un
+        // EXISTS sobre `customers`, que para un sales_rep está limitado a
+        // assigned_user_id → las direcciones de los clientes que ve por la
+        // ventana de retención volvían vacías y la fila salía sin dirección ni
+        // botón de Maps (queja del equipo comercial, 2026-08-28). Los ids ya
+        // vienen filtrados por scope, así que esto no amplía la visibilidad.
+        gather((c) => {
+          // Sin company_id (superadmin global) no podemos filtrar por empresa:
+          // en ese caso leemos con el cliente normal, que ya tiene policy
+          // addresses_super.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let aq: any = (session.company_id ? adminRead : supabase)
             .from("addresses")
             .select(
               "customer_id, street, city, province, latitude, longitude, is_primary",
-            )
+            );
+          if (session.company_id) {
+            aq = aq.eq("company_id", session.company_id).is("deleted_at", null);
+          }
+          return aq
             .in("customer_id", c)
-            .order("is_primary", { ascending: false }),
-        ),
+            .order("is_primary", { ascending: false });
+        }),
         // ROBUSTO: sin embeds (products/external). Resolvemos nombres por id abajo.
         gather((c) =>
           supabase

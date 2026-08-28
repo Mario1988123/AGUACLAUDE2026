@@ -110,7 +110,13 @@ export default async function CustomerDetailPage({
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cust = customer as any;
       const hasRecentSale = await hasRecentSaleForCustomer(session, id);
+      // OJO (fix 2026-08-28): antes esto sólo miraba `created_by`. Un cliente
+      // ASIGNADO al comercial pero creado por otro (importación masiva, alta
+      // hecha por el admin) le salía en su listado —la RLS de customers va por
+      // assigned_user_id— y al abrir la ficha daba 404. Ahora se aceptan las
+      // dos vías, igual que hace la policy.
       const inScope =
+        (cust.assigned_user_id && visibleUserIds.includes(cust.assigned_user_id)) ||
         (cust.created_by && visibleUserIds.includes(cust.created_by)) ||
         hasTask ||
         hasRecentSale;
@@ -118,10 +124,16 @@ export default async function CustomerDetailPage({
     }
   }
   let addresses = await listAddresses({ customer_id: id }).catch(() => []);
-  // Si RLS no devolvió direcciones pero el técnico tiene tarea activa, las
-  // leemos con admin client (filtradas por empresa) para que vea la dirección
-  // de instalación en la ficha.
-  if (addresses.length === 0 && hasTask && session.company_id) {
+  // Fallback de direcciones. listAddresses lee con el cliente RLS y la policy
+  // `addresses_select_inherit` resuelve la visibilidad haciendo un EXISTS
+  // sobre `customers`, que a su vez está limitado a assigned_user_id. Por eso
+  // devolvía CERO direcciones a quien llega por una excepción de scope:
+  //   · técnico con tarea activa (ya contemplado antes), y
+  //   · comercial dentro de la ventana de retención tras vender (NO lo estaba
+  //     → "no me aparece la dirección del cliente", queja 2026-08-28).
+  // Llegados aquí el acceso a la ficha YA está autorizado, así que releer con
+  // admin filtrando por company_id no amplía nada (sin fuga cross-tenant).
+  if (addresses.length === 0 && session.company_id) {
     const { createAdminClient } = await import("@/shared/lib/supabase/admin");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
