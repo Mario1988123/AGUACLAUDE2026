@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { requireSession } from "@/shared/lib/auth/session";
 import type {
   PunchKind,
@@ -532,24 +533,33 @@ export async function listPunchesAdmin(filters: {
   if (!isAdmin) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  let q = admin
-    .from("time_punches")
-    .select(
-      "id, user_id, punch_kind, punched_at, geo_latitude, geo_longitude, needs_geo_review, is_manual, manual_reason, auto_closed, edited_by_admin, edited_reason",
-    )
-    .eq("company_id", session.company_id)
-    .gte("punched_at", filters.from)
-    .lte("punched_at", filters.to)
-    .order("punched_at", { ascending: false })
-    .limit(2000);
-  if (filters.user_id) q = q.eq("user_id", filters.user_id);
-  if (filters.kind) q = q.eq("punch_kind", filters.kind);
-  if (filters.only_no_geo) q = q.eq("needs_geo_review", true);
-  if (filters.only_manual) q = q.eq("is_manual", true);
-  if (filters.only_autoclosed) q = q.eq("auto_closed", true);
-  const { data } = await q;
-  type R = PunchRow;
-  const rows = (data ?? []) as R[];
+  // El histórico de fichajes se exporta para inspección de trabajo: cortarlo
+  // en 1000 filas en silencio (lo que hacía el .limit(2000) contra el max-rows
+  // de PostgREST) daría un CSV incompleto.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const buildPunchesPage = (from: number, to: number): any => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let q: any = admin
+      .from("time_punches")
+      .select(
+        "id, user_id, punch_kind, punched_at, geo_latitude, geo_longitude, needs_geo_review, is_manual, manual_reason, auto_closed, edited_by_admin, edited_reason",
+      )
+      .eq("company_id", session.company_id)
+      .gte("punched_at", filters.from)
+      .lte("punched_at", filters.to)
+      .order("punched_at", { ascending: false })
+      .order("id")
+      .range(from, to);
+    if (filters.user_id) q = q.eq("user_id", filters.user_id);
+    if (filters.kind) q = q.eq("punch_kind", filters.kind);
+    if (filters.only_no_geo) q = q.eq("needs_geo_review", true);
+    if (filters.only_manual) q = q.eq("is_manual", true);
+    if (filters.only_autoclosed) q = q.eq("auto_closed", true);
+    return q;
+  };
+  const rows = await fetchAllRows<PunchRow>(buildPunchesPage, {
+    label: "historicoFichajes",
+  });
   // Resolver nombres
   const ids = Array.from(new Set(rows.map((r) => r.user_id)));
   const nameMap = new Map<string, string>();

@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export interface SlaStats {
@@ -46,15 +47,20 @@ export async function getSlaStats(year: number, month: number): Promise<SlaStats
   const start = new Date(year, month - 1, 1, 0, 0, 0);
   const end = new Date(year, month, 1, 0, 0, 0);
 
-  const { data: rows } = await admin
-    .from("incidents")
-    .select(
-      "id, priority, status, created_at, deadline_at, resolved_at, assigned_user_id",
-    )
-    .eq("company_id", session.company_id)
-    .gte("created_at", start.toISOString())
-    .lt("created_at", end.toISOString())
-    .limit(2000);
+  const rows = await fetchAllRows<Record<string, unknown>>(
+    (from, to) =>
+      admin
+        .from("incidents")
+        .select(
+          "id, priority, status, created_at, deadline_at, resolved_at, assigned_user_id",
+        )
+        .eq("company_id", session.company_id)
+        .gte("created_at", start.toISOString())
+        .lt("created_at", end.toISOString())
+        .order("id")
+        .range(from, to),
+    { label: "slaStats" },
+  );
 
   type Row = {
     id: string;

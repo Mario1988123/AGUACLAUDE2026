@@ -3,6 +3,7 @@
 import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { z } from "zod";
@@ -157,13 +158,21 @@ interface Recipient {
 async function resolveAudience(companyId: string): Promise<Recipient[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data: customers } = await admin
-    .from("customers")
-    .select("id, email, party_kind, legal_name, trade_name, first_name, last_name")
-    .eq("company_id", companyId)
-    .is("deleted_at", null)
-    .not("email", "is", null)
-    .limit(5000);
+  // CRÍTICO: son los DESTINATARIOS de la campaña. Con .limit(5000) PostgREST
+  // devolvía como mucho 1000 y la campaña se enviaba a una parte de la lista
+  // sin avisar de nada.
+  const customers = await fetchAllRows<Record<string, unknown>>(
+    (from, to) =>
+      admin
+        .from("customers")
+        .select("id, email, party_kind, legal_name, trade_name, first_name, last_name")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .not("email", "is", null)
+        .order("id")
+        .range(from, to),
+    { label: "campaignRecipients" },
+  );
   const out: Recipient[] = [];
   for (const c of (customers ?? []) as Array<Record<string, unknown>>) {
     const email = (c.email as string | null)?.trim();

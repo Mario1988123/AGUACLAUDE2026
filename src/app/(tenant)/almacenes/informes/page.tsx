@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireSession } from "@/shared/lib/auth/session";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { BackButton } from "@/shared/components/back-button";
 import { SnLookup } from "@/modules/warehouses/sn-lookup";
@@ -30,9 +31,15 @@ export default async function InformesPage() {
   const admin = createAdminClient() as any;
 
   // === Valor total del inventario (suma stock × cost_cents del producto) ===
+  // FUGA CROSS-TENANT (arreglada 2026-08-28): estas tres consultas usan el
+  // cliente admin, que SALTA RLS, y no filtraban por company_id → el informe
+  // de almacén de una empresa sumaba el stock, los costes de producto y los
+  // movimientos de TODAS las empresas del SaaS. Regla del proyecto: con
+  // createAdminClient() hay que filtrar company_id a mano, siempre.
   const { data: stocks } = await admin
     .from("warehouse_stock")
-    .select("product_id, quantity, warehouse_id");
+    .select("product_id, quantity, warehouse_id")
+    .eq("company_id", session.company_id);
   type S = { product_id: string; quantity: number; warehouse_id: string };
   const stockRows = (stocks ?? []) as S[];
 
@@ -41,6 +48,7 @@ export default async function InformesPage() {
     ? await admin
         .from("products")
         .select("id, name, cost_cents")
+        .eq("company_id", session.company_id)
         .in("id", productIds)
     : { data: [] };
   type P = { id: string; name: string; cost_cents: number | null };
@@ -75,11 +83,25 @@ export default async function InformesPage() {
   // === Top 10 movidos último mes ===
   const since = new Date();
   since.setMonth(since.getMonth() - 1);
-  const { data: movs } = await admin
-    .from("stock_movements")
-    .select("product_id, quantity, movement_type, performed_at")
-    .gte("performed_at", since.toISOString())
-    .limit(5000);
+  // .limit(5000) no servía: PostgREST corta en max-rows (1000) sin error, así
+  // que el "top 10 movidos" se calculaba sobre una muestra arbitraria.
+  const movs = await fetchAllRows<{
+    product_id: string;
+    quantity: number;
+    movement_type: string;
+    performed_at: string;
+  }>(
+    (from, to) =>
+      admin
+        .from("stock_movements")
+        .select("product_id, quantity, movement_type, performed_at")
+        .eq("company_id", session.company_id)
+        .gte("performed_at", since.toISOString())
+        .order("performed_at", { ascending: false })
+        .order("id")
+        .range(from, to),
+    { label: "informes/stock_movements" },
+  );
   type M = {
     product_id: string;
     quantity: number;

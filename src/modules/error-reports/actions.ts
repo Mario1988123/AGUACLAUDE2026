@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 
@@ -372,15 +373,19 @@ export async function getTopAutoErrors(days = 30): Promise<TopAutoError[]> {
   try {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    const { data, error } = await admin
-      .from("error_reports")
-      .select(
-        "fingerprint, message, route, occurrences, company_id, last_seen_at, created_at",
-      )
-      .eq("source", "auto_toast")
-      .gte("created_at", cutoff.toISOString())
-      .limit(2000);
-    if (error) return [];
+    const data = await fetchAllRows<Record<string, unknown>>(
+      (from, to) =>
+        admin
+          .from("error_reports")
+          .select(
+            "fingerprint, message, route, occurrences, company_id, last_seen_at, created_at",
+          )
+          .eq("source", "auto_toast")
+          .gte("created_at", cutoff.toISOString())
+          .order("id")
+          .range(from, to),
+      { label: "errorReports" },
+    );
     type Row = {
       fingerprint: string | null;
       message: string;

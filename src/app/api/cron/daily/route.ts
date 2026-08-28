@@ -4,6 +4,7 @@ import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -1717,11 +1718,23 @@ export async function GET(req: NextRequest) {
   // Resultado clampeado 0-100.
   const churnStats = { recalculated: 0, errors: 0 };
   try {
-    const { data: custs } = await admin
-      .from("customers")
-      .select("id, company_id, created_at")
-      .is("deleted_at", null)
-      .limit(5000);
+    // Recalcula churn de TODAS las empresas (por eso no filtra company_id;
+    // selecciona company_id y lo usa por fila). El .limit(5000) hacía que solo
+    // se recalculasen los 1000 primeros por el max-rows de PostgREST.
+    const custs = await fetchAllRows<{
+      id: string;
+      company_id: string;
+      created_at: string;
+    }>(
+      (from, to) =>
+        admin
+          .from("customers")
+          .select("id, company_id, created_at")
+          .is("deleted_at", null)
+          .order("id")
+          .range(from, to),
+      { label: "cron/churn" },
+    );
     type C = { id: string; company_id: string; created_at: string };
     for (const c of ((custs ?? []) as C[])) {
       try {

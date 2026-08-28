@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { requireSession } from "@/shared/lib/auth/session";
 
 export interface EmailListFilters {
@@ -202,12 +203,20 @@ export async function getEmailKpis(): Promise<EmailKpis> {
       .gte("created_at", startMonth.toISOString()),
   );
   // Para tasas: solo los del mes
-  const { data: monthRows } = await withScope(
-    admin
-      .from("email_sends")
-      .select("status, opened_at, clicked_at, bounced_at")
-      .gte("created_at", startMonth.toISOString())
-      .limit(5000),
+  // Las tasas de apertura/clic se calculan sobre TODOS los envíos del mes. El
+  // .limit(5000) no evitaba el max-rows de PostgREST (1000), así que con más
+  // de mil envíos los porcentajes salían de una muestra arbitraria.
+  const monthRows = await fetchAllRows<Record<string, unknown>>(
+    (from, to) =>
+      withScope(
+        admin
+          .from("email_sends")
+          .select("status, opened_at, clicked_at, bounced_at")
+          .gte("created_at", startMonth.toISOString())
+          .order("id")
+          .range(from, to),
+      ),
+    { label: "mailing/monthRates" },
   );
   type R = {
     status: string;
@@ -234,14 +243,19 @@ export async function getEmailKpis(): Promise<EmailKpis> {
   try {
     const since = new Date();
     since.setDate(since.getDate() - 30);
-    const { data: marketing } = await withScope(
-      admin
-        .from("email_sends")
-        .select("customer_id")
-        .eq("kind", "marketing")
-        .not("customer_id", "is", null)
-        .gte("created_at", since.toISOString())
-        .limit(2000),
+    const marketing = await fetchAllRows<{ customer_id: string | null }>(
+      (from, to) =>
+        withScope(
+          admin
+            .from("email_sends")
+            .select("customer_id")
+            .eq("kind", "marketing")
+            .not("customer_id", "is", null)
+            .gte("created_at", since.toISOString())
+            .order("id")
+            .range(from, to),
+        ),
+      { label: "mailing/marketing30d" },
     );
     type M = { customer_id: string | null };
     const ids = Array.from(
@@ -292,15 +306,22 @@ export async function getStatsByTemplate(): Promise<ByTemplateRow[]> {
   const admin = createAdminClient() as any;
   const since = new Date();
   since.setMonth(since.getMonth() - 3);
-  let q = admin
-    .from("email_sends")
-    .select("template_key, status, opened_at, clicked_at, bounced_at")
-    .eq("company_id", companyId)
-    .gte("created_at", since.toISOString())
-    .not("template_key", "is", null)
-    .limit(5000);
-  if (restrictToUserId) q = q.eq("user_id", restrictToUserId);
-  const { data } = await q;
+  const data = await fetchAllRows<Record<string, unknown>>(
+    (from, to) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let q: any = admin
+        .from("email_sends")
+        .select("template_key, status, opened_at, clicked_at, bounced_at")
+        .eq("company_id", companyId)
+        .gte("created_at", since.toISOString())
+        .not("template_key", "is", null)
+        .order("id")
+        .range(from, to);
+      if (restrictToUserId) q = q.eq("user_id", restrictToUserId);
+      return q;
+    },
+    { label: "mailing/porPlantilla" },
+  );
   type R = {
     template_key: string;
     status: string;
@@ -343,13 +364,18 @@ export async function getStatsByUser(): Promise<ByUserRow[]> {
   const admin = createAdminClient() as any;
   const since = new Date();
   since.setMonth(since.getMonth() - 1);
-  const { data } = await admin
-    .from("email_sends")
-    .select("user_id, opened_at, clicked_at")
-    .eq("company_id", companyId)
-    .gte("created_at", since.toISOString())
-    .not("user_id", "is", null)
-    .limit(5000);
+  const data = await fetchAllRows<Record<string, unknown>>(
+    (from, to) =>
+      admin
+        .from("email_sends")
+        .select("user_id, opened_at, clicked_at")
+        .eq("company_id", companyId)
+        .gte("created_at", since.toISOString())
+        .not("user_id", "is", null)
+        .order("id")
+        .range(from, to),
+    { label: "mailing/porUsuario" },
+  );
   type R = { user_id: string; opened_at: string | null; clicked_at: string | null };
   const grouped = new Map<string, { total: number; opened: number; clicked: number }>();
   for (const r of (data ?? []) as R[]) {

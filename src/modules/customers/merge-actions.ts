@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 
 export interface DuplicateCustomerGroup {
   /** El campo por el que coinciden: tax_id | email | phone */
@@ -25,14 +26,21 @@ export async function findCustomerDuplicates(): Promise<DuplicateCustomerGroup[]
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data } = await supabase
-    .from("customers")
-    .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary, created_at",
-    )
-    .eq("company_id", session.company_id)
-    .is("deleted_at", null)
-    .limit(5000);
+  // Detección de duplicados: NECESITA todos los clientes, si no compara sobre
+  // una muestra. El .limit(5000) era ilusorio (PostgREST corta en 1000).
+  const data = await fetchAllRows<Record<string, unknown>>(
+    (from, to) =>
+      supabase
+        .from("customers")
+        .select(
+          "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary, created_at",
+        )
+        .eq("company_id", session.company_id)
+        .is("deleted_at", null)
+        .order("id")
+        .range(from, to),
+    { label: "dedupeCustomers" },
+  );
   type C = {
     id: string;
     party_kind: "individual" | "company";

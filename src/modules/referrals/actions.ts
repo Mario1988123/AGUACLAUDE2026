@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
 
 export interface ReferralItem {
@@ -53,18 +54,24 @@ export async function listReferrals(): Promise<ReferralGroup[]> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const supabase = (await createClient()) as any;
-    let q = supabase
-      .from("leads")
-      .select(
-        "id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary, status, created_at, assigned_user_id, referred_by_customer_id",
-      )
-      .is("deleted_at", null)
-      .not("referred_by_customer_id", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(2000);
-    if (visibleUserIds) q = q.in("assigned_user_id", visibleUserIds);
-    const { data, error } = await q;
-    if (error) return [];
+    const data = await fetchAllRows<Record<string, unknown>>(
+      (from, to) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q: any = supabase
+          .from("leads")
+          .select(
+            "id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary, status, created_at, assigned_user_id, referred_by_customer_id",
+          )
+          .is("deleted_at", null)
+          .not("referred_by_customer_id", "is", null)
+          .order("created_at", { ascending: false })
+          .order("id")
+          .range(from, to);
+        if (visibleUserIds) q = q.in("assigned_user_id", visibleUserIds);
+        return q;
+      },
+      { label: "referrals" },
+    );
     type Row = PartyRow & {
       id: string;
       phone_primary: string | null;

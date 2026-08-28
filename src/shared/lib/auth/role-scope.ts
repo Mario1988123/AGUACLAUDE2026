@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import type { SessionClaims } from "./session";
 
 /**
@@ -162,15 +163,21 @@ export async function getCommercialRetentionCustomerIds(
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data } = await admin
-      .from("contracts")
-      .select("customer_id")
-      .eq("company_id", session.company_id)
-      .eq("created_by", session.user_id)
-      .not("signed_at", "is", null)
-      .gte("signed_at", cutoff)
-      .is("deleted_at", null)
-      .limit(2000);
+    // .limit(2000) no levantaba nada: PostgREST corta en max-rows (1000).
+    const data = await fetchAllRows<{ customer_id: string | null }>(
+      (from, to) =>
+        admin
+          .from("contracts")
+          .select("customer_id")
+          .eq("company_id", session.company_id)
+          .eq("created_by", session.user_id)
+          .not("signed_at", "is", null)
+          .gte("signed_at", cutoff)
+          .is("deleted_at", null)
+          .order("id")
+          .range(from, to),
+      { label: "retencionComercial" },
+    );
     return Array.from(
       new Set(
         ((data ?? []) as Array<{ customer_id: string | null }>)

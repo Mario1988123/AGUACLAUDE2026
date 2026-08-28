@@ -10,6 +10,7 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
+import { fetchAllRows, POSTGREST_MAX_ROWS } from "@/shared/lib/supabase/fetch-all";
 
 // Helper local: normaliza si el formato es válido, sino devuelve original
 function normalizePhoneSafe(v: string | null | undefined): string | null {
@@ -65,47 +66,53 @@ export async function listCustomers(
     "id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at, assigned_user_id";
   const SELECT_LEGACY =
     "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, is_active, created_at, assigned_user_id";
-  let query = supabase
-    .from("customers")
-    .select(SELECT_FULL)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(2000);
-  // Scope: nivel 3 ve los suyos (+ vendidos recientemente si hay retención);
-  // nivel 2 ve los suyos + equipo; nivel 1 ve todos.
-  query = applyScope(query);
-  if (q) {
-    const c = q.replace(/[%_]/g, "");
-    query = query.or(
-      `legal_name.ilike.%${c}%,trade_name.ilike.%${c}%,first_name.ilike.%${c}%,last_name.ilike.%${c}%,email.ilike.%${c}%,phone_primary.ilike.%${c}%`,
-    );
-  }
+  // Página de clientes. OJO: el `.limit(2000)` que había aquí NO servía de
+  // nada — PostgREST corta en `max-rows` (1000 en este proyecto) SIN devolver
+  // error, así que con más de 1000 clientes el listado ocultaba el resto en
+  // silencio. La empresa mayor ya va por 950. Se lee por tramos con .range().
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let res: any = await query;
-  if (
-    res.error &&
-    /is_autonomo|schema cache|Could not find/i.test(res.error.message ?? "")
-  ) {
-    // Reintento con columnas legacy si is_autonomo no está visible.
+  const buildCustomersPage = (sel: string, from: number, to: number): any => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let q2: any = supabase
+    let qb: any = supabase
       .from("customers")
-      .select(SELECT_LEGACY)
+      .select(sel)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(200);
-    q2 = applyScope(q2);
+      .order("id") // desempate estable: sin él, dos clientes con el mismo
+      // created_at pueden repetirse o perderse entre tramos.
+      .range(from, to);
+    // Scope: nivel 3 ve los suyos (+ vendidos recientemente si hay retención);
+    // nivel 2 ve los suyos + equipo; nivel 1 ve todos.
+    qb = applyScope(qb);
     if (q) {
       const c = q.replace(/[%_]/g, "");
-      q2 = q2.or(
+      qb = qb.or(
         `legal_name.ilike.%${c}%,trade_name.ilike.%${c}%,first_name.ilike.%${c}%,last_name.ilike.%${c}%,email.ilike.%${c}%,phone_primary.ilike.%${c}%`,
       );
     }
-    res = await q2;
+    return qb;
+  };
+
+  // Sondeo del primer tramo para decidir si `is_autonomo` está disponible.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const probe: any = await buildCustomersPage(SELECT_FULL, 0, POSTGREST_MAX_ROWS - 1);
+  const useLegacy =
+    probe.error &&
+    /is_autonomo|schema cache|Could not find/i.test(probe.error.message ?? "");
+  if (probe.error && !useLegacy) throw probe.error;
+
+  const select = useLegacy ? SELECT_LEGACY : SELECT_FULL;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let rows: any[];
+  if (!useLegacy && (probe.data?.length ?? 0) < POSTGREST_MAX_ROWS) {
+    rows = probe.data ?? []; // cabía en un tramo: nos ahorramos releerlo
+  } else {
+    rows = await fetchAllRows<Record<string, unknown>>(
+      (from, to) => buildCustomersPage(select, from, to),
+      { label: "listCustomers" },
+    );
   }
-  const { data, error } = res;
-  if (error) throw error;
-  let baseRows = (data as Array<{
+  let baseRows = (rows as Array<{
     id: string;
     party_kind: "individual" | "company";
     is_autonomo?: boolean | null;
