@@ -9,6 +9,7 @@ import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { computeMaintenanceJobAlerts } from "./alerts";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface MaintenanceRow {
   id: string;
@@ -133,7 +134,7 @@ export async function reassignMaintenanceAction(
     revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -230,7 +231,7 @@ export async function validateMaintenanceJobAction(input: {
     revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -319,7 +320,7 @@ export async function rescheduleMaintenanceProposalAction(input: {
     revalidatePath("/mantenimientos/por-confirmar");
     return { ok: true, new_scheduled_at: newIso };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -870,7 +871,7 @@ export async function declineRenewalAction(input: {
     revalidatePath(`/clientes/${c.customer_id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -969,7 +970,7 @@ export async function acceptRenewalAction(input: {
     revalidatePath("/mantenimientos");
     return { ok: true, new_maintenance_contract_id: newId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -984,7 +985,7 @@ export async function completeMaintenanceSafeAction(
     await completeMaintenanceAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -995,7 +996,7 @@ export async function startMaintenanceSafeAction(
     await startMaintenanceAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1006,7 +1007,7 @@ export async function createMaintenanceSafeAction(
     await createMaintenanceAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

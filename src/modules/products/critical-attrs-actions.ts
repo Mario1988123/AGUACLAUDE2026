@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { isProductEditor } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface CriticalAttributeMissing {
   attribute_id: string;
@@ -157,6 +158,6 @@ export async function dismissCriticalAttributesAlertAction(
     revalidatePath(`/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

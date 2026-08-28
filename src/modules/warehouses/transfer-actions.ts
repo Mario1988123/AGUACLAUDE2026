@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { adjustStockBatch, isInsufficientStockError, isFunctionMissingError } from "./adjust-stock";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 interface TransferArgs {
   from_warehouse_id: string;
@@ -183,6 +184,6 @@ export async function transferStockSafeAction(
     await transferStockAction(args);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

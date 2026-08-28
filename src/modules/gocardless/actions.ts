@@ -15,6 +15,7 @@ import {
   getMandate,
   getRedirectFlow,
 } from "./client";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 interface SettingsRow {
   company_id: string;
@@ -761,6 +762,6 @@ export async function saveGoCardlessSettingsSafeAction(input: {
     await saveGoCardlessSettingsAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

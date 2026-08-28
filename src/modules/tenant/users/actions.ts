@@ -8,6 +8,7 @@ import { userInviteSchema, type RoleKey } from "./schemas";
 import type { TenantUser } from "./types";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { generateTempPassword } from "@/shared/lib/auth/temp-password";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureCompanyAdmin() {
   const session = await requireSession();
@@ -461,7 +462,7 @@ export async function inviteUserSafeAction(
     const r = await inviteUserAction(formData);
     return { ok: true, email: r.email, temp_password: r.temp_password };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -473,7 +474,7 @@ export async function setUserStatusSafeAction(
     await setUserStatus(userId, status);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -484,7 +485,7 @@ export async function resetUserPasswordSafeAction(
     const r = await resetUserPasswordAction(userId);
     return { ok: true, email: r.email, temp_password: r.temp_password };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -495,7 +496,7 @@ export async function deleteUserPermanentlySafeAction(
     await deleteUserPermanentlyAction(userId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -507,6 +508,6 @@ export async function updateUserRolesSafeAction(
     await updateUserRoles(userId, roles);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

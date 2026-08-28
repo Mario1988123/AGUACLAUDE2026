@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const BUCKET = "contract-photos";
 
@@ -219,6 +220,6 @@ export async function deleteContractPhotoSafeAction(
     await deleteContractPhotoAction(photoId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

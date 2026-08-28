@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Genera un archivo SEPA Direct Debit en formato XML pain.008.001.08
@@ -368,7 +369,7 @@ ${txXml}
     const filename = `remesa-sepa-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${rows.length}tx.xml`;
     return { ok: true, xml, filename, transactions: rows.length, total_cents: totalCents };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -407,7 +408,7 @@ export async function markSepaBatchSentAction(
     const updated = ((updRows ?? []) as Array<{ id: string }>).length;
     return { ok: true, updated_payments: updated };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -443,6 +444,6 @@ export async function cancelSepaBatchAction(
       .eq("sepa_batch_id", batchId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -12,6 +12,7 @@ import type {
   OverlayPosition,
   WatermarkPosition,
 } from "./image-types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -187,6 +188,6 @@ export async function saveSocialImageSettingsAction(
     revalidatePath("/configuracion/rrss");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

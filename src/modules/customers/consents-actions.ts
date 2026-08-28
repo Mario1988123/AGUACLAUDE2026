@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type ConsentKind = "commercial" | "data_processing" | "profiling";
 export type ConsentSource = "contract_sign" | "customer_creation" | "manual";
@@ -119,6 +120,6 @@ export async function recordCustomerConsentSafe(
     await recordCustomerConsent(args);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

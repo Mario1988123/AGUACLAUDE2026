@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface CustomerEquipmentRow {
   id: string;
@@ -276,7 +277,7 @@ export async function setEquipmentModalityAction(input: {
     revalidatePath(`/clientes/${row.customer_id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -596,7 +597,7 @@ export async function addCustomerEquipmentSafeAction(
     await addCustomerEquipmentAction(input as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -608,6 +609,6 @@ export async function removeCustomerEquipmentSafeAction(
     await removeCustomerEquipmentAction(equipmentId, customerId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

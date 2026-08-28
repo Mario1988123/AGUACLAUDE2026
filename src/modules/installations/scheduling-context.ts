@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface SchedulingContext {
   ok: boolean;
@@ -278,7 +279,7 @@ export async function getSchedulingContext(
   } catch (e) {
     return {
       ...empty,
-      error: e instanceof Error ? e.message : "Error",
+      error: toActionError(e),
     };
   }
 }

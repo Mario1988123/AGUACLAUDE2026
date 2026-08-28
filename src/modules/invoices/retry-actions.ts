@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Reintenta una sub-misión Verifactu rechazada por AEAT (status='failed').
@@ -54,6 +55,6 @@ export async function retryAeatSubmissionAction(
     revalidatePath("/facturas");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

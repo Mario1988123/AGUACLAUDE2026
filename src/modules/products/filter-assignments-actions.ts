@@ -16,6 +16,7 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface FilterAssignment {
   id: string;
@@ -122,7 +123,7 @@ export async function assignFilterToProductAction(input: {
     revalidatePath(`/productos/${input.productId}`);
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -161,7 +162,7 @@ export async function updateFilterAssignmentAction(input: {
     revalidatePath(`/productos/${input.productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -186,7 +187,7 @@ export async function removeFilterAssignmentAction(input: {
     revalidatePath(`/productos/${input.productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -264,7 +265,7 @@ export async function addFilterCompatibilityAction(input: {
     revalidatePath("/productos/filtros");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -303,7 +304,7 @@ export async function removeFilterCompatibilityAction(
     revalidatePath("/productos/filtros");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

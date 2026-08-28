@@ -6,6 +6,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 function generateToken(): string {
   // UUID + 32 random hex = 68 chars, alta entropía.
@@ -181,7 +182,7 @@ export async function sendContractForRemoteSignAction(
     revalidatePath(`/contratos/${c.id}`);
     return { ok: true, sign_url: signUrl };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -291,7 +292,7 @@ export async function getContractByRemoteToken(
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -554,7 +555,7 @@ export async function submitRemoteSignatureAction(input: {
     revalidatePath(`/contratos/${s.contract_id}`);
     return { ok: true, contract_id: s.contract_id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

@@ -12,6 +12,7 @@ import {
   type AbsenceKind,
   type AbsenceStatus,
 } from "./absence-labels";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface AbsenceRow {
   id: string;
@@ -409,7 +410,7 @@ export async function recalculateVacationBalanceAction(
     revalidatePath("/fichajes");
     return { ok: true, days_taken: total };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -423,6 +424,6 @@ export async function approveAbsenceSafeAction(
     await approveAbsenceAction(id, approve);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

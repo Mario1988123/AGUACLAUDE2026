@@ -19,6 +19,7 @@ import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
 import { assertInstallationCompany } from "./ownership";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Reasigna instalador. Solo admin/director técnico.
@@ -892,7 +893,7 @@ export async function setInstallationPriorityAction(
     revalidatePath("/instalaciones");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2005,7 +2006,7 @@ export async function createInstallationFromContractSafeAction(
     await createInstallationFromContract(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2017,6 +2018,6 @@ export async function reassignInstallationSafeAction(
     await reassignInstallationAction(installationId, installerUserId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

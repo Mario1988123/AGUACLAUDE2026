@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/shared/lib/auth/session";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const CONFIG_ROLES = [
   "company_admin",
@@ -103,7 +104,7 @@ export async function upsertServiceZoneAction(
     revalidatePath("/configuracion/zonas");
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -124,7 +125,7 @@ export async function deleteServiceZoneAction(
     revalidatePath("/configuracion/zonas");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -200,6 +201,6 @@ export async function setSchedulingSettingsAction(
     revalidatePath("/configuracion/zonas");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

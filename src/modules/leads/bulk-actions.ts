@@ -92,6 +92,7 @@ export async function bulkReassignLeadsAction(
  * Útil para director que quiere marcar lote como "lost" / "expired".
  */
 import type { LeadStatus } from "./types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export async function bulkUpdateLeadsStatusAction(input: {
   lead_ids: string[];
@@ -145,6 +146,6 @@ export async function bulkUpdateLeadsStatusAction(input: {
     revalidatePath("/leads");
     return { ok: true, count };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

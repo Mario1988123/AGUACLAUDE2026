@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { reconcileSalesRecordsForCompany } from "./reconcile";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Regenera sales_records a partir de los contratos firmados de la empresa.
@@ -61,6 +62,6 @@ export async function backfillSalesRecordsSafeAction(): Promise<
       errors: r.errors,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

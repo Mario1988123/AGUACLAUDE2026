@@ -8,6 +8,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { notifyIncidentCreated } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const incidentCreateSchema = z.object({
   title: z.string().min(2),
@@ -439,7 +440,7 @@ export async function createIncidentSafeAction(
     await createIncidentAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -451,7 +452,7 @@ export async function assignIncidentSafeAction(
     await assignIncidentAction(id, userId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -463,6 +464,6 @@ export async function resolveIncidentSafeAction(
     await resolveIncidentAction(id, notes);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

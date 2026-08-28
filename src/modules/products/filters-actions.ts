@@ -19,6 +19,7 @@ import {
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
 import type { FilterType } from "./filters-constants";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ProductFilterItem {
   id: string;
@@ -235,7 +236,7 @@ export async function upsertProductFilterAction(
     revalidatePath("/productos/filtros");
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -263,6 +264,6 @@ export async function deleteProductFilterAction(
     revalidatePath("/productos/filtros");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

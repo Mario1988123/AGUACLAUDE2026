@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type ChatThreadKind = "broadcast" | "team" | "direct";
 
@@ -817,7 +818,7 @@ export async function sendChatVoiceMessageSafeAction(
     await sendChatVoiceMessageAction(threadId, audioDataUrl, durationMs);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1021,7 +1022,7 @@ export async function sendChatAttachmentSafeAction(
     await sendChatAttachmentAction(threadId, fileDataUrl, fileName, mime);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1034,7 +1035,7 @@ export async function sendChatContactSafeAction(
     await sendChatContactAction(threadId, subjectType, subjectId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1047,7 +1048,7 @@ export async function sendChatLocationSafeAction(
     await sendChatLocationAction(threadId, lat, lng);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1061,7 +1062,7 @@ export async function sendChatMessageSafeAction(
     await sendChatMessageAction(threadId, body);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1073,7 +1074,7 @@ export async function editChatMessageSafeAction(
     await editChatMessageAction(messageId, newBody);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1084,7 +1085,7 @@ export async function deleteChatMessageSafeAction(
     await deleteChatMessageAction(messageId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1095,7 +1096,7 @@ export async function getOrCreateDirectThreadSafeAction(
     const id = await getOrCreateDirectThreadAction(otherUserId);
     return { ok: true, id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1107,7 +1108,7 @@ export async function createTeamThreadSafeAction(
     const id = await createTeamThreadAction(name, memberUserIds);
     return { ok: true, id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1118,6 +1119,6 @@ export async function createBroadcastThreadSafeAction(
     const id = await createBroadcastThreadAction(name);
     return { ok: true, id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

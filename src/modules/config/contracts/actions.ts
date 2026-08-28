@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type ClausePlanType = "cash" | "rental" | "renting";
 
@@ -137,7 +138,7 @@ export async function upsertClauseTemplateSafeAction(
     await upsertClauseTemplateAction(input as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -148,7 +149,7 @@ export async function deleteClauseTemplateSafeAction(
     await deleteClauseTemplateAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -160,6 +161,6 @@ export async function reorderClausesSafeAction(
     await reorderClausesAction(planType, orderedIds);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

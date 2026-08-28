@@ -17,6 +17,7 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type SeedImportResult =
   | { ok: true; inserted: number; skipped: number }
@@ -50,7 +51,7 @@ export async function importStandardWaterCategoriesAction(): Promise<SeedImportR
     revalidatePath("/configuracion/productos");
     return { ok: true, inserted, skipped };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -83,6 +84,6 @@ export async function importStandardServiceLinesAction(): Promise<SeedImportResu
     revalidatePath("/configuracion/productos");
     return { ok: true, inserted, skipped };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

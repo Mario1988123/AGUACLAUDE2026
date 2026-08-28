@@ -6,6 +6,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { getMyDayItems } from "@/modules/my-day/actions";
 import { nearestNeighborRoute, totalDistanceKm, type RoutePoint } from "./haversine";
 import { optimizeRouteWithGoogle } from "@/shared/lib/google-maps/routes";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface DayRouteItem {
   id: string;
@@ -196,7 +197,7 @@ export async function planMyDayRouteSafeAction(): Promise<
     const plan = await planMyDayRoute();
     return { ok: true, plan };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -208,6 +209,6 @@ export async function applyMyDayRouteSafeAction(
     await applyMyDayRouteAction(orderedIds, spacingMinutes);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

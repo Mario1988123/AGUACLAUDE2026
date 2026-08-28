@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getFiscalSettings } from "@/modules/config/fiscal/actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type InvoiceKind = "invoice" | "credit_note" | "proforma" | "delivery_note";
 export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "void" | "cancelled" | "proforma";
@@ -1128,7 +1129,7 @@ export async function markInvoiceIssuedSafeAction(
     await markInvoiceIssuedAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1140,7 +1141,7 @@ export async function markInvoicePaidSafeAction(
     await markInvoicePaidAction(id, amount);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1152,7 +1153,7 @@ export async function cancelInvoiceSafeAction(
     await cancelInvoiceAction(id, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1163,7 +1164,7 @@ export async function createCreditNoteSafeAction(
     const id = await createCreditNoteAction(invoiceId);
     return { ok: true, id: id as unknown as string };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1174,7 +1175,7 @@ export async function createInvoiceSafeAction(
     const id = await createInvoiceAction(input as never);
     return { ok: true, id: id as unknown as string };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1188,7 +1189,7 @@ export async function deleteOrRectifyInvoiceSafeAction(
     const r = await deleteOrRectifyInvoiceAction(invoiceId);
     return { ok: true, ...r };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1201,7 +1202,7 @@ export async function generateMonthlyRecurringInvoicesSafeAction(): Promise<
     const r = await generateMonthlyRecurringInvoicesAction();
     return { ok: true, created: r.created };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1212,6 +1213,6 @@ export async function createInvoiceForFinancierFromContractSafeAction(
     const id = await createInvoiceForFinancierFromContractAction(contractId);
     return { ok: true, id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

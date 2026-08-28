@@ -8,6 +8,7 @@ import {
   completeUninstallNowAction,
   type EquipmentDisposition,
 } from "./uninstall-actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // ============================================================================
 // Flujo "Borrar cliente" (decisión 2026-06-16)
@@ -267,7 +268,7 @@ export async function churnCustomerAction(
       warning: completionWarning,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -391,7 +392,7 @@ export async function deleteEmptyCustomerAction(input: {
     revalidatePath("/clientes");
     return { ok: true, anonymized: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

@@ -18,6 +18,7 @@ import {
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
 import type { ProductDocKind } from "./documents-constants";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ProductDocumentItem {
   id: string;
@@ -85,7 +86,7 @@ export async function addProductDocumentAction(input: {
     revalidatePath(`/productos/${input.productId}`);
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -110,7 +111,7 @@ export async function deleteProductDocumentAction(
     revalidatePath(`/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -176,7 +177,7 @@ export async function uploadProductDocumentAction(
       isPublic,
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -210,6 +211,6 @@ export async function getProductDocumentUrlAction(
     if (error) return { ok: false, error: error.message };
     return { ok: true, url: (data as { signedUrl: string }).signedUrl };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

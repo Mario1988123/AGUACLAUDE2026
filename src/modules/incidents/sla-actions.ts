@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { SLA_DEFAULTS, type SlaSettings } from "./sla-types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -75,6 +76,6 @@ export async function updateSlaSettingsSafeAction(
     await updateSlaSettingsAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

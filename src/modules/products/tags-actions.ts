@@ -20,6 +20,7 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ProductTagCatalogItem {
   id: string;
@@ -98,7 +99,7 @@ export async function createTagCatalogAction(input: {
     revalidatePath("/productos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -139,7 +140,7 @@ export async function updateTagCatalogAction(
     revalidatePath("/productos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -195,6 +196,6 @@ export async function setProductTagsAction(
     revalidatePath("/productos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { reconcileContractPaymentsForCompany } from "./reconcile-payments";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Botón "Sincronizar pagos" — fuerza el reconcile inmediato para la
@@ -46,6 +47,6 @@ export async function syncContractPaymentsAction(): Promise<
       errors: r.errors,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

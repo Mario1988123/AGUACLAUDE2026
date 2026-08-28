@@ -6,6 +6,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { decryptString } from "@/shared/lib/crypto/aes-gcm";
 import type { ProviderId, ProviderCredentials, PushInvoiceInput } from "./types";
 import { getProviderClient } from "./registry";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Empuja una factura al proveedor externo configurado de la empresa
@@ -209,7 +210,7 @@ export async function pushInvoiceToExternalProviderAction(
         "El proveedor rechazó la factura",
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

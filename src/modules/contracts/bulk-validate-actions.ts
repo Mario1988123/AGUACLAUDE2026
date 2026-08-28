@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Marca varios contratos en bloque como "active" desde "signed" (ya
@@ -64,6 +65,6 @@ export async function bulkActivateContractsAction(
     revalidatePath("/contratos");
     return { ok: true, activated, skipped };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

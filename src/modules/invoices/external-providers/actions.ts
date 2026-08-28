@@ -10,6 +10,7 @@ import {
 } from "@/shared/lib/crypto/aes-gcm";
 import type { ProviderId, ProviderCredentials } from "./types";
 import { findProvider, getProviderClient, selectableProviders } from "./registry";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -138,7 +139,7 @@ export async function saveExternalProviderAction(input: {
     revalidatePath("/configuracion/facturacion");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -200,7 +201,7 @@ export async function testExternalProviderConnectionAction(): Promise<
       ? { ok: true, message: r.message }
       : { ok: false, error: r.message };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

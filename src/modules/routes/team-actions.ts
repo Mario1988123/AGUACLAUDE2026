@@ -6,6 +6,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { nearestNeighborRoute, totalDistanceKm, type RoutePoint } from "./haversine";
 import { optimizeRouteWithGoogle } from "@/shared/lib/google-maps/routes";
 import type { DayRoutePlan, DayRouteItem } from "./actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 interface TeamMember {
   user_id: string;
@@ -526,6 +527,6 @@ export async function applyTeamDayRouteSafeAction(input: {
     revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

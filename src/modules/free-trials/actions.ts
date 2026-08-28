@@ -9,6 +9,7 @@ import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const createSchema = z.object({
   customer_id: z.string().uuid().optional(),
@@ -688,7 +689,7 @@ export async function getFreeTrialAcceptDefaultsAction(
 
     return { ok: true, defaults };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1193,7 +1194,7 @@ export async function acceptFreeTrialAction(input: {
     revalidatePath(`/clientes/${customerId}`);
     return { ok: true, contract_id: contractId, customer_id: customerId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1390,7 +1391,7 @@ export async function createFreeTrialSafeAction(
     const id = await createFreeTrialAction(input as never);
     return { ok: true, id: id as unknown as string };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1402,7 +1403,7 @@ export async function rejectFreeTrialSafeAction(
     await rejectFreeTrialAction(trialId, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1421,6 +1422,6 @@ export async function signAndInstallFreeTrialSafeAction(input: {
     const r = await signAndInstallFreeTrialAction(input);
     return { ok: true, status: r.status };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

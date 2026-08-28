@@ -10,6 +10,7 @@ import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { relinkCopiedItems } from "@/shared/lib/packs/link-items";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export async function listContracts(filters?: {
   status?: string;
@@ -765,7 +766,7 @@ export async function cleanupDuplicateContractPaymentsAction(
     revalidatePath("/wallet");
     return { ok: true, removed: toDelete.length };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1520,7 +1521,7 @@ export async function promoteContractToSignedAction(
     revalidatePath("/contratos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1572,7 +1573,7 @@ export async function validateContractAction(id: string): Promise<ContractAction
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     console.error("[validateContract]", e);
     return { ok: false, error: msg };
   }
@@ -1717,7 +1718,7 @@ export async function cancelContractAction(
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     console.error("[cancelContract]", e);
     return { ok: false, error: msg };
   }
@@ -2166,7 +2167,7 @@ export async function updateContractNotesSafeAction(
     await updateContractNotesAction(contractId, notes);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2178,7 +2179,7 @@ export async function updateContractClausesSafeAction(
     await updateContractClausesAction(contractId, clauses);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2194,7 +2195,7 @@ export async function collectContractPaymentSafeAction(
     await collectContractPaymentAction(paymentId, input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2206,7 +2207,7 @@ export async function reassignContractSafeAction(
     await reassignContractAction(contractId, userId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2218,7 +2219,7 @@ export async function saveInstallPreferenceSafeAction(
     await saveInstallPreferenceAction(contractId, input as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2229,6 +2230,6 @@ export async function markContractSignedSafeAction(
     await markContractSigned(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

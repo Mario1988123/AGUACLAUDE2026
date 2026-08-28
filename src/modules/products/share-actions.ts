@@ -15,6 +15,7 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type ShareType = "product_datasheet" | "category_catalog" | "custom_catalog";
 
@@ -111,7 +112,7 @@ export async function createProductDatasheetShareAction(input: {
     revalidatePath(`/productos/${input.productId}`);
     return { ok: true, share, public_url: publicUrl };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -166,7 +167,7 @@ export async function revokeProductShareAction(
     revalidatePath("/productos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -269,6 +270,6 @@ export async function resolvePublicShareToken(
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

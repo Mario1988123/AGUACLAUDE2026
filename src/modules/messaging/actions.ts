@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import type { MessageTemplate } from "./templates";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Lista plantillas de la empresa actual. Si no hay ninguna, siembra los
@@ -143,7 +144,7 @@ export async function upsertMessageTemplateSafeAction(input: {
     await upsertMessageTemplateAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -154,6 +155,6 @@ export async function deleteMessageTemplateSafeAction(
     await deleteMessageTemplateAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

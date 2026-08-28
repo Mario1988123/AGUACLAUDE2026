@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface SocialSettings {
   company_id: string;
@@ -79,6 +80,6 @@ export async function upsertSocialSettings(
     revalidatePath("/configuracion/rrss");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

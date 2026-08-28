@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface Ephemeris {
   id: string;
@@ -241,7 +242,7 @@ export async function upsertSocialPost(
     revalidatePath("/rrss/posts");
     return { ok: true, id: id! };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -275,7 +276,7 @@ export async function changePostStatus(
     revalidatePath(`/rrss/posts/${postId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -297,6 +298,6 @@ export async function deleteSocialPost(
     revalidatePath("/rrss/posts");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

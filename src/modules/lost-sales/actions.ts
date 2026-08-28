@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Asigna una venta perdida a un comercial para que intente recuperarla.
@@ -123,7 +124,7 @@ export async function assignRecoverySafeAction(
     await assignRecoveryAction(lostSaleId, userId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -134,7 +135,7 @@ export async function reopenLostSaleSafeAction(
     await reopenLostSaleAction(lostSaleId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -145,7 +146,7 @@ export async function markRecoveredSafeAction(
     await markRecoveredAction(lostSaleId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

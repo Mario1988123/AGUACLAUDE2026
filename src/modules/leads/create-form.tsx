@@ -245,7 +245,7 @@ export function LeadCreateForm() {
     setStep((s) => Math.max(1, s - 1));
   }
 
-  function submit() {
+  async function submit() {
     if (!validateStep1()) {
       setStep(1);
       return;
@@ -289,15 +289,42 @@ export function LeadCreateForm() {
     // dirección, o con solo el CP, no obliga a fijar chincheta. El técnico
     // necesita lat/lng para validar GPS, pero eso aplica cuando hay calle.
     const willPersistAddress = Boolean(street.trim() && postal.trim());
-    if (willPersistAddress && (latitude == null || longitude == null)) {
+    let lat = latitude;
+    let lng = longitude;
+    if (willPersistAddress && (lat == null || lng == null)) {
+      // ANTES: se bloqueaba aquí directamente y se mandaba al usuario a pulsar
+      // «Buscar en mapa» a mano. Era el error más repetido del panel de
+      // superadmin (96 veces entre junio y agosto de 2026) para algo que el
+      // sistema sabe hacer solo: geocodificamos primero y solo bloqueamos si
+      // de verdad no se encuentra la dirección. La regla de fondo no cambia
+      // (sin lat/lng no se guarda: el técnico las necesita para validar GPS).
+      setGeoLoading(true);
+      try {
+        const parts = [street, streetNumber, postal, city, province, "España"].filter(
+          Boolean,
+        );
+        const auto = await forwardGeocodeAction(parts.join(", "));
+        if (auto) {
+          lat = auto.lat;
+          lng = auto.lng;
+          setLatitude(auto.lat);
+          setLongitude(auto.lng);
+        }
+      } catch {
+        /* si el geocoder falla, cae al aviso de abajo */
+      } finally {
+        setGeoLoading(false);
+      }
+    }
+    if (willPersistAddress && (lat == null || lng == null)) {
       notify.error(
-        "Faltan coordenadas",
-        "Pulsa «Buscar en mapa» o usa tu ubicación actual para fijar la chincheta. Sin lat/lng el técnico no puede validar GPS al instalar.",
+        "No hemos podido localizar la dirección",
+        "Revisa la calle y el código postal, o coloca la chincheta a mano con «Buscar en mapa» / tu ubicación actual. Sin coordenadas el técnico no puede validar el GPS al instalar.",
       );
       return;
     }
-    if (latitude != null) fd.set("address_latitude", String(latitude));
-    if (longitude != null) fd.set("address_longitude", String(longitude));
+    if (lat != null) fd.set("address_latitude", String(lat));
+    if (lng != null) fd.set("address_longitude", String(lng));
     startTransition(async () => {
       try {
         const res = await createLeadAction(fd);

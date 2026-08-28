@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface PurchaseSuggestionRow {
   id: string;
@@ -80,7 +81,7 @@ export async function recomputePurchaseSuggestionsAction(): Promise<{
     return {
       ok: false,
       created: 0,
-      error: e instanceof Error ? e.message : "Error",
+      error: toActionError(e),
     };
   }
 }

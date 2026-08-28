@@ -11,6 +11,7 @@ import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
 import { fetchAllRows, POSTGREST_MAX_ROWS } from "@/shared/lib/supabase/fetch-all";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // Helper local: normaliza si el formato es válido, sino devuelve original
 function normalizePhoneSafe(v: string | null | undefined): string | null {
@@ -1017,7 +1018,7 @@ export async function updateCustomerSafeAction(
     await updateCustomerAction(customerId, patch as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1029,6 +1030,6 @@ export async function logCustomerContactSafeAction(
     await logCustomerContactAction(customerId, channel);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

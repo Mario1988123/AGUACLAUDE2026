@@ -9,6 +9,7 @@ import {
   type OfferableResult,
   type Slot,
 } from "@/modules/scheduling/availability";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /** Resuelve el input del motor de fechas ofrecibles desde el token de mantenimiento. */
 async function engineInputForMaintenanceToken(
@@ -259,7 +260,7 @@ export async function getPublicJobView(
       token: { used: !!t.used_at, used_action: t.used_action },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

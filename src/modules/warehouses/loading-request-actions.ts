@@ -7,6 +7,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "./stock-decrement";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const createSchema = z.object({
   source_warehouse_id: z.string().uuid(),
@@ -236,7 +237,7 @@ export async function deliverLoadingRequestSafeAction(
     await deliverLoadingRequestAction(requestId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -247,7 +248,7 @@ export async function createLoadingRequestSafeAction(
     await createLoadingRequestAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -258,6 +259,6 @@ export async function cancelLoadingRequestSafeAction(
     await cancelLoadingRequestAction(requestId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

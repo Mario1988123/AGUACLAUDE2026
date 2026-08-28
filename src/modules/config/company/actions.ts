@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Configuración GENERAL de la empresa: horario, tolerancias instalación y
@@ -121,7 +122,7 @@ export async function updateBusinessHoursSafeAction(
     await updateBusinessHoursAction(hours as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -132,7 +133,7 @@ export async function updateCompanySettingsSafeAction(
     await updateCompanySettingsAction(input as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -191,6 +192,6 @@ export async function updateCustomerRetentionDaysSafeAction(
     await updateCustomerRetentionDaysAction(days);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

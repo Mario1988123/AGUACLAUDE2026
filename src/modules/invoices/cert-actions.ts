@@ -9,6 +9,7 @@ import {
   encryptString,
   isMasterKeyConfigured,
 } from "@/shared/lib/crypto/aes-gcm";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -232,7 +233,7 @@ export async function uploadCertificateSafeAction(
     const r = await uploadCertificateAction(formData);
     return { ok: true, info: r.info };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -243,6 +244,6 @@ export async function deleteCertificateSafeAction(): Promise<
     await deleteCertificateAction();
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

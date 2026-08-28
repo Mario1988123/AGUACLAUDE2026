@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Crea una orden de reubicación de un equipo del cliente.
@@ -187,6 +188,6 @@ export async function relocateEquipmentAction(input: {
     revalidatePath("/instalaciones");
     return { ok: true, installation_id: installationId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

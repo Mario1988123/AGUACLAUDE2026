@@ -25,6 +25,7 @@ import type {
   ResolvedOverlaySettings,
   WatermarkPosition,
 } from "./image-types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const BUCKET = "social-images";
 const COST_PER_IMAGE_CENTS = 4;
@@ -70,7 +71,7 @@ export async function previewEnrichedPromptAction(
     );
     return { ok: true, prompt };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -274,7 +275,7 @@ export async function generatePostImageAction(
       resolved_overlay: resolvedOverlay,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -603,6 +604,6 @@ export async function saveFinalPostImageAction(
     revalidatePath(`/rrss/posts/${postId}`);
     return { ok: true, image_url: imageUrl };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

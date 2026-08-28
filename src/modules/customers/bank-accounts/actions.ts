@@ -8,6 +8,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { validateIBAN } from "@/shared/lib/validations/spanish";
 import { isPendingIban } from "@/shared/lib/validations/iban-partial";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface BankAccountRow {
   id: string;
@@ -180,7 +181,7 @@ export async function createBankAccountSafeAction(
     await createBankAccountAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -192,6 +193,6 @@ export async function deleteBankAccountSafeAction(
     await deleteBankAccountAction(id, customerId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

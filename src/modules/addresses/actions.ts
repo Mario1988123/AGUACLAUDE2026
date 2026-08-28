@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { addressUpsertSchema, type AddressKind, type StreetType } from "./schemas";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface AddressRow {
   id: string;
@@ -126,6 +127,46 @@ export async function upsertAddressAction(input: unknown) {
     notes: parsed.notes || null,
   };
 
+  // ORDEN IMPORTANTE (fix 2026-08-28): desmarcar las OTRAS primarias va
+  // ANTES de guardar, no después. Hay un índice único parcial
+  // `uniq_address_primary_per_customer` (y su gemelo por lead) sobre
+  // (customer_id) where is_primary and deleted_at is null. Al guardar una
+  // segunda dirección marcada como principal, el INSERT chocaba con la
+  // primaria que aún seguía marcada y el usuario veía el error crudo de
+  // Postgres: "duplicate key value violates unique constraint
+  // uniq_address_primary_per_customer". Desmarcando primero, el índice
+  // nunca ve dos primarias a la vez.
+  if (parsed.is_primary) {
+    const notMe = parsed.id ?? "00000000-0000-0000-0000-000000000000";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let unmark: any = null;
+    if (parsed.customer_id) {
+      unmark = await admin
+        .from("addresses")
+        .update({ is_primary: false })
+        .eq("company_id", session.company_id)
+        .eq("customer_id", parsed.customer_id)
+        .neq("id", notMe)
+        .is("deleted_at", null);
+    } else if (parsed.lead_id) {
+      unmark = await admin
+        .from("addresses")
+        .update({ is_primary: false })
+        .eq("company_id", session.company_id)
+        .eq("lead_id", parsed.lead_id)
+        .neq("id", notMe)
+        .is("deleted_at", null);
+    }
+    // Si esto falla NO seguimos: el guardado chocaría con el índice único y
+    // el usuario vería otra vez el error críptico. Mejor un mensaje claro.
+    if (unmark?.error) {
+      console.error("[upsertAddress] desmarcar primary falló:", unmark.error.message);
+      throw new Error(
+        `No se pudo cambiar la dirección principal: ${unmark.error.message}`,
+      );
+    }
+  }
+
   if (parsed.id) {
     const { error } = await admin
       .from("addresses")
@@ -140,30 +181,6 @@ export async function upsertAddressAction(input: unknown) {
     if (error) {
       console.error("[upsertAddress] INSERT failed:", error.message);
       throw new Error(`No se pudo crear la dirección: ${error.message}`);
-    }
-  }
-
-  // Si esta es marcada como primaria, desmarcar las demás del mismo dueño
-  if (parsed.is_primary) {
-    try {
-      if (parsed.customer_id) {
-        await admin
-          .from("addresses")
-          .update({ is_primary: false })
-          .eq("customer_id", parsed.customer_id)
-          .neq("id", parsed.id ?? "00000000-0000-0000-0000-000000000000")
-          .is("deleted_at", null);
-      } else if (parsed.lead_id) {
-        await admin
-          .from("addresses")
-          .update({ is_primary: false })
-          .eq("lead_id", parsed.lead_id)
-          .neq("id", parsed.id ?? "00000000-0000-0000-0000-000000000000")
-          .is("deleted_at", null);
-      }
-    } catch (e) {
-      console.error("[upsertAddress] desmarcar primary falló:", e);
-      /* no bloqueante */
     }
   }
 
@@ -194,7 +211,7 @@ export async function upsertAddressSafeAction(
     await upsertAddressAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -205,6 +222,6 @@ export async function deleteAddressSafeAction(
     await deleteAddressAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

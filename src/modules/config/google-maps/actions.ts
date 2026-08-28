@@ -10,6 +10,7 @@ import {
 } from "@/shared/lib/google-maps/config";
 import { encryptGmapsKey } from "@/shared/lib/google-maps/key-storage";
 import type { GmapsFeature } from "@/shared/lib/google-maps/pricing";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -105,7 +106,7 @@ export async function setGmapsApiKeySafeAction(
     revalidatePath("/configuracion/google-maps");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -133,7 +134,7 @@ export async function setGmapsFeaturesSafeAction(
     revalidatePath("/configuracion/google-maps");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -156,7 +157,7 @@ export async function setGmapsAlertEmailSafeAction(
     revalidatePath("/configuracion/google-maps");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -222,6 +223,6 @@ export async function setAntiFraudSettingsSafeAction(input: {
     revalidatePath("/configuracion/google-maps");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

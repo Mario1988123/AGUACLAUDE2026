@@ -28,6 +28,7 @@ import {
 } from "./share-actions";
 import { generateProductDatasheetAuto } from "./datasheet-pick";
 import { sendEmailViaResend } from "@/modules/mailing/resend";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -291,6 +292,6 @@ export async function sendProductDatasheetEmailAction(input: {
       share_token: share.share_token,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

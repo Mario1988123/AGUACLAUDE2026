@@ -12,6 +12,7 @@ import type {
   PunchRow,
   PunchResult,
 } from "./types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 interface PunchInput {
   geo_latitude: number | null;
@@ -906,6 +907,6 @@ export async function autoCloseStalePunchesSafeAction(): Promise<
     const r = await autoCloseStalePunchesAction();
     return { ok: true, closed: r.closed };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

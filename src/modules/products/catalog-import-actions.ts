@@ -21,6 +21,7 @@ import {
   copyPhotos,
   copyDocuments,
 } from "./catalog-copy-helpers";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // PostgREST ilike trata % y _ como comodines; los escapamos para que la
 // referencia se busque literal (insensible a may/min por el índice único).
@@ -94,7 +95,7 @@ export async function lookupCatalogBySupplierRefAction(
       alreadyOwnedId: (existing as { id: string } | null)?.id ?? null,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -189,6 +190,6 @@ export async function importCatalogProductSafeAction(
     revalidatePath(`/productos/${productId}`);
     return { ok: true, id: productId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

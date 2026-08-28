@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface SepaMandate {
   id: string;
@@ -267,7 +268,7 @@ export async function createSepaMandateAction(
     revalidatePath(`/contratos/${c.id}`);
     return { ok: true, mandate_id: (inserted as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -331,7 +332,7 @@ export async function signSepaMandateAction(
     revalidatePath(`/contratos/${mandate.contract_id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -367,6 +368,6 @@ export async function updateContractRecurringPaymentMethodAction(
     revalidatePath(`/contratos/${parsed.contract_id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

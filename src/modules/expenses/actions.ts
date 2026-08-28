@@ -11,6 +11,7 @@ import {
   mileageCreateSchema,
 } from "./schemas";
 import { isMindeeConfigured, mapMindeeCategoryToOurs, ocrReceiptWithMindee } from "./mindee";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // =============================================================================
 // Settings
@@ -765,7 +766,7 @@ export async function saveExpenseSettingsSafeAction(
     await saveExpenseSettingsAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -776,7 +777,7 @@ export async function upsertExpenseCategorySafeAction(
     await upsertExpenseCategoryAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -788,7 +789,7 @@ export async function toggleExpenseCategoryActiveSafeAction(
     await toggleExpenseCategoryActiveAction(categoryId, isActive);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -799,7 +800,7 @@ export async function uploadAndOcrReceiptSafeAction(
     const result = await uploadAndOcrReceiptAction(formData);
     return { ok: true, result };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -810,7 +811,7 @@ export async function createExpenseSafeAction(
     const r = await createExpenseAction(input);
     return { ok: true, id: r.id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -821,7 +822,7 @@ export async function approveExpenseSafeAction(
     await approveExpenseAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -833,7 +834,7 @@ export async function rejectExpenseSafeAction(
     await rejectExpenseAction(id, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -845,7 +846,7 @@ export async function reimburseExpenseSafeAction(
     await reimburseExpenseAction(id, input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -856,7 +857,7 @@ export async function createPerDiemSafeAction(
     await createPerDiemAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -867,6 +868,6 @@ export async function createMileageSafeAction(
     await createMileageAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

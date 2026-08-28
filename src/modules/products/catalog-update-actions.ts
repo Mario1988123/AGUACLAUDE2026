@@ -19,6 +19,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { isProductEditor, PRODUCTS_NOT_EDITOR_ERROR } from "./permissions";
 import { copyAttributes, copyDocuments } from "./catalog-copy-helpers";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ProductCatalogStatus {
   linked: boolean;
@@ -182,7 +183,7 @@ export async function applyCatalogUpdateSafeAction(
     revalidatePath(`/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -218,6 +219,6 @@ export async function dismissCatalogUpdateSafeAction(
     revalidatePath(`/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

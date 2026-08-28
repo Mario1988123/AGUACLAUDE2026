@@ -10,6 +10,7 @@ import {
   type CalcResult,
   computeSavings,
 } from "./calc";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const DEFAULT_CONFIG: CalcConfig = {
   osmosis_annual_cost_cents: 15000,
@@ -306,7 +307,7 @@ export async function createQuickLeadFromSavingsAction(input: {
       name,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -327,7 +328,7 @@ export async function deleteSavingsProposalAction(
     revalidatePath("/calculadora-ahorro");
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     return { ok: false, error: msg };
   }
 }
@@ -462,7 +463,7 @@ export async function convertSavingsToProposalAction(
     revalidatePath("/calculadora-ahorro");
     return { ok: true, proposal_id: proposalId };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     console.error("[convertSavingsToProposal]", e);
     return { ok: false, error: msg };
   }
@@ -485,7 +486,7 @@ export async function refreshScraperPricesAction(): Promise<
     revalidatePath("/configuracion/calculadora-ahorro");
     return { ok: true, stats };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     console.error("[refreshScraperPrices]", e);
     return { ok: false, error: msg };
   }
@@ -869,7 +870,7 @@ export async function saveSavingsProposalAction(
     revalidatePath("/calculadora-ahorro");
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     console.error("[saveSavingsProposal]", e);
     return { ok: false, error: msg };
   }
@@ -884,7 +885,7 @@ export async function saveSavingsConfigSafeAction(
     await saveSavingsConfigAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -895,7 +896,7 @@ export async function upsertSavingsBrandSafeAction(
     await upsertSavingsBrandAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -906,6 +907,6 @@ export async function deleteSavingsBrandSafeAction(
     await deleteSavingsBrandAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -10,6 +10,7 @@ import { linkItemsByParentIndex } from "@/shared/lib/packs/link-items";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export async function listProposals(filters?: { status?: string }): Promise<ProposalListItem[]> {
   const session = await requireSession();
@@ -1306,7 +1307,7 @@ export async function updateProposalSafeAction(
     await updateProposalAction(proposalId, input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1317,7 +1318,7 @@ export async function approveProposalSafeAction(
     await approveProposalAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1331,7 +1332,7 @@ export async function markProposalAcceptedSafeAction(
     const r = await markProposalAccepted(id);
     return { ok: true, customer_id: r.customer_id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1342,7 +1343,7 @@ export async function markProposalSentSafeAction(
     await markProposalSent(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1430,7 +1431,7 @@ export async function duplicateProposalAction(
     revalidatePath("/propuestas");
     return { ok: true, new_proposal_id: newId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1442,7 +1443,7 @@ export async function markProposalRejectedSafeAction(
     await markProposalRejected(id, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1454,7 +1455,7 @@ export async function rejectApprovalSafeAction(
     await rejectApprovalAction(id, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1468,6 +1469,6 @@ export async function convertAcceptedProposalToCustomerSafeAction(
     const r = await convertAcceptedProposalToCustomerAction(proposalId);
     return { ok: true, customer_id: r.customer_id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -14,6 +14,7 @@ import {
   madridDayRangeUtc,
   madridLocalToUtcISO,
 } from "@/shared/lib/format-date";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Decide si una fecha cae fuera del horario laboral. Prioridad:
@@ -1386,6 +1387,18 @@ export async function createAgendaEventAction(input: unknown) {
   const baseStart = new Date(startIso);
   const endIso = parsed.ends_at ? madridLocalToUtcISO(parsed.ends_at) : null;
   const baseEnd = endIso ? new Date(endIso) : null;
+  // VALIDACIÓN (fix 2026-08-28): la tabla tiene el check
+  // `agenda_events_check` = (ends_at is null or ends_at >= starts_at). Nadie
+  // lo comprobaba antes de insertar, así que poner una hora de fin anterior a
+  // la de inicio reventaba con el mensaje crudo de Postgres —
+  // "new row for relation \"agenda_events\" violates check constraint
+  // \"agenda_events_check\"" — y el usuario perdía lo que había escrito.
+  // Cuatro casos registrados en /agenda y /leads.
+  if (baseEnd && baseEnd.getTime() < baseStart.getTime()) {
+    throw new Error(
+      "La hora de fin es anterior a la de inicio. Revisa las fechas: el evento no puede terminar antes de empezar.",
+    );
+  }
   const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
   const occurrences =
     parsed.recurrence_freq === "none" ? 1 : Math.max(1, parsed.recurrence_count);
@@ -1465,7 +1478,7 @@ export async function rescheduleAgendaEventSafeAction(
     await rescheduleAgendaEventInternal(eventId, newStartsAtIso);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1659,7 +1672,7 @@ export async function markAgendaEventDoneAction(
     await updateAgendaStatus(eventId, "completed");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1867,7 +1880,7 @@ export async function createAgendaEventSafeAction(
     await createAgendaEventAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1879,7 +1892,7 @@ export async function reassignAgendaEventSafeAction(
     await reassignAgendaEventAction(eventId, newAssignedUserId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1897,7 +1910,7 @@ export async function updateAgendaStatusSafeAction(
     await updateAgendaStatus(id, status);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1991,7 +2004,7 @@ export async function deleteAgendaTaskSafeAction(
     revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -2035,6 +2048,6 @@ export async function changeAgendaEventKindSafeAction(
     revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

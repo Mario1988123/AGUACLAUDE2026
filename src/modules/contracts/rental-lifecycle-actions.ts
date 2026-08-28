@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -93,7 +94,7 @@ export async function pauseRentalAction(input: unknown): Promise<Result> {
     revalidatePath("/contratos/alquileres");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -145,7 +146,7 @@ export async function resumeRentalAction(
     revalidatePath("/contratos/alquileres");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -224,6 +225,6 @@ export async function extendRentalAction(input: unknown): Promise<Result> {
     revalidatePath("/contratos/alquileres");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

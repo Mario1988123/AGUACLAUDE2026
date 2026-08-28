@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { categoryOfKind } from "./category-of-kind";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface NotificationRow {
   id: string;
@@ -126,6 +127,6 @@ export async function markAllAsReadSafeAction(
     await markAllAsRead(category);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -22,6 +22,7 @@ import {
 } from "./smtp";
 import { encryptSecret } from "./encryption";
 import { createOrFetchDomain, verifyDomain } from "./resend";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -161,7 +162,7 @@ export async function setCompanySmtpAction(
     revalidatePath("/configuracion/mailing");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -240,7 +241,7 @@ export async function testSmtpAction(
       password,
     });
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -444,7 +445,7 @@ export async function updateTemplateAction(
     revalidatePath("/configuracion/mailing");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -489,7 +490,7 @@ export async function resetTemplateToSystemAction(
     revalidatePath("/configuracion/mailing");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -865,7 +866,7 @@ export async function sendQuickEmailAction(
     if (!res.ok) return { ok: false, error: res.error };
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -956,7 +957,7 @@ export async function addMailingDomainSafeAction(
     revalidatePath("/configuracion/mailing");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -982,7 +983,7 @@ export async function verifyMailingDomainSafeAction(): Promise<
     revalidatePath("/configuracion/mailing");
     return { ok: true, status: res.status };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1086,6 +1087,6 @@ export async function setMyEmailSettingsSafeAction(input: {
     await setMyEmailSettingsAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

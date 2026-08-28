@@ -17,6 +17,7 @@ function normalizePhoneSafe(v: string | null | undefined): string | null {
   return normalizeSpanishPhone(v) ?? v;
 }
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export async function listLeads(filters?: {
   status?: LeadStatus;
@@ -935,7 +936,7 @@ export async function updateLeadSafeAction(
     await updateLeadAction(leadId, patch);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -946,7 +947,7 @@ export async function deleteLeadSafeAction(
     await deleteLeadAction(leadId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -958,7 +959,7 @@ export async function markLeadAsLostSafeAction(
     await markLeadAsLostAction(leadId, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -972,7 +973,7 @@ export async function convertLeadToCustomerSafeAction(
     const customer_id = await convertLeadToCustomerAction(leadId);
     return { ok: true, customer_id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -984,7 +985,7 @@ export async function logLeadContactSafeAction(
     await logLeadContactAction(leadId, channel);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -997,6 +998,6 @@ export async function updateLeadStatusSafeAction(
     await updateLeadStatus(id, status, lostReason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

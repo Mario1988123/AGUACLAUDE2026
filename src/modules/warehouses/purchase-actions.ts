@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureCanManage() {
   const session = await requireSession();
@@ -222,7 +223,7 @@ export async function createPurchaseAction(input: {
     revalidatePath("/almacenes");
     return { ok: true, purchase_id: purchaseId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -431,6 +432,6 @@ export async function returnToSupplierSafeAction(input: {
     await returnToSupplierAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

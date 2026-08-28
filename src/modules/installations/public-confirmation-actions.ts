@@ -9,6 +9,7 @@ import {
   type OfferableResult,
   type Slot,
 } from "@/modules/scheduling/availability";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Resuelve, a partir del token público, el input para el motor de fechas
@@ -277,7 +278,7 @@ export async function getPublicInstallationView(
       token: { used: !!t.used_at, used_action: t.used_action },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

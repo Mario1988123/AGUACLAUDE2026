@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly, zBoolean } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type FinancierKind = "renting_strict" | "financing";
 
@@ -286,7 +287,7 @@ export async function upsertFinancierSafeAction(
     const r = await upsertFinancierAction(input);
     return { ok: true, id: r.id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -297,7 +298,7 @@ export async function deleteFinancierSafeAction(
     await deleteFinancierAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -308,7 +309,7 @@ export async function upsertFinancierCoefficientSafeAction(
     await upsertFinancierCoefficientAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -319,6 +320,6 @@ export async function deleteFinancierCoefficientSafeAction(
     await deleteFinancierCoefficientAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

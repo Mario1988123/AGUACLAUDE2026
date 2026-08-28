@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Persiste una nueva push subscription para el usuario actual.
@@ -52,7 +53,7 @@ export async function registerPushSubscriptionAction(input: {
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -73,6 +74,6 @@ export async function unregisterPushSubscriptionAction(
       .eq("user_id", session.user_id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureSuperadmin() {
   const session = await requireSession();
@@ -240,7 +241,7 @@ export async function upsertGlobalCategorySafeAction(input: {
     await upsertGlobalCategoryAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -251,7 +252,7 @@ export async function deleteGlobalCategorySafeAction(
     await deleteGlobalCategoryAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -267,7 +268,7 @@ export async function upsertGlobalAttributeSafeAction(input: {
     await upsertGlobalAttributeAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -278,7 +279,7 @@ export async function deleteGlobalAttributeSafeAction(
     await deleteGlobalAttributeAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -290,7 +291,7 @@ export async function setAttributeCategoriesSafeAction(
     await setAttributeCategoriesAction(attributeKey, categoryKeys);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -304,7 +305,7 @@ export async function upsertExternalModelSafeAction(input: {
     await upsertExternalModelAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -315,6 +316,6 @@ export async function deleteExternalModelSafeAction(
     await deleteExternalModelAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

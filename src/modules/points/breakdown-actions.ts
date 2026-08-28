@@ -7,6 +7,7 @@ import {
   isLevel2,
   resolveVisibleUserIds,
 } from "@/shared/lib/auth/role-scope";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface PointsBreakdownLine {
   id: string;
@@ -323,6 +324,6 @@ export async function getPointsBreakdownSafeAction(
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

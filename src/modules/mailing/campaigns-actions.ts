@@ -12,6 +12,7 @@ import { loadCompanyEmailContext } from "./company-context";
 import { sendViaSmtp } from "./smtp";
 import { hasActiveConsent } from "@/modules/customers/consents-actions";
 import { listEphemerides, type Ephemeris } from "@/modules/social/actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // Solo el departamento de telemarketing (+ admin para configurar) gestiona campañas.
 const MAILING_ROLES = ["company_admin", "telemarketing_director", "telemarketer"];
@@ -137,7 +138,7 @@ export async function createCampaignAction(
     revalidatePath("/mailing/campanas");
     return { ok: true, id: data.id as string };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -318,7 +319,7 @@ export async function sendCampaignAction(
     revalidatePath("/mailing/campanas");
     return { ok: true, sent, failed, recipients: recipients.length };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

@@ -17,6 +17,7 @@
  */
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { madridHour } from "@/shared/lib/format-date";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type Slot = "morning" | "afternoon";
 
@@ -362,7 +363,7 @@ export async function computeOfferableSlots(
 
     return { ok: true, zonesConfigured, coveredByZone, slots: out, weeks: offerWeeks };
   } catch (e) {
-    return { ...base, error: e instanceof Error ? e.message : "Error" };
+    return { ...base, error: toActionError(e) };
   }
 }
 

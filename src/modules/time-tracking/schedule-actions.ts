@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface WorkScheduleDay {
   day_of_week: number; // 0=Lun ... 6=Dom
@@ -169,7 +170,7 @@ export async function setUserScheduleSafeAction(
     await setUserScheduleAction(userId, days);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -182,6 +183,6 @@ export async function setVacationDaysSafeAction(
     await setVacationDaysAction(userId, year, daysTotal);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

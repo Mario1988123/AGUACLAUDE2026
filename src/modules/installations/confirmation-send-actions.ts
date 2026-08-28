@@ -4,6 +4,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { ensureInstallationConfirmationToken } from "./public-confirmation-actions";
 import { sendTransactionalEmail } from "@/modules/mailing/actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 function appBaseUrl(): string {
   return (
@@ -164,6 +165,6 @@ export async function sendInstallationConfirmationAction(
 
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

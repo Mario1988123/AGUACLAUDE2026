@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // ============================================================================
 // Fase C — generar CONTRATOS HEREDADOS desde la modalidad de cada equipo.
@@ -158,6 +159,6 @@ export async function generateLegacyContractsAction(input?: {
     revalidatePath("/clientes");
     return { ok: true, result };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

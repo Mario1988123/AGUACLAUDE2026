@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getPointsSettings } from "./award";
 import { computeCycleRange } from "./cycles-utils";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureManager() {
   const session = await requireSession();
@@ -400,7 +401,7 @@ export async function adjustCycleLineSafeAction(args: {
     await adjustCycleLine(args);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -411,7 +412,7 @@ export async function closeCycleSafeAction(
     await closeCycle(cycleId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -423,6 +424,6 @@ export async function reopenCycleSafeAction(
     await reopenCycle(cycleId, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

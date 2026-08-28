@@ -14,6 +14,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
 import type { ProductDocKind } from "@/modules/products/documents-constants";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const BUCKET = "catalog-global";
 
@@ -239,7 +240,7 @@ export async function createGlobalAttributeForCategoryAction(input: {
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -385,7 +386,7 @@ export async function getCatalogFileUrlAction(
     if (error) return { ok: false, error: error.message };
     return { ok: true, url: (data as { signedUrl: string }).signedUrl };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -455,7 +456,7 @@ export async function createCatalogProductSafeAction(
     revalidatePath("/superadmin/catalogo/productos");
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -477,7 +478,7 @@ export async function updateCatalogProductSafeAction(
     revalidatePath(`/superadmin/catalogo/productos/${id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -493,7 +494,7 @@ export async function deleteCatalogProductSafeAction(
     revalidatePath("/superadmin/catalogo/productos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -537,7 +538,7 @@ export async function setCatalogProductAttributesSafeAction(
     revalidatePath(`/superadmin/catalogo/productos/${id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -587,7 +588,7 @@ export async function uploadCatalogPhotoAction(
     revalidatePath(`/superadmin/catalogo/productos/${id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -636,7 +637,7 @@ export async function deleteCatalogPhotoSafeAction(
     revalidatePath(`/superadmin/catalogo/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -668,7 +669,7 @@ export async function setMainCatalogPhotoSafeAction(
     revalidatePath(`/superadmin/catalogo/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -718,7 +719,7 @@ export async function uploadCatalogDocumentAction(
     revalidatePath(`/superadmin/catalogo/productos/${id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -751,6 +752,6 @@ export async function deleteCatalogDocumentSafeAction(
     revalidatePath(`/superadmin/catalogo/productos/${productId}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

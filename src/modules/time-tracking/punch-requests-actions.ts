@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type PunchRequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 export type PunchKind = "clock_in" | "clock_out" | "break_start" | "break_end";
@@ -305,7 +306,7 @@ export async function createPunchRequestSafeAction(
     await createPunchRequestAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -317,7 +318,7 @@ export async function approvePunchRequestSafeAction(
     await approvePunchRequestAction(id, notes);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -329,7 +330,7 @@ export async function rejectPunchRequestSafeAction(
     await rejectPunchRequestAction(id, notes);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -340,6 +341,6 @@ export async function cancelPunchRequestSafeAction(
     await cancelPunchRequestAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

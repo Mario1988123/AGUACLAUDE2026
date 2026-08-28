@@ -23,6 +23,7 @@ import type {
   CatalogPricingVisibility,
 } from "./catalog-pdf-v2";
 import type { ProductShareItem } from "./share-actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 function buildCatalogUrl(token: string): string {
   const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ?? "";
@@ -116,7 +117,7 @@ export async function createCatalogShareAction(input: {
     revalidatePath("/productos");
     return { ok: true, share, public_url: publicUrl };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -326,6 +327,6 @@ export async function sendCatalogEmailAction(input: {
       share_token: share.share_token,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -9,6 +9,7 @@ import {
   type StepImportance,
 } from "./steps-config";
 import { AUTO_CHECK_FUNCTIONS } from "./auto-checks";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface OnboardingStepState extends OnboardingStep {
   status: "pending" | "completed" | "postponed";
@@ -208,7 +209,7 @@ export async function markOnboardingStepDone(
     revalidatePath("/configuracion");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -245,7 +246,7 @@ export async function postponeOnboardingStep(
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Devuelve el ID del almacén "principal" de la empresa. Si no hay ninguno
@@ -135,7 +136,7 @@ export async function reserveStockForContractAction(
     return {
       ok: false,
       reserved: 0,
-      error: e instanceof Error ? e.message : "Error",
+      error: toActionError(e),
     };
   }
 }

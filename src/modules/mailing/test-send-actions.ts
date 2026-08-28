@@ -7,6 +7,7 @@ import { renderTemplate, buildEmailHtml } from "./templates";
 import { loadCompanyEmailContext } from "./company-context";
 import { getSampleVars } from "./sample-vars";
 import { getSystemTemplates } from "./system-templates";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Manda TODAS las plantillas del sistema (12+) al email indicado con
@@ -90,6 +91,6 @@ export async function sendAllTemplatesTestAction(
     }
     return { ok: true, sent, failed };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

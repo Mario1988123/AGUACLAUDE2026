@@ -19,6 +19,7 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface FilterStockRow {
   filter_id: string;
@@ -216,6 +217,6 @@ export async function setFilterStockAction(input: {
     revalidatePath("/productos/filtros");
     return { ok: true, quantity: input.quantity };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -6,6 +6,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ReferralItem {
   lead_id: string;
@@ -325,6 +326,6 @@ export async function createReferralLeadAction(input: {
     revalidatePath(`/clientes/${input.customer_id}`);
     return { ok: true, lead_id: leadId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

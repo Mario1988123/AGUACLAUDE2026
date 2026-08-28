@@ -9,6 +9,7 @@ import { companyCreateSchema, companyUpdateSchema, type CompanyUpdateInput } fro
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { generateTempPassword } from "@/shared/lib/auth/temp-password";
 import type { CompanyDetail, CompanyListItem } from "./types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 async function ensureSuperadmin() {
   const session = await requireSession();
@@ -478,7 +479,7 @@ export async function updateCompanySafeAction(
     await updateCompanyAction(id, input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -491,7 +492,7 @@ export async function toggleCompanyModuleSafeAction(
     await toggleCompanyModule(companyId, moduleKey, isActive);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -502,7 +503,7 @@ export async function createCompanyAdminSafeAction(
     const result = await createCompanyAdminAction(input);
     return { ok: true, result };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -513,7 +514,7 @@ export async function resetCompanyAdminPasswordSafeAction(
     const r = await resetCompanyAdminPassword(userId);
     return { ok: true, temp_password: r.temp_password };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -595,7 +596,7 @@ export async function setCompanyGmapsSafeAction(input: {
     revalidatePath("/configuracion/google-maps");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -636,6 +637,6 @@ export async function setCompanyEmailProviderSafeAction(input: {
     revalidatePath("/configuracion/mailing");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { DEFAULT_FREE_TRIAL_CONDITIONS } from "./defaults";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface FreeTrialsConfig {
   duration_days: number;
@@ -78,6 +79,6 @@ export async function updateFreeTrialsConfigSafeAction(
     await updateFreeTrialsConfig(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

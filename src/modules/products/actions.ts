@@ -8,6 +8,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { productCreateSchema, PRODUCT_ROLES } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CategoryItem, ProductDetail, ProductListItem, ProductKind } from "./types";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export async function listProducts(filters?: {
   kind?: string;
@@ -424,7 +425,7 @@ export async function updateCategoryAction(
     revalidatePath("/productos");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -486,7 +487,7 @@ export async function deleteCategoryAction(
     revalidatePath("/configuracion/productos");
     return { ok: true, deactivated: false };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -637,7 +638,7 @@ export async function createProductSafeAction(
     ) {
       throw e;
     }
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -767,7 +768,7 @@ export async function updateProductAction(
     revalidatePath("/productos");
     return { ok: true };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Error";
+    const msg = toActionError(e);
     console.error("[updateProduct]", e);
     return { ok: false, error: msg };
   }
@@ -792,7 +793,7 @@ export async function cloneGlobalCategorySafeAction(
     await cloneGlobalCategoryAction(globalCategoryId);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -803,7 +804,7 @@ export async function createCategorySafeAction(
     await createCategoryAction(formData);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 

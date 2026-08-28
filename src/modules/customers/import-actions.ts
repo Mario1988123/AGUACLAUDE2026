@@ -11,6 +11,7 @@ import {
   type ImportCustomerRow,
 } from "./import-mapping";
 import { readXlsxRows } from "@/shared/lib/xlsx/read-xlsx";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type { ImportCustomerRow };
 
@@ -504,6 +505,6 @@ export async function importCustomersSafeAction(
     const result = await importCustomersAction(rows);
     return { ok: true, result };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { addCustomerEquipmentAction } from "./equipment-actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Una línea de equipo dentro de un pack (principal o extra). Mismos campos que
@@ -87,6 +88,6 @@ export async function addCustomerEquipmentPackAction(input: {
     revalidatePath(`/clientes/${input.customer_id}`);
     return { ok: true, mainId, extraIds };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

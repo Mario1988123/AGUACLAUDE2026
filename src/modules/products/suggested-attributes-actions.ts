@@ -24,6 +24,7 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface SuggestedAttribute {
   key: string;
@@ -245,6 +246,6 @@ export async function importGlobalAttributesForCategoryAction(
       skipped: suggested.length - inserted,
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

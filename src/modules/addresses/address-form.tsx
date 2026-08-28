@@ -370,7 +370,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     return null;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     // Geo: solo avisar, nunca bloquear (decisión 2026-06-10). El nombre de
     // provincia que devuelve el mapa puede ser una variante cooficial; el
@@ -383,16 +383,54 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     // no puede iniciar parte ni validar GPS si faltan. Si no se han
     // podido geocodificar, el usuario debe colocar chincheta manual en
     // el mapa.
-    if (form.latitude == null || form.longitude == null) {
+    // Si faltan coordenadas intentamos geocodificar ANTES de bloquear. Era el
+    // error más repetido del panel de superadmin (96 veces en /leads/nuevo
+    // entre junio y agosto de 2026): se mandaba al usuario a pulsar «Buscar en
+    // mapa» a mano para algo que el sistema resuelve solo. La regla no cambia
+    // (sin lat/lng no se guarda), solo se deja de pedir trabajo manual
+    // innecesario. Mismo criterio en leads/create-form.tsx.
+    let lat = form.latitude as number | null;
+    let lng = form.longitude as number | null;
+    if (lat == null || lng == null) {
+      setGeoLoading(true);
+      try {
+        const parts = [
+          form.street,
+          form.street_number,
+          form.postal_code,
+          form.city,
+          form.province,
+          "España",
+        ].filter(Boolean);
+        const auto = await forwardGeocode(parts.join(", "));
+        if (auto) {
+          lat = auto.lat;
+          lng = auto.lng;
+          setForm((f) => ({
+            ...f,
+            latitude: auto.lat,
+            longitude: auto.lng,
+            geo_source: "geocoded",
+          }));
+        }
+      } catch {
+        /* cae al aviso de abajo */
+      } finally {
+        setGeoLoading(false);
+      }
+    }
+    if (lat == null || lng == null) {
       notify.error(
-        "Faltan coordenadas",
-        "Pulsa «Buscar en mapa» o coloca la chincheta manualmente — sin lat/lng el técnico no puede validar el GPS al instalar.",
+        "No hemos podido localizar la dirección",
+        "Revisa la calle y el código postal, o coloca la chincheta a mano con «Buscar en mapa» — sin coordenadas el técnico no puede validar el GPS al instalar.",
       );
       return;
     }
     startTransition(async () => {
       const r = await upsertAddressSafeAction({
         ...form,
+        latitude: lat,
+        longitude: lng,
         id: initial?.id,
         customer_id: customerId,
         lead_id: leadId,

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export type Tier = "lite" | "medium" | "premium";
 
@@ -323,7 +324,7 @@ export async function generateMonthlyMaintenanceInvoicesAction(): Promise<{
     } catch (e) {
       errors.push({
         contract: mc.reference_code ?? mc.id.slice(0, 8),
-        error: e instanceof Error ? e.message : "Error",
+        error: toActionError(e),
       });
       skipped += 1;
     }
@@ -404,7 +405,7 @@ export async function createMaintenanceContractSafeAction(input: {
     await createMaintenanceContractAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -443,6 +444,6 @@ export async function generateMonthlyMaintenanceInvoicesSafeAction(): Promise<
     const r = await generateMonthlyMaintenanceInvoicesAction();
     return { ok: true, created: r.created, skipped: r.skipped };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

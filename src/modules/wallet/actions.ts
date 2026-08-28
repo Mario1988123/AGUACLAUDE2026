@@ -7,6 +7,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { walletEntryCreateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { notifyPaymentPendingValidation } from "@/modules/notifications/notifier";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface WalletEntryRow {
   id: string;
@@ -1053,7 +1054,7 @@ export async function validateWalletEntrySafeAction(
     await validateWalletEntryAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1064,7 +1065,7 @@ export async function markWalletAsCollectedSafeAction(
     await markWalletAsCollectedAction(id);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1076,7 +1077,7 @@ export async function rejectWalletEntrySafeAction(
     await rejectWalletEntryAction(id, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1088,7 +1089,7 @@ export async function cancelWalletEntrySafeAction(
     await cancelWalletEntryAction(id, reason);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1100,7 +1101,7 @@ export async function changeWalletMethodSafeAction(
     await changeWalletMethodAction(id, newMethod as never);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -1111,6 +1112,6 @@ export async function createWalletEntrySafeAction(
     await createWalletEntryAction(input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

@@ -6,6 +6,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { isLevel1 } from "@/shared/lib/auth/role-scope";
 import { isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
 import { customerConvertSchema, type CustomerConvertInput } from "./schemas";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // ============================================================================
 // Conversión particular → autónomo / empresa (y autónomo → empresa)
@@ -85,7 +86,7 @@ export async function checkConversionImpactsAction(
       },
     };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -247,6 +248,6 @@ export async function convertCustomerSafeAction(
     await convertCustomerAction(customerId, input);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

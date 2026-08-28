@@ -11,6 +11,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 const BUCKET = "catalog-global";
 
@@ -91,7 +92,7 @@ export async function upsertManufacturerSafeAction(input: {
     revalidatePath("/superadmin/catalogo/fabricantes");
     return { ok: true, id: (data as { id: string }).id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -118,7 +119,7 @@ export async function deleteManufacturerSafeAction(
     revalidatePath("/superadmin/catalogo/fabricantes");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -155,6 +156,6 @@ export async function uploadManufacturerLogoAction(
     revalidatePath("/superadmin/catalogo/fabricantes");
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

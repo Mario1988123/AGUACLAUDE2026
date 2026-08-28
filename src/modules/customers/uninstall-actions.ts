@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 /**
  * Destino de cada equipo retirado:
@@ -245,7 +246,7 @@ export async function createUninstallAction(
     revalidatePath("/instalaciones");
     return { ok: true, installation_id: installationId };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -574,7 +575,7 @@ export async function changeStockStateAction(input: {
     revalidatePath(`/almacenes/${r.warehouse_id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
@@ -634,6 +635,6 @@ export async function completeUninstallNowAction(input: {
     revalidatePath(`/instalaciones/${i.id}`);
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }

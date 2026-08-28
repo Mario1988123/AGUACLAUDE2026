@@ -137,13 +137,14 @@ export async function setUserSmtpAction(
 
     return { ok: true };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+    return { ok: false, error: toActionError(e) };
   }
 }
 
 // Wrapper async sobre testSmtpAction de actions.ts.
 // "use server" no permite re-exports; tiene que ser una función async declarada.
 import type { TestSmtpInput } from "./actions";
+import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export async function testSmtpAction(
   input: TestSmtpInput,
