@@ -328,7 +328,19 @@ export async function createContractFromProposal(proposalId: string) {
     .eq("is_active", true)
     .order("display_order");
   if (!tpls || (tpls as Array<unknown>).length === 0) {
-    await supaAny.rpc("seed_default_clauses", { p_company_id: session.company_id });
+    // El wrapper public.seed_default_clauses es service_role (no se concede a
+    // authenticated: recibe un p_company_id arbitrario y con grant abierto
+    // permitiría sembrar cláusulas en OTRA empresa vía PostgREST). Por eso se
+    // llama con admin, no con la sesión del usuario. El company_id sale de la
+    // sesión, así que no hay elevación de privilegios.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminSeed = createAdminClient() as any;
+    const seedRes = await adminSeed.rpc("seed_default_clauses", {
+      p_company_id: session.company_id,
+    });
+    if (seedRes?.error) {
+      console.error("[contracts] seed_default_clauses:", seedRes.error.message);
+    }
     const r = await supaAny
       .from("contract_clause_templates")
       .select("title, body, display_order")
