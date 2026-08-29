@@ -8,6 +8,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/client";
 import { notify } from "@/shared/hooks/use-toast";
 import { PasswordInput } from "@/shared/components/password-input";
+import { authErrorEs } from "@/shared/lib/auth/auth-error-es";
 
 const loginSchema = z.object({
   email: z.string().email("Email no válido"),
@@ -34,7 +35,7 @@ function LoginForm() {
     const { error } = await supabase.auth.signInWithPassword(values);
     setSubmitting(false);
     if (error) {
-      notify.error("No se pudo iniciar sesión", error.message);
+      notify.error("No se pudo iniciar sesión", authErrorEs(error.message));
       return;
     }
     notify.success("Sesión iniciada");

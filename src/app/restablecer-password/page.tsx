@@ -7,6 +7,7 @@ import { createClient } from "@/shared/lib/supabase/client";
 import { notify } from "@/shared/hooks/use-toast";
 import { markPasswordChangedAction } from "@/modules/auth/password-actions";
 import { PasswordInput } from "@/shared/components/password-input";
+import { authErrorEs, MIN_PASSWORD_LENGTH } from "@/shared/lib/auth/auth-error-es";
 
 export default function RestablecerPasswordPage() {
   // Next 15 exige Suspense alrededor de useSearchParams para SSG.
@@ -31,6 +32,15 @@ function RestablecerPasswordInner() {
       notify.warning("Escribe una contraseña");
       return;
     }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      // Validamos aquí lo que Supabase validaría en el servidor: así el aviso
+      // sale al instante y en español, en vez de ir y volver para recibir
+      // "Password should be at least 6 characters".
+      notify.warning(
+        `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`,
+      );
+      return;
+    }
     if (password !== confirm) {
       notify.warning("Las contraseñas no coinciden");
       return;
@@ -40,7 +50,7 @@ function RestablecerPasswordInner() {
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
       setSubmitting(false);
-      notify.error("No se pudo cambiar la contraseña", error.message);
+      notify.error("No se pudo cambiar la contraseña", authErrorEs(error.message));
       return;
     }
     // Marcar must_change_password=false en user_profiles para que el

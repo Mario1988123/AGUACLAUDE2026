@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/shared/lib/supabase/client";
 import { notify } from "@/shared/hooks/use-toast";
+import { authErrorEs } from "@/shared/lib/auth/auth-error-es";
 
 export default function RecuperarPasswordPage() {
   const [email, setEmail] = useState("");
@@ -17,7 +18,7 @@ export default function RecuperarPasswordPage() {
     });
     setSubmitting(false);
     if (error) {
-      notify.error("No se pudo enviar el correo", error.message);
+      notify.error("No se pudo enviar el correo", authErrorEs(error.message));
       return;
     }
     notify.success("Te hemos enviado un correo con instrucciones");
