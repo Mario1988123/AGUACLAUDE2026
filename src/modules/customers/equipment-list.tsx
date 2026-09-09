@@ -12,6 +12,7 @@ import { RelocateEquipmentButton } from "./relocate-button";
 import { OfferMaintenanceContractButton } from "./offer-maintenance-contract-button";
 import { EquipmentModalityButton } from "./modality-button";
 import { RemoveEquipmentButton } from "./remove-equipment-button";
+import { TransferEquipmentButton } from "./transfer-equipment-button";
 import type { CustomerEquipmentRow } from "./equipment-actions";
 import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
 
@@ -203,6 +204,17 @@ export function CustomerEquipmentList({
                     equipmentName={name}
                     currentAddressId={e.address_id}
                     addresses={addresses}
+                  />
+                )}
+                {/* Cambiar el TITULAR (particular ↔ autónomo ↔ empresa). No es
+                    reubicar: el equipo se queda donde está, solo cambia a quién
+                    se factura. Mismo permiso que reubicar. */}
+                {canRelocate && e.is_active && customerId && (
+                  <TransferEquipmentButton
+                    equipmentId={e.id}
+                    customerId={customerId}
+                    equipmentName={name}
+                    hasChildren={(childrenByParent.get(e.id)?.length ?? 0) > 0}
                   />
                 )}
                 {/* Botón "Ofrecer contrato de mantenimiento" — solo si el
