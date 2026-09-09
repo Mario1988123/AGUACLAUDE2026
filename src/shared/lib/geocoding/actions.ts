@@ -34,24 +34,27 @@ export async function reverseGeocodeAction(
   if (companyId) {
     const gm = await canUseGoogleMaps({ companyId });
     if (gm.ok) {
-      const result = await reverseGoogle(lat, lng, gm.key);
-      if (result) {
+      const g = await reverseGoogle(lat, lng, gm.key);
+      if (g.result) {
         await trackGoogleApiCall({
           companyId,
           api: "geocoding",
           endpoint: "reverse",
           userId,
         });
-        return result;
+        return g.result;
       }
-      // Si Google falla, registramos error y caemos a Nominatim
+      // Si Google falla, registramos el motivo REAL (REQUEST_DENIED,
+      // OVER_DAILY_LIMIT, http_403…) y caemos a Nominatim. Antes se
+      // guardaba siempre "no_result" y era imposible distinguir "no hay
+      // resultados" de "la key está mal / sin facturación".
       await trackGoogleApiCall({
         companyId,
         api: "geocoding",
         endpoint: "reverse",
         userId,
         success: false,
-        errorCode: "no_result",
+        errorCode: g.errorCode,
       });
     }
   }
@@ -75,15 +78,15 @@ export async function forwardGeocodeAction(
   if (companyId) {
     const gm = await canUseGoogleMaps({ companyId });
     if (gm.ok) {
-      const result = await forwardGoogle(query, gm.key);
-      if (result) {
+      const g = await forwardGoogle(query, gm.key);
+      if (g.result) {
         await trackGoogleApiCall({
           companyId,
           api: "geocoding",
           endpoint: "forward",
           userId,
         });
-        return result;
+        return g.result;
       }
       await trackGoogleApiCall({
         companyId,
@@ -91,7 +94,7 @@ export async function forwardGeocodeAction(
         endpoint: "forward",
         userId,
         success: false,
-        errorCode: "no_result",
+        errorCode: g.errorCode,
       });
     }
   }
@@ -103,11 +106,37 @@ export async function forwardGeocodeAction(
 // Google implementations
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Resultado de una llamada a Google: o hay resultado, o hay un código
+ * de error explicable. `errorCode` es el `status` de Google
+ * (ZERO_RESULTS, REQUEST_DENIED, OVER_DAILY_LIMIT, INVALID_REQUEST…),
+ * `http_<code>` si el HTTP no fue 2xx, o `fetch_failed` si ni
+ * siquiera hubo respuesta. Se persiste en google_api_usage.error_code.
+ */
+type GoogleResult<T> =
+  | { result: T; errorCode: null }
+  | { result: null; errorCode: string };
+
+function googleFailure<T>(
+  endpoint: "reverse" | "forward",
+  status: string,
+  errorMessage?: string,
+): GoogleResult<T> {
+  // ZERO_RESULTS es normal (dirección inexistente); lo demás es un
+  // problema de key/facturación/cuota y merece salir en los logs de Vercel.
+  if (status !== "ZERO_RESULTS") {
+    console.error(
+      `[geocoding] Google ${endpoint} falló: ${status}${errorMessage ? ` — ${errorMessage}` : ""}`,
+    );
+  }
+  return { result: null, errorCode: status };
+}
+
 async function reverseGoogle(
   lat: number,
   lng: number,
   key: string,
-): Promise<ReverseGeocode | null> {
+): Promise<GoogleResult<ReverseGeocode>> {
   try {
     const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
     url.searchParams.set("latlng", `${lat},${lng}`);
@@ -115,9 +144,10 @@ async function reverseGoogle(
     url.searchParams.set("region", "es");
     url.searchParams.set("key", key);
     const res = await fetch(url.toString(), { next: { revalidate: 60 } });
-    if (!res.ok) return null;
+    if (!res.ok) return googleFailure("reverse", `http_${res.status}`);
     const data = (await res.json()) as {
       status: string;
+      error_message?: string;
       results?: Array<{
         formatted_address: string;
         address_components: Array<{
@@ -127,13 +157,15 @@ async function reverseGoogle(
         }>;
       }>;
     };
-    if (data.status !== "OK" || !data.results?.length) return null;
+    if (data.status !== "OK" || !data.results?.length) {
+      return googleFailure("reverse", data.status || "empty", data.error_message);
+    }
     const r = data.results[0]!;
     const comp = (type: string) =>
       r.address_components.find((c) => c.types.includes(type))?.long_name ?? null;
     const route = comp("route") ?? "";
     const { type, rest } = detectStreetType(route);
-    return {
+    const result: ReverseGeocode = {
       street_type: type,
       street: rest,
       street_number: comp("street_number"),
@@ -149,15 +181,16 @@ async function reverseGoogle(
         null,
       display_name: r.formatted_address,
     };
+    return { result, errorCode: null };
   } catch {
-    return null;
+    return googleFailure("reverse", "fetch_failed");
   }
 }
 
 async function forwardGoogle(
   query: string,
   key: string,
-): Promise<{ lat: number; lng: number } | null> {
+): Promise<GoogleResult<{ lat: number; lng: number }>> {
   try {
     const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
     url.searchParams.set("address", query);
@@ -166,16 +199,19 @@ async function forwardGoogle(
     url.searchParams.set("components", "country:ES");
     url.searchParams.set("key", key);
     const res = await fetch(url.toString(), { next: { revalidate: 60 } });
-    if (!res.ok) return null;
+    if (!res.ok) return googleFailure("forward", `http_${res.status}`);
     const data = (await res.json()) as {
       status: string;
+      error_message?: string;
       results?: Array<{ geometry: { location: { lat: number; lng: number } } }>;
     };
-    if (data.status !== "OK" || !data.results?.length) return null;
+    if (data.status !== "OK" || !data.results?.length) {
+      return googleFailure("forward", data.status || "empty", data.error_message);
+    }
     const loc = data.results[0]!.geometry.location;
-    return { lat: loc.lat, lng: loc.lng };
+    return { result: { lat: loc.lat, lng: loc.lng }, errorCode: null };
   } catch {
-    return null;
+    return googleFailure("forward", "fetch_failed");
   }
 }
 
