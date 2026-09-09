@@ -631,6 +631,114 @@ Corto, y por eso conviene leerlo: es lo que **no** está hecho.
   tratamiento frente a tus clientes: actualiza la lista de subencargados antes
   de lanzar. Esto no es código, pero sin ello no deberías encender nada.
 
+## 8-bis. Cómo se le enseña a hablar y a concertar visitas
+
+La pregunta natural es "¿cómo hago que aprenda?". Conviene desmontar eso
+primero, porque la respuesta correcta cambia todo lo demás.
+
+### El agente no aprende solo. Nunca
+
+No hay entrenamiento, ni memoria entre llamadas, ni mejora con el uso. Cada
+llamada empieza de cero con el mismo guion. Si hoy dice una tontería, mañana
+dirá exactamente la misma tontería, mil veces, hasta que **alguien cambie el
+guion**.
+
+Eso no es una limitación: es lo que lo hace gobernable. En un sistema que
+aprendiera solo, nadie podría garantizar que mañana sigue diciendo que es una
+IA. Aquí el comportamiento vive en `prompts.ts`, se versiona con git y se sabe
+quién lo cambió y cuándo.
+
+**El que aprende eres tú, leyendo transcripciones.** El agente solo hereda lo
+aprendido cuando tú lo escribes en el guion.
+
+### El bucle, que es todo el secreto
+
+```
+   llamada real  →  transcripción  →  la lees  →  la clasificas
+        ↑                                              │
+        │                                              ▼
+   despliegas  ←  pasan los tests  ←  UN cambio en prompts.ts
+```
+
+Cuatro reglas que hacen que el bucle funcione en vez de dar vueltas:
+
+1. **Una semana en simulación antes de marcar a nadie.** Con
+   `VOICE_AGENT_SIMULATE=true` la cola corre entera y no suena ningún teléfono.
+   Mira a quién *llamaría*. La primera cosecha de errores sale de ahí, gratis.
+2. **Lee las transcripciones. Todas, al principio.** Con un tope de 100 minutos
+   son unas 80 llamadas; se leen en media hora. De ahí salen tres correcciones
+   que valen por veinte hipótesis de despacho.
+3. **Un cambio cada vez.** Si tocas cuatro cosas y la siguiente tanda va mejor,
+   no sabes cuál fue. Cambias una, despliegas, comparas.
+4. **Cada fallo corregido se convierte en un test.** Hay 37 en
+   `prompts.test.ts` que vigilan que nadie borre las frases obligatorias. Cuando
+   arregles algo, añade el test: así el arreglo no se pierde dentro de tres
+   meses cuando alguien reescriba el guion.
+
+### Qué mirar en cada transcripción
+
+Clasifica cada llamada en una de estas casillas. La casilla dice qué arreglar:
+
+| Lo que ves | Qué significa | Dónde se arregla |
+|---|---|---|
+| Cuelga en los primeros 5 segundos | La apertura no convence | La frase de apertura en `prompts.ts` |
+| "¿Qué? ¿Cómo dice?" repetido | Habla demasiado rápido o largo | Frases más cortas en `VOICE_STYLE` |
+| Ofrece hueco y el cliente duda mucho | Demasiadas opciones | Ya está en dos; no subir de ahí |
+| Da un dato que no le consta | Se lo está inventando | Reforzar la regla 4 del bloque legal |
+| Acaba sin cita ni motivo claro | Falta una salida en la tabla | Añadir fila a "Qué hacer en cada salida" |
+| Escala a persona sin hacer falta | El umbral está bajo | Acotar cuándo escalar |
+| El cliente se enfada | Casi siempre: no entendió que era una IA | La declaración tiene que ir más clara |
+
+### Lo que hace que una llamada de este tipo funcione
+
+Esto no es opinión: es lo que coincide entre la documentación de ElevenLabs, la
+gente que ha montado agendadores en producción y lo que ya está escrito en
+nuestro guion.
+
+- **Dos opciones de hueco, no cinco.** Con tres la gente duda, pide pensarlo y
+  la llamada se muere. Dos es una decisión, no un menú.
+- **El modelo no elige la fecha: elige entre las que le da el backend.** Nuestro
+  `huecos_mantenimiento` devuelve los huecos ya redactados para decirlos en voz
+  alta, y `confirmar_mantenimiento` revalida contra el motor de disponibilidad
+  antes de tocar la agenda. Cada responsabilidad que le quitas al modelo es una
+  clase entera de errores que deja de existir.
+- **Fechas habladas, no escritas.** "El jueves dieciocho por la mañana", nunca
+  "18/09". El motor de voz lee texto; los números y las barras los pronuncia
+  fatal.
+- **Franjas, no horas exactas.** Prometer "a las 10:15" es prometer algo que el
+  técnico no controla.
+- **Repetir la cita en voz alta al cerrar**, y mandar el WhatsApp. La
+  confirmación hablada evita el malentendido; la escrita evita el "yo no dije
+  eso".
+- **Repite dos veces lo más importante.** ElevenLabs recomienda literalmente
+  duplicar la instrucción crítica dentro del prompt, y marcar los pasos
+  obligatorios con un *"este paso es importante"* al final de la línea. Los
+  modelos le prestan atención extra.
+- **Guardarraíles en su propia sección.** No repartidos por el texto: juntos,
+  bajo un encabezado propio. Es lo que hace nuestro `LEGAL_BLOCK`.
+
+### Cuándo dejar de tocar el prompt
+
+Cuando el guion pasa de unas 1.000 palabras o necesita más de tres caminos de
+conversación distintos, el prompt deja de ser la herramienta adecuada y toca
+partirlo en un flujo con estados (ElevenLabs los llama *workflows*). Señal de
+que has llegado: empiezas a añadir "si pasó X antes, entonces…". Nuestros tres
+guiones están holgadamente por debajo de ese punto, y conviene que sigan así.
+
+### Las tres métricas que dicen si va bien
+
+No mires "cuántas llamadas ha hecho". Mira:
+
+1. **Citas cerradas ÷ llamadas contestadas.** Es el número. Todo lo demás lo
+   explica.
+2. **Tasa de escalado a persona.** Si sube, el guion tiene un agujero. Si es
+   cero, sospecha: significa que no está escalando cuando debería.
+3. **Duración media.** Si crece llamada a llamada, se está enredando.
+
+Y una cuarta que no es una métrica pero vale más que las tres: **escucha diez
+llamadas enteras tú mismo el primer mes.** No hay panel que sustituya a oír a un
+cliente tuyo hablando con tu máquina.
+
 ## 9. Fuentes
 
 - [BOE — Resolución de 14 de abril de 2026, numeración 400](https://www.boe.es/diario_boe/txt.php?id=BOE-A-2026-8409)
@@ -639,5 +747,10 @@ Corto, y por eso conviene leerlo: es lo que **no** está hecho.
 - [BOE — Circular 1/2023 de la AEPD sobre el art. 66.1.b) LGTel](https://www.boe.es/buscar/doc.php?id=BOE-A-2023-15071)
 - [Comisión Europea — Obligaciones de transparencia del art. 50 del Reglamento de IA](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act)
 - [ElevenLabs — Agents Pricing](https://elevenlabs.io/pricing/agents)
+- [ElevenLabs — Guía de prompting para agentes](https://elevenlabs.io/docs/eleven-agents/best-practices/prompting-guide) (secciones del prompt, normalización para TTS, énfasis en pasos críticos)
+- [Un agendador real con ElevenLabs y Cal.com: que el modelo nunca adivine](https://dev.to/devrchancay/voice-agent-that-books-appointments-elevenlabs-calcom-and-a-backend-that-never-lets-the-model-34e9)
+- [Cuándo pasar de un prompt único a un workflow](https://growwstacks.com/blog/how-to-build-workflow-agents-in-elevenlabs)
+- [Hamming AI — Rúbrica para puntuar llamadas con un LLM juez](https://hamming.ai/resources/llm-grader-voice-agent-call-scoring-rubric)
+- [Coval — Guía de evaluación de agentes de voz](https://www.coval.ai/blog/voice-ai-agent-evaluation-guide/)
 - [Twilio — ConversationRelay](https://www.twilio.com/docs/voice/twiml/connect/conversationrelay)
 - [Cuatrecasas — Circular de la AEPD sobre llamadas comerciales no solicitadas](https://www.cuatrecasas.com/es/spain/art/publicacion-de-la-circular-de-la-aepd-sobre-llamadas-comerciales-no-solicitadas)
