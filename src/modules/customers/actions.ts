@@ -9,6 +9,7 @@ import { customerCreateSchema, customerUpdateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
+import { isBlockingDuplicate } from "@/shared/lib/dedupe/rules";
 import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
 import { fetchAllRows, POSTGREST_MAX_ROWS } from "@/shared/lib/supabase/fetch-all";
 import { toActionError } from "@/shared/lib/actions/safe-error";
@@ -636,14 +637,18 @@ export async function createCustomerAction(formData: FormData) {
 
   // Anti-duplicado server-side. Si viene de lead, excluimos al propio lead
   // (porque sus datos siguen ahí hasta que actualizamos su estado).
-  const dups = await checkDedupe({
-    tax_id: parsed.tax_id || undefined,
-    email: parsed.email || undefined,
-    phone: parsed.phone_primary || undefined,
-    exclude: parsed.source_lead_id
-      ? { entity: "lead", id: parsed.source_lead_id }
-      : undefined,
-  });
+  // Regla persona ↔ empresa: el email/teléfono compartido NO bloquea si el alta
+  // es de otro tipo de titular (ver isBlockingDuplicate). El DNI/CIF sí.
+  const dups = (
+    await checkDedupe({
+      tax_id: parsed.tax_id || undefined,
+      email: parsed.email || undefined,
+      phone: parsed.phone_primary || undefined,
+      exclude: parsed.source_lead_id
+        ? { entity: "lead", id: parsed.source_lead_id }
+        : undefined,
+    })
+  ).filter((m) => isBlockingDuplicate(m, parsed.party_kind));
   if (dups.length > 0) {
     const first = dups[0]!;
     const fieldLabel =

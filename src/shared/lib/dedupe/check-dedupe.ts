@@ -7,6 +7,8 @@ import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validati
 export interface DedupeMatch {
   field: "tax_id" | "email" | "phone";
   entity: "lead" | "customer";
+  /** Tipo de titular del registro que ya existe (para la regla persona ↔ empresa). */
+  party_kind: "individual" | "company";
   id: string;
   display_name: string;
   assigned_user_id: string | null;
@@ -102,6 +104,7 @@ export async function checkDedupe(input: DedupeInput): Promise<DedupeMatch[]> {
         matches.push({
           field: f,
           entity: table === "leads" ? "lead" : "customer",
+          party_kind: r.party_kind === "company" ? "company" : "individual",
           id: r.id,
           display_name: display,
           assigned_user_id: r.assigned_user_id,

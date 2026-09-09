@@ -253,7 +253,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
             </div>
           </div>
 
-          <DedupeWarning matches={dedupeMatches} />
+          <DedupeWarning matches={dedupeMatches} partyKind={partyKind} />
         </div>
       )}
 

@@ -591,7 +591,9 @@ set search_path = public, app, pg_temp
 as $$
   with released as (
     update public.voice_call_tasks
-       set status = case when attempts >= max_attempts then 'failed' else 'pending' end,
+       -- El CASE hay que castearlo: sus ramas son `text` y la columna es
+       -- `app.voice_task_status`. Sin el cast, Postgres da 42804.
+       set status = (case when attempts >= max_attempts then 'failed' else 'pending' end)::app.voice_task_status,
            locked_at = null,
            lock_token = null,
            next_attempt_at = now() + make_interval(mins => p_minutes)

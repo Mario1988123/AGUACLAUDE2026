@@ -10,6 +10,7 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { LeadDetail, LeadListItem, LeadStatus } from "./types";
 import { notifyLeadCreated } from "@/modules/notifications/notifier";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
+import { isBlockingDuplicate } from "@/shared/lib/dedupe/rules";
 import { normalizeSpanishPhone } from "@/shared/lib/validations/spanish";
 
 function normalizePhoneSafe(v: string | null | undefined): string | null {
@@ -340,11 +341,15 @@ export async function createLeadAction(formData: FormData) {
   // dirección (?address=open) para completarla cuando se quiera.
 
   // Anti-duplicado server-side (cubre el caso de dos comerciales creando a la vez)
-  const dups = await checkDedupe({
-    tax_id: parsed.tax_id || undefined,
-    email: parsed.email || undefined,
-    phone: parsed.phone_primary || undefined,
-  });
+  // Regla persona ↔ empresa: el email/teléfono compartido NO bloquea si el alta
+  // es de otro tipo de titular (ver isBlockingDuplicate). El DNI/CIF sí.
+  const dups = (
+    await checkDedupe({
+      tax_id: parsed.tax_id || undefined,
+      email: parsed.email || undefined,
+      phone: parsed.phone_primary || undefined,
+    })
+  ).filter((m) => isBlockingDuplicate(m, parsed.party_kind));
   if (dups.length > 0) {
     const first = dups[0]!;
     const fieldLabel =

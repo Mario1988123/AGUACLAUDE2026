@@ -22,6 +22,11 @@ export const LEAD_ORIGIN = [
   "cold_call",
   "event",
   "social",
+  // Los dos siguientes los pone el agente de voz IA, nunca una persona. Se
+  // separan de `cold_call` y `tmk` a propósito: sin origen propio no hay forma
+  // de medir si la IA aporta leads o solo ruido.
+  "inbound_call",
+  "ia_voz",
   "other",
 ] as const;
 export const LEAD_POTENTIAL = ["A", "B", "C", "unknown"] as const;
@@ -45,6 +50,8 @@ export const ORIGIN_LABEL: Record<(typeof LEAD_ORIGIN)[number], string> = {
   cold_call: "Llamada fría",
   event: "Evento",
   social: "Redes sociales",
+  inbound_call: "Llamada entrante (IA)",
+  ia_voz: "Agente de voz IA",
   other: "Otro",
 };
 

@@ -502,7 +502,7 @@ export function LeadCreateForm() {
             </div>
           </div>
 
-          <DedupeWarning matches={dedupeMatches} />
+          <DedupeWarning matches={dedupeMatches} partyKind={partyKind} />
 
           <div className="border-t pt-4">
             <div className="grid gap-4 sm:grid-cols-2">
