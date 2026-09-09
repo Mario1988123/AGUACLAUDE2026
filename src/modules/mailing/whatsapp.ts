@@ -56,6 +56,15 @@ export interface SendWhatsAppInput {
   template_sid?: string;
   /** Variables de la plantilla {{1}}, {{2}}... */
   template_variables?: Record<string, string>;
+  /**
+   * Número emisor de ESTA empresa, formato "whatsapp:+34XXXXXXXXX".
+   *
+   * Sin esto se usa `WHATSAPP_TWILIO_FROM`, que es global y compartido por
+   * todos los tenants: el cliente de la empresa A recibe mensajes desde el
+   * mismo número que el de la empresa B, y una respuesta entrante no se puede
+   * enrutar a ninguna. Pásalo siempre que sepas de qué empresa escribes.
+   */
+  from_override?: string;
   /** Metadata para registrar en whatsapp_sends y timeline (opcional). */
   company_id?: string;
   user_id?: string | null;
@@ -124,7 +133,7 @@ export async function sendWhatsApp(
 
   try {
     const client = getTwilio();
-    const from = process.env.WHATSAPP_TWILIO_FROM!;
+    const from = input.from_override ?? process.env.WHATSAPP_TWILIO_FROM!;
     const params: {
       from: string;
       to: string;

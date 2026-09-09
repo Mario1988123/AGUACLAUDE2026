@@ -32,6 +32,14 @@
     {
       "path": "/api/cron/maintenance-reminders",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/voice-calls",
+      "schedule": "5 8-19 * * 1-5"
+    },
+    {
+      "path": "/api/cron/voice-retention",
+      "schedule": "30 3 * * *"
     }
   ]
 }

@@ -105,6 +105,11 @@ export const MODULES: ModuleEntry[] = [
   // nivel 1/2. Calidad: Haversine NN local (gratis) o Routes API
   // Google si la empresa también tiene smart_routes activo.
   { key: "routes", label: "Rutas", icon: "Map", href: "/rutas", group: "operations", rolesAllowed: [...LEVEL_1_2, "installer", "sales_rep", "telemarketer"] },
+  // Agente de voz IA — opt-in, APAGADO por defecto. Cuesta dinero por minuto y
+  // tiene implicaciones legales (declaración de IA, rango 400, exclusión), así
+  // que nadie se lo encuentra encendido sin haberlo pedido. Nivel 1/2: son los
+  // que hoy hacen esas llamadas a mano.
+  { key: "voice_agent", label: "Agente de voz", icon: "PhoneCall", href: "/agente-voz", configHref: "/configuracion/agente-voz", group: "operations", rolesAllowed: ["company_admin", "technical_director", "telemarketing_director"] },
 
   // ===== 5. CATÁLOGO Y STOCK (productos + almacenes juntos) =====
   { key: "products", label: "Productos", icon: "Package", href: "/productos", configHref: "/configuracion/productos", group: "catalog", rolesAllowed: LEVEL_1_2 },

@@ -1,4 +1,10 @@
 export const EVENT_LABEL: Record<string, string> = {
+  // Agente de voz IA
+  "voice_agent.inbound_call": "Llamada entrante atendida por la IA",
+  "voice_agent.interest_detected": "Interés comercial detectado en una llamada",
+  "voice_agent.escalation": "Pidió hablar con una persona",
+  "voice_agent.incident_created": "Avería comunicada por teléfono",
+
   "email.sent": "Email enviado",
   "email.opened": "Email abierto por el cliente",
   "email.clicked": "Email — cliente pulsó enlace",
