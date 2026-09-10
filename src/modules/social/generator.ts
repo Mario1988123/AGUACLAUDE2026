@@ -230,7 +230,7 @@ async function loadBrandData(
   if (!brandName) {
     const { data: cs } = await admin
       .from("company_settings")
-      .select("fiscal_legal_name, fiscal_trade_name")
+      .select("fiscal_legal_name")
       .eq("company_id", companyId)
       .maybeSingle();
     brandName =

@@ -23,7 +23,7 @@ export async function findProductByBarcode(
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("products")
-    .select("id, name, barcode, sku")
+    .select("id, name, barcode, sku:internal_reference")
     .eq("company_id", session.company_id)
     .eq("barcode", barcode.trim())
     .is("deleted_at", null)

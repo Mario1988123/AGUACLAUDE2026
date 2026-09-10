@@ -379,13 +379,18 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
   // Empresa + fiscal
   const { data: company } = await admin
     .from("companies")
-    .select("legal_name, trade_name, pdf_brand_color")
+    // En companies solo existen name y primary_color.
+    .select("name, primary_color")
     .eq("id", p.company_id)
     .maybeSingle();
-  const co = (company ?? {}) as {
-    legal_name: string | null;
-    trade_name: string | null;
-    pdf_brand_color: string | null;
+  const companyRow2 = (company ?? {}) as {
+    name: string | null;
+    primary_color: string | null;
+  };
+  const co = {
+    legal_name: null as string | null,
+    trade_name: companyRow2.name,
+    pdf_brand_color: companyRow2.primary_color,
   };
 
   const { data: fiscal } = await admin

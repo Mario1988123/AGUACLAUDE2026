@@ -213,15 +213,16 @@ export async function getCycleDetail(cycleId: string): Promise<CycleDetail | nul
   if (userIds.length > 0) {
     const { data: profiles } = await admin
       .from("user_profiles")
-      .select("user_id, full_name, department")
+      // user_profiles no tiene department; se deja el puesto (job_title).
+      .select("user_id, full_name, job_title")
       .in("user_id", userIds);
     for (const p of (profiles ?? []) as Array<{
       user_id: string;
       full_name: string | null;
-      department: string | null;
+      job_title: string | null;
     }>) {
       nameMap.set(p.user_id, p.full_name ?? p.user_id.slice(0, 8));
-      deptMap.set(p.user_id, p.department ?? null);
+      deptMap.set(p.user_id, p.job_title ?? null);
     }
   }
 

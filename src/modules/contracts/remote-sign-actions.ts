@@ -265,12 +265,11 @@ export async function getContractByRemoteToken(
     // Empresa
     const { data: cs } = await admin
       .from("company_settings")
-      .select("fiscal_legal_name, fiscal_trade_name, fiscal_logo_url")
+      .select("fiscal_legal_name, fiscal_logo_url")
       .eq("company_id", cc.company_id)
       .maybeSingle();
     const cset = cs as {
       fiscal_legal_name: string | null;
-      fiscal_trade_name: string | null;
       fiscal_logo_url: string | null;
     } | null;
 
@@ -286,7 +285,7 @@ export async function getContractByRemoteToken(
         monthly_cents: cc.monthly_cents,
         duration_months: cc.duration_months,
         company_name:
-          cset?.fiscal_trade_name || cset?.fiscal_legal_name || "la empresa",
+          cset?.fiscal_legal_name || "la empresa",
         company_logo_url: cset?.fiscal_logo_url ?? null,
         pdf_url: `/api/pdf/contract/public/${token}`,
       },

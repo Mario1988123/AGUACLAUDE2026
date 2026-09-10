@@ -93,21 +93,11 @@ export async function recomputeChurnScoreAction(
       /* */
     }
 
-    // 5) NPS bajo último mantenimiento
-    try {
-      const { data: last } = await admin
-        .from("maintenance_jobs")
-        .select("nps_score")
-        .eq("customer_id", customerId)
-        .eq("status", "completed")
-        .order("completed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const nps = (last as { nps_score: number | null } | null)?.nps_score;
-      if (nps != null && nps <= 2) score += 10;
-    } catch {
-      /* */
-    }
+    // 5) NPS bajo del último mantenimiento — FACTOR RETIRADO.
+    // `maintenance_jobs` no tiene `nps_score` ni ninguna otra columna de
+    // satisfacción en producción: la consulta fallaba y el factor sumaba
+    // siempre 0, así que quitarlo no cambia ni una puntuación. Si algún día
+    // se mide NPS por visita, este es el sitio donde volvía a entrar.
 
     score = Math.min(100, score);
 

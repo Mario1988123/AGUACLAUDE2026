@@ -823,7 +823,7 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
     supabase
       .from("installations")
       .select(
-        "id, reference_code, status, kind, company_id, scheduled_at, started_at, completed_at, duration_seconds, notes, customer_id, contract_id, address_id, installer_user_id, has_previous_damage, needs_countertop_drilling, started_geo_lat, started_geo_lng, geo_distance_to_address_m",
+        "id, reference_code, status, kind, company_id, scheduled_at, started_at, completed_at, duration_seconds, notes, customer_id, contract_id, address_id, installer_user_id, has_previous_damage, needs_countertop_drilling, geo_started_lat, geo_started_lng, geo_distance_to_address_m",
       )
       .eq("id", installationId)
       .maybeSingle(),
@@ -843,7 +843,8 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
       .order("signed_at"),
     supabase
       .from("companies")
-      .select("legal_name, trade_name, tax_id")
+      // Ídem: solo `name`. Lo fiscal viene de company_settings.
+      .select("name")
       .eq("id", session.company_id)
       .single(),
     supabase
@@ -880,8 +881,8 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
     installer_user_id: string | null;
     has_previous_damage: boolean | null;
     needs_countertop_drilling: boolean | null;
-    started_geo_lat: number | null;
-    started_geo_lng: number | null;
+    geo_started_lat: number | null;
+    geo_started_lng: number | null;
     geo_distance_to_address_m: number | null;
   };
 
@@ -937,19 +938,15 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
     }
   }
 
-  const co = (company ?? {}) as {
-    legal_name?: string | null;
-    trade_name?: string | null;
-    tax_id?: string | null;
-  };
+  const co = (company ?? {}) as { name?: string | null };
   const csObj = (cs ?? {}) as {
     fiscal_legal_name?: string | null;
     fiscal_tax_id?: string | null;
     contact_phone?: string | null;
     contact_email?: string | null;
   };
-  const companyName = co.trade_name || co.legal_name || csObj.fiscal_legal_name || "Empresa";
-  const companyTaxId = co.tax_id ?? csObj.fiscal_tax_id ?? null;
+  const companyName = csObj.fiscal_legal_name || co.name || "Empresa";
+  const companyTaxId = csObj.fiscal_tax_id ?? null;
   const companyContact =
     [csObj.contact_phone, csObj.contact_email].filter(Boolean).join(" · ") || null;
 
@@ -1070,8 +1067,8 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
   ]);
 
   // Geolocalización (decisión usuario)
-  if (i.started_geo_lat != null && i.started_geo_lng != null) {
-    const coords = `${i.started_geo_lat.toFixed(6)}, ${i.started_geo_lng.toFixed(6)}`;
+  if (i.geo_started_lat != null && i.geo_started_lng != null) {
+    const coords = `${i.geo_started_lat.toFixed(6)}, ${i.geo_started_lng.toFixed(6)}`;
     const distRow: [string, string, "ok" | "warn"] =
       i.geo_distance_to_address_m != null
         ? [
@@ -1091,8 +1088,8 @@ export async function generateWorkReportPdf(installationId: string): Promise<Uin
       const png = await fetchStaticMapPng({
         companyId: session.company_id,
         userId: session.user_id ?? null,
-        lat: Number(i.started_geo_lat),
-        lng: Number(i.started_geo_lng),
+        lat: Number(i.geo_started_lat),
+        lng: Number(i.geo_started_lng),
         zoom: 17,
         width: 600,
         height: 280,

@@ -89,26 +89,25 @@ export async function generateSavingsPdf(savingsId: string): Promise<Uint8Array>
   const [{ data: company }, { data: companySettings }] = await Promise.all([
     supabase
       .from("companies")
-      .select("legal_name, trade_name, tax_id")
+      // Ídem: solo `name`. Lo fiscal viene de company_settings.
+      .select("name")
       .eq("id", session.company_id)
       .single(),
     supabase
       .from("company_settings")
-      .select("contact_email, contact_phone, fiscal_address, fiscal_postal_code, fiscal_city")
+      .select("contact_email, contact_phone, fiscal_address, fiscal_postal_code, fiscal_city, fiscal_legal_name, fiscal_tax_id")
       .eq("company_id", session.company_id)
       .maybeSingle(),
   ]);
-  const co = (company ?? {}) as {
-    legal_name?: string | null;
-    trade_name?: string | null;
-    tax_id?: string | null;
-  };
+  const co = (company ?? {}) as { name?: string | null };
   const cs = (companySettings ?? {}) as {
     contact_email?: string | null;
     contact_phone?: string | null;
     fiscal_address?: string | null;
     fiscal_postal_code?: string | null;
     fiscal_city?: string | null;
+    fiscal_legal_name?: string | null;
+    fiscal_tax_id?: string | null;
   };
 
   // Resolver nombre del destinatario
@@ -176,7 +175,7 @@ export async function generateSavingsPdf(savingsId: string): Promise<Uint8Array>
   }
 
   const d = await newDashDoc();
-  const companyName = co.trade_name || co.legal_name || "Empresa";
+  const companyName = cs.fiscal_legal_name || co.name || "Empresa";
 
   // ============================================================================
   // PÁGINA 1: PORTADA
@@ -208,8 +207,8 @@ export async function generateSavingsPdf(savingsId: string): Promise<Uint8Array>
     {
       title: "Empresa",
       rows: [
-        ["Razón social", co.legal_name || co.trade_name || "—"],
-        ["CIF", co.tax_id ?? null],
+        ["Razón social", cs.fiscal_legal_name || co.name || "—"],
+        ["CIF", cs.fiscal_tax_id ?? null],
         ["Dirección", cs.fiscal_address ?? null],
         ["Población", [cs.fiscal_postal_code, cs.fiscal_city].filter(Boolean).join(" ") || null],
         ["Tel.", cs.contact_phone ?? null],

@@ -57,7 +57,7 @@ export default async function CountDetailPage({
   const pIds = Array.from(new Set(rows.map((r) => r.product_id)));
   const { data: prods } = await admin
     .from("products")
-    .select("id, name, sku, barcode")
+    .select("id, name, sku:internal_reference, barcode")
     .in("id", pIds);
   type P = { id: string; name: string; sku: string | null; barcode: string | null };
   const productMap = new Map<string, P>();

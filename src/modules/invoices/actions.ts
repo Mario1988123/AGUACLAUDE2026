@@ -685,7 +685,7 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
 
   const { data: items } = await admin
     .from("contract_items")
-    .select("product_name_snapshot, quantity, unit_price_cash_cents")
+    .select("product_name_snapshot, quantity, unit_price_cash_cents:unit_price_cents")
     .eq("contract_id", contractId);
   type CI = {
     product_name_snapshot: string;

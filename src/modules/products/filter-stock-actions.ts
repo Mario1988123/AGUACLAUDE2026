@@ -48,12 +48,16 @@ export async function listFilterStock(): Promise<{
   // Almacenes
   const { data: warehousesData } = await supabase
     .from("warehouses")
-    .select("id, name, is_main")
+    // No hay columna is_main: el almacén principal es kind = 'main'.
+    .select("id, name, kind")
     .eq("company_id", session.company_id)
-    .order("is_main", { ascending: false })
+    .order("kind")
     .order("name");
-  const warehouses =
-    ((warehousesData ?? []) as Array<{ id: string; name: string; is_main: boolean }>) ?? [];
+  const warehouses = ((warehousesData ?? []) as Array<{
+    id: string;
+    name: string;
+    kind: string | null;
+  }>).map((w) => ({ id: w.id, name: w.name, is_main: w.kind === "main" }));
 
   // Stock (defensivo: si la tabla aún no se ha aplicado, devuelve vacío)
   const { data: stockRows, error } = await supabase

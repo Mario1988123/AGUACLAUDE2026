@@ -26,10 +26,11 @@ export async function getInstallationProductAids(
     // company_id (installation_items lo lleva); si la instalación no es tuya, vacío.
     const { data: items } = await admin
       .from("installation_items")
-      .select("product_id, product_name_snapshot")
+      .select("product_id")
       .eq("installation_id", installationId)
       .eq("company_id", session.company_id);
-    type IT = { product_id: string; product_name_snapshot: string };
+    // installation_items no guarda snapshot del nombre; se resuelve por product_id.
+    type IT = { product_id: string };
     const list = (items ?? []) as IT[];
     if (list.length === 0) return [];
     const productIds = Array.from(new Set(list.map((i) => i.product_id)));
@@ -53,7 +54,7 @@ export async function getInstallationProductAids(
         if (!p.installation_manual_url && !p.installation_notes) return null;
         return {
           product_id: it.product_id,
-          product_name: it.product_name_snapshot || p.name,
+          product_name: p.name,
           manual_url: p.installation_manual_url,
           notes: p.installation_notes,
         };

@@ -158,16 +158,32 @@ export async function getInvoiceAlerts(): Promise<InvoiceAlerts> {
 
   // 4) Pendiente cobro total
   try {
+    // `pending_cents` no existe en invoices: lo pendiente es
+    // total_cents − cobros de invoice_payments, igual que en getInvoice().
     const { data: pending } = await admin
       .from("invoices")
-      .select("pending_cents")
+      .select("id, total_cents")
       .eq("company_id", session.company_id)
-      .gt("pending_cents", 0)
+      .in("status", ["issued", "overdue"])
       .is("deleted_at", null);
-    out.unpaid_total_cents = ((pending ?? []) as Array<{ pending_cents: number }>).reduce(
-      (s, r) => s + (r.pending_cents ?? 0),
-      0,
-    );
+    const invs = (pending ?? []) as Array<{ id: string; total_cents: number }>;
+    const paidByInvoice = new Map<string, number>();
+    if (invs.length > 0) {
+      const { data: pays } = await admin
+        .from("invoice_payments")
+        .select("invoice_id, amount_cents")
+        .in("invoice_id", invs.map((i) => i.id));
+      for (const pay of (pays ?? []) as Array<{ invoice_id: string; amount_cents: number }>) {
+        paidByInvoice.set(
+          pay.invoice_id,
+          (paidByInvoice.get(pay.invoice_id) ?? 0) + (pay.amount_cents ?? 0),
+        );
+      }
+    }
+    out.unpaid_total_cents = invs.reduce((s, i) => {
+      const left = i.total_cents - (paidByInvoice.get(i.id) ?? 0);
+      return s + (left > 0 ? left : 0);
+    }, 0);
   } catch {
     /* */
   }

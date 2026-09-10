@@ -208,11 +208,12 @@ export async function generateProductDatasheet(productId: string): Promise<Uint8
   const fi = (fiscal ?? {}) as FiscalInfo;
   const { data: companyRow } = await admin
     .from("companies")
-    .select("legal_name, trade_name")
+    // En companies solo existe `name`; la razón social sale de company_settings.
+    .select("name")
     .eq("id", p.company_id)
     .maybeSingle();
-  const co = (companyRow ?? {}) as { legal_name: string | null; trade_name: string | null };
-  const companyName = fi.fiscal_legal_name || co.trade_name || co.legal_name || "Empresa";
+  const co = (companyRow ?? {}) as { name: string | null };
+  const companyName = fi.fiscal_legal_name || co.name || "Empresa";
 
   let categoryName: string | null = null;
   if (p.category_id) {

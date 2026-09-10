@@ -27,8 +27,11 @@ export async function lookupSerialNumber(
   const admin = createAdminClient() as any;
   const { data } = await admin
     .from("customer_equipment")
+    // customer_equipment no tiene contract_id ni status: tiene installation_id
+    // e is_active. Pedir las otras dos tumbaba el select y buscar por número de
+    // serie no devolvía NADA.
     .select(
-      "id, serial_number, product_id, customer_id, contract_id, installed_at, status",
+      "id, serial_number, product_id, customer_id, installation_id, installed_at, is_active",
     )
     .eq("company_id", session.company_id)
     .ilike("serial_number", `%${sn.trim()}%`)
@@ -38,9 +41,9 @@ export async function lookupSerialNumber(
     serial_number: string;
     product_id: string | null;
     customer_id: string | null;
-    contract_id: string | null;
+    installation_id: string | null;
     installed_at: string | null;
-    status: string | null;
+    is_active: boolean | null;
   };
   const equips = (data ?? []) as E[];
   if (equips.length === 0) return [];
@@ -51,9 +54,21 @@ export async function lookupSerialNumber(
   const customerIds = Array.from(
     new Set(equips.map((e) => e.customer_id).filter((v): v is string => !!v)),
   );
-  const contractIds = Array.from(
-    new Set(equips.map((e) => e.contract_id).filter((v): v is string => !!v)),
+  // El contrato se alcanza a través de la instalación.
+  const installationIds = Array.from(
+    new Set(equips.map((e) => e.installation_id).filter((v): v is string => !!v)),
   );
+  const contractByInstallation = new Map<string, string>();
+  if (installationIds.length) {
+    const { data: ins } = await admin
+      .from("installations")
+      .select("id, contract_id")
+      .in("id", installationIds);
+    for (const i of (ins ?? []) as Array<{ id: string; contract_id: string | null }>) {
+      if (i.contract_id) contractByInstallation.set(i.id, i.contract_id);
+    }
+  }
+  const contractIds = Array.from(new Set([...contractByInstallation.values()]));
 
   const productMap = new Map<string, string>();
   const customerMap = new Map<string, string>();
@@ -109,9 +124,14 @@ export async function lookupSerialNumber(
     customer_name: e.customer_id
       ? customerMap.get(e.customer_id) ?? null
       : null,
-    contract_id: e.contract_id,
-    contract_ref: e.contract_id ? contractMap.get(e.contract_id) ?? null : null,
+    contract_id: e.installation_id
+      ? contractByInstallation.get(e.installation_id) ?? null
+      : null,
+    contract_ref: (() => {
+      const cid = e.installation_id ? contractByInstallation.get(e.installation_id) : null;
+      return cid ? contractMap.get(cid) ?? null : null;
+    })(),
     installed_at: e.installed_at,
-    status: e.status,
+    status: e.is_active === false ? "baja" : "activo",
   }));
 }

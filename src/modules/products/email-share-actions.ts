@@ -203,7 +203,8 @@ export async function sendProductDatasheetEmailAction(input: {
 
     const { data: company } = await admin
       .from("companies")
-      .select("legal_name, trade_name")
+      // En companies solo existe `name`.
+      .select("name")
       .eq("id", session.company_id)
       .maybeSingle();
     const { data: companySettings } = await admin
@@ -213,9 +214,7 @@ export async function sendProductDatasheetEmailAction(input: {
       .maybeSingle();
     const companyName =
       (companySettings as { fiscal_legal_name: string | null } | null)?.fiscal_legal_name ??
-      (company as { trade_name: string | null; legal_name: string | null } | null)
-        ?.trade_name ??
-      (company as { legal_name: string | null } | null)?.legal_name ??
+      (company as { name: string | null } | null)?.name ??
       "Empresa";
 
     const vars: Record<string, string | null> = {

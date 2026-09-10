@@ -863,7 +863,9 @@ export async function generateFreeTrialDeliveryNotePdf(
   // Empresa
   const { data: company } = await admin
     .from("companies")
-    .select("legal_name, trade_name, tax_id")
+    // legal_name/trade_name/tax_id no existen en companies; lo fiscal sale de
+    // company_settings (fiscal_legal_name, fiscal_tax_id), que ya se pide abajo.
+    .select("name")
     .eq("id", session.company_id!)
     .maybeSingle();
   const { data: cs } = await admin
@@ -873,11 +875,7 @@ export async function generateFreeTrialDeliveryNotePdf(
     )
     .eq("company_id", session.company_id!)
     .maybeSingle();
-  const co = (company ?? {}) as {
-    legal_name?: string | null;
-    trade_name?: string | null;
-    tax_id?: string | null;
-  };
+  const co = (company ?? {}) as { name?: string | null };
   const csObj = (cs ?? {}) as {
     contact_email?: string | null;
     contact_phone?: string | null;
@@ -888,8 +886,8 @@ export async function generateFreeTrialDeliveryNotePdf(
     fiscal_tax_id?: string | null;
     extra?: Record<string, unknown> | null;
   };
-  const companyName = co.trade_name || co.legal_name || csObj.fiscal_legal_name || "Mi Empresa";
-  const companyTaxId = co.tax_id ?? csObj.fiscal_tax_id ?? null;
+  const companyName = csObj.fiscal_legal_name || co.name || "Mi Empresa";
+  const companyTaxId = csObj.fiscal_tax_id ?? null;
   const companyContact =
     [csObj.contact_phone, csObj.contact_email].filter(Boolean).join(" · ") || null;
 

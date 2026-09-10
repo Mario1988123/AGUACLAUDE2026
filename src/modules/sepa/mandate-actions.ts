@@ -207,7 +207,7 @@ export async function createSepaMandateAction(
     const { data: cs } = await admin
       .from("company_settings")
       .select(
-        "fiscal_legal_name, fiscal_trade_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, sepa_creditor_id",
+        "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, sepa_creditor_id",
       )
       .eq("company_id", session.company_id)
       .maybeSingle();

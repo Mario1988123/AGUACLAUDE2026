@@ -22,14 +22,14 @@ export default async function PerfilPage() {
     avatar_url: string | null;
     home_latitude?: number | null;
     home_longitude?: number | null;
-    home_address_label?: string | null;
   };
   let profile: ProfileRow | null = null;
   try {
     const { data, error } = await admin
       .from("user_profiles")
       .select(
-        "full_name, phone, job_title, avatar_url, home_latitude, home_longitude, home_address_label",
+        // home_address_label no existe en user_profiles.
+        "full_name, phone, job_title, avatar_url, home_latitude, home_longitude",
       )
       .eq("user_id", session.user_id)
       .maybeSingle();
@@ -86,7 +86,7 @@ export default async function PerfilPage() {
         isOwn
         initialLat={profile?.home_latitude ?? null}
         initialLng={profile?.home_longitude ?? null}
-        initialLabel={profile?.home_address_label ?? null}
+        initialLabel={null}
       />
 
       <Card>

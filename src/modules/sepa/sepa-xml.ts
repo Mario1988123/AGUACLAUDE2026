@@ -175,14 +175,15 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
 
     const { data: banks } = await admin
       .from("customer_bank_accounts")
-      .select("customer_id, iban, sepa_mandate_id, sepa_mandate_signed_at, account_holder_name, is_primary, is_validated")
+      // customer_bank_accounts NO tiene columnas de mandato: el mandato vive en
+      // la tabla sepa_mandates (umr + signed_at). Pedirlas aquí tumbaba el
+      // select y la remesa salía siempre vacía ("sin cuenta bancaria").
+      .select("customer_id, iban, account_holder_name, is_primary, is_validated")
       .in("customer_id", customerIds)
       .order("is_primary", { ascending: false });
     type BK = {
       customer_id: string;
       iban: string;
-      sepa_mandate_id: string | null;
-      sepa_mandate_signed_at: string | null;
       account_holder_name: string | null;
       is_primary: boolean;
       is_validated: boolean | null;
@@ -190,6 +191,24 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
     const bankMap = new Map<string, BK>();
     for (const b of ((banks ?? []) as BK[])) {
       if (!bankMap.has(b.customer_id)) bankMap.set(b.customer_id, b);
+    }
+
+    // Mandato SEPA vigente por cliente (el más reciente que no esté cancelado).
+    const { data: mandates } = await admin
+      .from("sepa_mandates")
+      .select("customer_id, umr, signed_at, status, cancelled_at")
+      .in("customer_id", customerIds)
+      .is("cancelled_at", null)
+      .order("signed_at", { ascending: false });
+    type MD = {
+      customer_id: string;
+      umr: string | null;
+      signed_at: string | null;
+      status: string | null;
+    };
+    const mandateMap = new Map<string, MD>();
+    for (const m of ((mandates ?? []) as MD[])) {
+      if (!mandateMap.has(m.customer_id)) mandateMap.set(m.customer_id, m);
     }
 
     const { data: addresses } = await admin
@@ -221,7 +240,8 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
         skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: IBAN no disponible o ES00`);
         continue;
       }
-      if (!bank.sepa_mandate_id) {
+      const mandate = mandateMap.get(p.contracts.customer_id);
+      if (!mandate?.umr) {
         skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: sin mandato SEPA firmado`);
         continue;
       }
@@ -240,8 +260,8 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
         customer_iban: cleanIban(bank.iban),
         amount_cents: p.amount_cents,
         concept: p.concept,
-        mandate_id: bank.sepa_mandate_id,
-        mandate_date: bank.sepa_mandate_signed_at ?? new Date().toISOString().slice(0, 10),
+        mandate_id: mandate.umr,
+        mandate_date: (mandate.signed_at ?? new Date().toISOString()).slice(0, 10),
       });
     }
 

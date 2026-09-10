@@ -205,7 +205,9 @@ export async function getPublicInstallationView(
         : Promise.resolve({ data: null }),
       admin
         .from("companies")
-        .select("name, phone, email")
+        // companies no tiene phone ni email (el contacto vive en
+        // company_settings.contact_phone/contact_email).
+        .select("name, billing_email")
         .eq("id", j.company_id)
         .maybeSingle(),
     ]);
@@ -216,7 +218,15 @@ export async function getPublicInstallationView(
       legal_name: string | null;
       party_kind: string | null;
     };
-    const co = (company ?? {}) as { name: string | null; phone: string | null };
+    const co = (company ?? {}) as { name: string | null };
+    // El teléfono de contacto vive en company_settings, no en companies.
+    const { data: csRow } = await admin
+      .from("company_settings")
+      .select("contact_phone")
+      .eq("company_id", j.company_id)
+      .maybeSingle();
+    const companyPhone =
+      (csRow as { contact_phone: string | null } | null)?.contact_phone ?? null;
 
     // Dirección: la específica de la instalación si existe, si no la primaria.
     let addr: {
@@ -272,7 +282,7 @@ export async function getPublicInstallationView(
         customer_address: customerAddress,
         technician_name: technicianName,
         company_name: co.name ?? "Hidromanager",
-        company_phone: co.phone,
+        company_phone: companyPhone,
         status: j.status,
       },
       token: { used: !!t.used_at, used_action: t.used_action },

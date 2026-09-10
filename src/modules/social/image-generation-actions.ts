@@ -403,18 +403,18 @@ async function loadContext(
   try {
     const { data: cs } = await admin
       .from("company_settings")
-      .select("fiscal_trade_name, fiscal_legal_name, fiscal_logo_url")
+      // fiscal_trade_name no existe en company_settings.
+      .select("fiscal_legal_name, fiscal_logo_url")
       .eq("company_id", companyId)
       .maybeSingle();
     const csRow = cs as
       | {
-          fiscal_trade_name?: string | null;
           fiscal_legal_name?: string | null;
           fiscal_logo_url?: string | null;
         }
       | null;
     companyName =
-      csRow?.fiscal_trade_name || csRow?.fiscal_legal_name || companyName;
+      csRow?.fiscal_legal_name || companyName;
     fiscalLogoUrl = csRow?.fiscal_logo_url ?? null;
     if (companyName === "tu empresa") {
       const { data: c } = await admin
@@ -434,7 +434,7 @@ async function loadContext(
     try {
       const { data: prodRows } = await admin
         .from("products")
-        .select("id, name, description, main_image_url")
+        .select("id, name, description:short_description, main_image_url")
         .eq("company_id", companyId) // seguridad: nunca productos de otra empresa
         .in("id", productIds.slice(0, MAX_PRODUCTS_PER_POST));
       products = ((prodRows as ProductReference[] | null) ?? []).map((p) => ({

@@ -133,7 +133,8 @@ export async function listPendingPunchRequests(): Promise<PunchRequestRow[]> {
   const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
   const { data: profiles } = await admin
     .from("user_profiles")
-    .select("user_id, full_name, email")
+    // user_profiles no tiene email (vive en auth.users).
+    .select("user_id, full_name, display_name")
     .in("user_id", userIds);
   const nameMap = new Map<string, string>();
   for (const p of (profiles ?? []) as Array<{

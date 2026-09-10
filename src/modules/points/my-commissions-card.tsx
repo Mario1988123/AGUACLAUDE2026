@@ -92,149 +92,156 @@ export function MyCommissionsCard({ data }: { data: MyCommissionData }) {
 export async function getMyCommissionData(userId: string): Promise<MyCommissionData | null> {
   const { createAdminClient } = await import("@/shared/lib/supabase/admin");
   const { requireSession } = await import("@/shared/lib/auth/session");
+  const { getPointsSettings } = await import("./award");
   const session = await requireSession();
   if (!session.company_id) return null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  const companyId = session.company_id;
 
-  // 1) Settings para euros_per_point
-  let eurosPerPoint = 0;
-  try {
-    const { data: settings } = await admin
-      .from("points_settings")
-      .select("euros_per_point")
-      .eq("company_id", session.company_id)
-      .maybeSingle();
-    eurosPerPoint = Number((settings as { euros_per_point: number } | null)?.euros_per_point ?? 0);
-  } catch {
-    /* */
+  // Esta tarjeta consultaba points_settings, points_events y points_cycle_users
+  // como si fueran tablas. No existen y nunca existieron: los puntos viven en
+  // `points_ledger`, la configuración en `company_settings.points_settings`
+  // (jsonb) y el cierre por usuario se calcula, no se guarda. Resultado: la
+  // tarjeta enseñaba ceros a todo el mundo. Ahora usa las mismas fuentes que
+  // getCycleDetail() en cycles-actions.ts.
+
+  const settings = await getPointsSettings(companyId);
+  const eurosPerPoint = settings.euros_per_point ?? 0;
+  const toCents = (points: number) => Math.round(points * eurosPerPoint * 100);
+
+  const MESES = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+
+  type Cycle = {
+    id: string;
+    cycle_year: number;
+    cycle_month: number;
+    cycle_start_at: string;
+    cycle_end_at: string;
+    status: string;
+  };
+
+  /** Puntos netos del usuario en un ciclo: ledger del rango + ajustes. */
+  async function netPointsInCycle(cycle: Cycle): Promise<number> {
+    const { data: ledger } = await admin
+      .from("points_ledger")
+      .select("points")
+      .eq("company_id", companyId)
+      .eq("user_id", userId)
+      .gte("awarded_at", cycle.cycle_start_at)
+      .lt("awarded_at", cycle.cycle_end_at);
+    const base = ((ledger ?? []) as Array<{ points: number }>).reduce(
+      (s, r) => s + (r.points ?? 0),
+      0,
+    );
+    const { data: adj } = await admin
+      .from("points_cycle_adjustments")
+      .select("delta_points")
+      .eq("company_id", companyId)
+      .eq("cycle_id", cycle.id)
+      .eq("user_id", userId);
+    const delta = ((adj ?? []) as Array<{ delta_points: number }>).reduce(
+      (s, r) => s + (r.delta_points ?? 0),
+      0,
+    );
+    return base + delta;
   }
 
-  // 2) Ciclo actual (status=open) o el más reciente
-  let cycleId: string | null = null;
-  let cycleLabel = "Ciclo actual";
-  try {
-    const { data: cycle } = await admin
+  const cycleCols =
+    "id, cycle_year, cycle_month, cycle_start_at, cycle_end_at, status";
+
+  // 1) Ciclo vigente: el abierto y, si no hay, el más reciente.
+  const { data: openRow } = await admin
+    .from("points_cycles")
+    .select(cycleCols)
+    .eq("company_id", companyId)
+    .eq("status", "open")
+    .order("cycle_year", { ascending: false })
+    .order("cycle_month", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  let current = openRow as Cycle | null;
+  if (!current) {
+    const { data: anyRow } = await admin
       .from("points_cycles")
-      .select("id, cycle_year, cycle_month, status")
-      .eq("company_id", session.company_id)
+      .select(cycleCols)
+      .eq("company_id", companyId)
       .order("cycle_year", { ascending: false })
       .order("cycle_month", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const c = cycle as
-      | { id: string; cycle_year: number; cycle_month: number; status: string }
-      | null;
-    if (c) {
-      cycleId = c.id;
-      const months = [
-        "Enero",
-        "Febrero",
-        "Marzo",
-        "Abril",
-        "Mayo",
-        "Junio",
-        "Julio",
-        "Agosto",
-        "Septiembre",
-        "Octubre",
-        "Noviembre",
-        "Diciembre",
-      ];
-      cycleLabel = `${months[c.cycle_month - 1]} ${c.cycle_year}`;
-    }
-  } catch {
-    /* */
+    current = anyRow as Cycle | null;
   }
 
-  // 3) Puntos del usuario en el ciclo actual
   let currentPoints = 0;
-  try {
-    if (cycleId) {
-      const { data: events } = await admin
-        .from("points_events")
-        .select("points")
-        .eq("company_id", session.company_id)
-        .eq("user_id", userId)
-        .eq("cycle_id", cycleId);
-      currentPoints = ((events ?? []) as Array<{ points: number }>).reduce(
-        (s, e) => s + (e.points ?? 0),
-        0,
-      );
-    } else {
-      // Fallback: puntos del mes actual del usuario
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const { data: events } = await admin
-        .from("points_events")
-        .select("points")
-        .eq("company_id", session.company_id)
-        .eq("user_id", userId)
-        .gte("created_at", monthStart);
-      currentPoints = ((events ?? []) as Array<{ points: number }>).reduce(
-        (s, e) => s + (e.points ?? 0),
-        0,
-      );
-    }
-  } catch {
-    /* */
-  }
-
-  // 4) Último ciclo cerrado del usuario
-  let lastClosed: MyCommissionData["last_closed_cycle"] = null;
-  try {
-    const { data: closed } = await admin
-      .from("points_cycle_users")
-      .select("points, eur_cents, points_cycles!inner(cycle_year, cycle_month, status)")
-      .eq("user_id", userId)
-      .eq("points_cycles.status", "closed")
-      .order("points_cycles(cycle_year)", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const lc = closed as
-      | {
-          points: number;
-          eur_cents: number;
-          points_cycles: { cycle_year: number; cycle_month: number };
-        }
-      | null;
-    if (lc) {
-      const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-      lastClosed = {
-        label: `${months[lc.points_cycles.cycle_month - 1]} ${lc.points_cycles.cycle_year}`,
-        points: lc.points,
-        eur_cents: lc.eur_cents,
-      };
-    }
-  } catch {
-    /* tabla cycle_users puede no existir */
-  }
-
-  // 5) Total año: sumar puntos events del año en curso
-  let totalYearEur = 0;
-  try {
-    const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString();
-    const { data: yearEvents } = await admin
-      .from("points_events")
+  let cycleLabel = "Ciclo actual";
+  if (current) {
+    currentPoints = await netPointsInCycle(current);
+    cycleLabel = `${MESES[current.cycle_month - 1] ?? ""} ${current.cycle_year}`;
+  } else {
+    // Sin ciclos creados todavía: el mes natural en curso.
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const { data: ledger } = await admin
+      .from("points_ledger")
       .select("points")
-      .eq("company_id", session.company_id)
+      .eq("company_id", companyId)
       .eq("user_id", userId)
-      .gte("created_at", yearStart);
-    const yearPoints = ((yearEvents ?? []) as Array<{ points: number }>).reduce(
-      (s, e) => s + (e.points ?? 0),
+      .gte("awarded_at", monthStart);
+    currentPoints = ((ledger ?? []) as Array<{ points: number }>).reduce(
+      (s, r) => s + (r.points ?? 0),
       0,
     );
-    totalYearEur = Math.round(yearPoints * eurosPerPoint * 100);
-  } catch {
-    /* */
+    cycleLabel = `${MESES[now.getMonth()] ?? ""} ${now.getFullYear()}`;
   }
+
+  // 2) Último ciclo cerrado, calculado igual (no hay tabla de snapshot por usuario).
+  let lastClosed: MyCommissionData["last_closed_cycle"] = null;
+  const { data: closedRow } = await admin
+    .from("points_cycles")
+    .select(cycleCols)
+    .eq("company_id", companyId)
+    .eq("status", "closed")
+    .order("cycle_year", { ascending: false })
+    .order("cycle_month", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const closed = closedRow as Cycle | null;
+  if (closed) {
+    const pts = await netPointsInCycle(closed);
+    const MESES_CORTO = [
+      "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+      "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+    ];
+    lastClosed = {
+      label: `${MESES_CORTO[closed.cycle_month - 1] ?? ""} ${closed.cycle_year}`,
+      points: pts,
+      eur_cents: toCents(pts),
+    };
+  }
+
+  // 3) Total del año en curso (por fecha de concesión).
+  const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString();
+  const { data: yearLedger } = await admin
+    .from("points_ledger")
+    .select("points")
+    .eq("company_id", companyId)
+    .eq("user_id", userId)
+    .gte("awarded_at", yearStart);
+  const yearPoints = ((yearLedger ?? []) as Array<{ points: number }>).reduce(
+    (s, r) => s + (r.points ?? 0),
+    0,
+  );
 
   return {
     current_cycle_points: currentPoints,
-    current_cycle_eur_cents: Math.round(currentPoints * eurosPerPoint * 100),
+    current_cycle_eur_cents: toCents(currentPoints),
     current_cycle_label: cycleLabel,
     last_closed_cycle: lastClosed,
-    ranking_in_company: null, // se podría calcular pero requiere más queries
-    total_year_eur_cents: totalYearEur,
+    ranking_in_company: null,
+    total_year_eur_cents: toCents(yearPoints),
   };
 }

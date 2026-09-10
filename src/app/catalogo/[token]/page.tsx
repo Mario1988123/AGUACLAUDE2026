@@ -135,13 +135,20 @@ export default async function PublicCatalogPage({
   // Empresa
   const { data: company } = await admin
     .from("companies")
-    .select("legal_name, trade_name, pdf_brand_color")
+    // `companies` solo tiene name/primary_color: legal_name, trade_name y
+    // pdf_brand_color no existen y tumbaban el select entero (catálogo sin
+    // nombre de empresa ni color de marca).
+    .select("name, primary_color")
     .eq("id", data.company_id)
     .maybeSingle();
-  const co = (company ?? {}) as {
-    legal_name: string | null;
-    trade_name: string | null;
-    pdf_brand_color: string | null;
+  const companyRow = (company ?? {}) as {
+    name: string | null;
+    primary_color: string | null;
+  };
+  const co = {
+    legal_name: null as string | null,
+    trade_name: companyRow.name,
+    pdf_brand_color: companyRow.primary_color,
   };
 
   const { data: fiscal } = await admin

@@ -34,13 +34,15 @@ async function productsPriced(companyId: string): Promise<boolean> {
     .eq("is_active", true)
     .is("deleted_at", null);
   if ((total ?? 0) === 0) return true;
-  // ¿Hay al menos UN producto con precio?
+  // ¿Hay al menos UN producto con precio? La tabla es product_pricing_plans:
+  // `product_prices` no existe (ni existió), así que este paso del onboarding
+  // se quedaba en "sin hacer" para siempre.
   const { data: priced } = await a
-    .from("product_prices")
-    .select("product_id")
+    .from("product_pricing_plans")
+    .select("product_id, total_price_cents, monthly_price_cents")
     .eq("company_id", companyId)
-    .not("price_cents", "is", null)
-    .gt("price_cents", 0)
+    .eq("is_active", true)
+    .or("total_price_cents.gt.0,monthly_price_cents.gt.0")
     .limit(1);
   return Array.isArray(priced) && priced.length > 0;
 }
@@ -136,23 +138,25 @@ async function agendaConfig(companyId: string): Promise<boolean> {
   try {
     const { data } = await a
       .from("company_settings")
+      // gps_tolerance_meters y schedule_default_start_hour NO existen: pedirlas
+      // tumbaba el select y este paso del onboarding no se daba por hecho nunca.
       .select(
-        "scheduling_max_route_radius_km, gps_tolerance_meters, schedule_default_start_hour",
+        "scheduling_max_route_radius_km, scheduling_jobs_per_slot, scheduling_offer_weeks",
       )
       .eq("company_id", companyId)
       .maybeSingle();
     const r = data as
       | {
           scheduling_max_route_radius_km: number | null;
-          gps_tolerance_meters: number | null;
-          schedule_default_start_hour: number | null;
+          scheduling_jobs_per_slot: number | null;
+          scheduling_offer_weeks: number | null;
         }
       | null;
     if (!r) return false;
     return (
       r.scheduling_max_route_radius_km != null ||
-      r.gps_tolerance_meters != null ||
-      r.schedule_default_start_hour != null
+      r.scheduling_jobs_per_slot != null ||
+      r.scheduling_offer_weeks != null
     );
   } catch {
     return false;
@@ -189,16 +193,17 @@ async function incidentSla(companyId: string): Promise<boolean> {
       /* */
     }
   }
-  // Fallback: comprobar columna en company_settings
+  // Fallback: la configuración vive en company_settings.sla_settings (jsonb).
+  // No existe ninguna columna incident_sla_first_response_hours.
   try {
     const { data } = await a
       .from("company_settings")
-      .select("incident_sla_first_response_hours")
+      .select("sla_settings")
       .eq("company_id", companyId)
       .maybeSingle();
-    const v = (data as { incident_sla_first_response_hours: number | null } | null)
-      ?.incident_sla_first_response_hours;
-    return v != null;
+    const v = (data as { sla_settings: Record<string, unknown> | null } | null)
+      ?.sla_settings;
+    return !!v && Object.keys(v).length > 0;
   } catch {
     return false;
   }

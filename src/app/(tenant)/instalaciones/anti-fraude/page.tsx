@@ -13,7 +13,7 @@ interface FraudEvent {
   id: string;
   kind: "installation.geo_off_road" | "installation.start_far_from_address";
   subject_id: string;
-  created_at: string;
+  occurred_at: string;
   payload: Record<string, unknown> | null;
   actor_user_id: string | null;
   reference_code: string | null;
@@ -39,21 +39,21 @@ export default async function AntiFraudPage() {
 
   const { data: rows } = await admin
     .from("events")
-    .select("id, kind, subject_id, created_at, payload, actor_user_id")
+    .select("id, kind, subject_id, occurred_at, payload, actor_user_id")
     .eq("company_id", session.company_id)
     .in("kind", [
       "installation.geo_off_road",
       "installation.start_far_from_address",
     ])
-    .gte("created_at", ninetyDaysAgo)
-    .order("created_at", { ascending: false })
+    .gte("occurred_at", ninetyDaysAgo)
+    .order("occurred_at", { ascending: false })
     .limit(200);
 
   type Raw = {
     id: string;
     kind: FraudEvent["kind"];
     subject_id: string;
-    created_at: string;
+    occurred_at: string;
     payload: Record<string, unknown> | null;
     actor_user_id: string | null;
   };
@@ -97,7 +97,7 @@ export default async function AntiFraudPage() {
     id: e.id,
     kind: e.kind,
     subject_id: e.subject_id,
-    created_at: e.created_at,
+    occurred_at: e.occurred_at,
     payload: e.payload,
     actor_user_id: e.actor_user_id,
     reference_code: refByInst.get(e.subject_id) ?? null,
@@ -198,7 +198,7 @@ function FraudCard({
                       {e.installer_name ? ` · ${e.installer_name}` : ""}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(e.created_at).toLocaleString("es-ES")}
+                      {new Date(e.occurred_at).toLocaleString("es-ES")}
                       {distance != null && (
                         <>
                           {" · "}

@@ -1175,8 +1175,11 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
 
   const [{ data: company }, { data: companySettings }, { data: customer }] = await Promise.all([
     supabase
+      // `companies` no tiene legal_name/trade_name/tax_id (solo `name`):
+      // pedirlas tumbaba el select y el PDF salía sin datos de la empresa.
+      // Lo fiscal vive en company_settings.
       .from("companies")
-      .select("legal_name, trade_name, tax_id")
+      .select("name")
       .eq("id", session.company_id)
       .single(),
     supabase
@@ -1195,11 +1198,7 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
       .single(),
   ]);
 
-  const co = (company ?? {}) as {
-    legal_name?: string | null;
-    trade_name?: string | null;
-    tax_id?: string | null;
-  };
+  const co = (company ?? {}) as { name?: string | null };
   const cs = (companySettings ?? {}) as {
     contact_email?: string | null;
     contact_phone?: string | null;
@@ -1320,8 +1319,8 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
     : null;
 
   // ---------- HEADER ----------
-  const companyDisplay = co.trade_name || co.legal_name || cs.fiscal_legal_name || "Empresa";
-  const companyTaxId = co.tax_id ?? cs.fiscal_tax_id ?? null;
+  const companyDisplay = cs.fiscal_legal_name || co.name || "Empresa";
+  const companyTaxId = cs.fiscal_tax_id ?? null;
   const companyAddress = [cs.fiscal_address, cs.fiscal_postal_code, cs.fiscal_city]
     .filter(Boolean)
     .join(", ") || null;

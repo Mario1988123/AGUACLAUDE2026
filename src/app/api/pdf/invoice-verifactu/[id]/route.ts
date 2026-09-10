@@ -61,7 +61,7 @@ export async function GET(
   const { data: lines } = await admin
     .from("invoice_lines")
     .select(
-      "description, quantity, unit_price_cents, discount_pct, tax_rate, total_cents",
+      "description, quantity, unit_price_cents, discount_pct:discount_percent, tax_rate, total_cents",
     )
     .eq("invoice_id", id)
     .order("display_order");

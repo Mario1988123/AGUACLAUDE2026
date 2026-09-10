@@ -132,19 +132,40 @@ export async function getProductAlerts(): Promise<ProductAlerts> {
     /* */
   }
 
-  // Margen negativo (cash_price_cents < cost_cents)
+  // Margen negativo: el PVP al contado no está en products (no existe
+  // cash_price_cents) sino en product_pricing_plans.total_price_cents del
+  // plan cash. Tal y como estaba, esta alerta no contaba nada nunca.
   try {
     const { data: prods } = await admin
       .from("products")
-      .select("id, cash_price_cents, cost_cents")
+      .select("id, cost_cents")
       .eq("company_id", session.company_id)
       .eq("is_active", true)
-      .not("cash_price_cents", "is", null)
       .not("cost_cents", "is", null);
-    out.negative_margin = ((prods ?? []) as Array<{
-      cash_price_cents: number;
-      cost_cents: number;
-    }>).filter((p) => p.cash_price_cents < p.cost_cents).length;
+    const costById = new Map<string, number>();
+    for (const p of (prods ?? []) as Array<{ id: string; cost_cents: number }>) {
+      costById.set(p.id, p.cost_cents);
+    }
+    if (costById.size > 0) {
+      const { data: plans } = await admin
+        .from("product_pricing_plans")
+        .select("product_id, total_price_cents")
+        .eq("company_id", session.company_id)
+        .eq("plan_type", "cash")
+        .eq("is_active", true)
+        .in("product_id", [...costById.keys()]);
+      const bad = new Set<string>();
+      for (const pl of (plans ?? []) as Array<{
+        product_id: string;
+        total_price_cents: number | null;
+      }>) {
+        const cost = costById.get(pl.product_id);
+        if (cost != null && pl.total_price_cents != null && pl.total_price_cents < cost) {
+          bad.add(pl.product_id);
+        }
+      }
+      out.negative_margin = bad.size;
+    }
   } catch {
     /* */
   }
