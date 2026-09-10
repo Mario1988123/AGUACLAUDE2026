@@ -30,7 +30,13 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const today = new Date().toISOString().slice(0, 10);
-  const stats = { scanned: 0, warned: 0, capped: 0, skipped_already_sent: 0 };
+  const stats = {
+    scanned: 0,
+    warned: 0,
+    capped: 0,
+    key_broken: 0,
+    skipped_already_sent: 0,
+  };
 
   const { data: companies } = await admin
     .from("companies")
@@ -97,19 +103,50 @@ export async function GET(req: NextRequest) {
         0,
       ) / 1_000_000;
 
+    // ── Salud de la key ────────────────────────────────────────────────
+    // Google puede dejar de responder sin que cambie nada del código:
+    // facturación suspendida, key regenerada, restricción de referrer nueva.
+    // Pasó el 24-ago-2026 y estuvo semanas sin que nadie se enterara, porque
+    // la app cae a OpenStreetMap en silencio. Si más de la mitad de las
+    // llamadas de las últimas 24 h fallan por algo que NO es "no hay
+    // resultados", se avisa con el código real que devuelve Google.
+    const dayAgo = new Date(Date.now() - 86400000).toISOString();
+    const { data: recentCalls } = await admin
+      .from("google_api_usage")
+      .select("success, error_code")
+      .eq("company_id", c.id)
+      .gte("called_at", dayAgo);
+    const calls = (recentCalls ?? []) as Array<{
+      success: boolean;
+      error_code: string | null;
+    }>;
+    const broken = calls.filter(
+      (r) =>
+        !r.success &&
+        r.error_code !== null &&
+        r.error_code !== "ZERO_RESULTS" &&
+        r.error_code !== "no_result",
+    );
+    const failureCodes = [...new Set(broken.map((r) => r.error_code))].join(", ");
+    const keyLooksBroken = calls.length >= 5 && broken.length > calls.length / 2;
+
     const monthlyCap = Number(c.gmaps_monthly_cap_usd ?? 50);
     const dailyCap = Number(c.gmaps_daily_cap_usd ?? 10);
     const reachedFreeTier = monthUsd >= FREE_TIER_USD * WARN_PCT;
     const reachedCapMonth = monthUsd >= monthlyCap;
     const reachedCapDay = dayUsd >= dailyCap;
 
-    if (!reachedFreeTier && !reachedCapMonth && !reachedCapDay) continue;
+    if (!reachedFreeTier && !reachedCapMonth && !reachedCapDay && !keyLooksBroken) continue;
 
     const severity: "warning" | "error" =
-      reachedCapMonth || reachedCapDay ? "error" : "warning";
+      reachedCapMonth || reachedCapDay || keyLooksBroken ? "error" : "warning";
     let subject: string;
     let body: string;
-    if (reachedCapMonth) {
+    if (keyLooksBroken) {
+      subject = `[${c.name ?? "Empresa"}] Google Maps no responde`;
+      body = `${broken.length} de ${calls.length} llamadas a Google han fallado en las últimas 24 h con: ${failureCodes}. La app está tirando de OpenStreetMap, que no encuentra muchas direcciones españolas. REQUEST_DENIED suele ser facturación suspendida, key regenerada o una restricción de referrer nueva (la key de servidor NO puede tener restricción de referrer); OVER_DAILY_LIMIT es cuota. Revísalo en Google Cloud Console → Facturación y → Credenciales.`;
+      stats.key_broken++;
+    } else if (reachedCapMonth) {
       subject = `[${c.name ?? "Empresa"}] Google Maps: tope mensual alcanzado`;
       body = `Has llegado al tope mensual de $${monthlyCap} (consumo: $${monthUsd.toFixed(2)}). El módulo Google Maps Tools está cayendo a OpenStreetMap hasta el día 1 del próximo mes. Aumenta el tope o espera.`;
       stats.capped++;

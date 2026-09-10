@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getFiscalSettings } from "@/modules/config/fiscal/actions";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { createInvoiceCore } from "./create-core";
 
 export type InvoiceKind = "invoice" | "credit_note" | "proforma" | "delivery_note";
 export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "void" | "cancelled" | "proforma";
@@ -86,56 +87,9 @@ export interface InvoiceDetail {
   }>;
 }
 
-interface SeriesRow {
-  id: string;
-  kind: InvoiceKind;
-  series_code: string;
-}
-
-async function getOrSeedSeries(companyId: string, kind: InvoiceKind): Promise<SeriesRow> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-  let { data } = await admin
-    .from("invoice_series")
-    .select("id, kind, series_code")
-    .eq("company_id", companyId)
-    .eq("kind", kind)
-    .eq("is_active", true)
-    .order("series_code")
-    .limit(1)
-    .maybeSingle();
-  if (!data) {
-    // Intento sembrar la serie default desde RPC. Si la RPC no existe o falla,
-    // capturamos el error para no tumbar el flujo con un error críptico.
-    try {
-      await admin.rpc("seed_default_invoice_series", { p_company_id: companyId });
-    } catch (e) {
-      console.error("[getOrSeedSeries] seed RPC failed:", e);
-    }
-    const r = await admin
-      .from("invoice_series")
-      .select("id, kind, series_code")
-      .eq("company_id", companyId)
-      .eq("kind", kind)
-      .eq("is_active", true)
-      .order("series_code")
-      .limit(1)
-      .maybeSingle();
-    data = r.data;
-  }
-  if (!data) {
-    const kindLabel: Record<string, string> = {
-      invoice: "factura",
-      proforma: "factura proforma",
-      credit_note: "factura rectificativa",
-      simplified: "factura simplificada",
-    };
-    throw new Error(
-      `No tienes configurada una serie de facturación para ${kindLabel[kind] ?? kind}. Ve a Configuración → Facturación y crea al menos una serie activa.`,
-    );
-  }
-  return data as SeriesRow;
-}
+// La numeración fiscal y el insert viven en ./create-core, que no es
+// "use server": así el cron (sin sesión) crea facturas por el mismo camino
+// que el alta manual, en vez de insertar a pelo como hacía antes.
 
 function customerDisplayName(c: {
   party_kind: "individual" | "company";
@@ -148,13 +102,8 @@ function customerDisplayName(c: {
   return `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Cliente";
 }
 
-function calcLineTotals(line: InvoiceLine) {
-  const gross = line.unit_price_cents * line.quantity;
-  const discount = Math.round((gross * line.discount_percent) / 100);
-  const subtotal = gross - discount;
-  const tax = Math.round((subtotal * line.tax_rate_percent) / 100);
-  return { subtotal_cents: subtotal, tax_cents: tax, total_cents: subtotal + tax };
-}
+// calcLineTotals se movió a ./create-core (lo comparten el alta manual y el
+// cron). Se reexporta el uso local vía import.
 
 export async function listInvoices(filters?: {
   status?: InvoiceStatus;
@@ -368,180 +317,16 @@ interface CreateInvoiceInput {
 export async function createInvoiceAction(input: CreateInvoiceInput): Promise<string> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
-  if (!input.lines || input.lines.length === 0) throw new Error("Añade al menos una línea");
-  if (!input.customer_id && !input.financier_id) {
-    throw new Error("La factura necesita un destinatario (customer_id o financier_id)");
-  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-
-  const kind: InvoiceKind = input.kind ?? "invoice";
-  const series = await getOrSeedSeries(session.company_id, kind);
-  // Función canónica en schema public (Verifactu 2026-05-07). Devuelve
-  // bigint con el número. La anterior app.next_invoice_number quedó
-  // obsoleta (no visible en PostgREST por estar en schema app).
-  const { data: nextNum, error: e1 } = await admin.rpc(
-    "allocate_next_invoice_number",
-    { p_series_id: series.id },
-  );
-  if (e1) throw new Error(e1.message);
-  const num = Number(nextNum);
-  if (!Number.isFinite(num) || num <= 0) {
-    throw new Error("No se pudo asignar número de factura");
-  }
-  const fiscalYear = new Date().getFullYear();
-  const fullRef = `${series.series_code}-${fiscalYear}-${String(num).padStart(5, "0")}`;
-
-  // Snapshots — fuente depende de si el destinatario es customer o financier.
-  const fiscal = await getFiscalSettings();
-  let recipientSnapshot: Record<string, unknown> = {};
-  if (input.financier_id) {
-    const { data: fin } = await admin
-      .from("financiers")
-      .select(
-        "id, name, fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban",
-      )
-      .eq("id", input.financier_id)
-      .maybeSingle();
-    const f = fin as Record<string, unknown> | null;
-    if (!f) throw new Error("Financiera no encontrada");
-    recipientSnapshot = {
-      kind: "financier",
-      party_kind: "company",
-      legal_name: f.fiscal_legal_name ?? f.name,
-      tax_id: f.fiscal_tax_id ?? null,
-      email: f.fiscal_email ?? null,
-      phone_primary: f.fiscal_phone ?? null,
-      iban: f.fiscal_iban ?? null,
-      address: {
-        street: f.fiscal_street ?? null,
-        postal_code: f.fiscal_postal_code ?? null,
-        city: f.fiscal_city ?? null,
-        province: f.fiscal_province ?? null,
-        country: f.fiscal_country ?? "España",
-      },
-    };
-  } else if (input.customer_id) {
-    const { data: cust } = await admin
-      .from("customers")
-      .select(
-        "id, party_kind, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary",
-      )
-      .eq("id", input.customer_id)
-      .maybeSingle();
-    const { data: addr } = await admin
-      .from("addresses")
-      .select("street, street_number, postal_code, city, province")
-      .eq("customer_id", input.customer_id)
-      .eq("is_primary", true)
-      .maybeSingle();
-    recipientSnapshot = { ...(cust ?? {}), address: addr ?? null };
-  }
-
-  // Calcular totales
-  let subtotal = 0;
-  let tax = 0;
-  for (const l of input.lines) {
-    const t = calcLineTotals(l);
-    subtotal += t.subtotal_cents;
-    tax += t.tax_cents;
-  }
-  const total = subtotal + tax;
-
-  // En modo Verifactu (empresa con certificado FNMT) ADEMÁS poblamos las
-  // columnas V2 (customer_snapshot, tax_total_cents, invoice_type, due_at,
-  // operation_at) para que el botón "Emitir Verifactu" funcione sobre una
-  // factura creada por este camino legacy. En modo simple se quedan null.
-  const { getCompanyInvoicingMode } = await import("./mode");
-  const modeInfo = await getCompanyInvoicingMode(session.company_id, admin);
-  const dueDate =
-    input.due_date ??
-    new Date(Date.now() + (fiscal.invoice_default_due_days ?? 30) * 86400000)
-      .toISOString()
-      .slice(0, 10);
-
-  const insertPayload: Record<string, unknown> = {
-    company_id: session.company_id,
-    customer_id: input.customer_id ?? null,
-    financier_id: input.financier_id ?? null,
-    contract_id: input.contract_id ?? null,
-    kind,
-    series_id: series.id,
-    number: num,
-    fiscal_year: fiscalYear,
-    full_reference: fullRef,
-    status: "draft",
-    customer_fiscal_snapshot: recipientSnapshot,
-    company_fiscal_snapshot: fiscal,
-    subtotal_cents: subtotal,
-    tax_cents: tax,
-    total_cents: total,
-    withholdings_cents: 0,
-    issue_date: new Date().toISOString().slice(0, 10),
-    due_date: dueDate,
-    corrects_invoice_id: input.corrects_invoice_id ?? null,
-    notes: input.notes ?? null,
-    maintenance_contract_id: input.maintenance_contract_id ?? null,
-    billing_period: input.billing_period ?? null,
-  };
-  if (modeInfo.mode === "verifactu") {
-    insertPayload.customer_snapshot = recipientSnapshot;
-    insertPayload.tax_total_cents = tax;
-    insertPayload.invoice_type = "F1";
-    insertPayload.due_at = dueDate;
-    insertPayload.operation_at = new Date().toISOString().slice(0, 10);
-  }
-  // INSERT defensivo: si financier_id / maintenance_contract_id /
-  // billing_period no existen en cache (migración pendiente), los
-  // eliminamos y reintentamos para no romper en entornos viejos.
-  let inv = await admin.from("invoices").insert(insertPayload).select("id").single();
-  if (
-    inv.error &&
-    /financier_id|maintenance_contract_id|billing_period|schema cache|Could not find/i.test(
-      inv.error.message ?? "",
-    )
-  ) {
-    delete insertPayload.financier_id;
-    delete insertPayload.maintenance_contract_id;
-    delete insertPayload.billing_period;
-    inv = await admin.from("invoices").insert(insertPayload).select("id").single();
-  }
-  const created = inv.data;
-  const e2 = inv.error;
-  if (e2) throw new Error(e2.message);
-  const invoiceId = (created as { id: string }).id;
-
-  await admin.from("invoice_lines").insert(
-    input.lines.map((l, idx) => {
-      const t = calcLineTotals(l);
-      return {
-        invoice_id: invoiceId,
-        company_id: session.company_id,
-        product_id: l.product_id ?? null,
-        description: l.description,
-        quantity: l.quantity,
-        unit_price_cents: l.unit_price_cents,
-        discount_percent: l.discount_percent,
-        tax_rate_percent: l.tax_rate_percent,
-        subtotal_cents: t.subtotal_cents,
-        tax_cents: t.tax_cents,
-        total_cents: t.total_cents,
-        display_order: idx,
-      };
-    }),
-  );
-
-  await admin.from("events").insert({
-    company_id: session.company_id,
-    subject_type: "contract",
-    subject_id: input.contract_id ?? invoiceId,
-    kind: "invoice.created",
-    payload: { invoice_id: invoiceId, full_reference: fullRef },
-    actor_user_id: session.user_id,
+  const { id } = await createInvoiceCore({
+    admin,
+    companyId: session.company_id,
+    actorUserId: session.user_id,
+    input,
   });
-
   revalidatePath("/facturas");
-  return invoiceId;
+  return id;
 }
 
 export async function markInvoiceIssuedAction(invoiceId: string): Promise<void> {

@@ -5,6 +5,7 @@ import { notifyByRoles } from "@/modules/notifications/notifier";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
+import { createContractMonthlyInvoice } from "@/modules/invoices/create-core";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -223,15 +224,15 @@ export async function GET(req: NextRequest) {
         if (!needsIncident) continue;
 
         // Buscar nombre para el título
+        // user_profiles NO tiene email (vive en auth.users): pedirlo hacía
+        // fallar el select entero y el nombre salía siempre "Usuario".
         const { data: prof } = await admin
           .from("user_profiles")
-          .select("full_name, email")
+          .select("full_name, display_name")
           .eq("user_id", s.user_id)
           .maybeSingle();
-        const pName =
-          (prof as { full_name?: string; email?: string } | null)?.full_name ||
-          (prof as { email?: string } | null)?.email ||
-          "Usuario";
+        const p = prof as { full_name?: string; display_name?: string } | null;
+        const pName = p?.full_name || p?.display_name || "Usuario";
 
         // Evitar duplicar: si ya hay incidencia abierta de horario para
         // ese user_id + fecha, saltar.
@@ -1169,19 +1170,19 @@ export async function GET(req: NextRequest) {
       .update({ status: "expired" })
       .eq("status", "installed")
       .lt("expires_at", todayDate)
-      .select("id, company_id, assigned_user_id");
+      .select("id, company_id, assigned_installer_user_id");
     phase2.free_trials_expired = ((expiredTrials ?? []) as Array<unknown>).length;
     for (const t of (expiredTrials ?? []) as Array<{
       id: string;
       company_id: string;
-      assigned_user_id: string | null;
+      assigned_installer_user_id: string | null;
     }>) {
       if (offFreeTrials.has(t.company_id)) continue;
-      if (t.assigned_user_id) {
+      if (t.assigned_installer_user_id) {
         try {
           await admin.from("notifications").insert({
             company_id: t.company_id,
-            recipient_user_id: t.assigned_user_id,
+            recipient_user_id: t.assigned_installer_user_id,
             kind: "free_trial.expired",
             severity: "warning",
             title: "Prueba gratuita caducada",
@@ -1389,12 +1390,15 @@ export async function GET(req: NextRequest) {
         let createdPaymentId: string | null = null;
         try {
           const monthLabel = monthIso.slice(0, 7); // "2026-05"
-          // Idempotencia previa al insert (en cualquier paso podría haber)
+          // Idempotencia previa al insert (en cualquier paso podría haber).
+          // Se mira `issue_date`, no `issued_at`: `issued_at` solo se rellena
+          // al EMITIR, así que en un borrador es NULL y el filtro no casaba
+          // nunca — habría facturado otra vez cada día.
           const { count: already } = await admin
             .from("invoices")
             .select("id", { count: "exact", head: true })
             .eq("contract_id", c.id)
-            .gte("issued_at", monthStart)
+            .gte("issue_date", monthStart.slice(0, 10))
             .is("deleted_at", null);
           if ((already ?? 0) > 0) continue;
           const { count: cpAlready } = await admin
@@ -1404,27 +1408,39 @@ export async function GET(req: NextRequest) {
             .ilike("concept", `Cuota mensual%${monthLabel}%`);
           if ((cpAlready ?? 0) > 0) continue;
 
-          // 1) Insert invoice draft
-          const { data: invRow, error } = await admin.from("invoices").insert({
-            company_id: c.company_id,
-            customer_id: c.customer_id,
-            contract_id: c.id,
-            kind: "invoice",
-            status: "draft",
-            total_cents: c.monthly_cents,
-            pending_cents: c.monthly_cents,
-            issue_date: monthIso,
-            due_date: new Date(today.getFullYear(), today.getMonth() + 1, 0)
-              .toISOString()
-              .slice(0, 10),
-            notes: `Mensualidad ${monthLabel} contrato ${c.reference_code ?? c.id.slice(0, 8)}`,
-          }).select("id").single();
-          if (error) {
+          // 1) Factura de la cuota, por el MISMO camino que el alta manual:
+          //    serie fiscal + allocate_next_invoice_number + full_reference.
+          //    Antes se insertaba a pelo con `pending_cents` (columna que no
+          //    existe) y sin series_id/number/fiscal_year/full_reference, las
+          //    cuatro NOT NULL: no llegó a crearse una sola factura nunca.
+          let charged = c.monthly_cents;
+          try {
+            const inv = await createContractMonthlyInvoice({
+              admin,
+              companyId: c.company_id,
+              contract: {
+                id: c.id,
+                customer_id: c.customer_id,
+                monthly_cents: c.monthly_cents,
+                reference_code: c.reference_code,
+              },
+              monthLabel,
+              dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 0)
+                .toISOString()
+                .slice(0, 10),
+            });
+            createdInvoiceId = inv.id;
+            // Lo que se cobra es lo que se factura. Para empresa/autónomo la
+            // cuota del contrato es BASE y la factura lleva el IVA encima.
+            charged = inv.total_cents;
+          } catch (e) {
             monthlyInvoicing.errors += 1;
-            console.error("[phase2/monthly-invoice]", error.message);
+            console.error(
+              "[phase2/monthly-invoice]",
+              e instanceof Error ? e.message : e,
+            );
             continue;
           }
-          createdInvoiceId = (invRow as { id: string }).id;
           monthlyInvoicing.generated += 1;
 
           // 2) Insert contract_payment
@@ -1434,7 +1450,7 @@ export async function GET(req: NextRequest) {
               company_id: c.company_id,
               contract_id: c.id,
               concept: `Cuota mensual · ${monthLabel}`,
-              amount_cents: c.monthly_cents,
+              amount_cents: charged,
               method: "direct_debit",
               moment: "periodic",
               status: "pending",
@@ -1458,7 +1474,7 @@ export async function GET(req: NextRequest) {
             contract_payment_id: createdPaymentId,
             customer_id: c.customer_id,
             concept: `Cuota mensual ${monthLabel}`,
-            amount_cents: c.monthly_cents,
+            amount_cents: charged,
             method: "direct_debit",
             status: "pending",
           });
@@ -1872,14 +1888,16 @@ export async function GET(req: NextRequest) {
   };
   try {
     const now = Date.now();
+    // `pending_cents` NO existe en la tabla: pedirla hacía fallar el select
+    // entero y ningún recordatorio salió jamás. Lo pendiente es
+    // total_cents − cobros de invoice_payments, igual que en getInvoice().
     const { data: overdue } = await admin
       .from("invoices")
       .select(
-        "id, company_id, customer_id, customer_fiscal_snapshot, full_reference, total_cents, pending_cents, due_date, status",
+        "id, company_id, customer_id, customer_fiscal_snapshot, full_reference, total_cents, due_date, status",
       )
       .in("status", ["issued", "overdue"])
       .lt("due_date", new Date(now).toISOString().slice(0, 10))
-      .gt("pending_cents", 0)
       .is("deleted_at", null);
     type Inv = {
       id: string;
@@ -1888,12 +1906,31 @@ export async function GET(req: NextRequest) {
       customer_fiscal_snapshot: Record<string, unknown> | null;
       full_reference: string;
       total_cents: number;
-      pending_cents: number;
       due_date: string;
       status: string;
     };
-    for (const inv of ((overdue ?? []) as Inv[])) {
+    const overdueList = (overdue ?? []) as Inv[];
+    // Cobros parciales de todas ellas en una sola consulta.
+    const paidByInvoice = new Map<string, number>();
+    if (overdueList.length > 0) {
+      const { data: paysData } = await admin
+        .from("invoice_payments")
+        .select("invoice_id, amount_cents")
+        .in("invoice_id", overdueList.map((i) => i.id));
+      for (const p of (paysData ?? []) as Array<{
+        invoice_id: string;
+        amount_cents: number;
+      }>) {
+        paidByInvoice.set(
+          p.invoice_id,
+          (paidByInvoice.get(p.invoice_id) ?? 0) + (p.amount_cents ?? 0),
+        );
+      }
+    }
+    for (const inv of overdueList) {
       if (offInvoicing.has(inv.company_id)) continue;
+      const pendingCents = inv.total_cents - (paidByInvoice.get(inv.id) ?? 0);
+      if (pendingCents <= 0) continue;
       try {
         const daysOverdue = Math.floor(
           (now - new Date(inv.due_date).getTime()) / 86400000,
@@ -1909,7 +1946,7 @@ export async function GET(req: NextRequest) {
                 kind: "invoice.legal_action_suggested",
                 severity: "warning",
                 title: `Factura ${inv.full_reference} +45d vencida`,
-                body: `Considera vía legal. Cliente impagado más de 45 días por ${(inv.pending_cents / 100).toFixed(2)}€.`,
+                body: `Considera vía legal. Cliente impagado más de 45 días por ${(pendingCents / 100).toFixed(2)}€.`,
                 subject_type: "invoice",
                 subject_id: inv.id,
                 action_url: `/facturas/${inv.id}`,
@@ -1939,18 +1976,22 @@ export async function GET(req: NextRequest) {
           continue;
         }
 
-        // Consentimiento comercial (si el cliente revocó, no enviamos).
+        // RGPD: `customers.commercial_consent` no existe — el consentimiento
+        // vive en `customer_consents`. Un recordatorio de impago es
+        // transaccional, no marketing, así que se mira `data_processing`,
+        // igual que los emails de incidencia (incidents/email-from-cron.ts).
         let hasConsent = true;
         if (inv.customer_id) {
           try {
-            const { data: cust } = await admin
-              .from("customers")
-              .select("commercial_consent")
-              .eq("id", inv.customer_id)
+            const { data: consent } = await admin
+              .from("customer_consents")
+              .select("granted")
+              .eq("customer_id", inv.customer_id)
+              .eq("kind", "data_processing")
+              .order("granted_at", { ascending: false })
+              .limit(1)
               .maybeSingle();
-            hasConsent =
-              (cust as { commercial_consent?: boolean } | null)
-                ?.commercial_consent !== false;
+            hasConsent = (consent as { granted?: boolean } | null)?.granted !== false;
           } catch {
             /* */
           }
@@ -1963,7 +2004,7 @@ export async function GET(req: NextRequest) {
               company_id: inv.company_id,
               kind: "task",
               title: `Llamar — factura ${inv.full_reference} impagada ${daysOverdue}d`,
-              description: `El cliente no acepta comunicaciones comerciales. Pendiente: ${(inv.pending_cents / 100).toFixed(2)}€.`,
+              description: `El cliente no acepta comunicaciones comerciales. Pendiente: ${(pendingCents / 100).toFixed(2)}€.`,
               starts_at: new Date(now + 24 * 3600000).toISOString(),
               subject_type: "invoice",
               subject_id: inv.id,
@@ -2025,7 +2066,7 @@ export async function GET(req: NextRequest) {
               // Genérico mínimo si no hay seed: que al menos llegue algo
               // útil. (system-templates debería tener payment_reminder_*).
               tplSubject = `Recordatorio: factura ${inv.full_reference} pendiente`;
-              tplBody = `<p>Hola,</p><p>Te recordamos que la factura <b>${inv.full_reference}</b> de ${(inv.pending_cents / 100).toFixed(2)} € está pendiente de pago desde hace ${daysOverdue} días.</p><p>Si ya la has abonado, ignora este aviso. Si no, ponte en contacto con nosotros.</p>`;
+              tplBody = `<p>Hola,</p><p>Te recordamos que la factura <b>${inv.full_reference}</b> de ${(pendingCents / 100).toFixed(2)} € está pendiente de pago desde hace ${daysOverdue} días.</p><p>Si ya la has abonado, ignora este aviso. Si no, ponte en contacto con nosotros.</p>`;
             }
           }
 
@@ -2043,7 +2084,7 @@ export async function GET(req: NextRequest) {
             customer_name: customerName,
             invoice_ref: inv.full_reference ?? "",
             days_overdue: String(daysOverdue),
-            pending_amount: (inv.pending_cents / 100).toFixed(2),
+            pending_amount: (pendingCents / 100).toFixed(2),
             due_date: new Date(inv.due_date).toLocaleDateString("es-ES"),
           };
           const render = (s: string) =>
@@ -2114,7 +2155,7 @@ export async function GET(req: NextRequest) {
             kind: `invoice.reminder_${level}_sent`,
             severity: level === 3 ? "warning" : "info",
             title: `Recordatorio nivel ${level}: ${inv.full_reference}`,
-            body: `Factura impagada ${daysOverdue} días. ${(inv.pending_cents / 100).toFixed(2)}€.`,
+            body: `Factura impagada ${daysOverdue} días. ${(pendingCents / 100).toFixed(2)}€.`,
             subject_type: "invoice",
             subject_id: inv.id,
             action_url: `/facturas/${inv.id}`,

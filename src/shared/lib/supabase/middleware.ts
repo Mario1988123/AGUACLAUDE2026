@@ -72,6 +72,12 @@ export async function updateSession(request: NextRequest) {
     "/baja", // baja de comunicaciones comerciales (link en emails de campaña)
     "/api/webhooks/", // webhooks externos (Resend, GoCardless) verifican su propia firma
     "/api/track/", // tracking de aperturas/clics SMTP (pixel + redirect)
+    // Crons de Vercel: llegan sin cookie de sesión, así que el middleware los
+    // redirigía a /login con un 307 y el handler NUNCA llegaba a ejecutarse
+    // (cron_runs vacía, VeriFactu sin enviar, recordatorios sin salir).
+    // No abre ningún agujero: cada ruta empieza por verifyCronAuth(), que exige
+    // el CRON_SECRET y es fail-closed si la variable no está definida.
+    "/api/cron/",
   ];
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 

@@ -1552,13 +1552,19 @@ export async function validateContractAction(id: string): Promise<ContractAction
         error: `El contrato debe estar firmado para validar (estado: ${c.status})`,
       };
     }
-    const r = await admin
-      .from("contracts")
-      .update({
-        validated_at: new Date().toISOString(),
-        validated_by_user_id: session.user_id,
-      })
-      .eq("id", id);
+    // `validated_at` no existe en producción: mandarla hacía fallar el UPDATE
+    // entero y validar un contrato devolvía error siempre. Se intenta con la
+    // fecha y, si la columna no está, se reintenta sin ella (la migración
+    // 20260910120000 la añade; hasta que se aplique, validar debe funcionar).
+    const patch: Record<string, unknown> = {
+      validated_at: new Date().toISOString(),
+      validated_by_user_id: session.user_id,
+    };
+    let r = await admin.from("contracts").update(patch).eq("id", id);
+    if (r.error && /validated_at|schema cache|Could not find/i.test(r.error.message ?? "")) {
+      delete patch.validated_at;
+      r = await admin.from("contracts").update(patch).eq("id", id);
+    }
     if (r.error) return { ok: false, error: r.error.message };
     await admin.from("events").insert({
       company_id: session.company_id,

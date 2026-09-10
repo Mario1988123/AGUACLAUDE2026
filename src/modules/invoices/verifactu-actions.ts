@@ -568,20 +568,30 @@ export async function createMonthlyV2InvoiceAction(opts: {
     }
     const invoiceId = (created as { id: string }).id;
 
-    await admin.from("invoice_lines").insert({
+    // company_id y tax_rate_percent son NOT NULL, y la columna de descuento
+    // se llama discount_percent (no discount_pct): tal y como estaba, este
+    // insert fallaba siempre y la factura V2 se quedaba sin líneas.
+    const { error: lineErr } = await admin.from("invoice_lines").insert({
       invoice_id: invoiceId,
+      company_id: session.company_id,
       display_order: 0,
       description: `Cuota ${opts.month_label}`,
       quantity: 1,
       unit_price_cents: baseCents,
-      discount_pct: 0,
+      discount_percent: 0,
       subtotal_cents: baseCents,
+      tax_rate_percent: iva,
       tax_rate: iva,
       tax_cents: taxCents,
       retention_rate: 0,
       retention_cents: 0,
       total_cents: total,
     });
+    if (lineErr) {
+      console.error("[createMonthlyV2] línea fallida:", lineErr.message);
+      await admin.from("invoices").delete().eq("id", invoiceId);
+      return { ok: false, error: lineErr.message };
+    }
     await admin.from("invoice_taxes").insert({
       invoice_id: invoiceId,
       tax_rate: iva,

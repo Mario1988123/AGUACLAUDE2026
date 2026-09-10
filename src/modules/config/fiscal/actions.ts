@@ -4,50 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { FISCAL_DEFAULTS, loadFiscalSettings } from "./load";
+import type { FiscalSettings } from "./load";
 
-export interface FiscalSettings {
-  fiscal_legal_name: string | null;
-  fiscal_tax_id: string | null;
-  fiscal_street: string | null;
-  fiscal_postal_code: string | null;
-  fiscal_city: string | null;
-  fiscal_province: string | null;
-  fiscal_country: string;
-  fiscal_email: string | null;
-  fiscal_phone: string | null;
-  fiscal_iban: string | null;
-  fiscal_mercantile_reg: string | null;
-  fiscal_logo_url: string | null;
-  /** Color hex aplicado a cabeceras y bandas de los PDFs emitidos. */
-  pdf_brand_color: string;
-  /** Creditor Identifier SEPA. Formato típico ES##ZZZ########## (max 35 chars).
-   *  Lo asigna el banco al empresa para domiciliar cuotas con SEPA Core.
-   *  Lo usa generateSepaXmlForPendingDebits + el snapshot de cada mandato. */
-  sepa_creditor_id: string | null;
-  invoice_default_iva: number;
-  invoice_default_due_days: number;
-  invoice_footer_text: string | null;
-}
+// El tipo y los defaults viven en ./load (módulo normal): este fichero es
+// "use server" y todo lo que exporte sería una server action invocable desde
+// el navegador, así que aquí no puede haber nada que acepte un company_id.
+export type { FiscalSettings } from "./load";
 
-const DEFAULTS: FiscalSettings = {
-  fiscal_legal_name: null,
-  fiscal_tax_id: null,
-  fiscal_street: null,
-  fiscal_postal_code: null,
-  fiscal_city: null,
-  fiscal_province: null,
-  fiscal_country: "España",
-  fiscal_email: null,
-  fiscal_phone: null,
-  fiscal_iban: null,
-  fiscal_mercantile_reg: null,
-  fiscal_logo_url: null,
-  pdf_brand_color: "#4880FF",
-  sepa_creditor_id: null,
-  invoice_default_iva: 21,
-  invoice_default_due_days: 30,
-  invoice_footer_text: null,
-};
+const DEFAULTS = FISCAL_DEFAULTS;
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -62,15 +27,7 @@ export async function getFiscalSettings(): Promise<FiscalSettings> {
     if (!session.company_id) return DEFAULTS;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data } = await admin
-      .from("company_settings")
-      .select(
-        "fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, fiscal_email, fiscal_phone, fiscal_iban, fiscal_mercantile_reg, fiscal_logo_url, pdf_brand_color, sepa_creditor_id, invoice_default_iva, invoice_default_due_days, invoice_footer_text",
-      )
-      .eq("company_id", session.company_id)
-      .maybeSingle();
-    if (!data) return DEFAULTS;
-    return { ...DEFAULTS, ...(data as Partial<FiscalSettings>) };
+    return await loadFiscalSettings(admin, session.company_id);
   } catch {
     return DEFAULTS;
   }
