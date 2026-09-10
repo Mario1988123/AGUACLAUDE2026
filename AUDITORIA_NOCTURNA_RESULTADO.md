@@ -265,3 +265,45 @@ la sesión; la idea, por si hay que rehacerlos:
 Merece la pena convertirlo en un test de CI: es la clase de fallo que este
 proyecto produce una y otra vez, y no lo detecta ni el typecheck ni el build
 porque el cliente de Supabase está tipado como `any` a propósito.
+
+---
+
+## 6. Estado al cerrar la sesión (2026-09-10)
+
+Lo que se ha hecho después de escribir el informe, con typecheck, 190 tests y
+build en verde en cada tanda:
+
+| Cosa | Estado |
+|---|---|
+| Middleware: `/api/cron/` público (con `verifyCronAuth`) | **Desplegado** (`5aec812`) |
+| `CRON_SECRET` en Vercel + redespliegue | **Hecho** — los crons ya pueden ejecutarse |
+| Cuota mensual de alquiler por el camino de numeración fiscal | **Desplegado** |
+| Recordatorios de impago (pendiente calculado) | **Desplegado** |
+| Fechas fiscales en hora de Madrid | **Desplegado** |
+| Traspaso de equipos: pack partido, nietos, errores silenciados, límite de 500 | **Desplegado** (`5712be9`) |
+| Packs: anidar extras en la propuesta (UI) | **Desplegado** (`5712be9`) |
+| Migración `20260910120000` (2 columnas) | **Aplicada al remoto** |
+| Migración `20260910130000` (6 tablas + RLS acotada) | **Aplicada al remoto** |
+| 33 → 0 referencias a columnas inexistentes | **Desplegado** (`5a41a18`) |
+| 10 → 1 tablas inexistentes (`customer_duplicates`) | **Desplegado** (`5a41a18`) |
+
+**Sigue pendiente y necesita a una persona:**
+
+1. **Google Maps.** Sin una llamada real desde producción no se sabe el motivo.
+   Hace falta o iniciar sesión en el CRM para provocar una geocodificación, o
+   mirar Facturación y Credenciales en Google Cloud Console. Recomendación
+   independiente del diagnóstico: crear una key **de servidor sin restricción de
+   referrer** y darla de alta como `GOOGLE_MAPS_PLATFORM_SERVER_KEY`.
+2. **ElevenLabs** para encender el agente de voz.
+3. **Las siete preguntas de negocio** de `AUDITORIA_2026-09-09.md`.
+4. **`customer_duplicates`**: decidir si la detección de duplicados debe
+   persistirse (hoy no hay tabla ni migración en ninguna parte).
+5. **Packs**: modo "venta a instalar" en la ficha del cliente y robustez de
+   stock del pack (comprobación all-or-nothing).
+6. **Auditoría de correctness a mano** de dinero/redondeo e idempotencia en
+   propuestas, wallet, puntos y ahorro.
+
+**Y una recomendación que vale más que cualquiera de estos arreglos:** meter el
+escaneo de la §5 como test de CI. Los 33 fallos de columna y las 10 tablas que
+faltaban llevaban meses ahí, ninguno lo veía el typecheck ni el build, y ninguno
+daba error visible al usuario.
