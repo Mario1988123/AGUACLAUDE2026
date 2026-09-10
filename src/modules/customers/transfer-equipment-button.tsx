@@ -79,7 +79,16 @@ export function TransferEquipmentButton({
       if (d.jobs_moved > 0) partes.push(`${d.jobs_moved} mantenimiento(s) pendiente(s)`);
       if (d.contracts_moved > 0) partes.push(`${d.contracts_moved} contrato(s)`);
       if (d.incidents_moved > 0) partes.push(`${d.incidents_moved} incidencia(s) abierta(s)`);
-      notify.success("Titular cambiado", `Se ha movido: ${partes.join(", ")}.`);
+      if (d.warnings.length > 0) {
+        // El equipo sí se movió, pero algo del arrastre falló. Callarlo dejaría
+        // la ficha a medias sin que nadie se entere.
+        notify.error(
+          "Traspaso incompleto",
+          `Se movió el equipo, pero falló: ${d.warnings.join(" · ")}. Revísalo.`,
+        );
+      } else {
+        notify.success("Titular cambiado", `Se ha movido: ${partes.join(", ")}.`);
+      }
       setOpen(false);
       router.refresh();
     });

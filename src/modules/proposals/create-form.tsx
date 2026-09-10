@@ -65,6 +65,12 @@ interface ItemRow {
   maintenance_periodicity_months: number | null;
   deposit_cents: number | null;
   charge_first_payment_now: boolean;
+  /**
+   * Pack: índice (dentro de este mismo array) del equipo principal del que
+   * esta línea es un extra. null = línea suelta o el propio principal.
+   * El backend lo traduce a `parent_item_id` tras insertar (linkItemsByParentIndex).
+   */
+  parent_index?: number | null;
 }
 
 function eur(cents: number | null | undefined): string {
@@ -228,7 +234,14 @@ export function ProposalCreateForm({
               duration,
               destinatario,
             );
-            return { ...next, ...fresh, quantity: next.quantity };
+            // parent_index sobrevive al cambio de producto: cambiar el
+            // artículo de un extra no lo saca del pack.
+            return {
+              ...next,
+              ...fresh,
+              quantity: next.quantity,
+              parent_index: next.parent_index ?? null,
+            };
           }
         }
         return next;
@@ -237,7 +250,18 @@ export function ProposalCreateForm({
   }
 
   function removeItem(idx: number) {
-    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setItems((prev) =>
+      prev
+        .filter((_, i) => i !== idx)
+        // Los vínculos de pack van por índice: al quitar una línea hay que
+        // recolocarlos o el extra acabaría colgando de otro producto.
+        .map((it) => {
+          const p = it.parent_index;
+          if (p == null) return it;
+          if (p === idx) return { ...it, parent_index: null }; // se fue su principal
+          return p > idx ? { ...it, parent_index: p - 1 } : it;
+        }),
+    );
   }
 
   function changePlan(newPlan: PlanType) {
@@ -450,6 +474,22 @@ export function ProposalCreateForm({
             allProducts={products}
             planType={planType}
             duration={duration}
+            // Solo un principal puede ser padre: ni uno mismo, ni otro extra,
+            // ni una línea que ya tenga extras colgando (el modelo admite un
+            // nivel; packs dentro de packs no).
+            parentOptions={
+              items.some((x) => x.parent_index === idx)
+                ? []
+                : items
+                    .map((other, i) => ({ other, i }))
+                    .filter(({ other, i }) => i !== idx && other.parent_index == null)
+                    .map(({ other, i }) => ({
+                      index: i,
+                      label:
+                        products.find((p) => p.id === other.product_id)?.name ??
+                        `Línea ${i + 1}`,
+                    }))
+            }
             onChange={(patch) => updateItem(idx, patch)}
             onRemove={() => removeItem(idx)}
           />
@@ -516,6 +556,7 @@ function ItemEditor({
   allProducts,
   planType,
   duration,
+  parentOptions,
   onChange,
   onRemove,
 }: {
@@ -524,6 +565,8 @@ function ItemEditor({
   allProducts: ProductForProposal[];
   planType: PlanType;
   duration: number | null;
+  /** Líneas que pueden hacer de equipo principal de esta (packs). */
+  parentOptions: Array<{ index: number; label: string }>;
   onChange: (patch: Partial<ItemRow>) => void;
   onRemove: () => void;
 }) {
@@ -536,9 +579,37 @@ function ItemEditor({
   const minAuth = plan?.min_authorized_cents ?? null;
   const belowMin = minAuth != null && item.unit_price_cents < minAuth;
   const cuotaLabel = planType === "cash" ? "Precio total (€)" : "Cuota mensual (€)";
+  const isExtra = item.parent_index != null;
 
   return (
-    <div className="space-y-3 rounded-xl border bg-background p-4">
+    <div
+      className={
+        isExtra
+          ? "ml-6 space-y-3 rounded-xl border border-l-4 border-l-primary/40 bg-muted/20 p-4"
+          : "space-y-3 rounded-xl border bg-background p-4"
+      }
+    >
+      {parentOptions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Va dentro de:</span>
+          <select
+            className="h-9 rounded-lg border border-input bg-background px-2"
+            value={item.parent_index ?? ""}
+            onChange={(e) =>
+              onChange({
+                parent_index: e.target.value === "" ? null : Number(e.target.value),
+              })
+            }
+          >
+            <option value="">— Equipo independiente —</option>
+            {parentOptions.map((p) => (
+              <option key={p.index} value={p.index}>
+                Extra de: {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <select
           value={item.product_id}

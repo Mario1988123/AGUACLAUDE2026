@@ -52,6 +52,8 @@ export interface TransferEquipmentResult {
   incidents_moved: number;
   address_cloned: boolean;
   detached_from_pack: boolean;
+  /** Pasos que fallaron después de mover el equipo. Vacío = todo limpio. */
+  warnings: string[];
 }
 
 interface EquipmentRow {
@@ -152,19 +154,37 @@ export async function transferEquipmentAction(input: {
     // --- 3. Qué equipos viajan --------------------------------------------
     const includeChildren = input.include_children !== false;
     const ids = [equipment.id];
-    if (includeChildren) {
+    // Descendencia completa, no solo los hijos directos. Hoy el modelo solo
+    // encadena un nivel (extras colgando de un principal), pero nada en la BD
+    // impide un nieto y un nieto olvidado se queda apuntando a un equipo que
+    // ya es de otro titular. El bucle está acotado por si alguien crea un
+    // ciclo a mano.
+    const childrenOf = async (parents: string[]): Promise<string[]> => {
       const { data: kids } = await admin
         .from("customer_equipment")
         .select("id")
-        .eq("parent_equipment_id", equipment.id)
+        .in("parent_equipment_id", parents)
         .eq("company_id", companyId);
-      for (const k of (kids ?? []) as Array<{ id: string }>) ids.push(k.id);
+      return ((kids ?? []) as Array<{ id: string }>).map((k) => k.id);
+    };
+    const directChildren = await childrenOf([equipment.id]);
+    if (includeChildren) {
+      let frontier = directChildren;
+      for (let depth = 0; depth < 5 && frontier.length > 0; depth++) {
+        for (const id of frontier) if (!ids.includes(id)) ids.push(id);
+        frontier = (await childrenOf(frontier)).filter((id) => !ids.includes(id));
+      }
     }
 
     // Si lo que se mueve es un accesorio de un pack que se queda, hay que
     // soltarlo del padre: si no, quedaría colgando de un equipo que ya es de
     // otro titular y la ficha del pack mentiría.
     const detachFromPack = equipment.parent_equipment_id !== null;
+
+    // Sin transacción (PostgREST no las expone), así que lo que falle a mitad
+    // se recoge aquí y se devuelve: el traspaso queda hecho pero el llamante
+    // sabe exactamente qué se quedó a medias en vez de creerse que fue bien.
+    const partial: string[] = [];
 
     // --- 4. La dirección ---------------------------------------------------
     // El equipo sigue físicamente donde estaba, pero la dirección cuelga de la
@@ -232,11 +252,26 @@ export async function transferEquipmentAction(input: {
     if (eqErr) return { ok: false, error: eqErr.message };
 
     if (detachFromPack) {
-      await admin
+      const { error } = await admin
         .from("customer_equipment")
         .update({ parent_equipment_id: null })
         .eq("id", equipment.id)
         .eq("company_id", companyId);
+      if (error) partial.push(`soltar del pack de origen: ${error.message}`);
+    }
+
+    // Si el pack se parte a propósito (include_children = false), los extras
+    // que se quedan NO pueden seguir colgando de un equipo que ya es de otro
+    // titular: la ficha vieja mostraría "Extra del pack" sin pack, y dar de
+    // baja el principal en la ficha nueva arrastraría en cascada equipos de
+    // un cliente distinto.
+    if (!includeChildren && directChildren.length > 0) {
+      const { error } = await admin
+        .from("customer_equipment")
+        .update({ parent_equipment_id: null })
+        .in("id", directChildren)
+        .eq("company_id", companyId);
+      if (error) partial.push(`soltar los extras que se quedan: ${error.message}`);
     }
 
     // --- 6. Mantenimientos pendientes -------------------------------------
@@ -248,11 +283,12 @@ export async function transferEquipmentAction(input: {
       .not("status", "in", `(${MAINTENANCE_DONE.join(",")})`);
     const jobIds = ((jobsData ?? []) as Array<{ id: string }>).map((j) => j.id);
     if (jobIds.length > 0) {
-      await admin
+      const { error } = await admin
         .from("maintenance_jobs")
         .update({ customer_id: target.id, address_id: newAddressId })
         .in("id", jobIds)
         .eq("company_id", companyId);
+      if (error) partial.push(`mover mantenimientos pendientes: ${error.message}`);
     }
 
     // --- 7. Contrato de mantenimiento activo ------------------------------
@@ -264,11 +300,12 @@ export async function transferEquipmentAction(input: {
       .eq("status", "active");
     const contractIds = ((contractsData ?? []) as Array<{ id: string }>).map((c) => c.id);
     if (contractIds.length > 0) {
-      await admin
+      const { error } = await admin
         .from("maintenance_contracts")
         .update({ customer_id: target.id })
         .in("id", contractIds)
         .eq("company_id", companyId);
+      if (error) partial.push(`mover el contrato de mantenimiento: ${error.message}`);
     }
 
     // --- 8. Incidencias abiertas ------------------------------------------
@@ -280,11 +317,12 @@ export async function transferEquipmentAction(input: {
       .not("status", "in", `(${INCIDENT_DONE.join(",")})`);
     const incidentIds = ((incData ?? []) as Array<{ id: string }>).map((i) => i.id);
     if (incidentIds.length > 0) {
-      await admin
+      const { error } = await admin
         .from("incidents")
         .update({ customer_id: target.id, address_id: newAddressId })
         .in("id", incidentIds)
         .eq("company_id", companyId);
+      if (error) partial.push(`mover las incidencias abiertas: ${error.message}`);
     }
 
     // --- 9. Rastro en las dos fichas --------------------------------------
@@ -334,6 +372,7 @@ export async function transferEquipmentAction(input: {
         incidents_moved: incidentIds.length,
         address_cloned: addressCloned,
         detached_from_pack: detachFromPack,
+        warnings: partial,
       },
     };
   } catch (e) {
@@ -377,18 +416,48 @@ export async function listTransferTargets(currentCustomerId: string): Promise<
   const me = meData as (CustomerRow & { email: string | null; phone_primary: string | null }) | null;
   if (!me) return [];
 
-  const { data: rowsData } = await admin
-    .from("customers")
-    .select(cols)
-    .eq("company_id", session.company_id)
-    .is("deleted_at", null)
-    .neq("id", currentCustomerId)
-    .order("created_at", { ascending: false })
-    .limit(500);
+  type Row = CustomerRow & { email: string | null; phone_primary: string | null };
 
-  const rows = (rowsData ?? []) as Array<
-    CustomerRow & { email: string | null; phone_primary: string | null }
-  >;
+  // Las 500 más recientes son solo la lista "por si acaso". El caso de uso
+  // real —la misma persona dada de alta también como empresa— se busca
+  // aparte por DNI/CIF, email o teléfono: si no, con 1.800 fichas la ficha
+  // hermana se queda fuera de la ventana y el traspaso es imposible.
+  const orParts: string[] = [];
+  // Una coma o un paréntesis dentro del valor rompen la sintaxis del or=()
+  // de PostgREST: esos se dejan fuera y ya los pillará la lista de recientes.
+  const safe = (v: string | null) => (v && !/[,()]/.test(v) ? v : null);
+  const meTaxId = safe(me.tax_id);
+  const meEmail = safe(me.email);
+  const mePhone = safe(me.phone_primary);
+  if (meTaxId) orParts.push(`tax_id.eq.${meTaxId}`);
+  if (meEmail) orParts.push(`email.eq.${meEmail}`);
+  if (mePhone) orParts.push(`phone_primary.eq.${mePhone}`);
+
+  const [recent, relatives] = await Promise.all([
+    admin
+      .from("customers")
+      .select(cols)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .neq("id", currentCustomerId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    orParts.length > 0
+      ? admin
+          .from("customers")
+          .select(cols)
+          .eq("company_id", session.company_id)
+          .is("deleted_at", null)
+          .neq("id", currentCustomerId)
+          .or(orParts.join(","))
+          .limit(200)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const byId = new Map<string, Row>();
+  for (const r of ((recent?.data ?? []) as Row[])) byId.set(r.id, r);
+  for (const r of ((relatives?.data ?? []) as Row[])) byId.set(r.id, r);
+  const rows = [...byId.values()];
 
   return rows.map((r) => {
     const related =

@@ -333,7 +333,7 @@ export async function getProposalItems(proposalId: string): Promise<ProposalItem
   // mantenimiento, fianza, 1ª cuota). Si el schema no tiene alguna columna
   // (migración 20260503340000 no aplicada) caemos al select básico.
   const fullSelect =
-    "id, proposal_id, product_id, product_name_snapshot, quantity, unit_price_cash_cents, notes, installation_included, installation_price_cents, maintenance_included, maintenance_until_date, maintenance_price_cents, maintenance_periodicity_months, deposit_cents, charge_first_payment_now";
+    "id, proposal_id, product_id, product_name_snapshot, quantity, unit_price_cash_cents, notes, parent_item_id, installation_included, installation_price_cents, maintenance_included, maintenance_until_date, maintenance_price_cents, maintenance_periodicity_months, deposit_cents, charge_first_payment_now";
   const r = await supabase
     .from("proposal_items")
     .select(fullSelect)

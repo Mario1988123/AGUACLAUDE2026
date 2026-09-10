@@ -56,4 +56,6 @@ export interface ProposalItem {
   maintenance_periodicity_months?: number | null;
   deposit_cents?: number | null;
   charge_first_payment_now?: boolean;
+  /** Pack: id del equipo principal del que esta línea es un extra (20260703200000). */
+  parent_item_id?: string | null;
 }

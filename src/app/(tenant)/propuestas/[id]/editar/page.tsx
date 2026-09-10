@@ -51,7 +51,17 @@ export default async function EditarPropuestaPage({
     chosen_duration_months: proposal.chosen_duration_months,
     validity_until: proposal.validity_until,
     notes: proposal.notes,
+    // Pack: el vínculo se guarda por id (parent_item_id) y el formulario
+    // trabaja por índice de línea, así que se traduce aquí. Si el padre no
+    // está en la lista (borrado a mano), la línea vuelve a ser suelta.
     items: items.map((it) => ({
+      parent_index:
+        it.parent_item_id != null
+          ? (() => {
+              const i = items.findIndex((p) => p.id === it.parent_item_id);
+              return i >= 0 ? i : null;
+            })()
+          : null,
       product_id: it.product_id,
       quantity: it.quantity,
       unit_price_cents: it.unit_price_cash_cents ?? 0,
