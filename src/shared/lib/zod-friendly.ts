@@ -40,6 +40,24 @@ export function zBoolean() {
 }
 
 /**
+ * Entero opcional que llega de un <form>/FormData. z.coerce.number() hace
+ * Number(valor), y Number("") === 0, así que un campo numérico que el usuario
+ * deja en blanco llegaba como 0 en vez de como "sin dato". Con un CHECK (x > 0)
+ * en la tabla eso rompía el alta (pasó con las medidas del producto el
+ * 2026-10-01), y con un `??` detrás se colaba un 0 donde tocaba el valor por
+ * defecto.
+ *
+ * zOptionalInt() trata "", espacios, null y undefined como null. `min` es el
+ * mínimo admitido cuando SÍ hay valor (por defecto 0).
+ */
+export function zOptionalInt(min = 0, message?: string) {
+  return z.preprocess(
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : v),
+    z.coerce.number().int().min(min, message).nullable(),
+  );
+}
+
+/**
  * Generic preserva la inferencia de defaults/transforms del schema
  * (output type). Si usábamos `ZodSchema<T>` el TS perdía los defaults
  * y campos con `.default(1)` aparecían como `number | undefined`.

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { zBoolean } from "@/shared/lib/zod-friendly";
+import { zBoolean, zOptionalInt } from "@/shared/lib/zod-friendly";
 
 export const PRODUCT_KIND = ["equipment", "spare_part", "accessory", "consumable", "service"] as const;
 export const KIND_LABEL: Record<(typeof PRODUCT_KIND)[number], string> = {
@@ -52,18 +52,21 @@ export const productCreateSchema = z.object({
   supplier_reference: z.string().optional().default(""),
   short_description: z.string().optional().default(""),
   long_description: z.string().optional().default(""),
-  cost_cents: z.coerce.number().int().min(0).optional().nullable(),
-  supplier_price_cents: z.coerce.number().int().min(0).optional().nullable(),
-  dim_width_mm: z.coerce.number().int().min(0).optional().nullable(),
-  dim_height_mm: z.coerce.number().int().min(0).optional().nullable(),
-  dim_depth_mm: z.coerce.number().int().min(0).optional().nullable(),
-  weight_grams: z.coerce.number().int().min(0).optional().nullable(),
+  cost_cents: zOptionalInt(),
+  supplier_price_cents: zOptionalInt(),
+  // La tabla exige > 0 si hay valor (CHECK). Vacío = sin dato (null), no 0.
+  dim_width_mm: zOptionalInt(1, "El ancho debe ser mayor que 0"),
+  dim_height_mm: zOptionalInt(1, "El alto debe ser mayor que 0"),
+  dim_depth_mm: zOptionalInt(1, "El fondo debe ser mayor que 0"),
+  weight_grams: zOptionalInt(1, "El peso debe ser mayor que 0"),
   stock_managed: zBoolean().default(true),
   stock_min: z.coerce.number().int().min(0).default(0),
   // Plan inicial cash
-  cash_total_cents: z.coerce.number().int().min(0).optional().nullable(),
-  cash_min_authorized_cents: z.coerce.number().int().min(0).optional().nullable(),
-  cash_absolute_min_cents: z.coerce.number().int().min(0).optional().nullable(),
+  // Vacío = null, para que el `??` de la acción herede el precio total.
+  // Antes "" llegaba como 0 y el mínimo autorizado quedaba en 0 €.
+  cash_total_cents: zOptionalInt(),
+  cash_min_authorized_cents: zOptionalInt(),
+  cash_absolute_min_cents: zOptionalInt(),
 });
 
 export type ProductCreateInput = z.infer<typeof productCreateSchema>;
