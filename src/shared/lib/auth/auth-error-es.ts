@@ -14,8 +14,16 @@
  * un mensaje en inglés que uno genérico que no diga qué pasa).
  */
 
-/** Longitud mínima de contraseña que exige Supabase Auth por defecto. */
-export const MIN_PASSWORD_LENGTH = 6;
+/**
+ * Longitud mínima de contraseña que exige Supabase Auth.
+ *
+ * Ojo: esto NO es un valor libre, tiene que coincidir con
+ * `password_min_length` de la configuración de Auth del proyecto
+ * (Authentication → Policies, o `GET /v1/projects/<ref>/config/auth`).
+ * Si aquí pone menos que allí, la validación del cliente deja pasar
+ * contraseñas que el servidor rechaza después.
+ */
+export const MIN_PASSWORD_LENGTH = 10;
 
 const EXACT: Record<string, string> = {
   "invalid login credentials": "Email o contraseña incorrectos.",
@@ -43,6 +51,14 @@ const PATTERNS: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
   [
     /for security purposes, you can only request this after (\d+) seconds?/i,
     (m) => `Por seguridad, espera ${m[1]} segundos antes de volver a intentarlo.`,
+  ],
+  [
+    // Comprobación contra HaveIBeenPwned (`password_hibp_enabled`). El texto
+    // exacto de Supabase ha cambiado más de una vez, así que se reconoce por
+    // varias señales en vez de por la frase completa.
+    /known to be weak|easy to guess|pwned|has been leaked|compromised password/i,
+    () =>
+      "Esa contraseña aparece en filtraciones conocidas. Elige otra que no hayas usado en ningún otro sitio.",
   ],
   [/rate limit/i, () => "Demasiados intentos. Espera un momento y vuelve a probar."],
   [/network|fetch failed/i, () => "No hay conexión con el servidor. Revisa tu red."],

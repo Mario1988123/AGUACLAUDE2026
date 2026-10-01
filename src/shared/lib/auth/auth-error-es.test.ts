@@ -39,7 +39,13 @@ describe("authErrorEs", () => {
     expect(authErrorEs(undefined).length).toBeGreaterThan(10);
   });
 
-  it("MIN_PASSWORD_LENGTH coincide con el default de Supabase", () => {
-    expect(MIN_PASSWORD_LENGTH).toBe(6);
+  it("MIN_PASSWORD_LENGTH coincide con password_min_length del proyecto", () => {
+    expect(MIN_PASSWORD_LENGTH).toBe(10);
+  });
+
+  it("traduce el rechazo por contraseña filtrada (HIBP)", () => {
+    expect(
+      authErrorEs("Password is known to be weak and easy to guess, please choose a different one."),
+    ).toMatch(/filtraciones conocidas/);
   });
 });
