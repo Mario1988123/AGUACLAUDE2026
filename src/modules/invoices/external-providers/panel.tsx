@@ -16,6 +16,7 @@ import { Badge } from "@/shared/ui/badge";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   saveExternalProviderAction,
+  setVerifactiActivoAction,
   testExternalProviderConnectionAction,
   type ProviderSettingsRow,
 } from "./actions";
@@ -69,6 +70,27 @@ export function ExternalProviderPanel({ current, options }: Props) {
       } else {
         notify.success("Conexión OK", r.message);
       }
+      location.reload();
+    });
+  }
+
+  function cambiarActivo(activo: boolean) {
+    if (
+      activo &&
+      current.environment === "production" &&
+      !window.confirm(
+        "A partir de ahora cada factura que emitas se registrará en la AEAT (VeriFactu, entorno REAL) a través de Verifacti. ¿Activar?",
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const r = await setVerifactiActivoAction(activo);
+      if (!r.ok) {
+        notify.error("No se pudo cambiar", r.error);
+        return;
+      }
+      notify.success(activo ? "Registro en VeriFactu activado" : "Registro en VeriFactu desactivado");
       location.reload();
     });
   }
@@ -145,6 +167,40 @@ export function ExternalProviderPanel({ current, options }: Props) {
         </div>
       )}
 
+      {current.provider === "verifacti" && (
+        <div className="rounded-xl border-2 p-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="font-bold">
+                Registro automático en VeriFactu:{" "}
+                {current.activo ? (
+                  <span className="text-emerald-700">activado</span>
+                ) : (
+                  <span className="text-muted-foreground">desactivado</span>
+                )}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                Activado, cada factura se registra en VeriFactu al emitirla y su PDF lleva el QR
+                tributario. Verifacti solo admite registrar facturas con la fecha del mismo día.
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant={current.activo ? "outline" : "default"}
+              disabled={pending || (!current.activo && current.last_test_ok !== true)}
+              onClick={() => cambiarActivo(!current.activo)}
+            >
+              {current.activo ? "Desactivar" : "Activar"}
+            </Button>
+          </div>
+          {!current.activo && current.last_test_ok !== true && (
+            <div className="mt-2 text-xs text-amber-700">
+              Para activarlo: guarda la API key de tu NIF y pulsa «Probar» hasta que salga bien.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Selector */}
       <div className="space-y-2">
         <Label>Proveedor externo</Label>
@@ -202,6 +258,13 @@ export function ExternalProviderPanel({ current, options }: Props) {
       {/* Credenciales si NO es 'none' */}
       {provider !== "none" && (
         <div className="space-y-3 rounded-xl border bg-card p-4">
+          {provider === "verifacti" ? (
+            <p className="text-xs text-muted-foreground">
+              En Verifacti cada NIF tiene su propia API key, de pruebas o de producción: el entorno
+              lo marca la clave y se detecta al pulsar «Probar». Comprobamos también que la clave
+              sea del NIF de tu empresa.
+            </p>
+          ) : (
           <div className="space-y-2">
             <Label>Entorno</Label>
             <div className="flex gap-2">
@@ -230,6 +293,7 @@ export function ExternalProviderPanel({ current, options }: Props) {
               ))}
             </div>
           </div>
+          )}
 
           <div className="space-y-2">
             <Label>
@@ -280,11 +344,11 @@ export function ExternalProviderPanel({ current, options }: Props) {
       </div>
 
       <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground">
-        <Plug className="mb-1 inline h-3.5 w-3.5" /> Cuando hay proveedor
-        externo activo y conectado, las facturas emitidas se EMPUJAN por API
-        al proveedor (que se encarga de firma XAdES + envío AEAT). Si la
-        conexión falla, la factura queda en el CRM como borrador para
-        reintentar.
+        <Plug className="mb-1 inline h-3.5 w-3.5" /> Con Verifacti activado,
+        al emitir una factura se registra en VeriFactu por API (Verifacti
+        genera la huella, el XML y el envío a la AEAT). Si el registro falla,
+        la factura queda emitida y en su ficha verás el motivo y el botón
+        para reintentarlo.
       </div>
     </div>
   );

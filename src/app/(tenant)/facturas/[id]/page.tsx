@@ -13,6 +13,7 @@ import { suggestReminderLevel } from "@/modules/invoices/payment-reminder-action
 import { createClient } from "@/shared/lib/supabase/server";
 import { VerifactuV2Actions } from "@/modules/invoices/verifactu-v2-actions";
 import { PushToExternalButton } from "@/modules/invoices/external-providers/push-button";
+import { VerifactiFicha } from "@/modules/invoices/external-providers/verifacti-ficha";
 import {
   getExternalProviderSettings,
   listSelectableProvidersAction,
@@ -270,8 +271,21 @@ export default async function InvoiceDetailPage({
                 />
               </div>
             )}
+            {extProvider && extProvider.provider === "verifacti" && (
+              <div className="mt-3 border-t pt-3">
+                <VerifactiFicha
+                  invoiceId={inv.id}
+                  invoiceStatus={inv.status}
+                  invoiceKind={inv.kind}
+                  activo={extProvider.activo}
+                  entorno={extProvider.environment}
+                  envios={extSubmissions}
+                />
+              </div>
+            )}
             {extProvider &&
               extProvider.provider !== "none" &&
+              extProvider.provider !== "verifacti" &&
               extProviderMeta && (
                 <div className="mt-3 border-t pt-3 space-y-2">
                   <div className="text-xs font-bold text-muted-foreground">

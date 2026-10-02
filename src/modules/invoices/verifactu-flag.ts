@@ -14,6 +14,11 @@
  *    certificado, así que ni las facturas ni las cuotas toman el camino V2.
  *
  * Solo se pone a `true` cuando se haya rediseñado y probado el flujo.
+ *
+ * NO afecta a la vía Verifacti (external-providers/verifacti-envio.ts): esa
+ * se activa empresa a empresa con company_settings.external_invoicing_activo
+ * desde Configuración → Facturación, y exige que este envío directo esté en
+ * `no_envio` para no registrar dos veces la misma factura.
  */
 export const VERIFACTU_HABILITADO = false;
 

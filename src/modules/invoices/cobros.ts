@@ -57,6 +57,37 @@ export async function registrarCobroFactura(
   args: RegistrarCobroArgs,
 ): Promise<RegistrarCobroResultado> {
   const { admin } = args;
+  // Si un cobro automático va a pasar un BORRADOR a pagada, esa es su
+  // emisión: después se registra en VeriFactu (Verifacti) si procede.
+  let eraBorrador = false;
+  if (args.permitirBorrador) {
+    const { data: prev } = await admin
+      .from("invoices")
+      .select("status")
+      .eq("id", args.invoiceId)
+      .eq("company_id", args.companyId)
+      .maybeSingle();
+    eraBorrador = (prev as { status: string } | null)?.status === "draft";
+  }
+  const resultado = await registrarCobroSinVerifacti(args);
+  if (eraBorrador && resultado.status && resultado.status !== "draft") {
+    const { registrarAltaVerifactiSiProcede } = await import(
+      "./external-providers/verifacti-envio"
+    );
+    await registrarAltaVerifactiSiProcede({
+      admin,
+      companyId: args.companyId,
+      invoiceId: args.invoiceId,
+      alinearFecha: true,
+    });
+  }
+  return resultado;
+}
+
+async function registrarCobroSinVerifacti(
+  args: RegistrarCobroArgs,
+): Promise<RegistrarCobroResultado> {
+  const { admin } = args;
   const { data, error } = await admin.rpc("registrar_cobro_factura", {
     p_company_id: args.companyId,
     p_invoice_id: args.invoiceId,

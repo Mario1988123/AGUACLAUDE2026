@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { decryptString } from "@/shared/lib/crypto/aes-gcm";
+import { descifrarDeBytea } from "./cifrado";
 import type { ProviderId, ProviderCredentials, PushInvoiceInput } from "./types";
 import { getProviderClient } from "./registry";
 import { toActionError } from "@/shared/lib/actions/safe-error";
@@ -27,7 +27,13 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
 export async function pushInvoiceToExternalProviderAction(
   invoiceId: string,
 ): Promise<
-  | { ok: true; external_id?: string; external_url?: string; aeat_csv?: string }
+  | {
+      ok: true;
+      external_id?: string;
+      external_url?: string;
+      aeat_csv?: string;
+      mensaje?: string;
+    }
   | { ok: false; error: string }
 > {
   try {
@@ -61,6 +67,20 @@ export async function pushInvoiceToExternalProviderAction(
           "No hay proveedor externo configurado. Elige uno en /configuracion/facturacion.",
       };
     }
+    // Verifacti (VeriFactu) va por su camino propio: desglose de IVA,
+    // idempotencia, fecha de hoy, QR… (./verifacti-envio.ts).
+    if (provider === "verifacti") {
+      const { registrarAltaVerifacti } = await import("./verifacti-envio");
+      const r = await registrarAltaVerifacti({
+        admin,
+        companyId: session.company_id,
+        invoiceId,
+      });
+      revalidatePath(`/facturas/${invoiceId}`);
+      return r.ok
+        ? { ok: true, mensaje: r.mensaje }
+        : { ok: false, error: r.error };
+    }
     const apiKeyEnc = row?.external_invoicing_api_key_encrypted as string | null;
     if (!apiKeyEnc) {
       return {
@@ -78,14 +98,14 @@ export async function pushInvoiceToExternalProviderAction(
 
     const extraEnc = row?.external_invoicing_extra_encrypted as string | null;
     const creds: ProviderCredentials = {
-      api_key: decryptString(apiKeyEnc),
+      api_key: descifrarDeBytea(apiKeyEnc),
       environment:
         ((row?.external_invoicing_environment as
           | "sandbox"
           | "production"
           | null) ?? "sandbox") as "sandbox" | "production",
       extra: extraEnc
-        ? (JSON.parse(decryptString(extraEnc)) as Record<string, string>)
+        ? (JSON.parse(descifrarDeBytea(extraEnc)) as Record<string, string>)
         : undefined,
     };
 
@@ -214,44 +234,135 @@ export async function pushInvoiceToExternalProviderAction(
   }
 }
 
+export interface EnvioExterno {
+  id: string;
+  provider: string;
+  status: string;
+  sent_at: string | null;
+  external_id: string | null;
+  external_url: string | null;
+  error_message: string | null;
+  created_at: string;
+  /** Solo Verifacti (migración 20261003090000). */
+  operacion: "alta" | "anulacion";
+  estado_aeat: string | null;
+  codigo_error_aeat: string | null;
+  mensaje_error_aeat: string | null;
+  qr_url: string | null;
+  estado_consultado_at: string | null;
+}
+
 /**
  * Lista los envíos al proveedor externo para una factura concreta (para
- * pintar el historial en la ficha).
+ * pintar el historial en la ficha). Tolera que la migración de Verifacti
+ * aún no esté aplicada (columnas nuevas a null).
  */
 export async function listExternalSubmissionsForInvoiceAction(
   invoiceId: string,
-): Promise<
-  Array<{
-    id: string;
-    provider: string;
-    status: string;
-    sent_at: string | null;
-    external_id: string | null;
-    external_url: string | null;
-    error_message: string | null;
-    created_at: string;
-  }>
-> {
+): Promise<EnvioExterno[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data } = await admin
+  const base =
+    "id, provider, status, sent_at, external_id, external_url, error_message, created_at";
+  const nuevas =
+    ", operacion, estado_aeat, codigo_error_aeat, mensaje_error_aeat, qr_url, estado_consultado_at";
+  let r = await admin
     .from("external_invoicing_submissions")
-    .select(
-      "id, provider, status, sent_at, external_id, external_url, error_message, created_at",
-    )
+    .select(base + nuevas)
     .eq("company_id", session.company_id)
     .eq("invoice_id", invoiceId)
     .order("created_at", { ascending: false });
-  return (data ?? []) as Array<{
-    id: string;
-    provider: string;
-    status: string;
-    sent_at: string | null;
-    external_id: string | null;
-    external_url: string | null;
-    error_message: string | null;
-    created_at: string;
-  }>;
+  if (r.error) {
+    r = await admin
+      .from("external_invoicing_submissions")
+      .select(base)
+      .eq("company_id", session.company_id)
+      .eq("invoice_id", invoiceId)
+      .order("created_at", { ascending: false });
+  }
+  return ((r.data ?? []) as Array<Partial<EnvioExterno>>).map((e) => ({
+    id: e.id ?? "",
+    provider: e.provider ?? "",
+    status: e.status ?? "",
+    sent_at: e.sent_at ?? null,
+    external_id: e.external_id ?? null,
+    external_url: e.external_url ?? null,
+    error_message: e.error_message ?? null,
+    created_at: e.created_at ?? "",
+    operacion: e.operacion === "anulacion" ? "anulacion" : "alta",
+    estado_aeat: e.estado_aeat ?? null,
+    codigo_error_aeat: e.codigo_error_aeat ?? null,
+    mensaje_error_aeat: e.mensaje_error_aeat ?? null,
+    qr_url: e.qr_url ?? null,
+    estado_consultado_at: e.estado_consultado_at ?? null,
+  }));
+}
+
+async function sesionAdminFacturas() {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const allowed =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director");
+  if (!allowed) throw new Error("Sin permisos");
+  return session as typeof session & { company_id: string };
+}
+
+/** Botón "Consultar estado en la AEAT" (último envío vivo de la factura). */
+export async function consultarEstadoVerifactiAction(
+  invoiceId: string,
+): Promise<{ ok: true; mensaje: string } | { ok: false; error: string }> {
+  try {
+    const session = await sesionAdminFacturas();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("external_invoicing_submissions")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .eq("invoice_id", invoiceId)
+      .eq("provider", "verifacti")
+      .eq("status", "sent")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return { ok: false, error: "Esta factura no tiene ningún envío aceptado por Verifacti." };
+    const { consultarEstadoEnvioVerifacti } = await import("./verifacti-envio");
+    const r = await consultarEstadoEnvioVerifacti({
+      admin,
+      companyId: session.company_id,
+      submissionId: (data as { id: string }).id,
+    });
+    revalidatePath(`/facturas/${invoiceId}`);
+    return r.ok ? { ok: true, mensaje: r.mensaje } : { ok: false, error: r.error };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Botón "Anular registro en VeriFactu" (solo admin de empresa). */
+export async function anularRegistroVerifactiAction(
+  invoiceId: string,
+): Promise<{ ok: true; mensaje: string } | { ok: false; error: string }> {
+  try {
+    const session = await sesionAdminFacturas();
+    if (!session.is_superadmin && !session.roles.includes("company_admin")) {
+      return { ok: false, error: "Solo el administrador de la empresa puede anular un registro de VeriFactu." };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { anularRegistroVerifacti } = await import("./verifacti-envio");
+    const r = await anularRegistroVerifacti({
+      admin,
+      companyId: session.company_id,
+      invoiceId,
+    });
+    revalidatePath(`/facturas/${invoiceId}`);
+    return r.ok ? { ok: true, mensaje: r.mensaje } : { ok: false, error: r.error };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
 }

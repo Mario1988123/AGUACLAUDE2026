@@ -5,177 +5,191 @@ import type {
   PushInvoiceResult,
   TestConnectionResult,
 } from "./types";
+import {
+  mensajeErrorVerifacti,
+  type CuerpoAltaVerifacti,
+  type CuerpoAnulacionVerifacti,
+} from "./verifacti-mapeo";
 
 /**
- * Cliente Verifacti (https://www.verifacti.com).
+ * Cliente HTTP de Verifacti (https://www.verifacti.com).
  *
- * AUTH: API key del proveedor en header `Authorization: Bearer <key>` (estándar
- * del sector; se ajusta vía panel admin si Verifacti pidiera otro header).
+ * Contrastado con la especificación OpenAPI publicada por Verifacti
+ * (https://www.verifacti.com/openapi/verifactu.yaml, leída el 02-10-2026):
+ *  · URL base única: https://api.verifacti.com/ — el entorno (pruebas o
+ *    producción) y el NIF emisor los determina la API KEY, no la URL.
+ *  · Autenticación: cabecera `Authorization: Bearer <API_KEY>`.
+ *  · Hay UNA API key POR NIF (se genera al dar de alta el NIF en su panel).
+ *    La clave "vfn_..." de la API de gestión de NIFs no sirve para facturar.
+ *  · POST /verifactu/create  → 200 { uuid, estado:"Pendiente", url, qr, huella }
+ *  · POST /verifactu/cancel  → 200 { uuid, estado, huella }
+ *  · GET  /verifactu/status?uuid=… → estado del registro (Pendiente, Correcto,
+ *    Aceptado con errores, Incorrecto, Duplicado, Anulado, …)
+ *  · GET  /verifactu/health  → { estado, nif, entorno }
+ *  · Cabecera opcional `Idempotency-Key` en create/cancel (24 h por NIF).
+ *  · Verifacti NO devuelve el CSV de la AEAT en ninguna respuesta.
  *
- * MODELO MULTI-TENANT: Verifacti factura por NIF activo. Cada empresa cliente
- * del CRM introduce el NIF de su empresa al activar Verifactu interno (ya está
- * en company_settings.fiscal_tax_id). En sandbox los NIFs son ilimitados.
- *
- * ENDPOINTS conocidos (docs públicas de Verifacti son escuetas; URL y header
- * exactos pueden ajustarse vía credentials.extra.api_base_url y
- * .auth_header_name si fuera necesario):
- *   POST /verifactu/create        — crear y enviar 1 factura
- *   POST /verifactu/create_bulk   — hasta 50 facturas
- *   GET  /verifactu/health        — comprobar conexión
+ * Errores: se traducen a español en ./verifacti-mapeo.ts.
  */
+
+const URL_BASE = "https://api.verifacti.com";
+const TIEMPO_MAXIMO_MS = 20_000;
+
+export interface RespuestaAltaVerifacti {
+  uuid: string;
+  estado: string;
+  url: string | null;
+  qr: string | null;
+  huella: string | null;
+}
+
+export interface RespuestaAnulacionVerifacti {
+  uuid: string;
+  estado: string;
+  huella: string | null;
+}
+
+export interface EstadoRegistroVerifacti {
+  estado: string;
+  operacion: string | null;
+  url: string | null;
+  codigo_error: string | null;
+  mensaje_error: string | null;
+  estado_registro_duplicado: string | null;
+}
+
+export type ResultadoLlamada<T> =
+  | { ok: true; datos: T; repetida: boolean; raw: unknown }
+  | {
+      ok: false;
+      status: number;
+      /** true si NO sabemos si Verifacti llegó a procesar la petición. */
+      incierto: boolean;
+      codigo: string | null;
+      mensaje: string;
+      raw: unknown;
+    };
+
 export class VerifactiClient implements ExternalInvoicingClient {
   readonly providerId = "verifacti" as const;
 
-  private baseUrl(creds: ProviderCredentials): string {
-    const extra = creds.extra ?? {};
-    if (extra.api_base_url) return extra.api_base_url.replace(/\/+$/, "");
-    // El propio Verifacti no publica todavía URLs separadas prod/sandbox en
-    // su doc abierta — usan el mismo dominio y un flag de cuenta. Si esto
-    // cambia, el admin pega la URL correcta en "extras" del panel.
-    return creds.environment === "production"
-      ? "https://api.verifacti.com"
-      : "https://api.verifacti.com";
-  }
+  private async llamar<T>(
+    apiKey: string,
+    metodo: "GET" | "POST",
+    ruta: string,
+    cuerpo?: unknown,
+    idempotencyKey?: string,
+  ): Promise<ResultadoLlamada<T>> {
+    const headers: Record<string, string> = {
+      accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    };
+    if (cuerpo !== undefined) headers["Content-Type"] = "application/json";
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
 
-  private authHeaders(creds: ProviderCredentials): Record<string, string> {
-    const headerName = creds.extra?.auth_header_name ?? "Authorization";
-    const headerValue = creds.extra?.auth_header_value_prefix
-      ? `${creds.extra.auth_header_value_prefix}${creds.api_key}`
-      : `Bearer ${creds.api_key}`;
-    return { [headerName]: headerValue };
+    let res: Response;
+    try {
+      res = await fetch(`${URL_BASE}${ruta}`, {
+        method: metodo,
+        headers,
+        body: cuerpo !== undefined ? JSON.stringify(cuerpo) : undefined,
+        signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS),
+        cache: "no-store",
+      });
+    } catch (e) {
+      return {
+        ok: false,
+        status: 0,
+        incierto: true,
+        codigo: "RED",
+        mensaje:
+          "No se pudo contactar con Verifacti (" +
+          (e instanceof Error ? e.message : String(e)) +
+          "). Puede que la factura llegara: consulta el estado antes de reintentar.",
+        raw: null,
+      };
+    }
+    const raw = (await res.json().catch(() => null)) as unknown;
+    if (!res.ok) {
+      const r = (raw ?? {}) as { codigo?: string };
+      return {
+        ok: false,
+        status: res.status,
+        // 409 = la primera petición con esa clave sigue en curso.
+        incierto: res.status === 409,
+        codigo: r.codigo ?? `HTTP_${res.status}`,
+        mensaje: mensajeErrorVerifacti(res.status, raw),
+        raw,
+      };
+    }
+    return {
+      ok: true,
+      datos: (raw ?? {}) as T,
+      repetida: res.headers.get("Idempotent-Replayed") === "true",
+      raw,
+    };
   }
 
   async testConnection(creds: ProviderCredentials): Promise<TestConnectionResult> {
-    try {
-      const res = await fetch(`${this.baseUrl(creds)}/verifactu/health`, {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-          ...this.authHeaders(creds),
-        },
-      });
-      if (res.status === 401 || res.status === 403) {
-        return {
-          ok: false,
-          message:
-            "API key no aceptada por Verifacti. Comprueba la clave en tu panel.",
-        };
-      }
-      if (res.status === 404) {
-        return {
-          ok: false,
-          message:
-            "Endpoint /verifactu/health no encontrado. Si Verifacti cambió la URL base, configúrala en «extras» del panel (api_base_url).",
-        };
-      }
-      if (!res.ok) {
-        return {
-          ok: false,
-          message: `Verifacti devolvió ${res.status}. Revisa el panel del proveedor.`,
-        };
-      }
-      const env =
-        creds.environment === "production" ? "Producción" : "Sandbox";
-      return {
-        ok: true,
-        message: `Conexión OK con Verifacti (${env}).`,
-        account_info: { environment: env },
-      };
-    } catch (e) {
-      return {
-        ok: false,
-        message:
-          "No se pudo contactar con Verifacti: " +
-          (e instanceof Error ? e.message : String(e)),
-      };
-    }
+    const r = await this.llamar<{ estado?: string; nif?: string; entorno?: string }>(
+      creds.api_key,
+      "GET",
+      "/verifactu/health",
+    );
+    if (!r.ok) return { ok: false, message: r.mensaje };
+    const entorno = r.datos.entorno ?? "";
+    return {
+      ok: true,
+      message: `Conexión correcta con Verifacti · NIF ${r.datos.nif ?? "?"} · entorno ${entorno === "test" ? "de pruebas" : entorno || "?"}.`,
+      account_info: {
+        nif: r.datos.nif ?? "",
+        entorno,
+        estado: r.datos.estado ?? "",
+      },
+    };
   }
 
+  crear(apiKey: string, cuerpo: CuerpoAltaVerifacti, idempotencyKey: string) {
+    return this.llamar<RespuestaAltaVerifacti>(
+      apiKey,
+      "POST",
+      "/verifactu/create",
+      cuerpo,
+      idempotencyKey,
+    );
+  }
+
+  anular(apiKey: string, cuerpo: CuerpoAnulacionVerifacti, idempotencyKey: string) {
+    return this.llamar<RespuestaAnulacionVerifacti>(
+      apiKey,
+      "POST",
+      "/verifactu/cancel",
+      cuerpo,
+      idempotencyKey,
+    );
+  }
+
+  estadoRegistro(apiKey: string, uuid: string) {
+    return this.llamar<EstadoRegistroVerifacti>(
+      apiKey,
+      "GET",
+      `/verifactu/status?uuid=${encodeURIComponent(uuid)}`,
+    );
+  }
+
+  /**
+   * La interfaz genérica no lleva los datos que exige VeriFactu (desglose,
+   * idempotencia, fecha de hoy…). Las facturas a Verifacti van SIEMPRE por
+   * ./verifacti-envio.ts; este método no envía nada.
+   */
   async pushInvoice(
-    creds: ProviderCredentials,
-    input: PushInvoiceInput,
+    _creds: ProviderCredentials,
+    _input: PushInvoiceInput,
   ): Promise<PushInvoiceResult> {
-    try {
-      // Mapeo nuestro modelo → payload Verifactu (campos documentados):
-      //   serie, numero, fecha_expedicion, fecha_operacion, tipo_factura,
-      //   descripcion, lineas[], importe_total, nif (destinatario), nombre.
-      // Verifacti espera importes con coma o punto en EUROS (no céntimos).
-      const ref = input.reference_code ?? input.full_reference ?? "";
-      // Sacar serie y número del reference_code "SERIE-YYYY-NNNN" o
-      // "PREFIX-SERIE-YYYY-NNNN" — caemos al full_reference legacy.
-      const refMatch = ref.match(/^(?:.*?)([A-Z0-9]+)-(\d{4})-(\d+)$/i);
-      const serie = refMatch?.[1] ?? "";
-      const numero = refMatch?.[3] ?? "1";
-
-      const fechaExp = input.issued_at.slice(0, 10);
-
-      const lineas = input.lines.map((l) => ({
-        descripcion: l.description,
-        cantidad: l.quantity,
-        // Verifacti pide importes en euros con punto decimal.
-        precio_unitario: (l.unit_price_cents / 100).toFixed(2),
-        tipo_iva: String(l.tax_rate),
-      }));
-
-      const payload: Record<string, unknown> = {
-        serie,
-        numero,
-        fecha_expedicion: fechaExp,
-        tipo_factura: "F1",
-        descripcion: input.notes ?? `Factura ${ref}`,
-        lineas,
-        importe_total: (input.total_cents / 100).toFixed(2),
-        nif: input.customer.tax_id ?? undefined,
-        nombre: input.customer.name,
-      };
-
-      const res = await fetch(`${this.baseUrl(creds)}/verifactu/create`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          accept: "application/json",
-          ...this.authHeaders(creds),
-        },
-        body: JSON.stringify(payload),
-      });
-      const raw = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        return {
-          ok: false,
-          error_code: `HTTP_${res.status}`,
-          error_message:
-            (raw as { error?: string; message?: string; detail?: string })
-              ?.detail ??
-            (raw as { error?: string })?.error ??
-            (raw as { message?: string })?.message ??
-            `Verifacti devolvió ${res.status}`,
-          raw_response: raw,
-        };
-      }
-
-      // Verifacti suele devolver { id, csv_aeat, status, hash, ... } — recogemos
-      // los campos comunes, tolerando que el shape exacto pueda variar.
-      const r = raw as {
-        id?: string | number;
-        csv_aeat?: string;
-        csv?: string;
-        url?: string;
-        permalink?: string;
-      };
-      return {
-        ok: true,
-        external_id: r.id != null ? String(r.id) : undefined,
-        external_url: r.url ?? r.permalink,
-        aeat_csv: r.csv_aeat ?? r.csv,
-        raw_response: raw,
-      };
-    } catch (e) {
-      return {
-        ok: false,
-        error_code: "NETWORK",
-        error_message: e instanceof Error ? e.message : String(e),
-      };
-    }
+    return {
+      ok: false,
+      error_code: "USO_INTERNO",
+      error_message: "Las facturas a Verifacti se registran con registrarAltaVerifacti().",
+    };
   }
 }

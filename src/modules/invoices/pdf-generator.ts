@@ -6,6 +6,7 @@ import {
   type PDFPage,
   type PDFImage,
 } from "pdf-lib";
+import QRCode from "qrcode";
 import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { getInvoice } from "./actions";
 
@@ -543,6 +544,38 @@ function drawFooter(
 }
 
 /**
+ * QR tributario de VeriFactu (Orden HAC/1177/2024): va en la cabecera, al
+ * principio de la factura, con el texto «QR tributario:» encima y
+ * «VERI*FACTU» debajo, de 30 mm (~85 pt; la norma pide entre 30 y 40 mm).
+ * La URL es la de cotejo de la AEAT que devuelve Verifacti al registrar.
+ */
+async function drawVerifactuQr(d: Doc, url: string): Promise<void> {
+  const lado = 85;
+  const png = await QRCode.toBuffer(url, {
+    errorCorrectionLevel: "M",
+    margin: 0,
+    width: 300,
+  });
+  const img = await d.pdf.embedPng(png);
+  // Hueco libre entre el bloque del emisor (izquierda) y la tarjeta del
+  // número (derecha, 200 pt de ancho pegada al margen).
+  const x = PAGE_W - MARGIN - 200 - 14 - lado;
+  const top = PAGE_H - 30;
+  text(d, "QR tributario:", x + lado / 2, top, {
+    size: 7,
+    bold: true,
+    color: MUTED,
+    align: "center",
+  });
+  d.page.drawImage(img, { x, y: top - 6 - lado, width: lado, height: lado });
+  text(d, "VERI*FACTU", x + lado / 2, top - 6 - lado - 10, {
+    size: 8,
+    bold: true,
+    align: "center",
+  });
+}
+
+/**
  * Genera el PDF moderno de factura. Reemplazo del diseño previo que
  * tenía solapes y faltaba logo / IBAN visibles.
  */
@@ -625,6 +658,11 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Uint8Array>
     email: (customer.email as string) ?? null,
     phone: (customer.phone_primary as string) ?? null,
   });
+
+  // QR VeriFactu (solo si la factura está registrada vía Verifacti)
+  if (inv.verifactu_qr_url) {
+    await drawVerifactuQr(d, inv.verifactu_qr_url);
+  }
 
   // Tabla líneas
   y = drawLinesTable(d, y, inv.lines);

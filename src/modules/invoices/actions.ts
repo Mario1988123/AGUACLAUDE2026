@@ -100,6 +100,8 @@ export interface InvoiceDetail {
   total_cents: number;
   pending_cents: number;
   notes: string | null;
+  /** URL de cotejo de la AEAT (QR VeriFactu), si la factura está registrada. */
+  verifactu_qr_url?: string | null;
   lines: InvoiceLine[];
   payments: Array<{
     id: string;
@@ -273,7 +275,7 @@ export async function getInvoice(id: string): Promise<InvoiceDetail> {
   const { data: inv } = await admin
     .from("invoices")
     .select(
-      "id, full_reference, kind, status, series_id, number, fiscal_year, customer_id, financier_id, customer_fiscal_snapshot, company_fiscal_snapshot, contract_id, corrects_invoice_id, issue_date, due_date, paid_at, subtotal_cents, tax_cents, withholdings_cents, total_cents, notes, company_id",
+      "id, full_reference, kind, status, series_id, number, fiscal_year, customer_id, financier_id, customer_fiscal_snapshot, company_fiscal_snapshot, contract_id, corrects_invoice_id, issue_date, due_date, paid_at, subtotal_cents, tax_cents, withholdings_cents, total_cents, notes, company_id, verifactu_qr_url",
     )
     .eq("id", id)
     .maybeSingle();
@@ -372,12 +374,29 @@ export async function markInvoiceIssuedAction(invoiceId: string): Promise<void> 
   const session = await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin
+  const { data: emitidas } = await admin
     .from("invoices")
-    .update({ status: "issued" })
+    .update({ status: "issued", issued_at: new Date().toISOString() })
     .eq("id", invoiceId)
     .eq("company_id", session.company_id)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id");
+
+  // VeriFactu vía Verifacti: si la empresa lo tiene activado, la factura se
+  // registra al emitirse (Verifacti solo acepta la fecha de hoy, por eso se
+  // alinea la fecha del borrador). No hace nada si no está activado; un
+  // fallo queda anotado en la ficha de la factura y no deshace la emisión.
+  if (session.company_id && ((emitidas ?? []) as unknown[]).length > 0) {
+    const { registrarAltaVerifactiSiProcede } = await import(
+      "./external-providers/verifacti-envio"
+    );
+    await registrarAltaVerifactiSiProcede({
+      admin,
+      companyId: session.company_id,
+      invoiceId,
+      alinearFecha: true,
+    });
+  }
 
   // Trazabilidad: enlazar invoice_id en los stock_movements del contrato
   // que aún no tengan factura. Fail-soft (la columna puede no existir si

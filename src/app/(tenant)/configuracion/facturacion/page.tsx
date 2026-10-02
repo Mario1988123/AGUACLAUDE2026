@@ -43,6 +43,7 @@ export default async function FacturacionConfigPage() {
     last_test_at: null,
     last_test_ok: null,
     last_test_error: null,
+    activo: false,
   }));
   const extProviders = await listSelectableProvidersAction().catch(() => []);
 

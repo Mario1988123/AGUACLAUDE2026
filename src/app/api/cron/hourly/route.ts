@@ -99,7 +99,24 @@ export async function GET(req: NextRequest) {
     tracker.error("autoclose-notify-outer", e);
   }
 
-  const stats = { punches_closed: punchesClosed, notified_users: notifiedUsers };
+  // VeriFactu vía Verifacti: consultar los registros que siguen "Pendiente"
+  // (Verifacti los procesa en ~1 min). Sin empresas activas no hace nada.
+  let verifactiConsultados = 0;
+  try {
+    const { actualizarEstadosPendientesVerifacti } = await import(
+      "@/modules/invoices/external-providers/verifacti-envio"
+    );
+    const r = await actualizarEstadosPendientesVerifacti(admin);
+    verifactiConsultados = r.consultados;
+  } catch (e) {
+    tracker.error("verifacti-estados", e);
+  }
+
+  const stats = {
+    punches_closed: punchesClosed,
+    notified_users: notifiedUsers,
+    verifacti_consultados: verifactiConsultados,
+  };
   await tracker.finish({ summary: stats });
   return NextResponse.json({
     ok: true,

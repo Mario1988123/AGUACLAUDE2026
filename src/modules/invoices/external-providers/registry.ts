@@ -24,12 +24,12 @@ export const PROVIDERS: ProviderMeta[] = [
     id: "verifacti",
     name: "Verifacti",
     tagline:
-      "Pasarela Verifactu pura: firma XAdES + envío AEAT por API. Multi-tenant nativo, ~2,90 €/NIF/mes",
-    docs_url: "https://www.verifacti.com/en/docs",
+      "Registro VeriFactu por API: Verifacti genera huella, XML y QR y envía a la AEAT. Desde 2,90 € por NIF y mes (sin IVA).",
+    docs_url: "https://www.verifacti.com/docs",
     has_sandbox: true,
     status: "ready",
     notes:
-      "Ganador #1 según investigación. Una API key del CRM, NIFs ilimitados en sandbox, prod facturable por NIF. Encaja directo con el modo verifactu.",
+      "Una API key POR NIF (se crea al dar de alta el NIF en app.verifacti.com); la clave dice si es de pruebas o de producción. Para producción hay que firmar antes el modelo de representación.",
   },
   {
     id: "invopop",
