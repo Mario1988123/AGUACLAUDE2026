@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { errorMessage } from "@/shared/lib/actions/safe-error";
 
 /**
  * Wrapper para registrar una ejecución de cron job en `cron_runs`.
@@ -39,7 +40,9 @@ export async function startCronRun(job: string): Promise<CronTracker> {
     startedAt,
     errors,
     error(section: string, e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      // errorMessage: un PostgrestError es un objeto plano y String(e) daba
+      // "[object Object]" en cron_runs (auditoría 2026-10-01 I2).
+      const msg = errorMessage(e);
       errors.push({ section, message: msg });
       console.error(`[cron:${job}] ${section}:`, msg);
     },

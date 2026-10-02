@@ -72,6 +72,37 @@ export async function upsertAddressAction(input: unknown) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // El admin client se salta la RLS: todo id que llega del navegador se
+  // comprueba contra la empresa de la sesión (I10 / I15).
+  if (parsed.customer_id) {
+    const { data: c } = await admin
+      .from("customers")
+      .select("id")
+      .eq("id", parsed.customer_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!c) throw new Error("Cliente no encontrado");
+  }
+  if (parsed.lead_id) {
+    const { data: l } = await admin
+      .from("leads")
+      .select("id")
+      .eq("id", parsed.lead_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!l) throw new Error("Lead no encontrado");
+  }
+  if (parsed.id) {
+    const { data: existente } = await admin
+      .from("addresses")
+      .select("id")
+      .eq("id", parsed.id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!existente) throw new Error("Dirección no encontrada");
+  }
+
   // Geocoding automático server-side: si vienen lat/lng vacíos pero hay
   // calle + ciudad mínimas, intentamos geocodificar con Nominatim. No
   // bloqueante: si falla, se guarda sin coords (el técnico lo verá luego).
@@ -171,7 +202,8 @@ export async function upsertAddressAction(input: unknown) {
     const { error } = await admin
       .from("addresses")
       .update(payload)
-      .eq("id", parsed.id);
+      .eq("id", parsed.id)
+      .eq("company_id", session.company_id);
     if (error) {
       console.error("[upsertAddress] UPDATE failed:", error.message);
       throw new Error(`No se pudo actualizar la dirección: ${error.message}`);
@@ -191,13 +223,39 @@ export async function upsertAddressAction(input: unknown) {
 export async function deleteAddressAction(id: string) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
+
+  // I6: el borrado suave con el cliente RLS fallaba SIEMPRE ("new row
+  // violates row-level security policy"): la política de SELECT exige
+  // deleted_at IS NULL y Postgres comprueba que la fila nueva de un UPDATE
+  // siga siendo visible. Ahora:
+  //   1) se lee la dirección con el cliente RLS → confirma que el usuario la
+  //      ve con su alcance (empresa + lead/cliente visible);
+  //   2) se marca como borrada con el admin client, filtrando por empresa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { error } = await supabase
+  const { data: visible, error: errVis } = await supabase
+    .from("addresses")
+    .select("id, customer_id, lead_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (errVis) throw errVis;
+  if (!visible) throw new Error("Dirección no encontrada");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: borradas, error } = await admin
     .from("addresses")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null)
+    .select("id");
   if (error) throw error;
+  if (!borradas || borradas.length === 0) throw new Error("Dirección no encontrada");
+
+  const v = visible as { customer_id: string | null; lead_id: string | null };
+  if (v.customer_id) revalidatePath(`/clientes/${v.customer_id}`);
+  if (v.lead_id) revalidatePath(`/leads/${v.lead_id}`);
 }
 
 // ============================================================================

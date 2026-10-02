@@ -6,6 +6,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { decrementStock } from "./stock-decrement";
+import { adjustStockBatch } from "./adjust-stock";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
@@ -64,6 +65,18 @@ export async function createLoadingRequestAction(input: unknown) {
 export async function deliverLoadingRequestAction(requestId: string) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  // Rol (auditoría 2026-10-01): entregar mueve stock entre almacenes, así que
+  // exige los mismos roles que el resto de movimientos de stock
+  // (inventory-actions.ensureCanManage). [decide] admin, director técnico e
+  // instalador (el que recibe la carga en su furgoneta).
+  if (
+    !session.is_superadmin &&
+    !session.roles.includes("company_admin") &&
+    !session.roles.includes("technical_director") &&
+    !session.roles.includes("installer")
+  ) {
+    throw new Error("Sin permiso para entregar órdenes de carga");
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -87,6 +100,30 @@ export async function deliverLoadingRequestAction(requestId: string) {
     throw new Error("Solicitud no pertenece a tu empresa");
   }
   if (r.status === "delivered") throw new Error("Ya entregada");
+  if (r.status === "cancelled") throw new Error("La orden está cancelada");
+
+  // Compare-and-set ANTES de mover stock (auditoría 2026-10-01, I42): solo un
+  // envío pasa a 'delivered'. Un doble clic hacía un doble traspaso.
+  // [decide] Si algo falla después, la orden queda entregada y el error se
+  // muestra: preferimos un traspaso a revisar a un traspaso duplicado.
+  const nowIso = new Date().toISOString();
+  const { data: reclamada, error: errClaim } = await admin
+    .from("loading_requests")
+    .update({
+      status: "delivered",
+      prepared_at: nowIso,
+      delivered_at: nowIso,
+      prepared_by: session.user_id,
+      delivered_by: session.user_id,
+    })
+    .eq("id", requestId)
+    .eq("company_id", session.company_id)
+    .not("status", "in", "(delivered,cancelled)")
+    .select("id");
+  if (errClaim) throw new Error(errClaim.message);
+  if (!reclamada || (reclamada as unknown[]).length === 0) {
+    throw new Error("Ya entregada");
+  }
 
   const { data: items } = await admin
     .from("loading_request_items")
@@ -123,41 +160,20 @@ export async function deliverLoadingRequestAction(requestId: string) {
 
     // Entrada en almacén destino
     if (moved > 0) {
-      // upsert warehouse_stock destino
-      const { data: existing } = await admin
-        .from("warehouse_stock")
-        .select("id, quantity")
-        .eq("warehouse_id", r.destination_warehouse_id)
-        .eq("product_id", it.product_id)
-        .eq("state", "new")
-        .is("location_id", null)
-        .maybeSingle();
-      const ex = existing as { id: string; quantity: number } | null;
-      if (ex) {
-        await admin
-          .from("warehouse_stock")
-          .update({ quantity: ex.quantity + moved, updated_at: new Date().toISOString() })
-          .eq("id", ex.id);
-      } else {
-        await admin.from("warehouse_stock").insert({
+      // Entrada en destino + movimiento transfer_in, ATÓMICO vía RPC
+      // adjust_stock_batch (antes leer-sumar-escribir).
+      await adjustStockBatch(r.company_id, session.user_id, [
+        {
           warehouse_id: r.destination_warehouse_id,
           product_id: it.product_id,
-          company_id: r.company_id,
-          quantity: moved,
           state: "new",
-        });
-      }
-      // movimiento entrada
-      await admin.from("stock_movements").insert({
-        company_id: r.company_id,
-        product_id: it.product_id,
-        warehouse_id: r.destination_warehouse_id,
-        movement_type: "transfer_in",
-        quantity: moved,
-        loading_request_id: requestId,
-        performed_by: session.user_id,
-        notes: "Recepción vehículo",
-      });
+          location_id: null,
+          delta: moved,
+          movement_type: "transfer_in",
+          loading_request_id: requestId,
+          notes: "Recepción vehículo",
+        },
+      ]);
       // actualizar quantity_delivered
       await admin
         .from("loading_request_items")
@@ -165,17 +181,6 @@ export async function deliverLoadingRequestAction(requestId: string) {
         .eq("id", it.id);
     }
   }
-
-  await admin
-    .from("loading_requests")
-    .update({
-      status: "delivered",
-      prepared_at: new Date().toISOString(),
-      delivered_at: new Date().toISOString(),
-      prepared_by: session.user_id,
-      delivered_by: session.user_id,
-    })
-    .eq("id", requestId);
 
   // Entrega PARCIAL: si algún producto se entregó por debajo de lo pedido
   // (faltaba stock), dejamos constancia (evento + aviso) en lugar de marcar

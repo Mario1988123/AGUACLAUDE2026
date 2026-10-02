@@ -5,10 +5,24 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getFiscalSettings } from "@/modules/config/fiscal/actions";
 import { toActionError } from "@/shared/lib/actions/safe-error";
-import { createInvoiceCore } from "./create-core";
+import {
+  createInvoiceCore,
+  preciosContratoIncluyenIva,
+  registrarCuotaMensualContrato,
+} from "./create-core";
+import { registrarCobroFactura } from "./cobros";
+import { pendienteFactura } from "./importes";
+import { madridDateKey } from "@/shared/lib/format-date";
 
 export type InvoiceKind = "invoice" | "credit_note" | "proforma" | "delivery_note";
-export type InvoiceStatus = "draft" | "issued" | "paid" | "overdue" | "void" | "cancelled" | "proforma";
+export type InvoiceStatus =
+  | "draft"
+  | "issued"
+  | "paid"
+  | "overdue"
+  | "void"
+  | "cancelled"
+  | "proforma";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -52,6 +66,14 @@ export interface InvoiceLine {
   discount_percent: number;
   tax_rate_percent: number;
   product_id?: string | null;
+  /** El precio unitario lleva el IVA dentro (ver ./importes). */
+  iva_incluido?: boolean;
+  /** Importes que se respetan tal cual (rectificativas). */
+  importes_fijos?: { subtotal_cents: number; tax_cents: number } | null;
+  /** Solo lectura: importes guardados de la línea. */
+  subtotal_cents?: number;
+  tax_cents?: number;
+  total_cents?: number;
 }
 
 export interface InvoiceDetail {
@@ -63,6 +85,7 @@ export interface InvoiceDetail {
   number: number;
   fiscal_year: number;
   customer_id: string;
+  financier_id: string | null;
   customer_name: string | null;
   customer_fiscal_snapshot: Record<string, unknown> | null;
   company_fiscal_snapshot: Record<string, unknown> | null;
@@ -203,11 +226,7 @@ export async function listInvoices(filters?: {
   }
   // Y para credit_notes, resolver referencia de la original.
   const origIds = Array.from(
-    new Set(
-      rows
-        .filter((r) => r.corrects_invoice_id)
-        .map((r) => r.corrects_invoice_id as string),
-    ),
+    new Set(rows.filter((r) => r.corrects_invoice_id).map((r) => r.corrects_invoice_id as string)),
   );
   const origMap = new Map<string, string>();
   if (origIds.length > 0) {
@@ -223,8 +242,13 @@ export async function listInvoices(filters?: {
   return rows.map((r) => {
     // Si status='paid', 'cancelled' o 'void' → pending=0 aunque no haya
     // payments registrados (evita inconsistencia "Cobrada" con pendiente).
-    const isClosed = r.status === "paid" || r.status === "cancelled" || r.status === "void";
-    const pending = isClosed ? 0 : r.total_cents - (paidMap.get(r.id) ?? 0);
+    // Rectificativas (total negativo) también a 0: no son una deuda.
+    const pending = pendienteFactura({
+      kind: r.kind,
+      status: r.status,
+      total_cents: r.total_cents,
+      pagado_cents: paidMap.get(r.id) ?? 0,
+    });
     const rect = rectMap.get(r.id) ?? null;
     return {
       ...r,
@@ -233,7 +257,7 @@ export async function listInvoices(filters?: {
       corrected_by_id: rect?.id ?? null,
       corrected_by_reference: rect?.ref ?? null,
       corrects_reference: r.corrects_invoice_id
-        ? origMap.get(r.corrects_invoice_id) ?? null
+        ? (origMap.get(r.corrects_invoice_id) ?? null)
         : null,
       is_maintenance_remesa: !!r.maintenance_contract_id,
       billing_period: r.billing_period ?? null,
@@ -249,7 +273,7 @@ export async function getInvoice(id: string): Promise<InvoiceDetail> {
   const { data: inv } = await admin
     .from("invoices")
     .select(
-      "id, full_reference, kind, status, series_id, number, fiscal_year, customer_id, customer_fiscal_snapshot, company_fiscal_snapshot, contract_id, corrects_invoice_id, issue_date, due_date, paid_at, subtotal_cents, tax_cents, withholdings_cents, total_cents, notes, company_id",
+      "id, full_reference, kind, status, series_id, number, fiscal_year, customer_id, financier_id, customer_fiscal_snapshot, company_fiscal_snapshot, contract_id, corrects_invoice_id, issue_date, due_date, paid_at, subtotal_cents, tax_cents, withholdings_cents, total_cents, notes, company_id",
     )
     .eq("id", id)
     .maybeSingle();
@@ -267,7 +291,7 @@ export async function getInvoice(id: string): Promise<InvoiceDetail> {
   const { data: lines } = await admin
     .from("invoice_lines")
     .select(
-      "id, description, quantity, unit_price_cents, discount_percent, tax_rate_percent, product_id",
+      "id, description, quantity, unit_price_cents, discount_percent, tax_rate_percent, product_id, subtotal_cents, tax_cents, total_cents",
     )
     .eq("invoice_id", id)
     .order("display_order", { ascending: true });
@@ -292,7 +316,12 @@ export async function getInvoice(id: string): Promise<InvoiceDetail> {
       tax_rate_percent: Number(l.tax_rate_percent),
     })),
     payments: (pays ?? []) as InvoiceDetail["payments"],
-    pending_cents: (inv as { total_cents: number }).total_cents - paid,
+    pending_cents: pendienteFactura({
+      kind: (inv as { kind: string }).kind,
+      status: (inv as { status: string }).status,
+      total_cents: (inv as { total_cents: number }).total_cents,
+      pagado_cents: paid,
+    }),
   };
 }
 
@@ -317,13 +346,23 @@ interface CreateInvoiceInput {
 export async function createInvoiceAction(input: CreateInvoiceInput): Promise<string> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
+  // Las rectificativas solo nacen de createCreditNoteAction (copia exacta de
+  // la original). Desde fuera no se aceptan importes "fijos": la factura se
+  // calcula siempre a partir de cantidad, precio, descuento e IVA.
+  if (input.kind === "credit_note") {
+    throw new Error("Las rectificativas se crean desde la factura original");
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { id } = await createInvoiceCore({
     admin,
     companyId: session.company_id,
     actorUserId: session.user_id,
-    input,
+    input: {
+      ...input,
+      corrects_invoice_id: null,
+      lines: (input.lines ?? []).map((l) => ({ ...l, importes_fijos: null })),
+    },
   });
   revalidatePath("/facturas");
   return id;
@@ -375,80 +414,107 @@ export async function markInvoicePaidAction(
   const admin = createAdminClient() as any;
   const { data: inv } = await admin
     .from("invoices")
-    .select("id, total_cents, contract_id, customer_id")
+    .select("id, kind, status, total_cents, full_reference")
     .eq("id", invoiceId)
     .eq("company_id", session.company_id)
     .maybeSingle();
   if (!inv) throw new Error("Factura no encontrada");
-  const { data: pays } = await admin
-    .from("invoice_payments")
-    .select("amount_cents")
-    .eq("invoice_id", invoiceId);
-  const alreadyPaid = ((pays ?? []) as Array<{ amount_cents: number }>).reduce(
-    (s, p) => s + p.amount_cents,
-    0,
-  );
-  const pending = (inv as { total_cents: number }).total_cents - alreadyPaid;
-  const amt = amount_cents ?? pending;
-  if (amt <= 0) throw new Error("La factura ya está totalmente pagada");
-
-  // Crear wallet entry validada para que cuadre con la entrada manual
-  // (el flujo natural debería ser desde wallet, pero soportamos esta dirección)
-  const { data: walletEntry } = await admin
-    .from("wallet_entries")
-    .insert({
-      company_id: session.company_id,
-      contract_id: (inv as { contract_id: string | null }).contract_id,
-      customer_id: (inv as { customer_id: string }).customer_id,
-      concept: `Cobro factura ${invoiceId}`,
-      amount_cents: amt,
-      method: "transfer",
-      status: "validated",
-      collected_at: new Date().toISOString(),
-      validated_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  await admin.from("invoice_payments").insert({
-    company_id: session.company_id,
-    invoice_id: invoiceId,
-    wallet_entry_id: (walletEntry as { id: string } | null)?.id ?? null,
-    amount_cents: amt,
-    created_by: session.user_id,
-  });
-
-  // Si llega al total, marca la factura como pagada
-  if (alreadyPaid + amt >= (inv as { total_cents: number }).total_cents) {
-    await admin
-      .from("invoices")
-      .update({ status: "paid", paid_at: new Date().toISOString() })
-      .eq("id", invoiceId);
+  const f = inv as {
+    id: string;
+    kind: string;
+    status: string;
+    total_cents: number;
+    full_reference: string;
+  };
+  let importe = amount_cents;
+  if (importe == null) {
+    // Sin importe → lo pendiente. La RPC vuelve a comprobarlo con la fila
+    // bloqueada, así que una carrera aquí no puede cobrar de más.
+    const { data: pays } = await admin
+      .from("invoice_payments")
+      .select("amount_cents")
+      .eq("invoice_id", invoiceId);
+    const pagado = ((pays ?? []) as Array<{ amount_cents: number }>).reduce(
+      (s, p) => s + p.amount_cents,
+      0,
+    );
+    importe = f.total_cents - pagado;
   }
+  if (!Number.isInteger(importe) || importe <= 0) {
+    throw new Error("La factura ya está totalmente cobrada o el importe no es válido");
+  }
+
+  // Wallet validado + invoice_payment + estado, todo en una transacción con
+  // la factura bloqueada (I22): exige factura emitida y no cobra más de lo
+  // pendiente. Un doble clic ya no crea dos cobros.
+  await registrarCobroFactura({
+    admin,
+    companyId: session.company_id,
+    invoiceId,
+    importeCents: importe,
+    usuarioId: session.user_id,
+    permitirBorrador: false,
+    crearWallet: { metodo: "transfer" },
+    notas: `Cobro factura ${f.full_reference}`,
+  });
   revalidatePath(`/facturas/${invoiceId}`);
   revalidatePath("/facturas");
   revalidatePath("/wallet");
 }
 
+/**
+ * Anula una factura. Solo BORRADORES (C4): una factura emitida no se
+ * cancela, se rectifica (la ley obliga a conservarla y a emitir la
+ * rectificativa). El borrador anulado conserva su número para no dejar
+ * huecos sin explicar.
+ */
 export async function cancelInvoiceAction(invoiceId: string, reason?: string): Promise<void> {
   const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  // El motivo va a cancelled_reason (no a notes, que antes se SOBRESCRIBÍA y
-  // destruía las notas previas). Defensivo: si la columna no existe, solo status.
-  let r = await admin
+  const { data: inv } = await admin
     .from("invoices")
-    .update({ status: "cancelled", cancelled_reason: reason ?? null })
+    .select("id, status")
     .eq("id", invoiceId)
-    .eq("company_id", session.company_id);
-  if (r.error && /cancelled_reason/i.test(r.error.message ?? "")) {
-    r = await admin
-      .from("invoices")
-      .update({ status: "cancelled" })
-      .eq("id", invoiceId)
-      .eq("company_id", session.company_id);
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!inv) throw new Error("Factura no encontrada");
+  const st = (inv as { status: string }).status;
+  if (st !== "draft") {
+    throw new Error(
+      st === "cancelled"
+        ? "La factura ya está anulada"
+        : "Una factura emitida no se puede cancelar: crea una rectificativa.",
+    );
   }
+  const { count: pagos } = await admin
+    .from("invoice_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("invoice_id", invoiceId);
+  if ((pagos ?? 0) > 0) {
+    throw new Error("La factura tiene cobros registrados: no se puede anular");
+  }
+  const ahora = new Date().toISOString();
+  // El motivo va a cancelled_reason (no a notes, que antes se SOBRESCRIBÍA y
+  // destruía las notas previas). Filtro por status=draft: si entre medias la
+  // emitieron, no se toca.
+  const r = await admin
+    .from("invoices")
+    .update({
+      status: "cancelled",
+      cancelled_reason: reason ?? null,
+      cancelled_at: ahora,
+      cancelled_by: session.user_id,
+    })
+    .eq("id", invoiceId)
+    .eq("company_id", session.company_id)
+    .eq("status", "draft")
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (((r.data ?? []) as unknown[]).length === 0) {
+    throw new Error("La factura ha cambiado de estado; recarga la página");
+  }
   revalidatePath(`/facturas/${invoiceId}`);
   revalidatePath("/facturas");
 }
@@ -510,9 +576,7 @@ export async function deleteOrRectifyInvoiceAction(
     .limit(1)
     .maybeSingle();
   if (existingCredit) {
-    throw new Error(
-      "Esta factura ya tiene una rectificativa. No se puede volver a anular.",
-    );
+    throw new Error("Esta factura ya tiene una rectificativa. No se puede volver a anular.");
   }
 
   // Caso 1: borrado duro permitido.
@@ -524,57 +588,144 @@ export async function deleteOrRectifyInvoiceAction(
     // (next_number subió por encima), no decrementamos; queda un hueco (no
     // duplicado). Antes usábamos `.gte()` que en esa carrera generaba
     // numeración duplicada (decisión 2026-05-30).
+    // (Se hace DESPUÉS de borrar: si el borrado fallara con el contador ya
+    // decrementado, la siguiente factura repetiría número.)
+    // Un borrador con cobros no se borra (el dinero quedaría huérfano).
+    const { count: pagos } = await admin
+      .from("invoice_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_id", invoiceId);
+    if ((pagos ?? 0) > 0) {
+      throw new Error("La factura tiene cobros registrados: no se puede borrar");
+    }
+    // El cobro de la cuota (wallet) que apuntaba a este borrador vuelve a
+    // "pendiente de facturar" en vez de quedar apuntando a una factura borrada.
+    await admin
+      .from("wallet_entries")
+      .update({ invoice_id: null })
+      .eq("company_id", session.company_id)
+      .eq("invoice_id", invoiceId);
+    // Borrar líneas primero (FK)
+    const { error: lErr } = await admin.from("invoice_lines").delete().eq("invoice_id", invoiceId);
+    if (lErr) throw new Error(lErr.message);
+    const { error: dErr } = await admin
+      .from("invoices")
+      .delete()
+      .eq("id", invoiceId)
+      .eq("company_id", session.company_id)
+      .eq("status", "draft");
+    if (dErr) throw new Error(dErr.message);
     await admin
       .from("invoice_series")
       .update({ next_number: i.number })
       .eq("id", i.series_id)
+      // Y del mismo ejercicio: tras el reinicio anual el contador es de otro año.
+      .eq("current_year", i.fiscal_year)
       .eq("next_number", i.number + 1);
-    // Borrar líneas y pagos primero (FK)
-    await admin.from("invoice_lines").delete().eq("invoice_id", invoiceId);
-    await admin.from("invoice_payments").delete().eq("invoice_id", invoiceId);
-    await admin.from("invoices").delete().eq("id", invoiceId);
     revalidatePath("/facturas");
     return { deleted: true };
   }
 
-  // Caso 2: rectificar. Si está en draft pero no es la última, también
-  // forzamos rectificativa para mantener la numeración continua.
+  // Caso 2: borrador que no es el último → se ANULA conservando su número
+  // (un borrador nunca se emitió: no hay nada que rectificar). Antes se le
+  // creaba una rectificativa a un borrador.
+  if (i.status === "draft") {
+    await cancelInvoiceAction(invoiceId, "Borrador anulado (no era el último de la serie)");
+    revalidatePath("/facturas");
+    return { deleted: false };
+  }
+  if (i.status === "cancelled" || i.status === "void") {
+    throw new Error("La factura ya está anulada");
+  }
+
+  // Caso 3: emitida → rectificativa por diferencias que la anula entera.
   const creditId = await createCreditNoteAction(invoiceId);
-  // Marcar la original como cancelled si no lo estaba ya y NO está pagada.
-  // Si estaba pagada, la rectificativa generará un cobro negativo.
-  if (i.status !== "paid" && i.status !== "cancelled") {
-    await admin
+  // La original deja de ser una deuda: si no estaba cobrada se marca
+  // cancelada (sigue existiendo, con su número, y la rectificativa la
+  // anula contablemente). Si estaba cobrada, se queda "paid": la
+  // devolución del dinero al cliente es un movimiento aparte.
+  if (i.status !== "paid") {
+    const { error: uErr } = await admin
       .from("invoices")
-      .update({ status: "cancelled" })
-      .eq("id", invoiceId);
+      .update({
+        status: "cancelled",
+        cancelled_at: new Date().toISOString(),
+        cancelled_by: session.user_id,
+        cancelled_reason: "Anulada por rectificativa",
+      })
+      .eq("id", invoiceId)
+      .eq("company_id", session.company_id);
+    if (uErr) throw new Error(uErr.message);
   }
   revalidatePath("/facturas");
   return { deleted: false, credit_note_id: creditId };
 }
 
 /**
- * Crea una factura rectificativa (nota de crédito) que anula la original.
- * Copia las líneas con cantidades en negativo.
+ * Crea una factura rectificativa (por diferencias) que anula la original
+ * entera: copia cada línea con la cantidad en negativo y los importes
+ * EXACTOS guardados, cambiados de signo (no se recalculan: una cuota con IVA
+ * incluido recalculada daría 99,99 € en vez de 100,00 €).
+ *
+ * Solo sobre facturas emitidas (issued/overdue/paid) y una sola vez.
  */
 export async function createCreditNoteAction(originalId: string): Promise<string> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
   const orig = await getInvoice(originalId);
-  return createInvoiceAction({
-    customer_id: orig.customer_id,
-    contract_id: orig.contract_id,
-    kind: "credit_note",
-    corrects_invoice_id: originalId,
-    notes: `Rectificativa de ${orig.full_reference}`,
-    lines: orig.lines.map((l) => ({
-      description: l.description,
-      quantity: -Math.abs(l.quantity),
-      unit_price_cents: l.unit_price_cents,
-      discount_percent: l.discount_percent,
-      tax_rate_percent: l.tax_rate_percent,
-      product_id: l.product_id ?? null,
-    })),
+  if (orig.kind !== "invoice") {
+    throw new Error("Solo se rectifican facturas ordinarias");
+  }
+  if (!["issued", "overdue", "paid"].includes(orig.status)) {
+    throw new Error(
+      orig.status === "draft"
+        ? "Un borrador no se rectifica: bórralo o anúlalo"
+        : `No se puede rectificar una factura en estado ${orig.status}`,
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: existing } = await admin
+    .from("invoices")
+    .select("id, full_reference")
+    .eq("company_id", session.company_id)
+    .eq("corrects_invoice_id", originalId)
+    .eq("kind", "credit_note")
+    .not("status", "in", "(cancelled,void)")
+    .limit(1)
+    .maybeSingle();
+  if (existing) {
+    throw new Error(
+      `Esta factura ya tiene una rectificativa (${(existing as { full_reference: string }).full_reference}).`,
+    );
+  }
+  const { id } = await createInvoiceCore({
+    admin,
+    companyId: session.company_id,
+    actorUserId: session.user_id,
+    input: {
+      customer_id: orig.customer_id ?? null,
+      financier_id: orig.financier_id ?? null,
+      contract_id: orig.contract_id,
+      kind: "credit_note",
+      corrects_invoice_id: originalId,
+      notes: `Rectificativa de ${orig.full_reference}`,
+      lines: orig.lines.map((l) => ({
+        description: l.description,
+        quantity: -Math.abs(l.quantity),
+        unit_price_cents: l.unit_price_cents,
+        discount_percent: l.discount_percent,
+        tax_rate_percent: l.tax_rate_percent,
+        product_id: l.product_id ?? null,
+        importes_fijos: {
+          subtotal_cents: -(l.subtotal_cents ?? 0),
+          tax_cents: -(l.tax_cents ?? 0),
+        },
+      })),
+    },
   });
+  revalidatePath("/facturas");
+  return id;
 }
 
 /**
@@ -640,6 +791,37 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
   if (con.status === "cancelled") {
     throw new Error("No se puede facturar un contrato cancelado.");
   }
+  // [decide] Este botón factura la VENTA (contado). Un alquiler o renting se
+  // factura mes a mes con la cuota (cron / "Generar cuotas"); antes aquí se
+  // facturaba la cuota de contract_items como si fuera el importe del
+  // contrato.
+  if (con.plan_type !== "cash") {
+    throw new Error(
+      'Los alquileres y rentings se facturan por cuotas mensuales (botón "Generar cuotas" o el proceso automático), no desde aquí.',
+    );
+  }
+  // Idempotencia: un contrato de contado tiene UNA factura de venta. Cada clic
+  // creaba otra.
+  {
+    const { data: previa } = await admin
+      .from("invoices")
+      .select("id, full_reference")
+      .eq("company_id", session.company_id)
+      .eq("contract_id", contractId)
+      .eq("kind", "invoice")
+      .is("financier_id", null)
+      .is("billing_period", null)
+      .is("maintenance_contract_id", null)
+      .not("status", "in", "(cancelled,void)")
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    if (previa) {
+      throw new Error(
+        `Este contrato ya tiene factura (${(previa as { full_reference: string }).full_reference}).`,
+      );
+    }
+  }
   // Tanto venta como alquiler/renting REQUIEREN instalación completada
   // (decisión usuario 2026-05-10: "el alquiler entra en vigor desde la fecha
   // de instalación"). Buscamos la instalación 'normal' completada del
@@ -694,21 +876,26 @@ export async function createInvoiceFromContractAction(contractId: string): Promi
   };
   const ci = (items ?? []) as CI[];
   const fiscal = await getFiscalSettings();
+  // C5: el precio del contrato lleva el IVA dentro si se firmó con un
+  // particular (pickPrice). Antes se trataba siempre como base y al
+  // particular se le cobraba el IVA dos veces (1.210 € → 1.464,10 €).
+  const ivaIncluido = await preciosContratoIncluyenIva(admin, session.company_id, contractId);
   const lines: InvoiceLine[] =
     ci.length > 0
       ? ci.map((it) => ({
           description: it.product_name_snapshot,
-          quantity: it.quantity,
+          quantity: Number(it.quantity),
           unit_price_cents: it.unit_price_cash_cents ?? 0,
+          iva_incluido: ivaIncluido,
           discount_percent: 0,
           tax_rate_percent: fiscal.invoice_default_iva,
         }))
       : [
           {
-            description: `Contrato ${con.plan_type}`,
+            description: `Contrato ${con.reference_code ?? ""}`.trim(),
             quantity: 1,
-            unit_price_cents:
-              con.plan_type === "cash" ? con.total_cash_cents ?? 0 : con.monthly_cents ?? 0,
+            unit_price_cents: con.total_cash_cents ?? 0,
+            iva_incluido: ivaIncluido,
             discount_percent: 0,
             tax_rate_percent: fiscal.invoice_default_iva,
           },
@@ -818,88 +1005,83 @@ export async function createInvoiceForFinancierFromContractAction(
 // crea invoice_payments. La versión anterior aquí estaba huérfana.
 
 /**
- * Genera facturas mensuales para todos los contratos activos con cuota
- * (alquiler/renting). Idempotente: no duplica si ya hay factura del mes.
+ * "Generar cuotas" (botón de /facturas). Hace EXACTAMENTE lo mismo que el
+ * cron del día 1 (I28): mismos contratos (alquiler/renting `active`, no
+ * pausados, ya en facturación), mismo periodo (mes de Madrid), mismo
+ * desglose de IVA según el cliente con el que se firmó, y la cuota completa
+ * (factura + cobro + wallet enlazado). Idempotente por (contrato, periodo):
+ * si el cron ya la generó, no duplica.
+ *
+ * Antes: desglosaba el IVA también a empresas, filtraba `signed` (un
+ * alquiler instalado está `active`), no ponía billing_period y en modo
+ * VeriFactu llamaba a un insert que fallaba por columnas NOT NULL.
  */
 export async function generateMonthlyRecurringInvoicesAction(): Promise<{ created: number }> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  // Modo facturación efectivo de la empresa (derivado del certificado FNMT).
-  // En modo verifactu emitimos cuotas como borradores V2 (customer_snapshot,
-  // tax_total_cents, etc.) para que la emisión final encadene la huella.
-  const { getCompanyInvoicingMode } = await import("./mode");
-  const modeInfo = await getCompanyInvoicingMode(session.company_id, admin);
+  const hoy = madridDateKey(new Date());
+  const monthLabel = hoy.slice(0, 7);
+  const [y, m] = monthLabel.split("-").map(Number) as [number, number];
+  // Vencimiento: último día del mes (como el cron).
+  const ultimoDia = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const dueDate = `${monthLabel}-${String(ultimoDia).padStart(2, "0")}`;
 
-  const { data: contracts } = await admin
+  const { data: contracts, error } = await admin
     .from("contracts")
-    .select("id, customer_id, monthly_cents, plan_type, status")
+    .select("id, customer_id, monthly_cents, reference_code, paused_at, billing_starts_at")
     .eq("company_id", session.company_id)
     .in("plan_type", ["rental", "renting"])
-    .eq("status", "signed")
+    .eq("status", "active")
+    .gt("monthly_cents", 0)
     .is("deleted_at", null);
+  if (error) throw new Error(error.message);
   type C = {
     id: string;
     customer_id: string;
-    monthly_cents: number | null;
-    plan_type: string;
-    status: string;
+    monthly_cents: number;
+    reference_code: string | null;
+    paused_at: string | null;
+    billing_starts_at: string | null;
   };
-  const list = ((contracts ?? []) as C[]).filter((c) => c.monthly_cents && c.monthly_cents > 0);
-  let created = 0;
   const fiscal = await getFiscalSettings();
-  for (const c of list) {
-    // Comprobar si ya hay factura para este contrato este mes
-    const { data: existing } = await admin
-      .from("invoices")
-      .select("id")
-      .eq("contract_id", c.id)
-      .gte("issue_date", monthStart)
-      .limit(1)
-      .maybeSingle();
-    if (existing) continue;
-    const monthLabel = now.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
-    const iva = fiscal.invoice_default_iva;
-    const monthlyTotal = c.monthly_cents ?? 0;
-    if (modeInfo.mode === "verifactu") {
-      // Camino V2: borrador con customer_snapshot + tax_total_cents listo para
-      // que admin pulse "Emitir" (issueInvoiceV2Action) y encadene huella.
-      const { createMonthlyV2InvoiceAction } = await import("./verifactu-actions");
-      const r = await createMonthlyV2InvoiceAction({
-        contract_id: c.id,
-        month_label: monthLabel,
-        monthly_total_cents: monthlyTotal,
-        iva_percent: iva,
-      });
-      if (r.ok) created++;
-      else console.error("[monthly recurring V2] failed:", r.error);
-      continue;
-    }
-    // Camino legacy (modo simple): cuadre exacto base + IVA == cuota.
-    const taxOf = (b: number) => Math.round((b * iva) / 100);
-    let baseCents = Math.round(monthlyTotal / (1 + iva / 100));
-    for (let k = 0; k < 3 && baseCents + taxOf(baseCents) !== monthlyTotal; k++) {
-      baseCents += baseCents + taxOf(baseCents) < monthlyTotal ? 1 : -1;
-    }
-    await createInvoiceAction({
-      customer_id: c.customer_id,
-      contract_id: c.id,
-      lines: [
-        {
-          description: `Cuota ${monthLabel}`,
-          quantity: 1,
-          unit_price_cents: baseCents,
-          discount_percent: 0,
-          tax_rate_percent: fiscal.invoice_default_iva,
+  let created = 0;
+  const errores: string[] = [];
+  for (const c of (contracts ?? []) as C[]) {
+    if (c.paused_at) continue;
+    if (c.billing_starts_at && c.billing_starts_at > hoy) continue;
+    try {
+      const r = await registrarCuotaMensualContrato({
+        admin,
+        companyId: session.company_id,
+        contract: {
+          id: c.id,
+          customer_id: c.customer_id,
+          monthly_cents: c.monthly_cents,
+          reference_code: c.reference_code,
         },
-      ],
-    });
-    created++;
+        monthLabel,
+        dueDate,
+        fiscal,
+        actorUserId: session.user_id,
+      });
+      if (r.estado === "creada") created++;
+    } catch (e) {
+      errores.push(
+        `${c.reference_code ?? c.id.slice(0, 8)}: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
-  if (created > 0) revalidatePath("/facturas");
+  if (created > 0) {
+    revalidatePath("/facturas");
+    revalidatePath("/wallet");
+  }
+  if (errores.length > 0) {
+    throw new Error(
+      `Se generaron ${created} cuotas; fallaron ${errores.length}: ${errores.slice(0, 3).join(" · ")}`,
+    );
+  }
   return { created };
 }
 
@@ -966,10 +1148,7 @@ export async function createInvoiceSafeAction(
 
 export async function deleteOrRectifyInvoiceSafeAction(
   invoiceId: string,
-): Promise<
-  | { ok: true; deleted: boolean; credit_note_id?: string }
-  | { ok: false; error: string }
-> {
+): Promise<{ ok: true; deleted: boolean; credit_note_id?: string } | { ok: false; error: string }> {
   try {
     const r = await deleteOrRectifyInvoiceAction(invoiceId);
     return { ok: true, ...r };

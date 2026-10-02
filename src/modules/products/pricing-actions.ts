@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { parseOrFriendly, zOptionalInt, zOptionalNumber } from "@/shared/lib/zod-friendly";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface PricingPlan {
@@ -38,23 +38,25 @@ export interface PricingPlan {
   display_order: number;
 }
 
+// "" de un input vacío = sin dato (null), nunca 0: con z.coerce.number() un
+// precio en blanco llegaba como 0 y ganaba al `??` de los fallbacks de abajo.
 const pricingUpsertSchema = z.object({
   id: z.string().uuid().optional(),
   product_id: z.string().uuid(),
   plan_type: z.enum(["cash", "renting", "rental"]),
-  duration_months: z.coerce.number().int().min(1).optional().nullable(),
+  duration_months: zOptionalInt(1, "La duración tiene que ser de 1 mes o más"),
   // Legacy: si vienen, se usan como fallback al rellenar individual_cents.
-  monthly_price_cents: z.coerce.number().int().min(0).optional().nullable(),
-  total_price_cents: z.coerce.number().int().min(0).optional().nullable(),
-  financing_coefficient: z.coerce.number().min(0).optional().nullable(),
-  financier_payment_cents: z.coerce.number().int().min(0).optional().nullable(),
+  monthly_price_cents: zOptionalInt(0),
+  total_price_cents: zOptionalInt(0),
+  financing_coefficient: zOptionalNumber(0),
+  financier_payment_cents: zOptionalInt(0),
   // ---- Duales ----
-  monthly_price_individual_cents: z.coerce.number().int().min(0).optional().nullable(),
-  monthly_price_business_cents: z.coerce.number().int().min(0).optional().nullable(),
-  total_price_individual_cents: z.coerce.number().int().min(0).optional().nullable(),
-  total_price_business_cents: z.coerce.number().int().min(0).optional().nullable(),
-  financier_payment_business_cents: z.coerce.number().int().min(0).optional().nullable(),
-  permanence_months: z.coerce.number().int().min(0).optional().nullable(),
+  monthly_price_individual_cents: zOptionalInt(0),
+  monthly_price_business_cents: zOptionalInt(0),
+  total_price_individual_cents: zOptionalInt(0),
+  total_price_business_cents: zOptionalInt(0),
+  financier_payment_business_cents: zOptionalInt(0),
+  permanence_months: zOptionalInt(0),
   min_authorized_cents: z.coerce.number().int().min(0),
   absolute_min_cents: z.coerce.number().int().min(0),
 });

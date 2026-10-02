@@ -86,7 +86,14 @@ export default async function PublicDatasheetPage({
   {
     const cols =
       "id, name, short_description, long_description, marketing_claim, manufacturer_name, manufacturer_model, main_image_url, internal_reference, tags, warranty_months_general, warranty_months_electronics, warranty_months_body, category_id";
-    const r1 = await admin.from("products").select(cols).eq("id", productId).maybeSingle();
+    // company_id: el admin client salta RLS; el producto tiene que ser de la
+    // empresa que compartió el enlace.
+    const r1 = await admin
+      .from("products")
+      .select(cols)
+      .eq("id", productId)
+      .eq("company_id", data.company_id)
+      .maybeSingle();
     if (r1.error && /column .* does not exist|schema cache/i.test(r1.error.message ?? "")) {
       const r2 = await admin
         .from("products")
@@ -94,6 +101,7 @@ export default async function PublicDatasheetPage({
           "id, name, short_description, long_description, main_image_url, internal_reference, category_id",
         )
         .eq("id", productId)
+        .eq("company_id", data.company_id)
         .maybeSingle();
       prod = r2.data
         ? {
@@ -306,7 +314,7 @@ export default async function PublicDatasheetPage({
 
             <div className="mt-6 flex flex-wrap gap-3">
               <a
-                href={`/api/pdf/product-datasheet/${prod.id}`}
+                href={`/datasheet/${token}/pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center rounded-xl px-5 py-3 text-sm font-semibold text-white shadow"
@@ -315,7 +323,7 @@ export default async function PublicDatasheetPage({
                 Descargar PDF
               </a>
               <a
-                href={`/api/pdf/product-datasheet/${prod.id}`}
+                href={`/datasheet/${token}/pdf`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center rounded-xl border px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-100"

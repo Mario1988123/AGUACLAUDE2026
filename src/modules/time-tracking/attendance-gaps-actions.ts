@@ -93,6 +93,8 @@ export async function classifyAttendanceGapAction(input: {
       .from("attendance_gaps")
       .select("id, user_id, gap_date, status")
       .eq("id", input.gap_id)
+      // I18: el admin client se salta la RLS → solo huecos de mi empresa.
+      .eq("company_id", session.company_id)
       .maybeSingle();
     const g = gap as
       | { id: string; user_id: string; gap_date: string; status: string }
@@ -110,7 +112,8 @@ export async function classifyAttendanceGapAction(input: {
           classified_at: new Date().toISOString(),
           classified_notes: input.notes ?? null,
         })
-        .eq("id", input.gap_id);
+        .eq("id", input.gap_id)
+        .eq("company_id", session.company_id);
       revalidatePath("/fichajes/admin");
       return { ok: true };
     }
@@ -134,7 +137,8 @@ export async function classifyAttendanceGapAction(input: {
         classified_at: new Date().toISOString(),
         classified_notes: input.notes ?? null,
       })
-      .eq("id", input.gap_id);
+      .eq("id", input.gap_id)
+      .eq("company_id", session.company_id);
 
     revalidatePath("/fichajes/admin");
     return { ok: true };

@@ -116,18 +116,37 @@ export async function upsertMessageTemplateAction(input: {
     is_active: true,
   };
   if (input.id) {
-    await admin.from("message_templates").update(payload).eq("id", input.id);
+    // I12: el admin client se salta la RLS → filtrar SIEMPRE por la empresa
+    // de la sesión y comprobar que se ha tocado una fila (antes se podía
+    // reescribir —y trasladar a mi empresa— la plantilla de otra).
+    const { data, error } = await admin
+      .from("message_templates")
+      .update(payload)
+      .eq("id", input.id)
+      .eq("company_id", session.company_id)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error("Plantilla no encontrada");
   } else {
-    await admin.from("message_templates").insert(payload);
+    const { error } = await admin.from("message_templates").insert(payload);
+    if (error) throw new Error(error.message);
   }
   revalidatePath("/configuracion/plantillas");
 }
 
 export async function deleteMessageTemplateAction(id: string): Promise<void> {
-  await ensureAdmin();
+  const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin.from("message_templates").update({ is_active: false }).eq("id", id);
+  const { data, error } = await admin
+    .from("message_templates")
+    .update({ is_active: false })
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error("Plantilla no encontrada");
   revalidatePath("/configuracion/plantillas");
 }
 

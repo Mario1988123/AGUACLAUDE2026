@@ -797,8 +797,9 @@ export async function finishInstallationAction(input: {
       }
     }
 
-    // Delegamos en la lógica completa (idempotente: si ya estaba completed
-    // no se ejecuta dos veces porque service_start_date ya está set).
+    // Delegamos en la lógica completa. Es idempotente porque
+    // completeInstallation solo cierra si el estado NO era ya completed
+    // (compare-and-set); un segundo envío no repite stock ni equipos.
     await completeInstallation({
       id: input.installation_id,
       notes: input.notes ?? null,

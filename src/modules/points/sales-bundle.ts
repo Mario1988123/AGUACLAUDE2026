@@ -1,7 +1,10 @@
-"use server";
+// Sin "use server" (auditoría 2026-10-01): son funciones internas que llaman
+// otras acciones con el admin client. Como server actions cualquiera podía
+// invocarlas desde el navegador con empresa, usuario y puntos arbitrarios.
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { awardPoints, getPointsSettings } from "./award";
+import { yaOtorgadoAlguno, type AsientoPuntos } from "./idempotencia";
 
 /**
  * Otorga el bundle completo de puntos por una venta al cerrar el ciclo
@@ -49,19 +52,30 @@ export async function awardSalesBundleOnInstall(
     return { awarded: false, reason: `kind_${i.kind}_no_aplica` };
   }
 
-  // Idempotencia: si ya hay puntos otorgados para este contrato con
-  // razones de venta, no repetimos.
-  const { count: priorCount } = await admin
+  // Idempotencia: si ya hay puntos de venta VIGENTES para este contrato, no
+  // repetimos. Auditoría 2026-10-01, I43: antes contaba también los asientos
+  // revertidos (contrato cancelado y reactivado) y ya no se podía volver a
+  // otorgar. Ahora solo cuentan los posteriores a la última reversión del
+  // contrato (misma regla que award_points_once).
+  const { data: previos, error: errPrev } = await admin
     .from("points_ledger")
-    .select("id", { count: "exact", head: true })
-    .eq("contract_id", i.contract_id)
-    .in("reason", [
-      "sale",
-      "sale_with_discount",
-      "sale_tmk_split",
-    ]);
-  if ((priorCount ?? 0) > 0) {
-    return { awarded: false, reason: "ya_otorgados" };
+    .select("points, reason, awarded_at, user_id")
+    .eq("company_id", i.company_id)
+    .eq("subject_type", "contract")
+    .eq("subject_id", i.contract_id);
+  if (errPrev) return { awarded: false, reason: "error_leyendo_puntos" };
+  const asientos = (previos ?? []) as Array<AsientoPuntos & { user_id: string }>;
+  // Por usuario: una reversión de un usuario no reabre los puntos de otro.
+  const porUsuario = new Map<string, AsientoPuntos[]>();
+  for (const a of asientos) {
+    const l = porUsuario.get(a.user_id) ?? [];
+    l.push(a);
+    porUsuario.set(a.user_id, l);
+  }
+  for (const lista of porUsuario.values()) {
+    if (yaOtorgadoAlguno(lista, ["sale", "sale_with_discount", "sale_tmk_split"])) {
+      return { awarded: false, reason: "ya_otorgados" };
+    }
   }
 
   // Cargar contrato + comercial asignado (fallback a created_by). Hasta
@@ -70,7 +84,7 @@ export async function awardSalesBundleOnInstall(
   // retornaba "sin_comercial_asignado" → el comercial nunca cobraba.
   const { data: contract } = await admin
     .from("contracts")
-    .select("id, assigned_user_id, created_by, customer_id")
+    .select("id, assigned_user_id, created_by, customer_id, plan_type")
     .eq("id", i.contract_id)
     .maybeSingle();
   const c = contract as
@@ -79,6 +93,7 @@ export async function awardSalesBundleOnInstall(
         assigned_user_id: string | null;
         created_by: string | null;
         customer_id: string | null;
+        plan_type: string | null;
       }
     | null;
   const salesUserId = c?.assigned_user_id ?? c?.created_by ?? null;
@@ -122,10 +137,15 @@ export async function awardSalesBundleOnInstall(
   const totalEquipments = itemList.reduce((s, it) => s + it.quantity, 0) || 1;
 
   // Detectar descuento: si algún unit_price_cents < min_authorized del
-  // pricing plan cash del producto
+  // pricing plan cash del producto.
+  // Auditoría 2026-10-01, I43: en alquiler/renting el precio de la línea es
+  // la CUOTA MENSUAL y se comparaba con el mínimo del plan de CONTADO, así
+  // que todo alquiler puntuaba como venta con descuento (7 puntos en vez de
+  // 10). [decide] Solo se detecta descuento en contratos de contado; en
+  // alquiler/renting no se penaliza hasta definir con qué mínimo comparar.
   const productIds = itemList.map((it) => it.product_id);
   let hasDiscount = false;
-  if (productIds.length > 0) {
+  if (productIds.length > 0 && (c.plan_type ?? "cash") === "cash") {
     const { data: plans } = await admin
       .from("product_pricing_plans")
       .select("product_id, min_authorized_cents")

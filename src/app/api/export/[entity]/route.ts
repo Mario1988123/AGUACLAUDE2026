@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession, hasAnyRole } from "@/shared/lib/auth/session";
 import { toCsv } from "@/shared/lib/csv/to-csv";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 
 // Exportar datos personales (DNI/email/teléfono/IBAN/geolocalización) es
 // privilegio de administración. Un nivel 3 (comercial/instalador) NO debe poder
@@ -15,6 +16,12 @@ const EXPORT_ROLES = [
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+// Auditoría 2026-10-01 (I37): PostgREST corta CADA respuesta a 1.000 filas
+// (max_rows del servidor) aunque se pida .limit(10000), sin error. La empresa
+// mayor tiene 1.009 clientes y el CSV entregaba 1.000. Todas las consultas
+// van ahora por tramos con fetchAllRows; el número del antiguo .limit() queda
+// como tope de seguridad (maxRows).
 
 const ENTITIES = [
   "leads",
@@ -104,14 +111,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
   let csv = "";
   switch (entity as Entity) {
     case "leads": {
-      const { data } = await supabase
-        .from("leads")
-        .select(
-          "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, tax_id, status, origin, potential, assigned_at, created_at",
-        )
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(10000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("leads")
+            .select(
+              "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, tax_id, status, origin, potential, assigned_at, created_at",
+            )
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 10000, label: "export:leads" },
+      );
       csv = toCsv(
         [
           "ID",
@@ -149,14 +161,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
       break;
     }
     case "customers": {
-      const { data } = await supabase
-        .from("customers")
-        .select(
-          "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, tax_id, is_active, created_at",
-        )
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(10000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("customers")
+            .select(
+              "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, tax_id, is_active, created_at",
+            )
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 10000, label: "export:customers" },
+      );
       csv = toCsv(
         [
           "ID",
@@ -188,14 +205,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
       break;
     }
     case "contracts": {
-      const { data } = await supabase
-        .from("contracts")
-        .select(
-          "id, reference_code, status, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, signed_at, created_at",
-        )
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false })
-        .limit(10000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("contracts")
+            .select(
+              "id, reference_code, status, customer_id, plan_type, total_cash_cents, monthly_cents, duration_months, signed_at, created_at",
+            )
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 10000, label: "export:contracts" },
+      );
       csv = toCsv(
         ["ID", "Ref", "Estado", "Cliente ID", "Plan", "Total contado (€)", "Cuota (€)", "Meses", "Firmado", "Creado"],
         ((data ?? []) as Array<Record<string, unknown>>).map((r) => [
@@ -214,14 +236,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
       break;
     }
     case "payments": {
-      const { data } = await supabase
-        .from("contract_payments")
-        .select(
-          "id, contract_id, concept, amount_cents, method, moment, status, created_at",
-        )
-        .eq("company_id", session.company_id)
-        .order("created_at", { ascending: false })
-        .limit(10000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("contract_payments")
+            .select(
+              "id, contract_id, concept, amount_cents, method, moment, status, created_at",
+            )
+            .eq("company_id", session.company_id)
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 10000, label: "export:contract_payments" },
+      );
       csv = toCsv(
         ["ID", "Contrato ID", "Concepto", "Importe (€)", "Método", "Momento", "Estado", "Creado"],
         ((data ?? []) as Array<Record<string, unknown>>).map((r) => [
@@ -238,14 +265,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
       break;
     }
     case "installations": {
-      const { data } = await supabase
-        .from("installations")
-        .select(
-          "id, reference_code, status, kind, customer_id, contract_id, scheduled_at, started_at, completed_at, duration_seconds",
-        )
-        .is("deleted_at", null)
-        .order("scheduled_at", { ascending: false })
-        .limit(10000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("installations")
+            .select(
+              "id, reference_code, status, kind, customer_id, contract_id, scheduled_at, started_at, completed_at, duration_seconds",
+            )
+            .is("deleted_at", null)
+            .order("scheduled_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 10000, label: "export:installations" },
+      );
       csv = toCsv(
         [
           "ID",
@@ -276,15 +308,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
     }
     case "audit": {
       const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString();
-      const { data } = await supabase
-        .from("events")
-        .select(
-          "id, occurred_at, subject_type, subject_id, kind, actor_user_id, payload",
-        )
-        .eq("company_id", session.company_id)
-        .gte("occurred_at", ninetyDaysAgo)
-        .order("occurred_at", { ascending: false })
-        .limit(50000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("events")
+            .select(
+              "id, occurred_at, subject_type, subject_id, kind, actor_user_id, payload",
+            )
+            .eq("company_id", session.company_id)
+            .gte("occurred_at", ninetyDaysAgo)
+            .order("occurred_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 50000, label: "export:events" },
+      );
       type Row = {
         id: string;
         occurred_at: string;
@@ -331,15 +368,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
       // de los últimos 4 años (RD 8/2019 obliga a guardar 4 años).
       const fourYearsAgo = new Date();
       fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4);
-      const { data } = await supabase
-        .from("time_punches")
-        .select(
-          "id, user_id, punch_kind, punched_at, geo_latitude, geo_longitude, needs_geo_review, is_manual, manual_reason, auto_closed, edited_by_admin, edited_reason",
-        )
-        .eq("company_id", session.company_id)
-        .gte("punched_at", fourYearsAgo.toISOString())
-        .order("punched_at", { ascending: true })
-        .limit(200000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("time_punches")
+            .select(
+              "id, user_id, punch_kind, punched_at, geo_latitude, geo_longitude, needs_geo_review, is_manual, manual_reason, auto_closed, edited_by_admin, edited_reason",
+            )
+            .eq("company_id", session.company_id)
+            .gte("punched_at", fourYearsAgo.toISOString())
+            .order("punched_at", { ascending: true })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 200000, label: "export:time_punches" },
+      );
       type Row = {
         id: string;
         user_id: string;
@@ -401,14 +443,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ent
       break;
     }
     case "wallet": {
-      const { data } = await supabase
-        .from("wallet_entries")
-        .select(
-          "id, contract_id, customer_id, concept, amount_cents, method, status, collected_at, validated_at",
-        )
-        .eq("company_id", session.company_id)
-        .order("collected_at", { ascending: false })
-        .limit(10000);
+      const data = await fetchAllRows<Record<string, unknown>>(
+        (from, to) =>
+          supabase
+            .from("wallet_entries")
+            .select(
+              "id, contract_id, customer_id, concept, amount_cents, method, status, collected_at, validated_at",
+            )
+            .eq("company_id", session.company_id)
+            .order("collected_at", { ascending: false })
+            .order("id", { ascending: true }) // desempate estable entre tramos
+            .range(from, to),
+        { maxRows: 10000, label: "export:wallet_entries" },
+      );
       csv = toCsv(
         [
           "ID",

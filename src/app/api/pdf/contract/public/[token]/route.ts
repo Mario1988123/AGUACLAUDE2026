@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
-import { generateContractPdf } from "@/modules/contracts/pdf-generator";
+import { generateContractPdfForCompany } from "@/modules/contracts/pdf-generator";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(
   // Validar token: existe, no caducado, no cancelado.
   const { data: row } = await admin
     .from("contract_remote_signatures")
-    .select("contract_id, expires_at, cancelled_at")
+    .select("contract_id, company_id, expires_at, cancelled_at")
     .eq("token", token)
     .maybeSingle();
 
@@ -38,6 +38,7 @@ export async function GET(
   }
   const r = row as {
     contract_id: string;
+    company_id: string;
     expires_at: string;
     cancelled_at: string | null;
   };
@@ -49,7 +50,8 @@ export async function GET(
   }
 
   try {
-    const bytes = await generateContractPdf(r.contract_id);
+    // Sin sesión: generateContractPdf exigía login y aquí siempre daba 500.
+    const bytes = await generateContractPdfForCompany(r.contract_id, r.company_id);
     return new NextResponse(new Uint8Array(bytes), {
       status: 200,
       headers: {
@@ -61,9 +63,9 @@ export async function GET(
       },
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Error generando PDF" },
-      { status: 500 },
-    );
+    // Al cliente no se le enseña el error interno (puede llevar datos de la
+    // base); se registra en el servidor.
+    console.error("[pdf/contract/public]", err);
+    return NextResponse.json({ error: "No se pudo generar el PDF" }, { status: 500 });
   }
 }

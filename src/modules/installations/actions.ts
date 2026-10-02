@@ -1,5 +1,6 @@
 "use server";
 
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -536,23 +537,13 @@ export async function getInstallation(id: string) {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const admin = createAdminClient() as any;
-      const year = new Date(inst.created_at).getFullYear();
-      const yearPrefix = `I-${year}-`;
-      const { data: last } = await admin
-        .from("installations")
-        .select("reference_code")
-        .eq("company_id", inst.company_id)
-        .like("reference_code", `${yearPrefix}%`)
-        .order("reference_code", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let n = 1;
-      const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
-      if (lastCode) {
-        const m = lastCode.match(/-(\d+)$/);
-        if (m) n = parseInt(m[1]!, 10) + 1;
-      }
-      const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
+      // Numeración con contador atómico (auditoría 2026-10-01, I25).
+      const code = await siguienteReferencia(
+        admin,
+        inst.company_id,
+        "installations",
+        "I",
+      );
       await admin
         .from("installations")
         .update({ reference_code: code })
@@ -695,24 +686,14 @@ export async function createInstallationFromContract(input: unknown) {
     .is("deleted_at", null);
   if ((count ?? 0) > 0) throw new Error("Ya existe una instalación para este contrato");
 
-  // Generar reference_code I-YYYY-NNNN
-  const year = new Date().getFullYear();
-  const yearPrefix = `I-${year}-`;
-  const { data: lastCoded } = await admin
-    .from("installations")
-    .select("reference_code")
-    .eq("company_id", session.company_id)
-    .like("reference_code", `${yearPrefix}%`)
-    .order("reference_code", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  let nextNum = 1;
-  const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-  if (lastCode) {
-    const m = lastCode.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1]!, 10) + 1;
-  }
-  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+  // Generar reference_code I-YYYY-NNNN con contador atómico (auditoría
+  // 2026-10-01, I25: antes max()+1 sin bloqueo y con orden de texto).
+  const referenceCode = await siguienteReferencia(
+    admin,
+    session.company_id,
+    "installations",
+    "I",
+  );
 
   const { data: created, error } = await admin
     .from("installations")
@@ -1546,7 +1527,15 @@ export async function completeInstallation(input: unknown) {
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
     : null;
 
-  await admin
+  // Compare-and-set (auditoría 2026-10-01, C7): solo cierra si NO estaba ya
+  // completada ni cancelada. Un doble envío (el técnico pulsa "Finalizar" dos
+  // veces con mala cobertura) descontaba el stock dos veces, duplicaba los
+  // equipos del cliente y los mantenimientos. Si la fila no cambia, la
+  // segunda llamada sale sin efectos secundarios. [decide] Si la primera
+  // llamada se quedó a medias tras cambiar el estado, el reintento NO rehace
+  // los pasos siguientes: preferimos un paso pendiente (visible) a un stock
+  // descontado dos veces (invisible).
+  const { data: cerradas, error: errCierre } = await admin
     .from("installations")
     .update({
       status: "completed",
@@ -1556,7 +1545,16 @@ export async function completeInstallation(input: unknown) {
       geo_completed_lng: parsed.geo_lng ?? null,
       notes: parsed.notes ?? null,
     })
-    .eq("id", parsed.id);
+    .eq("id", parsed.id)
+    .eq("company_id", session.company_id)
+    .not("status", "in", "(completed,cancelled)")
+    .select("id");
+  if (errCierre) throw new Error(`No se pudo cerrar la instalación: ${errCierre.message}`);
+  if (!cerradas || (cerradas as unknown[]).length === 0) {
+    // Ya estaba completada (doble envío) o cancelada: nada más que hacer.
+    revalidatePath(`/instalaciones/${parsed.id}`);
+    return;
+  }
   // installation_steps_log dropeada — los wizards escriben en `events`.
 
   // Anti-fraude Roads API (decisión usuario, feature opcional). Si la

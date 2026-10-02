@@ -3,6 +3,8 @@
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { madridDateKey } from "@/shared/lib/format-date";
+import { fechaCobroSepa } from "./fechas";
 
 /**
  * Genera un archivo SEPA Direct Debit en formato XML pain.008.001.08
@@ -129,15 +131,24 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
     }
 
     // Cobros pendientes con método direct_debit (NO ya lockeados en otro batch)
-    const { data: paysRaw } = await admin
+    // C6: solo de contratos VIVOS. Antes no se miraba el estado del contrato
+    // y se domiciliaba a clientes con el contrato cancelado.
+    // [decide] `completed` entra: un alquiler finalizado puede deber la
+    // cuota ya facturada de su último mes. Cancelado o borrado, nunca.
+    const { data: paysRaw, error: paysErr } = await admin
       .from("contract_payments")
       .select(
-        "id, contract_id, amount_cents, concept, status, method, sepa_batch_id, contracts!inner(customer_id, company_id)",
+        "id, contract_id, amount_cents, concept, status, method, sepa_batch_id, contracts!inner(customer_id, company_id, status, deleted_at)",
       )
+      .eq("company_id", session.company_id)
       .eq("method", "direct_debit")
       .eq("status", "pending")
+      .gt("amount_cents", 0)
       .is("sepa_batch_id", null)
-      .eq("contracts.company_id", session.company_id);
+      .eq("contracts.company_id", session.company_id)
+      .in("contracts.status", ["signed", "active", "completed"])
+      .is("contracts.deleted_at", null);
+    if (paysErr) return { ok: false, error: paysErr.message };
     type CP = {
       id: string;
       contract_id: string;
@@ -193,22 +204,31 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
       if (!bankMap.has(b.customer_id)) bankMap.set(b.customer_id, b);
     }
 
-    // Mandato SEPA vigente por cliente (el más reciente que no esté cancelado).
+    // Mandato SEPA vigente: ACTIVO (firmado), no cancelado y con fecha de
+    // firma. Se prefiere el mandato del propio contrato; si no, el más
+    // reciente del cliente.
     const { data: mandates } = await admin
       .from("sepa_mandates")
-      .select("customer_id, umr, signed_at, status, cancelled_at")
+      .select("customer_id, contract_id, umr, signed_at, status, cancelled_at, debtor_iban")
+      .eq("company_id", session.company_id)
       .in("customer_id", customerIds)
+      .eq("status", "active")
       .is("cancelled_at", null)
+      .not("signed_at", "is", null)
       .order("signed_at", { ascending: false });
     type MD = {
       customer_id: string;
+      contract_id: string | null;
       umr: string | null;
       signed_at: string | null;
       status: string | null;
+      debtor_iban: string | null;
     };
     const mandateMap = new Map<string, MD>();
+    const mandateByContract = new Map<string, MD>();
     for (const m of ((mandates ?? []) as MD[])) {
       if (!mandateMap.has(m.customer_id)) mandateMap.set(m.customer_id, m);
+      if (m.contract_id && !mandateByContract.has(m.contract_id)) mandateByContract.set(m.contract_id, m);
     }
 
     const { data: addresses } = await admin
@@ -236,13 +256,17 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
       const bank = bankMap.get(p.contracts.customer_id);
       const addr = addrMap.get(p.contracts.customer_id);
       if (!cust) continue;
-      if (!bank?.iban || /^ES00/i.test(bank.iban)) {
-        skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: IBAN no disponible o ES00`);
+      const mandate =
+        mandateByContract.get(p.contract_id) ?? mandateMap.get(p.contracts.customer_id);
+      if (!mandate?.umr || !mandate.signed_at) {
+        skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: sin mandato SEPA firmado`);
         continue;
       }
-      const mandate = mandateMap.get(p.contracts.customer_id);
-      if (!mandate?.umr) {
-        skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: sin mandato SEPA firmado`);
+      // El IBAN autorizado es el del MANDATO; la cuenta del cliente solo si
+      // el mandato no lo guarda.
+      const iban = mandate.debtor_iban || bank?.iban || "";
+      if (!iban || /^ES00/i.test(iban)) {
+        skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: IBAN no disponible o ES00`);
         continue;
       }
       const name =
@@ -257,11 +281,12 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
         customer_id: cust.id,
         customer_name: name,
         customer_address: addressLine,
-        customer_iban: cleanIban(bank.iban),
+        customer_iban: cleanIban(iban),
         amount_cents: p.amount_cents,
         concept: p.concept,
         mandate_id: mandate.umr,
-        mandate_date: (mandate.signed_at ?? new Date().toISOString()).slice(0, 10),
+        // Fecha REAL de firma del mandato (antes se inventaba "hoy").
+        mandate_date: madridDateKey(mandate.signed_at),
       });
     }
 
@@ -274,9 +299,12 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
     }
 
     const now = new Date();
-    const msgId = `REM-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-    const creationDate = now.toISOString();
-    const collectionDate = now.toISOString().slice(0, 10);
+    const hoyMadrid = madridDateKey(now);
+    const msgId = `REM-${hoyMadrid.replace(/-/g, "")}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    // ISODateTime sin milisegundos (los validadores de algunos bancos los rechazan).
+    const creationDate = now.toISOString().slice(0, 19);
+    // I23: D+2 hábiles TARGET2 desde hoy (Madrid), nunca hoy ni una fecha pasada.
+    const collectionDate = fechaCobroSepa(hoyMadrid);
     const totalCents = rows.reduce((s, r) => s + r.amount_cents, 0);
     const total = eurFromCents(totalCents);
     const numTx = rows.length;
@@ -356,37 +384,61 @@ ${txXml}
   </CstmrDrctDbtInitn>
 </Document>`;
 
-    // Persistimos el batch y lockeamos los pagos incluidos (idempotencia).
-    try {
-      const { data: created } = await admin
-        .from("sepa_batches")
-        .insert({
-          company_id: session.company_id,
-          msg_id: msgId,
-          status: "open",
-          total_cents: totalCents,
-          num_transactions: rows.length,
-          xml,
-          generated_by: session.user_id,
-        })
-        .select("id")
-        .single();
-      const batchId = (created as { id: string } | null)?.id ?? null;
-      if (batchId) {
-        const paymentIds = rows.map((r) => r.contract_payment_id);
-        await admin
-          .from("contract_payments")
-          .update({ sepa_batch_id: batchId })
-          .in("id", paymentIds);
-      }
-    } catch (e) {
-      console.error("[sepa-xml] batch persistence failed:", e);
-      // No-bloqueante: el XML se devuelve igual; el usuario sabe que
-      // tendrá que controlar manualmente los duplicados si genera otra
-      // vez antes de aplicar la migración.
+    // Persistimos el batch y bloqueamos los pagos ANTES de entregar el XML
+    // (I23). Antes el XML se devolvía aunque fallara el guardado y el update
+    // no comprobaba que el pago siguiera libre: dos clics daban dos remesas
+    // con los mismos cobros. Ahora:
+    //   · el índice único de batch `open` por empresa (migración
+    //     20261002130100) impide dos remesas abiertas a la vez;
+    //   · el update solo bloquea pagos con sepa_batch_id NULL y se comprueba
+    //     que se bloquearon TODOS; si no, se deshace y no se entrega nada.
+    const { data: created, error: batchErr } = await admin
+      .from("sepa_batches")
+      .insert({
+        company_id: session.company_id,
+        msg_id: msgId,
+        status: "open",
+        total_cents: totalCents,
+        num_transactions: rows.length,
+        xml,
+        generated_by: session.user_id,
+      })
+      .select("id")
+      .single();
+    if (batchErr || !created) {
+      return {
+        ok: false,
+        error: /uniq_sepa_batch_open/i.test(batchErr?.message ?? "")
+          ? "Ya hay una remesa abierta: márcala como enviada o cancélala antes de generar otra."
+          : `No se pudo guardar la remesa: ${batchErr?.message ?? "error desconocido"}`,
+      };
+    }
+    const batchId = (created as { id: string }).id;
+    const paymentIds = rows.map((r) => r.contract_payment_id);
+    const { data: locked, error: lockErr } = await admin
+      .from("contract_payments")
+      .update({ sepa_batch_id: batchId })
+      .in("id", paymentIds)
+      .eq("company_id", session.company_id)
+      .eq("status", "pending")
+      .is("sepa_batch_id", null)
+      .select("id");
+    const nLocked = ((locked ?? []) as unknown[]).length;
+    if (lockErr || nLocked !== paymentIds.length) {
+      await admin
+        .from("contract_payments")
+        .update({ sepa_batch_id: null })
+        .eq("sepa_batch_id", batchId);
+      await admin.from("sepa_batches").delete().eq("id", batchId);
+      return {
+        ok: false,
+        error: lockErr
+          ? `No se pudieron reservar los cobros: ${lockErr.message}`
+          : "Algunos cobros han cambiado mientras se generaba la remesa. Vuelve a generarla.",
+      };
     }
 
-    const filename = `remesa-sepa-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${rows.length}tx.xml`;
+    const filename = `remesa-sepa-${hoyMadrid.replace(/-/g, "")}-${rows.length}tx.xml`;
     return { ok: true, xml, filename, transactions: rows.length, total_cents: totalCents };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
@@ -413,18 +465,25 @@ export async function markSepaBatchSentAction(
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { error: e1 } = await admin
+    const { data: enviada, error: e1 } = await admin
       .from("sepa_batches")
       .update({ status: "sent", sent_at: new Date().toISOString() })
       .eq("id", batchId)
       .eq("company_id", session.company_id)
-      .eq("status", "open");
+      .eq("status", "open")
+      .select("id");
     if (e1) return { ok: false, error: e1.message };
-    const { data: updRows } = await admin
+    if (((enviada ?? []) as unknown[]).length === 0) {
+      return { ok: false, error: "La remesa no está abierta (ya enviada o cancelada)" };
+    }
+    const { data: updRows, error: e2 } = await admin
       .from("contract_payments")
       .update({ status: "collected_pending_validation", collected_at: new Date().toISOString() })
       .eq("sepa_batch_id", batchId)
+      .eq("company_id", session.company_id)
+      .eq("status", "pending")
       .select("id");
+    if (e2) return { ok: false, error: e2.message };
     const updated = ((updRows ?? []) as Array<{ id: string }>).length;
     return { ok: true, updated_payments: updated };
   } catch (e) {
@@ -448,7 +507,10 @@ export async function cancelSepaBatchAction(
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    await admin
+    // Solo una remesa ABIERTA se cancela y solo entonces se liberan sus
+    // pagos (I23). Antes se liberaban también los de una remesa ya enviada
+    // al banco, que así se volvían a domiciliar en la siguiente.
+    const { data: cancelada, error: cErr } = await admin
       .from("sepa_batches")
       .update({
         status: "cancelled",
@@ -457,11 +519,22 @@ export async function cancelSepaBatchAction(
       })
       .eq("id", batchId)
       .eq("company_id", session.company_id)
-      .eq("status", "open");
-    await admin
+      .eq("status", "open")
+      .select("id");
+    if (cErr) return { ok: false, error: cErr.message };
+    if (((cancelada ?? []) as unknown[]).length === 0) {
+      return {
+        ok: false,
+        error: "Solo se puede cancelar una remesa abierta. Si ya se envió al banco, gestiona la devolución desde el banco.",
+      };
+    }
+    const { error: relErr } = await admin
       .from("contract_payments")
       .update({ sepa_batch_id: null })
-      .eq("sepa_batch_id", batchId);
+      .eq("sepa_batch_id", batchId)
+      .eq("company_id", session.company_id)
+      .eq("status", "pending");
+    if (relErr) return { ok: false, error: relErr.message };
     return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

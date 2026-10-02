@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { enmascararIban } from "./rgpd-anonimizar";
 
 /**
  * Exporta TODOS los datos personales de un cliente (RGPD art. 15 derecho
@@ -124,6 +125,19 @@ export async function requestCustomerDeletionAction(input: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // I11: comprobar ANTES de tocar nada que el cliente es de mi empresa.
+    // Antes el update de customers sí filtraba por empresa, pero si no
+    // afectaba a ninguna fila la acción seguía y enmascaraba las cuentas
+    // bancarias de un cliente ajeno (que solo se filtraban por customer_id).
+    const { data: propio, error: errPropio } = await admin
+      .from("customers")
+      .select("id")
+      .eq("id", input.customer_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (errPropio) return { ok: false, error: errPropio.message };
+    if (!propio) return { ok: false, error: "Cliente no encontrado" };
+
     // Anonimizar PII manteniendo estructura.
     const r = await admin
       .from("customers")
@@ -204,23 +218,20 @@ export async function requestCustomerDeletionAction(input: {
       const { data: banks } = await admin
         .from("customer_bank_accounts")
         .select("id, iban")
-        .eq("customer_id", input.customer_id);
+        .eq("customer_id", input.customer_id)
+        .eq("company_id", session.company_id);
       type BK = { id: string; iban: string | null };
       for (const b of ((banks ?? []) as BK[])) {
         if (!b.iban) continue;
-        const clean = b.iban.replace(/\s/g, "");
-        const masked =
-          clean.length > 8
-            ? clean.slice(0, 4) + "*".repeat(clean.length - 8) + clean.slice(-4)
-            : "****";
         await admin
           .from("customer_bank_accounts")
           .update({
-            iban: masked,
+            iban: enmascararIban(b.iban),
             account_holder_name: "[BORRADO]",
             is_validated: false,
           })
-          .eq("id", b.id);
+          .eq("id", b.id)
+          .eq("company_id", session.company_id);
       }
     } catch {
       /* fail-soft: tabla puede no existir o columnas distintas */

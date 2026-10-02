@@ -166,7 +166,8 @@ export default async function InvoiceDetailPage({
                 </thead>
                 <tbody className="divide-y">
                   {inv.lines.map((l, idx) => {
-                    const subtotal = l.unit_price_cents * l.quantity * (1 - l.discount_percent / 100);
+                    const subtotal =
+                      l.subtotal_cents ?? l.unit_price_cents * l.quantity * (1 - l.discount_percent / 100);
                     return (
                       <tr key={l.id ?? idx}>
                         <td className="py-2">{l.description}</td>

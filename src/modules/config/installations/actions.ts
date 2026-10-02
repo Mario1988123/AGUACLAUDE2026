@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { z } from "zod";
+import { parseOrFriendly, zIntDefault } from "@/shared/lib/zod-friendly";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -13,11 +15,28 @@ async function ensureAdmin() {
   return session;
 }
 
-export async function saveInstallationsConfigAction(input: {
-  installation_geo_tolerance_m?: number;
-  installation_time_tolerance_min?: number;
+// Validación en servidor (auditoría 2026-10-01): antes el formulario hacía
+// Number("") = 0 y se guardaba una tolerancia de 0 al dejar el campo vacío, y
+// el objeto entero se copiaba al update. Ahora: solo estas dos columnas, vacío
+// = valor por defecto (los mismos que usa la página), y rango como el <input>.
+const configSchema = z.object({
+  installation_geo_tolerance_m: zIntDefault(300, 50, "La tolerancia GPS mínima es 50 m").refine(
+    (v) => v <= 5000,
+    "La tolerancia GPS máxima es 5000 m",
+  ),
+  installation_time_tolerance_min: zIntDefault(30, 5, "La tolerancia mínima es 5 minutos").refine(
+    (v) => v <= 240,
+    "La tolerancia máxima es 240 minutos",
+  ),
+});
+
+export async function saveInstallationsConfigAction(raw: {
+  installation_geo_tolerance_m?: number | string;
+  installation_time_tolerance_min?: number | string;
 }): Promise<void> {
   const session = await ensureAdmin();
+  if (!session.company_id) throw new Error("Sin empresa");
+  const input = parseOrFriendly(configSchema, raw, "Configuración de instalaciones");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

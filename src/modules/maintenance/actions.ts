@@ -610,6 +610,10 @@ export async function completeMaintenanceAction(input: unknown) {
   // Admin client por mismo motivo que startMaintenanceAction
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Compare-and-set (auditoría 2026-10-01, C7): solo cierra si no estaba ya
+  // completado ni cancelado. Con un doble envío se duplicaban los recambios,
+  // el descuento de stock y los puntos. Si no cambia ninguna fila, la segunda
+  // llamada sale sin efectos secundarios.
   const updR = await admin
     .from("maintenance_jobs")
     .update({
@@ -619,8 +623,15 @@ export async function completeMaintenanceAction(input: unknown) {
       notes: parsed.notes ?? null,
     })
     .eq("id", parsed.id)
-    .eq("company_id", session.company_id);
+    .eq("company_id", session.company_id)
+    .not("status", "in", "(completed,cancelled)")
+    .select("id");
   if (updR.error) throw new Error(updR.error.message);
+  if (!updR.data || (updR.data as unknown[]).length === 0) {
+    revalidatePath("/mantenimientos");
+    revalidatePath(`/mantenimientos/${parsed.id}`);
+    return;
+  }
 
   // Auto-resolver notificaciones del mantenimiento (ya completado).
   try {
@@ -845,7 +856,9 @@ export async function declineRenewalAction(input: {
     try {
       await admin.from("agenda_events").insert({
         company_id: session.company_id,
-        kind: "task",
+        // "task" no existe en agenda_event_kind (auditoría 2026-10-01, I3):
+        // la tarea "Llamar para reactivar" no se guardaba nunca.
+        kind: "reminder",
         title: `Llamar para reactivar mantenimiento · ${c.reference_code ?? "Contrato"}`,
         description:
           input.notes ??

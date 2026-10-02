@@ -5,7 +5,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { productCreateSchema, PRODUCT_ROLES } from "./schemas";
+import {
+  productCreateSchema,
+  PRODUCT_ROLES,
+  validateProductPatch,
+  cashPlanError,
+} from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CategoryItem, ProductDetail, ProductListItem, ProductKind } from "./types";
 import { toActionError } from "@/shared/lib/actions/safe-error";
@@ -506,6 +511,11 @@ export async function createProductAction(formData: FormData) {
     "Producto",
   );
 
+  // Plan de contado incoherente: avisar ANTES de crear el producto, para no
+  // dejarlo creado sin precio (auditoría 2026-10-01 I40).
+  const planErr = cashPlanError(parsed);
+  if (planErr) throw new Error(planErr);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const { data, error } = await admin
@@ -539,7 +549,7 @@ export async function createProductAction(formData: FormData) {
   if (parsed.cash_total_cents != null && parsed.cash_total_cents > 0) {
     const minAuth = parsed.cash_min_authorized_cents ?? parsed.cash_total_cents;
     const minAbs = parsed.cash_absolute_min_cents ?? minAuth;
-    await admin.from("product_pricing_plans").insert({
+    const { error: planInsErr } = await admin.from("product_pricing_plans").insert({
       company_id: session.company_id,
       product_id: productId,
       plan_type: "cash",
@@ -549,6 +559,20 @@ export async function createProductAction(formData: FormData) {
       absolute_min_cents: minAbs,
       is_active: true,
     } as never);
+    if (planInsErr) {
+      // Deshacer el alta: el producto se acaba de crear y aún no tiene nada
+      // colgando (atributos y roles van después). Si lo dejáramos, el usuario
+      // reintentaría desde el formulario y acabaría con un duplicado sin precio.
+      console.error("[create product] plan cash:", planInsErr);
+      await admin
+        .from("products")
+        .delete()
+        .eq("id", productId)
+        .eq("company_id", session.company_id);
+      throw new Error(
+        `No se ha podido guardar el precio de contado y el producto no se ha creado: ${toActionError(planInsErr, "create product plan")}`,
+      );
+    }
   }
 
   // Atributos precargados desde la categoría: vienen como JSON string.
@@ -713,9 +737,15 @@ export async function updateProductAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
+    // Validar los numéricos ANTES de tocar la tabla (auditoría 2026-10-01
+    // I8): un 0 o un decimal en una medida reventaba contra el CHECK con un
+    // error crudo de Postgres.
+    const [checked, invalid] = validateProductPatch(input as Record<string, unknown>);
+    if (invalid !== null) return { ok: false, error: invalid };
+
     // Sanitizar: solo enviar las claves definidas
     const payload: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(input)) {
+    for (const [k, v] of Object.entries(checked)) {
       if (v !== undefined) payload[k] = v;
     }
 

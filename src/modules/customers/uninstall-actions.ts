@@ -4,8 +4,13 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
-import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
+import {
+  adjustStockBatch,
+  isFunctionMissingError,
+  type StockState,
+} from "@/modules/warehouses/adjust-stock";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 
 /**
  * Destino de cada equipo retirado:
@@ -127,23 +132,14 @@ export async function createUninstallAction(
     }
 
     // 2) Reference code I-YYYY-NNNN
-    const year = new Date().getFullYear();
-    const yearPrefix = `I-${year}-`;
-    const { data: lastCoded } = await admin
-      .from("installations")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${yearPrefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-    if (lastCode) {
-      const m = lastCode.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
-    const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    // Contador atómico por empresa (auditoría 2026-10-01 I25): el máximo + 1
+    // repetía números con dos altas a la vez y ordenaba como texto.
+    const referenceCode = await siguienteReferencia(
+      admin,
+      session.company_id,
+      "installations",
+      "I",
+    );
 
     // 3) Notas con el listado de equipos + payload con destino. El destino
     //    por equipo se etiqueta (PERDIDA/ROTA/ROBADA) para auditoría; el
@@ -523,54 +519,97 @@ export async function changeStockStateAction(input: {
     const qty = Math.min(r.quantity, input.quantity ?? r.quantity);
     if (qty <= 0) return { ok: false, error: "Cantidad inválida" };
 
-    // Decrementar línea original
-    if (qty === r.quantity) {
-      await admin.from("warehouse_stock").delete().eq("id", r.id);
-    } else {
-      await admin
-        .from("warehouse_stock")
-        .update({ quantity: r.quantity - qty })
-        .eq("id", r.id);
+    // Cambio de estado ATÓMICO con adjust_stock_batch (auditoría 2026-10-01):
+    // antes era leer-sumar-escribir en dos líneas sueltas, y dos cambios a la
+    // vez (o un fallo a mitad) perdían o duplicaban unidades. La RPC aplica la
+    // salida del estado viejo y la entrada en el nuevo en UNA transacción, con
+    // bloqueo de fila, y registra los dos movimientos.
+    let usedAtomic = false;
+    try {
+      const motivo = `Cambio de estado ${r.state} → ${input.new_state}`;
+      await adjustStockBatch(r.company_id, session.user_id, [
+        {
+          warehouse_id: r.warehouse_id,
+          product_id: r.product_id,
+          state: r.state as StockState,
+          location_id: r.location_id,
+          delta: -qty,
+          movement_type: "adjustment_minus",
+          reason: motivo,
+          notes: input.notes ?? null,
+        },
+        {
+          warehouse_id: r.warehouse_id,
+          product_id: r.product_id,
+          state: input.new_state,
+          location_id: r.location_id,
+          delta: qty,
+          movement_type: "adjustment_plus",
+          reason: motivo,
+          notes: input.notes ?? null,
+        },
+      ]);
+      usedAtomic = true;
+    } catch (e) {
+      // Solo hay camino clásico si la RPC no existe; con cualquier otro error
+      // pudo haber commiteado y repetir por legacy duplicaría stock.
+      if (!isFunctionMissingError(e)) throw e instanceof Error ? e : new Error(String(e));
+      console.error(
+        "[changeStockState] adjust_stock_batch no aplicada, fallback:",
+        e instanceof Error ? e.message : e,
+      );
     }
 
-    // Sumar en línea destino
-    const { data: existing } = await admin
-      .from("warehouse_stock")
-      .select("id, quantity")
-      .eq("warehouse_id", r.warehouse_id)
-      .eq("product_id", r.product_id)
-      .eq("state", input.new_state)
-      .is("location_id", r.location_id)
-      .maybeSingle();
-    const dst = existing as { id: string; quantity: number } | null;
-    if (dst) {
-      await admin
+    if (!usedAtomic) {
+      // Decrementar línea original
+      if (qty === r.quantity) {
+        await admin.from("warehouse_stock").delete().eq("id", r.id);
+      } else {
+        await admin
+          .from("warehouse_stock")
+          .update({ quantity: r.quantity - qty })
+          .eq("id", r.id);
+      }
+
+      // Sumar en línea destino
+      const { data: existing } = await admin
         .from("warehouse_stock")
-        .update({ quantity: dst.quantity + qty })
-        .eq("id", dst.id);
-    } else {
-      await admin.from("warehouse_stock").insert({
+        .select("id, quantity")
+        .eq("warehouse_id", r.warehouse_id)
+        .eq("product_id", r.product_id)
+        .eq("state", input.new_state)
+        .is("location_id", r.location_id)
+        .maybeSingle();
+      const dst = existing as { id: string; quantity: number } | null;
+      if (dst) {
+        await admin
+          .from("warehouse_stock")
+          .update({ quantity: dst.quantity + qty })
+          .eq("id", dst.id);
+      } else {
+        await admin.from("warehouse_stock").insert({
+          company_id: r.company_id,
+          warehouse_id: r.warehouse_id,
+          product_id: r.product_id,
+          quantity: qty,
+          state: input.new_state,
+          location_id: r.location_id,
+        });
+      }
+
+      // Movement informativo
+      await admin.from("stock_movements").insert({
         company_id: r.company_id,
-        warehouse_id: r.warehouse_id,
         product_id: r.product_id,
+        warehouse_id: r.warehouse_id,
+        movement_type: "adjustment_plus",
         quantity: qty,
-        state: input.new_state,
-        location_id: r.location_id,
+        state_after: input.new_state,
+        reason: `Cambio de estado ${r.state} → ${input.new_state}`,
+        notes: input.notes ?? null,
+        performed_by: session.user_id,
       });
     }
-
-    // Movement informativo
-    await admin.from("stock_movements").insert({
-      company_id: r.company_id,
-      product_id: r.product_id,
-      warehouse_id: r.warehouse_id,
-      movement_type: "adjustment_plus",
-      quantity: qty,
-      state_after: input.new_state,
-      reason: `Cambio de estado ${r.state} → ${input.new_state}`,
-      notes: input.notes ?? null,
-      performed_by: session.user_id,
-    });
 
     revalidatePath(`/almacenes/${r.warehouse_id}`);
     return { ok: true };

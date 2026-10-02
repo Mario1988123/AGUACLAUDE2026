@@ -23,6 +23,7 @@ import {
 import { encryptSecret } from "./encryption";
 import { createOrFetchDomain, verifyDomain } from "./resend";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { MARCADOR_PASSWORD, resolverConfigPrueba, type DatosSmtp } from "./smtp-prueba";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -192,8 +193,12 @@ export async function testSmtpAction(
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
 
-    let password = input.smtp_password ?? "";
-    if (!password || password === "********") {
+    // I14: la contraseña guardada solo se usa contra el host/puerto/usuario
+    // GUARDADOS (ver smtp-prueba.ts). Antes se descifraba y se enviaba al
+    // host que elegía el navegador.
+    const pwdEntrada = input.smtp_password ?? "";
+    let guardada: (DatosSmtp & { tienePassword: boolean; enc: string | null }) | null = null;
+    if (!pwdEntrada || pwdEntrada === MARCADOR_PASSWORD) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const admin = createAdminClient() as any;
       if (input.scope === "user") {
@@ -203,13 +208,19 @@ export async function testSmtpAction(
         }
         const { data } = await admin
           .from("email_user_settings")
-          .select("smtp_password_enc")
+          .select("smtp_host, smtp_port, smtp_user, smtp_secure, smtp_password_enc")
           .eq("user_id", uid)
           .eq("company_id", session.company_id)
           .maybeSingle();
-        if (data?.smtp_password_enc) {
-          const { decryptSecret } = await import("./encryption");
-          password = decryptSecret(data.smtp_password_enc);
+        if (data) {
+          guardada = {
+            host: data.smtp_host ?? "",
+            port: data.smtp_port ?? 587,
+            user: data.smtp_user ?? "",
+            secure: data.smtp_secure ?? true,
+            tienePassword: Boolean(data.smtp_password_enc),
+            enc: data.smtp_password_enc ?? null,
+          };
         }
       } else {
         if (!session.roles.includes("company_admin")) {
@@ -218,26 +229,38 @@ export async function testSmtpAction(
         const p = colPrefix(input.scope);
         const { data } = await admin
           .from("companies")
-          .select(`${p}_password_enc`)
+          .select(`${p}_host, ${p}_port, ${p}_user, ${p}_secure, ${p}_password_enc`)
           .eq("id", session.company_id)
           .maybeSingle();
-        const enc = data?.[`${p}_password_enc`];
-        if (enc) {
-          const { decryptSecret } = await import("./encryption");
-          password = decryptSecret(enc);
+        if (data) {
+          guardada = {
+            host: data[`${p}_host`] ?? "",
+            port: data[`${p}_port`] ?? 587,
+            user: data[`${p}_user`] ?? "",
+            secure: data[`${p}_secure`] ?? true,
+            tienePassword: Boolean(data[`${p}_password_enc`]),
+            enc: data[`${p}_password_enc`] ?? null,
+          };
         }
       }
     }
 
-    if (!password) {
-      return { ok: false, error: "Falta la contraseña. Introdúcela para probar la conexión." };
+    const decision = resolverConfigPrueba(input, guardada);
+    if (!decision.ok) return decision;
+
+    let password: string;
+    if (decision.usarGuardada) {
+      const { decryptSecret } = await import("./encryption");
+      password = decryptSecret(guardada!.enc as string);
+    } else {
+      password = decision.config.password;
     }
 
     return await testSmtpConnection({
-      host: input.smtp_host,
-      port: input.smtp_port || 587,
-      secure: input.smtp_secure,
-      user: input.smtp_user,
+      host: decision.config.host,
+      port: decision.config.port,
+      secure: decision.config.secure,
+      user: decision.config.user,
       password,
     });
   } catch (e) {
@@ -1006,6 +1029,35 @@ export async function subscribeEmailToListAction(input: {
   const email = input.email.trim().toLowerCase();
   const token = crypto.randomBytes(24).toString("base64url");
 
+  // La lista tiene que ser de la empresa: el admin client salta RLS.
+  const { data: lista } = await admin
+    .from("email_lists")
+    .select("id")
+    .eq("id", input.list_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!lista) throw new Error("Lista no encontrada");
+
+  // Auditoría 2026-10-01 (menor): el upsert devolvía a pending_confirmation a
+  // quien ya había confirmado, y reactivaba a quien se había dado de baja o
+  // había marcado spam. Una baja no se deshace desde el CRM (RGPD / LSSI).
+  const { data: previa } = await admin
+    .from("email_subscriptions")
+    .select("status")
+    .eq("company_id", session.company_id)
+    .eq("list_id", input.list_id)
+    .eq("email", email)
+    .maybeSingle();
+  const estadoPrevio = (previa as { status: string } | null)?.status ?? null;
+  if (estadoPrevio === "active") {
+    return { pending: false, confirmation_sent: false };
+  }
+  if (estadoPrevio === "unsubscribed" || estadoPrevio === "complained") {
+    throw new Error(
+      "Este email se dio de baja de la lista (o la marcó como spam). Solo puede volver a apuntarse la propia persona.",
+    );
+  }
+
   const { error } = await admin
     .from("email_subscriptions")
     .upsert(
@@ -1023,7 +1075,10 @@ export async function subscribeEmailToListAction(input: {
     );
   if (error) throw new Error(error.message);
 
-  // TODO: enviar email de confirmación con link /confirmar-suscripcion?token=...
+  // PENDIENTE (auditoría 2026-10-01): el correo de confirmación del doble
+  // opt-in NO se envía todavía (no existe la página /confirmar-suscripcion).
+  // Hoy esta acción no tiene llamadores; antes de usarla hay que montar ese
+  // envío, o la persona se queda para siempre en pending_confirmation.
   return { pending: true, confirmation_sent: false };
 }
 

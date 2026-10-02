@@ -52,7 +52,10 @@ export async function GET(req: NextRequest) {
 
   // --- 1. Tareas colgadas ------------------------------------------------
   try {
-    const { data } = await admin.rpc("voice_release_stale_tasks", { p_minutes: 15 });
+    // Wrapper public.* (migración 20261002100500): antes la función solo
+    // existía en `app`, que PostgREST no expone, y el error se ignoraba.
+    const { data, error } = await admin.rpc("voice_release_stale_tasks", { p_minutes: 15 });
+    if (error) throw new Error(error.message);
     stats.released = Number(data ?? 0);
   } catch (e) {
     tracker.error("release_stale", e);
@@ -62,10 +65,11 @@ export async function GET(req: NextRequest) {
   const disabled = await companiesWithModuleDisabled("voice_agent");
   let companies: string[] = [];
   try {
-    const { data } = await admin
+    const { data, error } = await admin
       .from("voice_agent_settings")
       .select("company_id, service_enabled, commercial_enabled")
       .or("service_enabled.eq.true,commercial_enabled.eq.true");
+    if (error) throw new Error(error.message);
     companies = ((data ?? []) as Array<{ company_id: string }>)
       .map((r) => r.company_id)
       .filter((id) => !disabled.has(id));
@@ -98,10 +102,15 @@ export async function GET(req: NextRequest) {
 
       let claimed: Array<Record<string, unknown>> = [];
       try {
-        const { data } = await admin.rpc("voice_claim_tasks", {
+        // p_company_id: el cron reclama SOLO las tareas de esta empresa
+        // (antes reclamaba por propósito de todas y descartaba las ajenas,
+        // que se quedaban "reclamadas" hasta que las liberaba el paso 1).
+        const { data, error } = await admin.rpc("voice_claim_tasks", {
           p_purpose: purpose,
           p_limit: BATCH_PER_COMPANY,
+          p_company_id: companyId,
         });
+        if (error) throw new Error(error.message);
         claimed = (data ?? []) as Array<Record<string, unknown>>;
       } catch (e) {
         tracker.error(`claim:${companyId}:${purpose}`, e);
@@ -123,8 +132,8 @@ export async function GET(req: NextRequest) {
           max_attempts: number;
         };
 
-        // Defensa en profundidad: la RPC no filtra por empresa (reclama por
-        // propósito). Si una tarea de otra empresa se colara, aquí se para.
+        // Defensa en profundidad: la RPC ya filtra por p_company_id; si una
+        // tarea de otra empresa se colara, aquí se para.
         if (task.company_id !== companyId) {
           stats.errors++;
           continue;

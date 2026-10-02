@@ -1,4 +1,7 @@
-"use server";
+// No es "use server": generateContractPdfForCompany no comprueba sesión (la
+// usan la ruta pública por token y el envío de la copia firmada) y como
+// server action quedaría invocable desde el navegador.
+import "server-only";
 
 import {
   PDFDocument,
@@ -1172,6 +1175,67 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  return construirPdfContrato(supabase, session.company_id, contractId, contract, items, payments);
+}
+
+type DatosContratoPdf = Awaited<ReturnType<typeof getContract>>;
+type LineasContratoPdf = Awaited<ReturnType<typeof getContractItems>>;
+type PagosContratoPdf = Awaited<ReturnType<typeof getContractPayments>>;
+
+/**
+ * PDF del contrato SIN sesión, para la firma remota (ruta pública por token
+ * y copia firmada por email). Antes esos caminos llamaban a
+ * generateContractPdf, que exige sesión → el cliente recibía un 500.
+ * Admin client y TODO filtrado por la empresa del contrato.
+ */
+export async function generateContractPdfForCompany(
+  contractId: string,
+  companyId: string,
+): Promise<Uint8Array> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const { data: c, error: cErr } = await admin
+    .from("contracts")
+    .select("*")
+    .eq("id", contractId)
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (cErr) throw new Error(cErr.message);
+  if (!c) throw new Error("Contrato no encontrado");
+  const { data: its, error: iErr } = await admin
+    .from("contract_items")
+    .select("id, product_id, product_name_snapshot, quantity, unit_price_cents")
+    .eq("contract_id", contractId)
+    .eq("company_id", companyId)
+    .order("display_order");
+  if (iErr) throw new Error(iErr.message);
+  const { data: pays, error: pErr } = await admin
+    .from("contract_payments")
+    .select("id, concept, amount_cents, method, moment, status, collected_at, validated_at, notes")
+    .eq("contract_id", contractId)
+    .eq("company_id", companyId)
+    .order("display_order");
+  if (pErr) throw new Error(pErr.message);
+  return construirPdfContrato(
+    admin,
+    companyId,
+    contractId,
+    c as DatosContratoPdf,
+    (its ?? []) as LineasContratoPdf,
+    (pays ?? []) as PagosContratoPdf,
+  );
+}
+
+async function construirPdfContrato(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  companyId: string,
+  contractId: string,
+  contract: DatosContratoPdf,
+  items: LineasContratoPdf,
+  payments: PagosContratoPdf,
+): Promise<Uint8Array> {
 
   const [{ data: company }, { data: companySettings }, { data: customer }] = await Promise.all([
     supabase
@@ -1180,14 +1244,14 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
       // Lo fiscal vive en company_settings.
       .from("companies")
       .select("name")
-      .eq("id", session.company_id)
+      .eq("id", companyId)
       .single(),
     supabase
       .from("company_settings")
       .select(
         "contact_email, contact_phone, fiscal_address, fiscal_postal_code, fiscal_city, fiscal_legal_name, fiscal_tax_id",
       )
-      .eq("company_id", session.company_id)
+      .eq("company_id", companyId)
       .maybeSingle(),
     supabase
       .from("customers")
@@ -1257,7 +1321,7 @@ export async function generateContractPdf(contractId: string): Promise<Uint8Arra
     const { data: tpls } = await supabase
       .from("contract_clause_templates")
       .select("title, body, display_order")
-      .eq("company_id", session.company_id)
+      .eq("company_id", companyId)
       .eq("plan_type", contract.plan_type)
       .eq("is_active", true)
       .order("display_order");

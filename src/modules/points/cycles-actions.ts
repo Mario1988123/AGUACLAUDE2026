@@ -5,16 +5,14 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { getPointsSettings } from "./award";
 import { computeCycleRange } from "./cycles-utils";
+import { esGestorComisiones } from "./visibilidad";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 
 async function ensureManager() {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  const can =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director");
-  if (!can) throw new Error("Solo admin o director comercial");
+  if (!esGestorComisiones(session)) throw new Error("Solo admin o director comercial");
   return session;
 }
 
@@ -161,16 +159,35 @@ export async function getCycleDetail(cycleId: string): Promise<CycleDetail | nul
   const settings = await getPointsSettings(session.company_id);
   const eurosPerPoint = settings.euros_per_point ?? 0;
 
-  // Líneas del ledger del rango
-  const { data: ledgerRows } = await admin
-    .from("points_ledger")
-    .select(
-      "id, user_id, points, reason, subject_type, subject_id, awarded_at",
-    )
-    .eq("company_id", session.company_id)
-    .gte("awarded_at", cycle.cycle_start_at)
-    .lt("awarded_at", cycle.cycle_end_at)
-    .order("awarded_at", { ascending: false });
+  // I16: el admin client se salta la RLS points_ledger_user_select. Solo
+  // admin y director comercial (los mismos que gestionan el ciclo) ven las
+  // líneas de toda la plantilla; el resto, solo las suyas. Esto cubre
+  // también la exportación CSV (/api/comisiones/[id]/export), que usa esta
+  // misma función.
+  const veTodo = esGestorComisiones(session);
+
+  // Líneas del ledger del rango. Paginado con fetchAllRows (auditoría
+  // 2026-10-01): PostgREST corta en 1.000 filas y el export de comisiones
+  // salía incompleto sin avisar. Orden estable (awarded_at, id) para paginar.
+  const companyId = session.company_id;
+  const ledgerRows = await fetchAllRows<Record<string, unknown>>(
+    (from, to) => {
+      let q = admin
+        .from("points_ledger")
+        .select(
+          "id, user_id, points, reason, subject_type, subject_id, awarded_at",
+        )
+        .eq("company_id", companyId)
+        .gte("awarded_at", cycle.cycle_start_at)
+        .lt("awarded_at", cycle.cycle_end_at);
+      if (!veTodo) q = q.eq("user_id", session.user_id);
+      return q
+        .order("awarded_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to);
+    },
+    { label: "points/cycle-detail" },
+  );
   type LR = {
     id: string;
     user_id: string;
@@ -183,11 +200,13 @@ export async function getCycleDetail(cycleId: string): Promise<CycleDetail | nul
   const ledger = (ledgerRows ?? []) as LR[];
 
   // Ajustes del ciclo
-  const { data: adjRows } = await admin
+  let adjQ = admin
     .from("points_cycle_adjustments")
     .select("id, user_id, ledger_entry_id, delta_points, reason, adjusted_by, adjusted_at")
     .eq("cycle_id", cycleId)
     .eq("company_id", session.company_id);
+  if (!veTodo) adjQ = adjQ.eq("user_id", session.user_id);
+  const { data: adjRows } = await adjQ;
   type AR = {
     id: string;
     user_id: string;

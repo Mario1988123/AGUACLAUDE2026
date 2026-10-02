@@ -7,7 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createCustomerAction } from "./actions";
+import { createCustomerSafeAction } from "./actions";
 import { TaxIdInput } from "@/shared/components/tax-id-input";
 import { PhoneInput } from "@/shared/components/phone-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
@@ -96,9 +96,10 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
     if (sourceLeadId) fd.set("source_lead_id", sourceLeadId);
     startTransition(async () => {
       try {
-        const res = await createCustomerAction(fd);
+        const res = await createCustomerSafeAction(fd);
         // En éxito hace redirect (lanza NEXT_REDIRECT, no llega aquí). Si
-        // devuelve {ok:false} es un aviso legible (p.ej. duplicado).
+        // devuelve {ok:false} es un mensaje legible (duplicado, validación o
+        // error de BD), que con la versión Safe sí llega en producción.
         if (res && res.ok === false) {
           notify.error("No se pudo crear", res.error);
         }

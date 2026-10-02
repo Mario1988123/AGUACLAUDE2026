@@ -1,5 +1,6 @@
 "use server";
 
+import { adjustStockBatch } from "./adjust-stock";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -140,42 +141,31 @@ export async function importStockCsvAction(input: {
       }
     }
 
-    // Suma a la fila existente o inserta nueva
-    const { data: existing } = await admin
-      .from("warehouse_stock")
-      .select("id, quantity")
-      .eq("warehouse_id", input.warehouse_id)
-      .eq("product_id", product.id)
-      .eq("state", "new")
-      .eq("location_id", locationId)
-      .maybeSingle();
-    const row = existing as { id: string; quantity: number } | null;
-    if (row) {
-      await admin
-        .from("warehouse_stock")
-        .update({ quantity: row.quantity + qty })
-        .eq("id", row.id);
-    } else {
-      await admin.from("warehouse_stock").insert({
-        company_id: session.company_id,
-        warehouse_id: input.warehouse_id,
-        product_id: product.id,
-        quantity: qty,
-        state: "new",
-        location_id: locationId,
+    // Suma ATÓMICA vía RPC adjust_stock_batch (auditoría 2026-10-01, I42).
+    // Antes leer-sumar-escribir y, sin ubicación, `.eq("location_id", null)`
+    // no casaba nunca (en SQL `= NULL` no es cierto): cada línea creaba una
+    // fila nueva de stock en vez de sumar a la existente.
+    try {
+      await adjustStockBatch(session.company_id, session.user_id, [
+        {
+          warehouse_id: input.warehouse_id,
+          product_id: product.id,
+          state: "new",
+          location_id: locationId,
+          delta: qty,
+          movement_type: "inbound",
+          notes: notes || "Importación CSV stock inicial",
+          reason: "csv_initial_import",
+        },
+      ]);
+    } catch (e) {
+      errors.push({
+        line: i + 1,
+        reference: ref,
+        reason: e instanceof Error ? e.message : "No se pudo sumar el stock",
       });
+      continue;
     }
-    await admin.from("stock_movements").insert({
-      company_id: session.company_id,
-      product_id: product.id,
-      warehouse_id: input.warehouse_id,
-      movement_type: "inbound",
-      quantity: qty,
-      state_after: "new",
-      performed_by: session.user_id,
-      notes: notes || "Importación CSV stock inicial",
-      reason: "csv_initial_import",
-    });
     inserted += 1;
   }
 

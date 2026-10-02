@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { puedeLeerHilo } from "./hilo-acceso";
 
 export type ChatThreadKind = "broadcast" | "team" | "direct";
 
@@ -236,7 +237,7 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
     .maybeSingle();
   if (!thread) return [];
   const t = thread as { id: string; kind: ChatThreadKind; company_id: string };
-  if (t.company_id !== session.company_id) return [];
+  if (!puedeLeerHilo(t, session.company_id, true)) return [];
 
   // Si es broadcast: insertar al usuario como miembro silencioso si no lo es,
   // para llevar last_read_at.
@@ -254,7 +255,7 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
       .eq("thread_id", threadId)
       .eq("user_id", session.user_id)
       .maybeSingle();
-    if (!m) return [];
+    if (!puedeLeerHilo(t, session.company_id, Boolean(m))) return [];
   }
 
   let rowsRes = await admin
@@ -367,20 +368,60 @@ export async function getChatMessages(threadId: string): Promise<ChatMessageRow[
 
 export async function markChatThreadRead(threadId: string): Promise<void> {
   const session = await requireSession();
+  if (!session.company_id) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin
-    .from("chat_thread_members")
-    .upsert(
-      {
-        thread_id: threadId,
-        user_id: session.user_id,
-        role: "member",
-        last_read_at: new Date().toISOString(),
-      },
-      { onConflict: "thread_id,user_id" },
-    );
+  // Antes se hacía un upsert de la membresía sin comprobar nada: cualquiera
+  // que conociera el id de un hilo privado se metía en él y lo leía (I17).
+  const { data: thread } = await admin
+    .from("chat_threads")
+    .select("id, kind, company_id")
+    .eq("id", threadId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  const t = thread as { id: string; kind: ChatThreadKind; company_id: string } | null;
+  if (!t) return;
+  const ahora = new Date().toISOString();
+  if (t.kind === "broadcast") {
+    // Los avisos generales los lee toda la empresa: la membresía silenciosa
+    // solo sirve para llevar last_read_at.
+    await admin
+      .from("chat_thread_members")
+      .upsert(
+        { thread_id: threadId, user_id: session.user_id, role: "member", last_read_at: ahora },
+        { onConflict: "thread_id,user_id" },
+      );
+  } else {
+    // Hilos team/direct: solo se actualiza si YA es miembro; nunca se crea.
+    await admin
+      .from("chat_thread_members")
+      .update({ last_read_at: ahora })
+      .eq("thread_id", threadId)
+      .eq("user_id", session.user_id);
+  }
   revalidatePath("/chat");
+}
+
+/**
+ * Devuelve, de entre `userIds`, solo los que tienen un rol activo en la
+ * empresa. Evita meter en un hilo a usuarios de otra empresa (I17).
+ */
+async function filtrarUsuariosDeEmpresa(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  companyId: string,
+  userIds: string[],
+): Promise<Set<string>> {
+  const unicos = Array.from(new Set(userIds.filter(Boolean)));
+  if (unicos.length === 0) return new Set();
+  const { data, error } = await admin
+    .from("user_roles")
+    .select("user_id")
+    .eq("company_id", companyId)
+    .is("revoked_at", null)
+    .in("user_id", unicos);
+  if (error) throw new Error("No se han podido comprobar los usuarios");
+  return new Set(((data ?? []) as Array<{ user_id: string }>).map((r) => r.user_id));
 }
 
 export async function sendChatMessageAction(threadId: string, body: string): Promise<void> {
@@ -602,6 +643,15 @@ export async function createTeamThreadAction(
   // personas (antes solo responsables nivel 2). Decisión Mario 2026-06-21.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Solo compañeros de la misma empresa (I17).
+  const validos = await filtrarUsuariosDeEmpresa(
+    admin,
+    session.company_id,
+    userIds.filter((u) => u !== session.user_id),
+  );
+  if (userIds.some((u) => u !== session.user_id && !validos.has(u))) {
+    throw new Error("Algún usuario no pertenece a tu empresa");
+  }
   const { data, error } = await admin
     .from("chat_threads")
     .insert({
@@ -614,7 +664,7 @@ export async function createTeamThreadAction(
     .single();
   if (error) throw new Error(error.message);
   const threadId = (data as { id: string }).id;
-  const members = Array.from(new Set([session.user_id, ...userIds]));
+  const members = Array.from(new Set([session.user_id, ...validos]));
   await admin.from("chat_thread_members").insert(
     members.map((uid) => ({
       thread_id: threadId,
@@ -636,6 +686,9 @@ export async function getOrCreateDirectThreadAction(otherUserId: string): Promis
   if (otherUserId === session.user_id) throw new Error("No puedes hablarte a ti mismo");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // El otro usuario tiene que ser de la misma empresa (I17).
+  const validos = await filtrarUsuariosDeEmpresa(admin, session.company_id, [otherUserId]);
+  if (!validos.has(otherUserId)) throw new Error("Ese usuario no pertenece a tu empresa");
 
   // Buscar hilos direct donde el usuario es miembro
   const { data: myMember } = await admin

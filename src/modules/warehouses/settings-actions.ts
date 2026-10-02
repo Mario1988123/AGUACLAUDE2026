@@ -65,10 +65,29 @@ export async function getWarehouseSettings(): Promise<WarehouseSettings> {
   };
 }
 
+/**
+ * Número obligatorio que llega como texto de un input: "" o espacios dan un
+ * error claro en vez de convertirse en 0 (auditoría 2026-10-01: un IVA en
+ * blanco se guardaba como IVA del 0 %).
+ */
+function zNumeroObligatorio(campo: string) {
+  return z.preprocess(
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? undefined : v),
+    z.coerce.number({
+      required_error: `Indica ${campo}`,
+      invalid_type_error: `Indica ${campo} (un número)`,
+    }),
+  );
+}
+
 const schema = z.object({
   valuation_method: z.enum(["PMP", "FIFO"]),
-  alert_no_rotation_days: z.coerce.number().int().min(1),
-  alert_min_company_age_days: z.coerce.number().int().min(0),
+  alert_no_rotation_days: zNumeroObligatorio("los días sin rotación").pipe(
+    z.number().int("Los días sin rotación tienen que ser un número entero").min(1, "Los días sin rotación tienen que ser 1 o más"),
+  ),
+  alert_min_company_age_days: zNumeroObligatorio("la antigüedad mínima").pipe(
+    z.number().int("La antigüedad mínima tiene que ser un número entero").min(0, "La antigüedad mínima no puede ser negativa"),
+  ),
   alerts_enabled: z.object({
     below_min: zBoolean(),
     predictive_low: zBoolean(),
@@ -76,7 +95,9 @@ const schema = z.object({
     no_rotation_90d: zBoolean(),
     no_lead_time_set: zBoolean(),
   }),
-  default_iva_pct: z.coerce.number().min(0).max(100),
+  default_iva_pct: zNumeroObligatorio("el IVA por defecto").pipe(
+    z.number().min(0, "El IVA no puede ser negativo").max(100, "El IVA no puede pasar del 100 %"),
+  ),
 });
 
 export async function saveWarehouseSettingsAction(

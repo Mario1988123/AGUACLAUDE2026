@@ -125,12 +125,37 @@ export async function listLeaveBudgetsForUser(
   return out;
 }
 
+/** "" y espacios → undefined (antes z.coerce.number() los convertía en 0:
+ *  un presupuesto en blanco se guardaba como 0 y un "consumido" en blanco
+ *  borraba lo consumido). Auditoría 2026-10-01. */
+const enBlancoAUndefined = (v: unknown) =>
+  v == null || (typeof v === "string" && v.trim() === "") ? undefined : v;
+
 const updateSchema = z.object({
   user_id: z.string().uuid(),
-  year: z.coerce.number().int(),
+  year: z.preprocess(
+    enBlancoAUndefined,
+    z.coerce
+      .number({ invalid_type_error: "Indica el año" })
+      .int("El año tiene que ser un número entero")
+      .min(2000, "Año no válido")
+      .max(2100, "Año no válido"),
+  ),
   kind: z.string().min(1),
-  budget: z.coerce.number().min(0),
-  taken: z.coerce.number().min(0).optional(),
+  budget: z.preprocess(
+    enBlancoAUndefined,
+    z.coerce
+      .number({ invalid_type_error: "Indica el presupuesto (un número)" })
+      .min(0, "El presupuesto no puede ser negativo"),
+  ),
+  // En blanco = no tocar lo consumido (se conserva el valor anterior).
+  taken: z.preprocess(
+    enBlancoAUndefined,
+    z.coerce
+      .number({ invalid_type_error: "Lo consumido tiene que ser un número" })
+      .min(0, "Lo consumido no puede ser negativo")
+      .optional(),
+  ),
   unit: z.enum(["days", "hours", "weeks", "months"]).optional(),
   notes: z.string().optional().nullable(),
 });

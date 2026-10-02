@@ -40,6 +40,14 @@
     {
       "path": "/api/cron/voice-retention",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/churn",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/invoice-reminders",
+      "schedule": "0 8 * * *"
     }
   ]
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { userInviteSchema, type RoleKey } from "./schemas";
+import { ROLE_KEYS, userInviteSchema, type RoleKey } from "./schemas";
 import type { TenantUser } from "./types";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { generateTempPassword } from "@/shared/lib/auth/temp-password";
@@ -395,6 +395,22 @@ export async function updateUserRoles(userId: string, roles: RoleKey[]) {
   const session = await ensureCompanyAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
   const admin = createAdminClient();
+
+  // I17 (auditoría 2026-10-01): solo roles conocidos y solo para usuarios de
+  // MI empresa (los mismos que lista listTenantUsers: user_profiles.company_id).
+  // Antes, con el UUID de un usuario de otra empresa, se le daban roles aquí y
+  // aparecía en el directorio y las notificaciones de esta empresa.
+  if (!Array.isArray(roles) || roles.some((r) => !(ROLE_KEYS as readonly string[]).includes(r))) {
+    throw new Error("Rol no válido");
+  }
+  const { data: perfilDestino, error: errPerfil } = await admin
+    .from("user_profiles")
+    .select("user_id")
+    .eq("user_id", userId)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (errPerfil) throw new Error(errPerfil.message);
+  if (!perfilDestino) throw new Error("Usuario no encontrado en tu empresa");
 
   // Decisión N-admins: se permiten VARIOS company_admin por empresa (antes esta
   // función rechazaba el 2º, contradiciendo a invite/createCompanyAdmin). Por eso

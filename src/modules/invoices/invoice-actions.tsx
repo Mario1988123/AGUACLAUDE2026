@@ -4,10 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Send, CheckCircle2, Ban, FileMinus } from "lucide-react";
 import { Button } from "@/shared/ui/button";
-import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { useConfirm } from "@/shared/components/confirm-dialog";
+import { MoneyInput } from "@/shared/components/money-input";
 import {
   markInvoiceIssuedSafeAction,
   markInvoicePaidSafeAction,
@@ -34,7 +34,7 @@ export function InvoiceActions({
 }) {
   const [pending, startTransition] = useTransition();
   const [paying, setPaying] = useState(false);
-  const [amount, setAmount] = useState((pendingCents / 100).toFixed(2));
+  const [amountCents, setAmountCents] = useState<number>(pendingCents);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const router = useRouter();
@@ -53,9 +53,13 @@ export function InvoiceActions({
   }
 
   function pay() {
-    const amt = Math.round(Number(amount) * 100);
-    if (!amt || amt <= 0) {
+    const amt = amountCents;
+    if (!Number.isInteger(amt) || amt <= 0) {
       notify.warning("Importe inválido");
+      return;
+    }
+    if (amt > pendingCents) {
+      notify.warning("El cobro no puede superar lo pendiente");
       return;
     }
     startTransition(async () => {
@@ -120,13 +124,7 @@ export function InvoiceActions({
           ) : (
             <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
               <Label className="text-xs">Importe del cobro (€)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min={0}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+              <MoneyInput valueCents={amountCents} onChangeCents={setAmountCents} />
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => setPaying(false)}>
                   Cancelar
@@ -142,12 +140,14 @@ export function InvoiceActions({
           )}
         </>
       )}
-      {kind !== "credit_note" && status !== "cancelled" && (
+      {/* Solo se rectifica lo EMITIDO; un borrador se borra o se anula (C4). */}
+      {kind === "invoice" && (status === "issued" || status === "overdue" || status === "paid") && (
         <Button onClick={rectify} disabled={pending} variant="outline" className="w-full gap-2">
           <FileMinus className="h-4 w-4" /> Crear rectificativa
         </Button>
       )}
-      {status !== "cancelled" && status !== "paid" && (
+      {/* Cancelar solo borradores: una factura emitida se rectifica (C4). */}
+      {status === "draft" && (
         <Button
           onClick={() => setCancelOpen(true)}
           disabled={pending}

@@ -96,31 +96,50 @@ export async function decrementStock(input: DecrementInput): Promise<number> {
   // pendiente), no se descuenta lote, solo stock_movements.
   let lotIdForMovement: string | null = null;
   if (moved > 0) {
-    try {
-      const { data: lots } = await admin
-        .from("stock_lots")
-        .select("id, remaining_quantity, received_at")
-        .eq("product_id", input.product_id)
-        .eq("warehouse_id", input.warehouse_id)
-        .gt("remaining_quantity", 0)
-        .order("received_at", { ascending: true });
-      type L = { id: string; remaining_quantity: number; received_at: string };
-      let toConsume = moved;
-      for (const l of ((lots ?? []) as L[])) {
-        if (toConsume <= 0) break;
-        const take = Math.min(Number(l.remaining_quantity), toConsume);
-        if (take <= 0) continue;
-        await admin
+    // Consumo ATÓMICO con la RPC consume_stock_lots_fifo (auditoría
+    // 2026-10-01, I42; migración 20261002090300). Antes leer-restar-escribir:
+    // dos salidas simultáneas perdían una resta y el lote quedaba inflado.
+    const { data: lotId, error: lotErr } = await admin.rpc("consume_stock_lots_fifo", {
+      p_company_id: input.company_id,
+      p_warehouse_id: input.warehouse_id,
+      p_product_id: input.product_id,
+      p_quantity: moved,
+    });
+    if (!lotErr) {
+      lotIdForMovement = (lotId as string | null) ?? null;
+    } else if (isFunctionMissingError(lotErr)) {
+      // Migración sin aplicar: camino antiguo (no atómico), igual que antes.
+      try {
+        const { data: lots } = await admin
           .from("stock_lots")
-          .update({
-            remaining_quantity: Number(l.remaining_quantity) - take,
-          })
-          .eq("id", l.id);
-        if (!lotIdForMovement) lotIdForMovement = l.id; // primer lote tocado
-        toConsume -= take;
+          .select("id, remaining_quantity, received_at")
+          .eq("company_id", input.company_id)
+          .eq("product_id", input.product_id)
+          .eq("warehouse_id", input.warehouse_id)
+          .gt("remaining_quantity", 0)
+          .order("received_at", { ascending: true });
+        type L = { id: string; remaining_quantity: number; received_at: string };
+        let toConsume = moved;
+        for (const l of ((lots ?? []) as L[])) {
+          if (toConsume <= 0) break;
+          const take = Math.min(Number(l.remaining_quantity), toConsume);
+          if (take <= 0) continue;
+          await admin
+            .from("stock_lots")
+            .update({
+              remaining_quantity: Number(l.remaining_quantity) - take,
+            })
+            .eq("id", l.id);
+          if (!lotIdForMovement) lotIdForMovement = l.id; // primer lote tocado
+          toConsume -= take;
+        }
+      } catch {
+        /* lotes no aplicados aún → seguimos sin lot_id */
       }
-    } catch {
-      /* lotes no aplicados aún → seguimos sin lot_id */
+    } else {
+      // El stock ya se descontó: no abortamos la salida por el lote, pero
+      // dejamos rastro (la valoración FIFO quedará por revisar).
+      console.error("[decrementStock] consume_stock_lots_fifo:", lotErr.message);
     }
   }
 

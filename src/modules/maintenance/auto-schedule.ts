@@ -1,6 +1,15 @@
-"use server";
+// Sin "use server" (auditoría 2026-10-01): son funciones internas que llaman
+// otras acciones y los crons con el admin client. Como server actions quedaban
+// invocables desde el navegador con cualquier id de contrato o empresa.
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { sumarMesesMadrid } from "@/modules/scheduling/fechas-madrid";
+import {
+  fechasTeoricasContrato,
+  serieEquipo,
+  yaExisteVisita,
+  type VisitaExistente,
+} from "./calendario-visitas";
 
 /**
  * Garantiza que un contrato con mantenimiento incluido tiene preprogrammed
@@ -82,48 +91,52 @@ export async function ensureMaintenanceWindow(
   if (totalMonths % periodicity === 0 && totalJobs > 0) totalJobs -= 1;
   if (totalJobs <= 0) return 0;
 
-  const baseDate = c.service_start_date
-    ? new Date(c.service_start_date)
-    : new Date(c.created_at);
+  // [decide] Sin fecha de inicio de servicio no se programa nada. Antes se
+  // usaba `created_at` como base y, al fijarse service_start_date en la
+  // instalación, la serie se desplazaba y se creaban visitas duplicadas
+  // (la deduplicación solo tolera ±2 días). El cron diario y el cierre de la
+  // instalación vuelven a llamar a esta función cuando ya hay fecha.
+  if (!c.service_start_date) return 0;
+  const baseDate = new Date(c.service_start_date);
 
   // Construir las fechas teóricas del contrato y elegir las que caen en
   // la ventana [hoy, hoy + monthsAhead].
   const now = new Date();
-  const windowEnd = new Date(now);
-  windowEnd.setMonth(windowEnd.getMonth() + monthsAhead);
+  // Sumas de meses sin desbordar y en hora de Madrid (auditoría I35).
+  const windowEnd = sumarMesesMadrid(now, monthsAhead);
 
-  const candidates: { idx: number; scheduledAt: Date }[] = [];
-  for (let n = 1; n <= totalJobs; n++) {
-    const d = new Date(baseDate);
-    d.setMonth(d.getMonth() + n * periodicity);
-    if (d.getTime() >= now.getTime() && d.getTime() <= windowEnd.getTime()) {
-      candidates.push({ idx: n, scheduledAt: d });
-    }
-  }
+  const candidates = fechasTeoricasContrato({
+    base: baseDate,
+    periodicidadMeses: periodicity,
+    totalVisitas: totalJobs,
+    desde: now,
+    hasta: windowEnd,
+  }).map((c) => ({ idx: c.idx, scheduledAt: c.fecha }));
   if (candidates.length === 0) return 0;
 
-  // Existentes en BD para no duplicar — tolerancia ±2 días en la fecha
-  // por si previous runs lo dejaron en un día ligeramente distinto.
-  const { data: existing } = await a
+  // Existentes en BD para no duplicar — tolerancia ±2 días. Se compara con
+  // la fecha ORIGINAL además de la actual: si el cliente movió la visita del
+  // 10 al 20, la del 10 no se vuelve a crear (auditoría I35).
+  const { data: existing, error: errExisting } = await a
     .from("maintenance_jobs")
-    .select("id, scheduled_at, status")
+    .select("id, scheduled_at, original_scheduled_at, status")
     .eq("contract_id", contractId)
     .eq("kind", "contracted")
     .in("status", [
       "preprogrammed",
+      "needs_callback",
       "scheduled",
       "in_progress",
       "completed",
       "cancelled",
       "rescheduled",
     ]);
-  type EJ = { id: string; scheduled_at: string | null; status: string };
-  const existingDates = ((existing ?? []) as EJ[])
-    .map((e) => (e.scheduled_at ? new Date(e.scheduled_at).getTime() : null))
-    .filter((t): t is number => t !== null);
+  // Si no se pudo leer lo existente, no se crea nada (mejor que duplicar).
+  if (errExisting) return 0;
+  const existentes = (existing ?? []) as VisitaExistente[];
   const tolerance = 2 * 86400000;
   function alreadyExists(t: number): boolean {
-    return existingDates.some((e) => Math.abs(e - t) < tolerance);
+    return yaExisteVisita(new Date(t), existentes, tolerance);
   }
 
   // Equipment (opcional). Packs: preferimos colgar el mantenimiento del equipo
@@ -207,43 +220,35 @@ export async function generateEquipmentMaintenanceWindow(input: {
   const a = createAdminClient() as any;
 
   const now = new Date();
-  const windowEnd = new Date(now);
-  windowEnd.setMonth(windowEnd.getMonth() + monthsAhead);
+  const windowEnd = sumarMesesMadrid(now, monthsAhead);
 
-  // Construir fechas: firstDue, +periodicity, ... mientras quepan en la ventana.
-  const candidates: Date[] = [];
-  let d = new Date(input.firstDue);
-  let guard = 0;
-  // Adelantar al futuro si firstDue ya pasó.
-  while (d.getTime() < now.getTime() && guard < 120) {
-    d = new Date(d);
-    d.setMonth(d.getMonth() + input.periodicity_months);
-    guard++;
-  }
-  guard = 0;
-  while (d.getTime() <= windowEnd.getTime() && guard < 60) {
-    candidates.push(new Date(d));
-    const nd = new Date(d);
-    nd.setMonth(nd.getMonth() + input.periodicity_months);
-    d = nd;
-    guard++;
-  }
+  // Construir fechas: firstDue, +periodicity, ... mientras quepan en la
+  // ventana. Sin desbordar el día ni mover la hora de Madrid (auditoría I35).
+  const candidates = serieEquipo({
+    primera: input.firstDue,
+    periodicidadMeses: input.periodicity_months,
+    ahora: now,
+    hasta: windowEnd,
+  });
   if (candidates.length === 0) return 0;
 
   // Idempotencia: no duplicar jobs ya existentes de este equipo (±7 días).
   const { data: existing } = await a
     .from("maintenance_jobs")
-    .select("scheduled_at")
+    .select("scheduled_at, original_scheduled_at")
     .eq("company_id", input.company_id)
     .eq("customer_equipment_id", input.customer_equipment_id)
-    .in("status", ["preprogrammed", "scheduled", "in_progress", "completed", "rescheduled"]);
-  const existingTimes = ((existing ?? []) as Array<{ scheduled_at: string | null }>)
-    .map((e) => (e.scheduled_at ? new Date(e.scheduled_at).getTime() : null))
-    .filter((t): t is number => t !== null);
+    .in("status", [
+      "preprogrammed",
+      "needs_callback",
+      "scheduled",
+      "in_progress",
+      "completed",
+      "rescheduled",
+    ]);
   const tol = 7 * 86400000;
-  const toCreate = candidates.filter(
-    (c) => !existingTimes.some((e) => Math.abs(e - c.getTime()) < tol),
-  );
+  const existentes = (existing ?? []) as VisitaExistente[];
+  const toCreate = candidates.filter((c) => !yaExisteVisita(c, existentes, tol));
   if (toCreate.length === 0) return 0;
 
   const jobs = toCreate.map((dt) => ({

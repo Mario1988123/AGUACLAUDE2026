@@ -1,5 +1,6 @@
 "use server";
 
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -128,10 +129,33 @@ export async function createMaintenanceContractAction(input: {
     spare_equipment_included: boolean;
   };
 
-  // IBAN principal del cliente (puede ser ES00 placeholder)
+  // SEGURIDAD (auditoría 2026-10-01): el admin client salta RLS. El cliente
+  // (y su equipo, si viene) deben ser de TU empresa; si no, se podía crear un
+  // contrato sobre un cliente ajeno y copiar su IBAN en el snapshot.
+  const { data: custOk } = await admin
+    .from("customers")
+    .select("id")
+    .eq("id", input.customer_id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!custOk) throw new Error("Cliente no encontrado o no pertenece a tu empresa");
+  if (input.customer_equipment_id) {
+    const { data: eqOk } = await admin
+      .from("customer_equipment")
+      .select("id")
+      .eq("id", input.customer_equipment_id)
+      .eq("customer_id", input.customer_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!eqOk) throw new Error("Equipo no encontrado para este cliente");
+  }
+
+  // IBAN principal del cliente (puede ser ES00 placeholder). Filtrado también
+  // por empresa.
   const { data: bank } = await admin
     .from("customer_bank_accounts")
     .select("iban, account_holder_name")
+    .eq("company_id", session.company_id)
     .eq("customer_id", input.customer_id)
     .eq("is_primary", true)
     .is("deleted_at", null)
@@ -140,23 +164,14 @@ export async function createMaintenanceContractAction(input: {
   const b = bank as { iban: string | null; account_holder_name: string | null } | null;
 
   // reference_code M-YYYY-NNNN
-  const year = new Date().getFullYear();
-  const yearPrefix = `M-${year}-`;
-  const { data: last } = await admin
-    .from("maintenance_contracts")
-    .select("reference_code")
-    .eq("company_id", session.company_id)
-    .like("reference_code", `${yearPrefix}%`)
-    .order("reference_code", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  let nextNum = 1;
-  const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
-  if (lastCode) {
-    const m = lastCode.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1]!, 10) + 1;
-  }
-  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+  // Numeración con contador atómico (auditoría 2026-10-01, I25: antes
+  // max()+1 sin bloqueo, orden de texto y año UTC).
+  const referenceCode = await siguienteReferencia(
+    admin,
+    session.company_id,
+    "maintenance_contracts",
+    "M",
+  );
 
   const { data: created, error } = await admin
     .from("maintenance_contracts")

@@ -1,7 +1,10 @@
-"use server";
+// Sin "use server" (auditoría 2026-10-01): son funciones internas que llaman
+// otras acciones con el admin client. Como server actions cualquiera podía
+// invocarlas desde el navegador con empresa, usuario y puntos arbitrarios.
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { getPointsSettings } from "./award";
+import { mesMadrid } from "@/modules/scheduling/fechas-madrid";
 
 /**
  * Comprueba si el usuario ha alcanzado algún hito mensual nuevo y, si es así,
@@ -18,9 +21,8 @@ export async function checkAndAwardMilestones(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  // Mes en hora de Madrid, igual que period_year/period_month de awardPoints.
+  const { anio: year, mes: month } = mesMadrid(new Date());
 
   // points_ledger NO tiene subject_id/subject_type; la clave del hito vive en
   // metadata->>'milestone_key'. Leemos points/reason/metadata del mes.

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 
 /**
  * Crea una orden de reubicación de un equipo del cliente.
@@ -86,23 +87,14 @@ export async function relocateEquipmentAction(input: {
     }
 
     // 2) Reference code I-YYYY-NNNN
-    const year = new Date().getFullYear();
-    const yearPrefix = `I-${year}-`;
-    const { data: lastCoded } = await admin
-      .from("installations")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${yearPrefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-    if (lastCode) {
-      const m = lastCode.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
-    const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    // Contador atómico por empresa (auditoría 2026-10-01 I25): el máximo + 1
+    // repetía números con dos altas a la vez y ordenaba como texto.
+    const referenceCode = await siguienteReferencia(
+      admin,
+      session.company_id,
+      "installations",
+      "I",
+    );
 
     const productName = eq.product?.name ?? "Equipo";
     const noteParts = [

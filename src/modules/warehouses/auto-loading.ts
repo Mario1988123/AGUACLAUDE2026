@@ -1,7 +1,9 @@
-"use server";
+// Sin "use server" (auditoría 2026-10-01): solo la llama el cron diario. Como
+// server action cualquiera podía dispararla desde el navegador.
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { notifyByRoles } from "@/modules/notifications/notifier";
+import { diaMananaCron, rangoDiaMadridUtc } from "@/modules/scheduling/fechas-madrid";
 
 /**
  * Genera órdenes de carga sugeridas para mañana.
@@ -27,14 +29,11 @@ export async function generateLoadingRequestsForTomorrow(): Promise<{
   const admin = createAdminClient() as any;
   const stats = { companies: 0, requests_created: 0, errors: 0 };
 
-  // Ventana mañana
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayStart = new Date(tomorrow);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(tomorrow);
-  dayEnd.setHours(23, 59, 59, 999);
-  const neededFor = dayStart.toISOString().slice(0, 10);
+  // Ventana "mañana" en hora de Madrid (auditoría 2026-10-01, I33). Antes se
+  // calculaba en UTC: en verano, con el cron a las 00:00 de Madrid, la orden
+  // de carga salía para el MISMO día y la ventana iba de 02:00 a 01:59.
+  const neededFor = diaMananaCron();
+  const { desde: dayStartIso, hasta: dayEndIso } = rangoDiaMadridUtc(neededFor);
 
   const { data: companies } = await admin
     .from("companies")
@@ -67,8 +66,8 @@ export async function generateLoadingRequestsForTomorrow(): Promise<{
         .eq("company_id", c.id)
         .in("status", ["scheduled"])
         .in("kind", ["normal", "free_trial"])
-        .gte("scheduled_at", dayStart.toISOString())
-        .lte("scheduled_at", dayEnd.toISOString())
+        .gte("scheduled_at", dayStartIso)
+        .lt("scheduled_at", dayEndIso)
         .is("deleted_at", null);
       const installations = (insts ?? []) as Array<{
         id: string;

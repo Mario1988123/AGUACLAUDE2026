@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zIntDefault } from "@/shared/lib/zod-friendly";
 
 export const companyStatusEnum = z.enum(["trial", "active", "suspended", "cancelled"]);
 
@@ -10,9 +11,9 @@ export const companyCreateSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9-]+$/, "Solo minúsculas, números y guiones"),
   status: companyStatusEnum.default("trial"),
-  max_users: z.coerce.number().int().min(1).default(5),
-  max_storage_mb: z.coerce.number().int().min(64).default(1024),
-  monthly_cost_cents: z.coerce.number().int().min(0).default(0),
+  max_users: zIntDefault(5, 1, "Al menos 1 usuario"),
+  max_storage_mb: zIntDefault(1024, 64, "Mínimo 64 MB"),
+  monthly_cost_cents: zIntDefault(0, 0, "No puede ser negativo"),
   billing_email: z.string().email().optional().or(z.literal("")),
   primary_color: z.string().default("#2563eb"),
   fiscal_legal_name: z.string().optional().default(""),

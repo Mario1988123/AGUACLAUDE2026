@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { zBoolean } from "@/shared/lib/zod-friendly";
+import { zBoolean, zOptionalInt } from "@/shared/lib/zod-friendly";
 
 export const CONTRACT_STATUS = [
   "draft",
@@ -48,13 +48,14 @@ export const contractCreateSchema = z.object({
   customer_id: z.string().uuid(),
   source_proposal_id: z.string().uuid().optional(),
   plan_type: z.enum(["cash", "renting", "rental"]).default("cash"),
-  duration_months: z.coerce.number().int().min(1).optional().nullable(),
-  total_cash_cents: z.coerce.number().int().min(0).optional().nullable(),
-  monthly_cents: z.coerce.number().int().min(0).optional().nullable(),
-  permanence_months: z.coerce.number().int().min(0).optional().nullable(),
+  // zOptionalInt: un campo vacío es "sin dato" (null), no 0 (Number("") = 0).
+  duration_months: zOptionalInt(1),
+  total_cash_cents: zOptionalInt(0),
+  monthly_cents: zOptionalInt(0),
+  permanence_months: zOptionalInt(0),
   maintenance_included: zBoolean().default(false),
-  maintenance_periodicity_months: z.coerce.number().int().min(1).optional().nullable(),
-  maintenance_months_included: z.coerce.number().int().min(0).optional().nullable(),
+  maintenance_periodicity_months: zOptionalInt(1),
+  maintenance_months_included: zOptionalInt(0),
   notes: z.string().optional().default(""),
 });
 export type ContractCreateInput = z.infer<typeof contractCreateSchema>;

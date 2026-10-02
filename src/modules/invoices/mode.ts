@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { VERIFACTU_HABILITADO } from "./verifactu-flag";
 
 /**
  * Modo de facturación de una empresa.
@@ -54,7 +55,8 @@ export async function getCompanyInvoicingMode(
     } | null;
     const certPresent = !!row?.verifactu_cert_alias;
     return {
-      mode: certPresent ? "verifactu" : "simple",
+      // I31: con el interruptor global apagado, siempre "simple".
+      mode: certPresent && VERIFACTU_HABILITADO ? "verifactu" : "simple",
       cert_present: certPresent,
       cert_expires_at: row?.verifactu_cert_expires_at ?? null,
       verifactu_mode: row?.verifactu_mode ?? "no_envio",

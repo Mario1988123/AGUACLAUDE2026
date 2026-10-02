@@ -16,6 +16,8 @@ import {
   getRedirectFlow,
 } from "./client";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { claveIdempotenciaCobro, ESTADOS_GC_VIVOS } from "./estados";
+import { pendienteFactura } from "@/modules/invoices/importes";
 
 interface SettingsRow {
   company_id: string;
@@ -35,6 +37,19 @@ async function getSettingsForCompany(companyId: string): Promise<SettingsRow | n
     .eq("company_id", companyId)
     .maybeSingle();
   return (data as SettingsRow | null) ?? null;
+}
+
+/**
+ * Mover dinero (cobrar, cancelar o importar mandatos) es cosa de admin o
+ * dirección comercial [decide]. Antes cualquier usuario con sesión podía
+ * lanzar un cargo contra el mandato de un cliente.
+ */
+function puedeGestionarCobros(session: { is_superadmin: boolean; roles: string[] }): boolean {
+  return (
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("commercial_director")
+  );
 }
 
 function settingsToConfig(s: SettingsRow): GoCardlessConfig {
@@ -348,12 +363,16 @@ export async function cancelMandateAction(mandateDbId: string): Promise<SimpleRe
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!puedeGestionarCobros(session)) {
+      return { ok: false, error: "Solo admin o dirección comercial puede cancelar mandatos" };
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const { data: m } = await admin
       .from("gocardless_mandates")
       .select("id, gocardless_mandate_id, customer_id, company_id")
       .eq("id", mandateDbId)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     const mandate = m as
       | { id: string; gocardless_mandate_id: string; customer_id: string; company_id: string }
@@ -423,6 +442,7 @@ async function _createPayment(input: {
 }): Promise<CreatePaymentResult> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  if (!puedeGestionarCobros(session)) throw new Error("Solo admin o dirección comercial puede cobrar");
   if (input.amount_cents <= 0) throw new Error("Importe inválido");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -442,26 +462,138 @@ async function _createPayment(input: {
     | null;
   if (!mandate) throw new Error("Mandato no encontrado");
   if (mandate.company_id !== session.company_id) throw new Error("Otra empresa");
+  // Todo lo que se enlaza al cobro tiene que ser de la empresa y del MISMO
+  // cliente que el mandato.
+  if (input.contract_id) {
+    const { data: con } = await admin
+      .from("contracts")
+      .select("id, customer_id, status")
+      .eq("id", input.contract_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!con) throw new Error("Contrato no encontrado");
+    const k = con as { customer_id: string; status: string };
+    if (k.customer_id !== mandate.customer_id) throw new Error("El contrato es de otro cliente");
+    if (k.status === "cancelled") throw new Error("No se cobra un contrato cancelado");
+  }
+  if (input.invoice_id) {
+    const { data: invOwner } = await admin
+      .from("invoices")
+      .select("customer_id")
+      .eq("id", input.invoice_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!invOwner) throw new Error("Factura no encontrada");
+    if ((invOwner as { customer_id: string | null }).customer_id !== mandate.customer_id) {
+      throw new Error("La factura es de otro cliente");
+    }
+  }
   if (!["active", "submitted", "pending_submission"].includes(mandate.status)) {
     throw new Error(`Mandato no activo (estado: ${mandate.status})`);
   }
+  if (!Number.isInteger(input.amount_cents)) throw new Error("Importe inválido");
   const settings = await getSettingsForCompany(mandate.company_id);
   if (!settings || !settings.enabled) throw new Error("GoCardless deshabilitado");
 
+  // I24: lo que se cobra tiene que ser de la empresa, seguir debiéndose y no
+  // tener ya un cobro en curso (antes un doble clic cobraba dos veces).
+  if (input.invoice_id) {
+    const { data: inv } = await admin
+      .from("invoices")
+      .select("id, kind, status, total_cents")
+      .eq("id", input.invoice_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!inv) throw new Error("Factura no encontrada");
+    const f = inv as { kind: string; status: string; total_cents: number };
+    const { data: pays } = await admin
+      .from("invoice_payments")
+      .select("amount_cents")
+      .eq("invoice_id", input.invoice_id);
+    const pagado = ((pays ?? []) as Array<{ amount_cents: number }>).reduce((t, p) => t + p.amount_cents, 0);
+    const pendiente = pendienteFactura({ kind: f.kind, status: f.status, total_cents: f.total_cents, pagado_cents: pagado });
+    if (pendiente <= 0) throw new Error("La factura no tiene nada pendiente de cobro");
+    if (input.amount_cents > pendiente) {
+      throw new Error(`El importe supera lo pendiente de la factura (${(pendiente / 100).toFixed(2)} €)`);
+    }
+  }
+  if (input.contract_payment_id) {
+    const { data: cp } = await admin
+      .from("contract_payments")
+      .select("id, status")
+      .eq("id", input.contract_payment_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (!cp) throw new Error("Pago del contrato no encontrado");
+    const st = (cp as { status: string }).status;
+    if (st !== "pending") throw new Error(`Ese pago no está pendiente (estado: ${st})`);
+  }
+  if (input.invoice_id || input.contract_payment_id) {
+    let q = admin
+      .from("gocardless_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .in("status", [...ESTADOS_GC_VIVOS]);
+    q = input.contract_payment_id
+      ? q.eq("contract_payment_id", input.contract_payment_id)
+      : q.eq("invoice_id", input.invoice_id);
+    const { count: vivos } = await q;
+    if ((vivos ?? 0) > 0) {
+      throw new Error("Ya hay un cobro de GoCardless en curso para esto. Espera a que se confirme o falle.");
+    }
+  }
+
+  // Nº de intento = cobros ya registrados para lo mismo (todos muertos,
+  // porque los vivos se han rechazado arriba). Dos clics a la vez ven el
+  // mismo número → misma clave → un único cargo. Tras un fallo, el siguiente
+  // intento manual lleva otra clave y sí se crea.
+  let intento = 0;
+  if (input.invoice_id || input.contract_payment_id) {
+    let qi = admin
+      .from("gocardless_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id);
+    qi = input.contract_payment_id
+      ? qi.eq("contract_payment_id", input.contract_payment_id)
+      : qi.eq("invoice_id", input.invoice_id);
+    const { count: previos } = await qi;
+    intento = previos ?? 0;
+  }
   const payment = await gcCreatePayment(settingsToConfig(settings), {
     mandateId: mandate.gocardless_mandate_id,
     amountCents: input.amount_cents,
     description: input.description.slice(0, 100),
+    idempotencyKey: claveIdempotenciaCobro({
+      companyId: mandate.company_id,
+      mandateId: mandate.gocardless_mandate_id,
+      invoiceId: input.invoice_id ?? null,
+      contractPaymentId: input.contract_payment_id ?? null,
+      importeCents: input.amount_cents,
+      intento,
+    }),
   });
 
+  // Si GoCardless devolvió un pago que ya teníamos (misma clave), no se
+  // duplica nada en la base.
+  {
+    const { data: ya } = await admin
+      .from("gocardless_payments")
+      .select("id")
+      .eq("gocardless_payment_id", payment.id)
+      .maybeSingle();
+    if (ya) return { ok: true, payment_db_id: (ya as { id: string }).id };
+  }
+
   // Crea wallet_entry pendiente (se validará al recibir webhook payment.confirmed)
-  const { data: walletEntry } = await admin
+  const { data: walletEntry, error: weErr } = await admin
     .from("wallet_entries")
     .insert({
       company_id: mandate.company_id,
       customer_id: mandate.customer_id,
       contract_id: input.contract_id ?? null,
       contract_payment_id: input.contract_payment_id ?? null,
+      // C3: el cobro queda atado a su factura → al confirmarse se aplica a ella.
+      invoice_id: input.invoice_id ?? null,
       concept: input.description,
       amount_cents: input.amount_cents,
       method: "direct_debit",
@@ -472,6 +604,11 @@ async function _createPayment(input: {
     })
     .select("id")
     .single();
+  if (weErr) {
+    // El cargo YA existe en GoCardless: se registra igualmente el pago para
+    // que el webhook lo encuentre; el wallet se podrá rehacer a mano.
+    console.error("[gocardless create payment] wallet_entry falló:", weErr);
+  }
 
   const { data: dbPay, error } = await admin
     .from("gocardless_payments")
@@ -689,8 +826,23 @@ export async function importMandateByIdAction(input: {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!puedeGestionarCobros(session)) {
+      return { ok: false, error: "Solo admin o dirección comercial puede importar mandatos" };
+    }
     const settings = await getSettingsForCompany(session.company_id);
     if (!settings) return { ok: false, error: "GoCardless no configurado" };
+    {
+      // El cliente al que se ata el mandato tiene que ser de la empresa.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const adminChk = createAdminClient() as any;
+      const { data: cOwn } = await adminChk
+        .from("customers")
+        .select("id")
+        .eq("id", input.customer_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      if (!cOwn) return { ok: false, error: "Cliente no encontrado" };
+    }
     const id = input.gocardless_mandate_id.trim();
     if (!/^MD\w+$/i.test(id)) {
       return { ok: false, error: "ID inválido — debe empezar por MD..." };

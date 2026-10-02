@@ -53,8 +53,70 @@ export function zBoolean() {
 export function zOptionalInt(min = 0, message?: string) {
   return z.preprocess(
     (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : v),
-    z.coerce.number().int().min(min, message).nullable(),
+    z.coerce
+      .number({ invalid_type_error: "Tiene que ser un número" })
+      .int("Tiene que ser un número entero, sin decimales")
+      .min(min, message ?? `Tiene que ser ${min} o más`)
+      .nullable(),
   );
+}
+
+/**
+ * Entero con valor por defecto que llega de un <form>/FormData: "", espacios,
+ * null y undefined → `defaultValue` (no 0, que es lo que hacía
+ * z.coerce.number().default(x) con un input vacío: el default solo salta con
+ * undefined).
+ */
+export function zIntDefault(defaultValue: number, min = 0, message?: string) {
+  return z.preprocess(
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? undefined : v),
+    z.coerce
+      .number({ invalid_type_error: "Tiene que ser un número" })
+      .int("Tiene que ser un número entero, sin decimales")
+      .min(min, message ?? `Tiene que ser ${min} o más`)
+      .default(defaultValue),
+  );
+}
+
+/**
+ * Como zOptionalInt() pero admite decimales (coeficientes, porcentajes).
+ * "", espacios, null y undefined → null.
+ */
+export function zOptionalNumber(min = 0, message?: string) {
+  return z.preprocess(
+    (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : v),
+    z.coerce
+      .number({ invalid_type_error: "Tiene que ser un número" })
+      .min(min, message ?? `Tiene que ser ${min} o más`)
+      .nullable(),
+  );
+}
+
+/**
+ * Valida SOLO las claves presentes de un parche (update parcial), con un
+ * schema por campo. Las claves ausentes o `undefined` no se tocan (no se
+ * convierten en null), así que sirve para updates "solo lo que viene".
+ *
+ * Devuelve `[parcheNormalizado, null]` o `[null, "campo: mensaje"]`.
+ *
+ *   const [patch, err] = validatePatch(input, { dim_width_mm: zOptionalInt(1) });
+ */
+export function validatePatch<T extends Record<string, unknown>>(
+  input: T,
+  fields: Record<string, z.ZodTypeAny>,
+  labels: Record<string, string> = {},
+): [T, null] | [null, string] {
+  const out: Record<string, unknown> = { ...input };
+  for (const [key, schema] of Object.entries(fields)) {
+    if (!(key in input) || input[key] === undefined) continue;
+    const r = schema.safeParse(input[key]);
+    if (!r.success) {
+      const msg = r.error.issues[0]?.message ?? "Dato no válido";
+      return [null, `${labels[key] ?? key}: ${msg}`];
+    }
+    out[key] = r.data;
+  }
+  return [out as T, null];
 }
 
 /**

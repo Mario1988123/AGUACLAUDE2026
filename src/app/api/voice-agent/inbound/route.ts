@@ -73,9 +73,20 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient() as any;
 
   // --- 1. ¿De qué empresa es este número? Es lo ÚNICO que lo identifica. ---
-  const { data: companyId } = await admin.rpc("voice_company_for_inbound", {
-    p_to_number: called,
-  });
+  // Wrapper public.voice_company_for_inbound (migración 20261002100500): antes
+  // la función solo vivía en `app`, PostgREST devolvía PGRST202 y, como el
+  // error no se miraba, TODAS las entrantes salían "de ninguna empresa".
+  const { data: companyId, error: companyErr } = await admin.rpc(
+    "voice_company_for_inbound",
+    { p_to_number: called },
+  );
+  if (companyErr) {
+    // Fallo nuestro, no "número sin empresa": que quede en el log con texto.
+    console.error(
+      "[voice-agent] voice_company_for_inbound falló:",
+      companyErr.message ?? companyErr,
+    );
+  }
   const company = (companyId as string | null) ?? null;
 
   const settings = company ? await loadVoiceSettings(company) : null;

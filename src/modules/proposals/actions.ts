@@ -11,6 +11,14 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
+import {
+  evaluatePriceFloors,
+  proposalStatusError,
+  PROPOSAL_ACCEPTABLE_STATUSES,
+  PROPOSAL_SENDABLE_STATUSES,
+  type PricePlanRow,
+} from "./price-floors";
 
 export async function listProposals(filters?: { status?: string }): Promise<ProposalListItem[]> {
   const session = await requireSession();
@@ -168,24 +176,14 @@ export async function getProposal(id: string): Promise<ProposalDetail> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const admin = createAdminClient() as any;
-      const year = new Date(p.created_at).getFullYear();
-      const yearPrefix = `P-${year}-`;
-      const { data: last } = await admin
+      // Contador atómico (auditoría 2026-10-01 I25). [decide] Año actual de
+      // Madrid, no el de created_at: el contador es por año en curso.
+      const code = await siguienteReferencia(admin, p.company_id, "proposals", "P");
+      await admin
         .from("proposals")
-        .select("reference_code")
-        .eq("company_id", p.company_id)
-        .like("reference_code", `${yearPrefix}%`)
-        .order("reference_code", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let n = 1;
-      const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
-      if (lastCode) {
-        const m = lastCode.match(/-(\d+)$/);
-        if (m) n = parseInt(m[1]!, 10) + 1;
-      }
-      const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
-      await admin.from("proposals").update({ reference_code: code }).eq("id", id);
+        .update({ reference_code: code })
+        .eq("id", id)
+        .eq("company_id", p.company_id);
       p.reference_code = code;
     } catch {
       /* fail-soft */
@@ -358,7 +356,12 @@ export async function getProposalItems(proposalId: string): Promise<ProposalItem
   return (r.data ?? []) as ProposalItem[];
 }
 
-export async function createProposalAction(input: unknown) {
+/**
+ * Alta de propuesta. Devuelve el id; NO redirige salvo en el camino de
+ * auto_accept con cliente, donde createContractFromProposal redirige al
+ * contrato (lanza NEXT_REDIRECT).
+ */
+async function crearPropuesta(input: unknown): Promise<string> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
 
@@ -379,41 +382,28 @@ export async function createProposalAction(input: unknown) {
 
   // Detectar si la propuesta requiere aprobación: comparar cuota con mínimo
   // autorizado del plan correspondiente para cada producto.
+  // Suelos de precio (auditoría 2026-10-01 I27): mínimo autorizado →
+  // aprobación; mínimo absoluto (contado) → no se puede guardar.
   let requiresApproval = false;
   if (parsed.items.length > 0) {
     const productIds = Array.from(new Set(parsed.items.map((i) => i.product_id)));
-    const { data: plans } = await supabase
+    const { data: plans, error: plansErr } = await supabase
       .from("product_pricing_plans")
-      .select("product_id, plan_type, min_authorized_cents, duration_months")
+      .select("product_id, plan_type, min_authorized_cents, absolute_min_cents, duration_months")
       .in("product_id", productIds)
       .eq("plan_type", parsed.chosen_plan_type)
       .eq("is_active", true);
-    type Plan = {
-      product_id: string;
-      plan_type: string;
-      min_authorized_cents: number | null;
-      duration_months: number | null;
-    };
-    const planByProduct = new Map<string, Plan>();
-    for (const p of (plans ?? []) as Plan[]) {
-      // Si hay varias duraciones (renting), nos quedamos con la que coincide
-      if (
-        parsed.chosen_duration_months &&
-        p.duration_months &&
-        p.duration_months === parsed.chosen_duration_months
-      ) {
-        planByProduct.set(p.product_id, p);
-      } else if (!planByProduct.has(p.product_id)) {
-        planByProduct.set(p.product_id, p);
-      }
+    if (plansErr) throw new Error(toActionError(plansErr, "propuesta: planes de precio"));
+    const floors = evaluatePriceFloors(parsed.items, (plans ?? []) as PricePlanRow[], {
+      planType: parsed.chosen_plan_type,
+      durationMonths: parsed.chosen_duration_months,
+    });
+    if (floors.belowAbsolute) {
+      throw new Error(
+        `Hay un precio por debajo del mínimo absoluto del producto (${(floors.belowAbsolute.min_cents / 100).toFixed(2).replace(".", ",")} €). Ni con aprobación se puede vender más barato.`,
+      );
     }
-    for (const it of parsed.items) {
-      const p = planByProduct.get(it.product_id);
-      if (p?.min_authorized_cents != null && it.unit_price_cents < p.min_authorized_cents) {
-        requiresApproval = true;
-        break;
-      }
-    }
+    requiresApproval = floors.requiresApproval;
   }
 
   // Mapear total a la columna correcta según plan
@@ -421,32 +411,17 @@ export async function createProposalAction(input: unknown) {
   const isRenting = parsed.chosen_plan_type === "renting";
   const isRental = parsed.chosen_plan_type === "rental";
 
-  // Generar reference_code "P-YYYY-NNNN" único por empresa+año.
-  // Lo hacemos en código porque la migración no creó trigger todavía.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supaAny = supabase as any;
-  const year = new Date().getFullYear();
-  const yearPrefix = `P-${year}-`;
-  // El MAX se lee con cliente admin (sin RLS): con el cliente de usuario, un
-  // comercial scope 'own' solo ve SUS propuestas y recalcula un número ya usado
-  // por otro → duplicados. Mismo patrón que installations/savings. (Auditoría 2026-06-21)
+  // Generar reference_code "P-YYYY-NNNN" con el contador atómico por empresa
+  // (auditoría 2026-10-01 I25: el máximo + 1 repetía números con dos altas a
+  // la vez y ordenaba como texto). Admin client + company_id de la sesión.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminForCode = createAdminClient() as any;
-  const { data: lastCoded } = await adminForCode
-    .from("proposals")
-    .select("reference_code")
-    .eq("company_id", session.company_id)
-    .like("reference_code", `${yearPrefix}%`)
-    .order("reference_code", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  let nextNum = 1;
-  const last = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-  if (last) {
-    const m = last.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1]!, 10) + 1;
-  }
-  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+  const referenceCode = await siguienteReferencia(
+    adminForCode,
+    session.company_id,
+    "proposals",
+    "P",
+  );
 
   const insertPayload: Record<string, unknown> = {
     company_id: session.company_id,
@@ -540,10 +515,24 @@ export async function createProposalAction(input: unknown) {
     charge_first_payment_now: isRental ? it.charge_first_payment_now : false,
     display_order: i,
   }));
-  const { data: insertedItems } = await supabase
+  const { data: insertedItems, error: itemsErr } = await supabase
     .from("proposal_items")
     .insert(itemRows)
     .select("id, display_order");
+  if (itemsErr) {
+    // Sin líneas la propuesta no vale para nada (total sin desglose, contrato
+    // vacío al aceptarla): la quitamos y avisamos, en vez de dejarla a medias.
+    console.error("[createProposal] proposal_items:", itemsErr);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (createAdminClient() as any)
+      .from("proposals")
+      .delete()
+      .eq("id", proposalId)
+      .eq("company_id", session.company_id);
+    throw new Error(
+      `No se han podido guardar las líneas de la propuesta: ${toActionError(itemsErr, "createProposal items")}`,
+    );
+  }
   // Pack: enlazar extras a su equipo principal (parent_index del cliente).
   await linkItemsByParentIndex(
     supabase,
@@ -588,7 +577,7 @@ export async function createProposalAction(input: unknown) {
     if (requiresApproval && !isUpper) {
       // Comercial nivel 3 con precio bajo mínimo. NO podemos saltarnos.
       revalidatePath("/propuestas");
-      redirect(`/propuestas/${proposalId}` as never);
+      return proposalId;
     }
     await admin
       .from("proposals")
@@ -639,7 +628,31 @@ export async function createProposalAction(input: unknown) {
 
   revalidatePath("/propuestas");
   revalidatePath("/clientes");
+  return proposalId;
+}
+
+/** Alta desde el formulario: crea y redirige a la ficha (comportamiento de siempre). */
+export async function createProposalAction(input: unknown) {
+  const proposalId = await crearPropuesta(input);
   redirect(`/propuestas/${proposalId}` as never);
+}
+
+/**
+ * Alta que DEVUELVE el id en vez de redirigir, para quien crea una propuesta
+ * desde otro flujo (p. ej. convertir una propuesta de ahorro). Antes savings
+ * tenía que sacar el id del digest del NEXT_REDIRECT. auto_accept se fuerza a
+ * false: ese camino acaba redirigiendo al contrato.
+ */
+export async function createProposalReturningIdAction(
+  input: unknown,
+): Promise<{ ok: true; proposal_id: string } | { ok: false; error: string }> {
+  try {
+    const base = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
+    const proposalId = await crearPropuesta({ ...base, auto_accept: false });
+    return { ok: true, proposal_id: proposalId };
+  } catch (e) {
+    return { ok: false, error: toActionError(e, "createProposalReturningId") };
+  }
 }
 
 /**
@@ -682,40 +695,28 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
   const planTotal = parsed.items.reduce((s, it) => s + lineTotal(it), 0);
 
   // Detectar requiresApproval (mismo cálculo que en create)
+  // Suelos de precio (auditoría 2026-10-01 I27): mínimo autorizado →
+  // aprobación; mínimo absoluto (contado) → no se puede guardar.
   let requiresApproval = false;
   if (parsed.items.length > 0) {
     const productIds = Array.from(new Set(parsed.items.map((i) => i.product_id)));
-    const { data: plans } = await supabase
+    const { data: plans, error: plansErr } = await supabase
       .from("product_pricing_plans")
-      .select("product_id, plan_type, min_authorized_cents, duration_months")
+      .select("product_id, plan_type, min_authorized_cents, absolute_min_cents, duration_months")
       .in("product_id", productIds)
       .eq("plan_type", parsed.chosen_plan_type)
       .eq("is_active", true);
-    type Plan = {
-      product_id: string;
-      plan_type: string;
-      min_authorized_cents: number | null;
-      duration_months: number | null;
-    };
-    const planByProduct = new Map<string, Plan>();
-    for (const p of (plans ?? []) as Plan[]) {
-      if (
-        parsed.chosen_duration_months &&
-        p.duration_months &&
-        p.duration_months === parsed.chosen_duration_months
-      ) {
-        planByProduct.set(p.product_id, p);
-      } else if (!planByProduct.has(p.product_id)) {
-        planByProduct.set(p.product_id, p);
-      }
+    if (plansErr) throw new Error(toActionError(plansErr, "propuesta: planes de precio"));
+    const floors = evaluatePriceFloors(parsed.items, (plans ?? []) as PricePlanRow[], {
+      planType: parsed.chosen_plan_type,
+      durationMonths: parsed.chosen_duration_months,
+    });
+    if (floors.belowAbsolute) {
+      throw new Error(
+        `Hay un precio por debajo del mínimo absoluto del producto (${(floors.belowAbsolute.min_cents / 100).toFixed(2).replace(".", ",")} €). Ni con aprobación se puede vender más barato.`,
+      );
     }
-    for (const it of parsed.items) {
-      const p = planByProduct.get(it.product_id);
-      if (p?.min_authorized_cents != null && it.unit_price_cents < p.min_authorized_cents) {
-        requiresApproval = true;
-        break;
-      }
-    }
+    requiresApproval = floors.requiresApproval;
   }
 
   const isCash = parsed.chosen_plan_type === "cash";
@@ -749,8 +750,14 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
     .eq("id", proposalId);
   if (r.error) throw new Error(r.error.message);
 
-  // Reemplazar items: DELETE + INSERT
-  await admin.from("proposal_items").delete().eq("proposal_id", proposalId);
+  // Reemplazar items: DELETE + INSERT (comprobando errores: antes un fallo
+  // del insert dejaba la propuesta SIN líneas y nadie se enteraba).
+  const del = await admin
+    .from("proposal_items")
+    .delete()
+    .eq("proposal_id", proposalId)
+    .eq("company_id", session.company_id);
+  if (del.error) throw new Error(toActionError(del.error, "updateProposal delete items"));
 
   const productIds = parsed.items.map((i) => i.product_id);
   const { data: prods } = await supabase
@@ -781,10 +788,15 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
     display_order: i,
   }));
   if (itemRows.length > 0) {
-    const { data: insertedItems } = await admin
+    const { data: insertedItems, error: itemsErr } = await admin
       .from("proposal_items")
       .insert(itemRows)
       .select("id, display_order");
+    if (itemsErr) {
+      throw new Error(
+        `La propuesta se ha guardado pero sus líneas NO: vuelve a guardarla. (${toActionError(itemsErr, "updateProposal items")})`,
+      );
+    }
     await linkItemsByParentIndex(
       admin,
       "proposal_items",
@@ -903,19 +915,33 @@ export async function markProposalSent(id: string) {
   // SEGURIDAD: admin salta RLS → filtrar por company_id.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const { data: prop } = await admin
+  // Visibilidad con el cliente del USUARIO (RLS): un comercial con alcance
+  // propio no puede enviar propuestas de otros (auditoría 2026-10-01 I27).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  const { data: prop } = await supabase
     .from("proposals")
-    .select("lead_id")
+    .select("lead_id, status")
     .eq("id", id)
     .eq("company_id", session.company_id)
+    .is("deleted_at", null)
     .maybeSingle();
   if (!prop) throw new Error("Propuesta no encontrada o no pertenece a tu empresa");
+  // Guarda de estado: no se envía una propuesta pendiente de aprobación ni una
+  // ya cerrada (auditoría 2026-10-01 I27).
+  const statusErr = proposalStatusError("send", (prop as { status: string }).status);
+  if (statusErr) throw new Error(statusErr);
   const r = await admin
     .from("proposals")
     .update({ status: "sent", sent_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("company_id", session.company_id);
-  if (r.error) throw new Error(r.error.message);
+    .eq("company_id", session.company_id)
+    .in("status", [...PROPOSAL_SENDABLE_STATUSES])
+    .select("id");
+  if (r.error) throw new Error(toActionError(r.error, "markProposalSent"));
+  if (!r.data || (r.data as unknown[]).length === 0) {
+    throw new Error("La propuesta ha cambiado de estado mientras tanto. Recarga la página.");
+  }
   await admin.from("events").insert({
     company_id: session.company_id!,
     subject_type: "proposal",
@@ -946,23 +972,40 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
+  if (!session.company_id) throw new Error("Sin empresa");
+  // Lectura con RLS: solo se acepta lo que el usuario puede ver.
   const { data: prop } = await supabase
     .from("proposals")
-    .select("id, lead_id, customer_id")
+    .select("id, lead_id, customer_id, status")
     .eq("id", id)
-    .single();
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null)
+    .maybeSingle();
   if (!prop) throw new Error("Propuesta no encontrada");
   const p = prop as {
     id: string;
     lead_id: string | null;
     customer_id: string | null;
+    status: string;
   };
+  // Guarda de estado (auditoría 2026-10-01 I27): antes se podía aceptar una
+  // propuesta en pending_approval, saltándose la aprobación.
+  const statusErr = proposalStatusError("accept", p.status);
+  if (statusErr) throw new Error(statusErr);
 
+  // Update condicional: si otro usuario la ha cambiado entre la lectura y
+  // aquí (aceptada dos veces, rechazada...), no se pisa.
   const r1 = await admin
     .from("proposals")
     .update({ status: "accepted", accepted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (r1.error) throw new Error(r1.error.message);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .in("status", [...PROPOSAL_ACCEPTABLE_STATUSES])
+    .select("id");
+  if (r1.error) throw new Error(toActionError(r1.error, "markProposalAccepted"));
+  if (!r1.data || (r1.data as unknown[]).length === 0) {
+    throw new Error("La propuesta ha cambiado de estado mientras tanto. Recarga la página.");
+  }
 
   await admin.from("events").insert({
     company_id: session.company_id!,
@@ -989,6 +1032,7 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
         superseded_by_id: id,
       })
       .eq("lead_id", p.lead_id)
+      .eq("company_id", session.company_id)
       .neq("id", id)
       .in("status", ["draft", "sent", "pending_approval"]);
 
@@ -1001,7 +1045,8 @@ export async function markProposalAccepted(id: string): Promise<{ customer_id: s
         await admin
           .from("proposals")
           .update({ customer_id: customerId, lead_id: null })
-          .eq("id", id);
+          .eq("id", id)
+          .eq("company_id", session.company_id);
       } catch (e) {
         // Si falla la conversión, dejamos la propuesta como aceptada y
         // el usuario podrá convertir más tarde con el botón "Pasar a
@@ -1298,6 +1343,23 @@ export async function rejectProposalFromListAction(
 // ============================================================================
 // Safe wrappers (result pattern) — añadidos 2026-05-20
 // ============================================================================
+
+/**
+ * Wrapper Safe de createProposalAction (auditoría 2026-10-01 I7): en
+ * producción Next oculta el mensaje de un throw y el comercial veía un
+ * genérico en vez de "Propuesta · items: Añade al menos un producto". El éxito
+ * redirige (NEXT_REDIRECT), que toActionError relanza.
+ */
+export async function createProposalSafeAction(
+  input: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createProposalAction(input);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: toActionError(e, "createProposal") };
+  }
+}
 
 export async function updateProposalSafeAction(
   proposalId: string,

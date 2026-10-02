@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { isModuleActiveForCompany } from "@/shared/lib/auth/module-guard";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
+import { mesMadrid } from "@/modules/scheduling/fechas-madrid";
 
 /**
  * Efectos secundarios que deben ocurrir cuando un contrato pasa a firmado,
@@ -147,24 +149,8 @@ export async function runPostSignSideEffects(opts: {
       .eq("contract_id", contractId)
       .is("deleted_at", null);
     if (instModuleOn && (instCount ?? 0) === 0) {
-      const year = new Date().getFullYear();
-      const yearPrefix = `I-${year}-`;
-      const { data: lastCoded } = await admin
-        .from("installations")
-        .select("reference_code")
-        .eq("company_id", companyId)
-        .like("reference_code", `${yearPrefix}%`)
-        .order("reference_code", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let nextNum = 1;
-      const lastCode = (lastCoded as { reference_code: string | null } | null)
-        ?.reference_code;
-      if (lastCode) {
-        const m = lastCode.match(/-(\d+)$/);
-        if (m) nextNum = parseInt(m[1]!, 10) + 1;
-      }
-      const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+      // I25: contador con bloqueo y año de Madrid.
+      const referenceCode = await siguienteReferencia(admin, companyId, "installations", "I");
 
       const { data: instCreated } = await admin
         .from("installations")
@@ -321,8 +307,8 @@ export async function runPostSignSideEffects(opts: {
         quantity: number;
       }>;
 
-      const periodYear = new Date().getFullYear();
-      const periodMonth = new Date().getMonth() + 1;
+      // Periodo de la venta en hora de Madrid.
+      const { anio: periodYear, mes: periodMonth } = mesMadrid();
       const recordRows = (items.length > 0 ? items : [null]).map((it) => ({
         company_id: companyId,
         contract_id: contractId,

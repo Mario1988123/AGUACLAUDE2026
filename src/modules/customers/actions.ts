@@ -6,13 +6,14 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { customerCreateSchema, customerUpdateSchema } from "./schemas";
+import { CAMPOS_EDITABLES_CLIENTE, elegirCampos } from "./campos-editables";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CustomerDetail, CustomerListItem } from "./types";
 import { checkDedupe } from "@/shared/lib/dedupe/check-dedupe";
 import { isBlockingDuplicate } from "@/shared/lib/dedupe/rules";
 import { normalizeSpanishPhone, isPlaceholderTaxId } from "@/shared/lib/validations/spanish";
 import { fetchAllRows, POSTGREST_MAX_ROWS } from "@/shared/lib/supabase/fetch-all";
-import { toActionError } from "@/shared/lib/actions/safe-error";
+import { runSafe, toActionError } from "@/shared/lib/actions/safe-error";
 
 // Helper local: normaliza si el formato es válido, sino devuelve original
 function normalizePhoneSafe(v: string | null | undefined): string | null {
@@ -784,6 +785,22 @@ export async function createCustomerAction(formData: FormData) {
 }
 
 /**
+ * Versión "result" del alta (auditoría 2026-10-01, I7): en producción Next
+ * oculta el mensaje de cualquier throw de una server action, así que el texto
+ * amable de parseOrFriendly (p. ej. teléfono inválido) o el error de BD nunca
+ * llegaba al formulario. Aquí se devuelve como dato. El redirect de éxito se
+ * relanza (runSafe → toActionError) y Next navega igual que antes.
+ */
+export async function createCustomerSafeAction(
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const r = await runSafe(() => createCustomerAction(formData), "createCustomer");
+  if (!r.ok) return r;
+  if (r.data && r.data.ok === false) return { ok: false, error: r.data.error };
+  return { ok: true };
+}
+
+/**
  * Registra contacto (call/whatsapp/email) en agenda + timeline para un cliente.
  */
 /**
@@ -807,6 +824,10 @@ export async function updateCustomerAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  // I13: solo columnas de la lista blanca; el resto del objeto se descarta
+  // (llega del navegador y se escribe con el admin client).
+  patch = elegirCampos(patch, CAMPOS_EDITABLES_CLIENTE) as typeof patch;
+  if (Object.keys(patch).length === 0) throw new Error("Nada que actualizar");
 
   // Validación de formato (DNI/CIF, teléfonos, email). Cargamos
   // party_kind + is_autonomo del cliente para validar tax_id según

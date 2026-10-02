@@ -108,6 +108,8 @@ export async function upsertInvoiceSeriesAction(input: {
     const g = await ensureAdminResult();
     if (!g.ok) return g;
     const { session } = g;
+    // I12: un superadmin sin empresa dejaba la serie con company_id = null.
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
     if (!input.code.trim()) return { ok: false, error: "Código de serie obligatorio" };
     if (!input.name.trim()) return { ok: false, error: "Nombre obligatorio" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,11 +138,19 @@ export async function upsertInvoiceSeriesAction(input: {
     };
 
     if (input.id) {
-      const { error } = await admin
+      // I12: filtrar por la empresa de la sesión y comprobar que se ha
+      // actualizado una fila; antes se podía reescribir la serie de otra
+      // empresa (y romper su numeración).
+      const { data: actualizadas, error } = await admin
         .from("invoice_series")
         .update(payload)
-        .eq("id", input.id);
+        .eq("id", input.id)
+        .eq("company_id", session.company_id)
+        .select("id");
       if (error) return { ok: false, error: error.message };
+      if (!actualizadas || actualizadas.length === 0) {
+        return { ok: false, error: "Serie no encontrada" };
+      }
     } else {
       const { error } = await admin.from("invoice_series").insert(payload);
       if (error) return { ok: false, error: error.message };

@@ -8,6 +8,7 @@ import { walletEntryCreateSchema } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { notifyPaymentPendingValidation } from "@/modules/notifications/notifier";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { cancelarCobrosWallet } from "./cancelar";
 
 export interface WalletEntryRow {
   id: string;
@@ -461,7 +462,7 @@ export async function validateWalletEntryAction(id: string) {
   const { data: entry } = await admin
     .from("wallet_entries")
     .select(
-      "id, contract_id, contract_payment_id, collected_by_user_id, concept, amount_cents, method, status",
+      "id, contract_id, contract_payment_id, collected_by_user_id, concept, amount_cents, method, status, invoice_id",
     )
     .eq("id", id)
     .eq("company_id", session.company_id)
@@ -469,6 +470,7 @@ export async function validateWalletEntryAction(id: string) {
   const e = entry as
     | {
         id: string;
+        invoice_id: string | null;
         contract_id: string | null;
         contract_payment_id: string | null;
         collected_by_user_id: string | null;
@@ -502,8 +504,14 @@ export async function validateWalletEntryAction(id: string) {
       ...(finalStatus === "settled" ? { settled_at: new Date().toISOString() } : {}),
     })
     .eq("id", id)
-    .eq("company_id", session.company_id);
+    .eq("company_id", session.company_id)
+    // Guarda de concurrencia: si otro clic ya lo validó, no se repite nada.
+    .in("status", ["collected", "pending_settlement"])
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (((r.data ?? []) as unknown[]).length === 0) {
+    throw new Error("Este cobro ya se ha validado");
+  }
 
   // PROPAGAR al contract_payment vinculado. El estado válido en
   // contract_payments es 'validated' tanto para cash como para banco
@@ -541,7 +549,7 @@ export async function validateWalletEntryAction(id: string) {
   }
   if (resolvedContractPaymentId) {
     try {
-      await admin
+      const { error: cpErr } = await admin
         .from("contract_payments")
         .update({
           status: "validated",
@@ -551,7 +559,9 @@ export async function validateWalletEntryAction(id: string) {
           validated_by_user_id: session.user_id,
           wallet_entry_id: id,
         })
-        .eq("id", resolvedContractPaymentId);
+        .eq("id", resolvedContractPaymentId)
+        .eq("company_id", session.company_id);
+      if (cpErr) throw cpErr;
     } catch (err) {
       console.error(
         "[validateWalletEntry] sync contract_payment falló:",
@@ -559,6 +569,33 @@ export async function validateWalletEntryAction(id: string) {
       );
     }
   }
+  // C3: si el cobro es de una factura (cuota mensual del cron, cobro de
+  // GoCardless...), se aplica a ESA factura: invoice_payment + "paid" cuando
+  // queda saldada. Antes el wallet quedaba sin factura, aparecía en
+  // "pendientes de facturar" y "Facturar" creaba una segunda factura del mes
+  // mientras la original seguía impagada (y acababa en recordatorios).
+  let errorFactura: string | null = null;
+  if (e.invoice_id) {
+    try {
+      const { registrarCobroFactura } = await import("@/modules/invoices/cobros");
+      await registrarCobroFactura({
+        admin,
+        companyId: session.company_id,
+        invoiceId: e.invoice_id,
+        importeCents: e.amount_cents,
+        walletEntryId: id,
+        usuarioId: session.user_id,
+        permitirBorrador: true,
+        notas: e.concept,
+      });
+      revalidatePath(`/facturas/${e.invoice_id}`);
+      revalidatePath("/facturas");
+    } catch (err) {
+      errorFactura = err instanceof Error ? err.message : String(err);
+      console.error("[validateWalletEntry] aplicar cobro a factura falló:", err);
+    }
+  }
+
   // Event timeline + notify al cobrador
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -609,6 +646,11 @@ export async function validateWalletEntryAction(id: string) {
     }
   } catch {
     /* no-op */
+  }
+  if (errorFactura) {
+    throw new Error(
+      `Cobro validado, pero no se pudo aplicar a su factura: ${errorFactura}. Revísala en Facturas.`,
+    );
   }
 }
 
@@ -693,6 +735,7 @@ export async function markWalletAsCollectedAction(id: string) {
     .from("wallet_entries")
     .select("id, status, method, contract_id, contract_payment_id, amount_cents, concept, company_id")
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const e = entry as
     | {
@@ -721,18 +764,26 @@ export async function markWalletAsCollectedAction(id: string) {
       collected_by_user_id: session.user_id,
       collected_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
   if (e.contract_payment_id) {
-    await admin
+    // I4: antes se escribía `moment: "now"`, que no existe en payment_moment:
+    // fallaba el update ENTERO (sin mirar el error) y el pago seguía
+    // "pendiente" hasta que el reconciliador lo arreglaba. El momento de
+    // cobro no cambia al cobrar.
+    const { error: cpErr } = await admin
       .from("contract_payments")
       .update({
         status: "collected_pending_validation",
-        moment: "now",
         collected_at: new Date().toISOString(),
         collected_by_user_id: session.user_id,
       })
-      .eq("id", e.contract_payment_id);
+      .eq("id", e.contract_payment_id)
+      .eq("company_id", session.company_id);
+    if (cpErr) {
+      throw new Error(`Cobro marcado, pero no se actualizó el pago del contrato: ${cpErr.message}`);
+    }
   }
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -764,6 +815,7 @@ export async function cancelWalletEntryAction(id: string, reason: string) {
     .from("wallet_entries")
     .select("id, status, contract_id, contract_payment_id, company_id, amount_cents")
     .eq("id", id)
+    .eq("company_id", session.company_id)
     .maybeSingle();
   const e = entry as
     | {
@@ -780,21 +832,32 @@ export async function cancelWalletEntryAction(id: string, reason: string) {
   if (e.status === "validated" || e.status === "settled") {
     throw new Error("No se puede cancelar un cobro ya validado/liquidado");
   }
-  const r = await admin
-    .from("wallet_entries")
-    .update({
-      status: "cancelled",
-      rejected_reason: reason || "Cancelado por el usuario",
-      validated_by_user_id: session.user_id,
-      validated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (r.error) throw new Error(r.error.message);
+  if (!session.company_id) throw new Error("Sin empresa");
+  // C6: "cancelled" no estaba en el enum y el usuario veía el error crudo de
+  // Postgres. Ver ./cancelar (cae a "rejected" si falta la migración).
+  const r = await cancelarCobrosWallet(
+    admin,
+    {
+      companyId: session.company_id,
+      id,
+      estados: ["pending", "collected", "pending_settlement", "rejected"],
+    },
+    reason || "Cancelado por el usuario",
+    session.user_id,
+  );
+  if (r.actualizados === 0) throw new Error("El cobro ha cambiado de estado; recarga la página");
   if (e.contract_payment_id) {
-    await admin
+    // El pago del contrato sigue debiéndose (se cancela ESTE cobro, no la
+    // deuda): vuelve a pendiente sin wallet, como antes.
+    const { error: cpErr } = await admin
       .from("contract_payments")
       .update({ wallet_entry_id: null, status: "pending" })
-      .eq("id", e.contract_payment_id);
+      .eq("id", e.contract_payment_id)
+      .eq("company_id", session.company_id)
+      .neq("status", "cancelled");
+    if (cpErr) {
+      throw new Error(`Cobro cancelado, pero no se actualizó el pago del contrato: ${cpErr.message}`);
+    }
   }
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -837,9 +900,10 @@ export async function createInvoiceFromWalletAction(
     const { data: row } = await admin
       .from("wallet_entries")
       .select(
-        "id, company_id, customer_id, contract_id, concept, amount_cents, status, invoice_id",
+        "id, company_id, customer_id, contract_id, contract_payment_id, concept, amount_cents, status, invoice_id",
       )
       .eq("id", walletId)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     const w = row as
       | {
@@ -847,6 +911,7 @@ export async function createInvoiceFromWalletAction(
           company_id: string;
           customer_id: string | null;
           contract_id: string | null;
+          contract_payment_id: string | null;
           concept: string;
           amount_cents: number;
           status: string;
@@ -905,21 +970,45 @@ export async function createInvoiceFromWalletAction(
       };
     }
 
+    // Un cobro de cuota cuyo mes ya está facturado no se vuelve a facturar
+    // (C3: el cron de antes no enlazaba el wallet con su factura).
+    if (w.contract_payment_id) {
+      const { data: cp } = await admin
+        .from("contract_payments")
+        .select("concept")
+        .eq("id", w.contract_payment_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      const periodo = /(\d{4}-\d{2})/.exec((cp as { concept: string } | null)?.concept ?? "")?.[1];
+      if (periodo && w.contract_id) {
+        const { data: yaFact } = await admin
+          .from("invoices")
+          .select("full_reference")
+          .eq("company_id", session.company_id)
+          .eq("contract_id", w.contract_id)
+          .eq("billing_period", periodo)
+          .eq("kind", "invoice")
+          .not("status", "in", "(cancelled,void)")
+          .limit(1)
+          .maybeSingle();
+        if (yaFact) {
+          return {
+            ok: false,
+            error: `Ese mes ya está facturado (${(yaFact as { full_reference: string }).full_reference}). Aplica el cobro a esa factura en vez de crear otra.`,
+          };
+        }
+      }
+    }
+
     // IVA configurable desde fiscal settings (antes hardcoded 21%).
     const { getFiscalSettings } = await import("@/modules/config/fiscal/actions");
     const fiscal = await getFiscalSettings();
     const ivaPercent = fiscal.invoice_default_iva ?? 21;
-    const totalCents = w.amount_cents;
-    // La factura aplica IVA por línea como round(base*iva/100), así que la
-    // base reconstruida puede descuadrar ±1 cént. respecto al cobro real.
-    // Ajustamos la base para que base + IVA == total EXACTO (la factura debe
-    // cuadrar con el importe cobrado en el wallet).
-    const taxOf = (b: number) => Math.round((b * ivaPercent) / 100);
-    let baseCents = Math.round(totalCents / (1 + ivaPercent / 100));
-    for (let k = 0; k < 3 && baseCents + taxOf(baseCents) !== totalCents; k++) {
-      baseCents += baseCents + taxOf(baseCents) < totalCents ? 1 : -1;
-    }
 
+    // Lo cobrado es el TOTAL (IVA dentro). La línea va con iva_incluido: la
+    // base se desglosa y el IVA es total − base, así la factura cuadra al
+    // céntimo con el cobro (antes había importes, p. ej. 100,00 €, para los
+    // que no existía base que cuadrara y salía 100,01 €).
     const { createInvoiceAction } = await import("@/modules/invoices/actions");
     const invoiceId = await createInvoiceAction({
       customer_id: w.customer_id,
@@ -930,37 +1019,50 @@ export async function createInvoiceFromWalletAction(
         {
           description: w.concept,
           quantity: 1,
-          unit_price_cents: baseCents,
+          unit_price_cents: w.amount_cents,
+          iva_incluido: true,
           discount_percent: 0,
           tax_rate_percent: ivaPercent,
         },
       ],
     });
 
-    // Vincular wallet → factura
-    await admin
+    // Vincular wallet → factura (solo si nadie la vinculó entre medias).
+    const { data: linked, error: linkErr } = await admin
       .from("wallet_entries")
       .update({ invoice_id: invoiceId })
-      .eq("id", w.id);
+      .eq("id", w.id)
+      .eq("company_id", session.company_id)
+      .is("invoice_id", null)
+      .select("id");
+    if (linkErr) throw new Error(linkErr.message);
+    if (((linked ?? []) as unknown[]).length === 0) {
+      return {
+        ok: false,
+        error: "Este cobro se facturó a la vez desde otra pestaña. Revisa el borrador duplicado en Facturas.",
+      };
+    }
 
-    // Registrar el cobro como invoice_payment + marcar factura pagada
-    // (el wallet_entry ya estaba en collected/validated → la factura nace
-    // pagada porque corresponde a un cobro real).
+    // Registrar el cobro y marcar la factura pagada (el wallet ya estaba
+    // cobrado: la factura nace pagada porque corresponde a un cobro real).
     try {
-      await admin.from("invoice_payments").insert({
-        company_id: session.company_id,
-        invoice_id: invoiceId,
-        wallet_entry_id: w.id,
-        amount_cents: w.amount_cents,
-        created_by: session.user_id,
+      const { registrarCobroFactura } = await import("@/modules/invoices/cobros");
+      await registrarCobroFactura({
+        admin,
+        companyId: session.company_id,
+        invoiceId,
+        importeCents: w.amount_cents,
+        walletEntryId: w.id,
+        usuarioId: session.user_id,
+        permitirBorrador: true,
+        notas: w.concept,
       });
-      await admin
-        .from("invoices")
-        .update({ status: "paid", paid_at: new Date().toISOString() })
-        .eq("id", invoiceId);
     } catch (e) {
-      console.error("[createInvoiceFromWallet] paid mark failed:", e);
-      // No bloqueante: factura existe, solo falta marcar paid.
+      console.error("[createInvoiceFromWallet] registrar cobro falló:", e);
+      return {
+        ok: false,
+        error: `Factura creada, pero no se pudo marcar cobrada: ${e instanceof Error ? e.message : String(e)}`,
+      };
     }
 
     revalidatePath("/wallet");

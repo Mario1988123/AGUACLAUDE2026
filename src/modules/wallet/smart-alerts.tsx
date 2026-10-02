@@ -136,7 +136,10 @@ export async function getWalletAlerts(): Promise<WalletAlerts> {
       .from("wallet_entries")
       .select("id", { count: "exact", head: true })
       .eq("company_id", session.company_id)
-      .in("status", ["rejected", "cancelled"])
+      // Solo "rejected": un cobro CANCELADO (contrato anulado, el cliente no
+      // tenía que pagar) no es un pago fallido. Además "cancelled" no existía
+      // en el enum y el filtro reventaba con 22P02 → siempre salía 0 (C6).
+      .eq("status", "rejected")
       .gt("created_at", past30.toISOString());
     out.payment_failures_30d = count ?? 0;
   } catch {

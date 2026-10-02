@@ -173,6 +173,10 @@ export function ProductEditButton({
                   <Label>Ancho (mm)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="Sin dato"
                     value={form.dim_w}
                     onChange={(e) => setForm({ ...form, dim_w: e.target.value })}
                   />
@@ -181,6 +185,10 @@ export function ProductEditButton({
                   <Label>Alto (mm)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="Sin dato"
                     value={form.dim_h}
                     onChange={(e) => setForm({ ...form, dim_h: e.target.value })}
                   />
@@ -189,6 +197,10 @@ export function ProductEditButton({
                   <Label>Profundidad (mm)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="Sin dato"
                     value={form.dim_d}
                     onChange={(e) => setForm({ ...form, dim_d: e.target.value })}
                   />
@@ -197,6 +209,10 @@ export function ProductEditButton({
                   <Label>Peso (g)</Label>
                   <Input
                     type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="Sin dato"
                     value={form.weight}
                     onChange={(e) => setForm({ ...form, weight: e.target.value })}
                   />
@@ -225,6 +241,9 @@ export function ProductEditButton({
                   <Label>Stock mínimo</Label>
                   <Input
                     type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
                     value={form.stock_min}
                     onChange={(e) => setForm({ ...form, stock_min: e.target.value })}
                   />

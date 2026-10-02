@@ -1,4 +1,6 @@
 import { requireSession } from "@/shared/lib/auth/session";
+import { mesMadrid, rangoMesMadridUtc } from "@/modules/scheduling/fechas-madrid";
+import { madridParts } from "@/shared/lib/format-date";
 import { createClient } from "@/shared/lib/supabase/server";
 import { resolveVisibleUserIds } from "@/shared/lib/auth/role-scope";
 import { KpiCard } from "@/shared/components/kpi-card";
@@ -112,11 +114,13 @@ async function renderDashboard({
   const scoped = visibleUserIds !== null;
   const scopeEmpty = scoped && visibleUserIds.length === 0;
 
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const yearStart = new Date(now.getFullYear(), 0, 1).toISOString();
-  const lastYearStart = new Date(now.getFullYear() - 1, 0, 1).toISOString();
-  const lastYearEnd = new Date(now.getFullYear(), 0, 0, 23, 59, 59).toISOString();
+  // Mes y año en hora de Madrid (auditoría 2026-10-01, I36): el servidor
+  // está en UTC y lo vendido el día 1 entre las 00:00 y las 02:00 contaba
+  // para el mes anterior.
+  const { anio: anioActual, mes: mesActual } = mesMadrid(new Date());
+  const monthStart = rangoMesMadridUtc(anioActual, mesActual).desde;
+  const yearStart = rangoMesMadridUtc(anioActual, 1).desde;
+  const lastYearStart = rangoMesMadridUtc(anioActual - 1, 1).desde;
 
   // Helper para aplicar filtro por scope a una query genérica. Si el campo
   // no existe en la tabla el caller se encarga (queries individuales).
@@ -204,7 +208,7 @@ async function renderDashboard({
             .from("sales_records")
             .select("total_cents, recorded_at")
             .gte("recorded_at", lastYearStart)
-            .lte("recorded_at", lastYearEnd),
+            .lt("recorded_at", yearStart),
           "sales_user_id",
         ),
         applyScope(
@@ -269,8 +273,8 @@ async function renderDashboard({
   );
 
   const sixMonths = Array.from({ length: 6 }).map((_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    return { year: d.getFullYear(), month: d.getMonth() };
+    const total = anioActual * 12 + (mesActual - 1) - (5 - i);
+    return { year: Math.floor(total / 12), month: total % 12 };
   });
   type SR = { total_cents: number; recorded_at: string };
   const yearRows = (salesYearRes.data ?? []) as SR[];
@@ -278,8 +282,8 @@ async function renderDashboard({
   const sumByMonth = (rows: SR[], y: number, m: number) =>
     rows
       .filter((r) => {
-        const d = new Date(r.recorded_at);
-        return d.getFullYear() === y && d.getMonth() === m;
+        const p = madridParts(r.recorded_at);
+        return p.year === y && p.month - 1 === m;
       })
       .reduce((s, r) => s + r.total_cents, 0);
   const salesData = sixMonths.map((d) => ({
@@ -288,11 +292,11 @@ async function renderDashboard({
   }));
   const yearMonthly = Array.from({ length: 12 }).map((_, m) => ({
     month: MONTHS_SHORT[m]!,
-    total_eur: sumByMonth(yearRows, now.getFullYear(), m) / 100,
+    total_eur: sumByMonth(yearRows, anioActual, m) / 100,
   }));
   const lastYearMonthly = Array.from({ length: 12 }).map((_, m) => ({
     month: MONTHS_SHORT[m]!,
-    total_eur: sumByMonth(lastYearRows, now.getFullYear() - 1, m) / 100,
+    total_eur: sumByMonth(lastYearRows, anioActual - 1, m) / 100,
   }));
 
   const leadStatuses = ((leadsByStatusRes.data ?? []) as { status: string }[]).reduce<

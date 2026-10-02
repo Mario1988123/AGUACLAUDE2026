@@ -11,6 +11,8 @@ import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { relinkCopiedItems } from "@/shared/lib/packs/link-items";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
+import { mesMadrid } from "@/modules/scheduling/fechas-madrid";
 
 export async function listContracts(filters?: {
   status?: string;
@@ -115,24 +117,14 @@ export async function getContract(id: string): Promise<ContractDetail> {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const admin = createAdminClient() as any;
-      const year = new Date(c.created_at).getFullYear();
-      const yearPrefix = `C-${year}-`;
-      const { data: last } = await admin
+      // I25: contador con bloqueo (siguienteReferencia), no max()+1 por texto.
+      const code = await siguienteReferencia(admin, c.company_id, "contracts", "C");
+      await admin
         .from("contracts")
-        .select("reference_code")
+        .update({ reference_code: code })
+        .eq("id", id)
         .eq("company_id", c.company_id)
-        .like("reference_code", `${yearPrefix}%`)
-        .order("reference_code", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let n = 1;
-      const lastCode = (last as { reference_code: string | null } | null)?.reference_code;
-      if (lastCode) {
-        const m = lastCode.match(/-(\d+)$/);
-        if (m) n = parseInt(m[1]!, 10) + 1;
-      }
-      const code = `${yearPrefix}${String(n).padStart(4, "0")}`;
-      await admin.from("contracts").update({ reference_code: code }).eq("id", id);
+        .is("reference_code", null);
       c.reference_code = code;
     } catch {
       /* fail-soft */
@@ -200,12 +192,18 @@ export async function createContractFromProposal(proposalId: string) {
   // Idempotencia: si ya existe un contrato no eliminado generado a partir
   // de esta propuesta, redirigimos al existente en lugar de crear otro
   // (antes "Generar contrato" creaba duplicados como C-2026-0002).
+  // I26: con el cliente normal (RLS por scope) un comercial con alcance
+  // "own" no veía el contrato que había generado otro y creaba un duplicado.
+  // Se mira con admin, filtrando por empresa. La carrera de dos clics la
+  // cierra el índice único uniq_contracts_source_proposal (migración
+  // 20261002130100).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supaCheck = supabase as any;
-  const { data: existing } = await supaCheck
+  const adminCheck = createAdminClient() as any;
+  const { data: existing } = await adminCheck
     .from("contracts")
     .select("id")
     .eq("source_proposal_id", proposalId)
+    .eq("company_id", session.company_id)
     .is("deleted_at", null)
     .limit(1)
     .maybeSingle();
@@ -371,25 +369,11 @@ export async function createContractFromProposal(proposalId: string) {
   // El MAX se lee con cliente admin (sin RLS): con el cliente de usuario, un
   // comercial scope 'own' solo ve SUS contratos y recalcula un número ya usado
   // por otro → duplicados. Mismo patrón que installations/savings. (Auditoría 2026-06-21)
-  const year = new Date().getFullYear();
-  const yearPrefix = `C-${year}-`;
+  // I25: contador con bloqueo y año de Madrid (antes max()+1 por texto, que
+  // repetía número con dos altas a la vez y al pasar de 9999).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const adminForCode = createAdminClient() as any;
-  const { data: lastCoded } = await adminForCode
-    .from("contracts")
-    .select("reference_code")
-    .eq("company_id", session.company_id)
-    .like("reference_code", `${yearPrefix}%`)
-    .order("reference_code", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  let nextNum = 1;
-  const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-  if (lastCode) {
-    const m = lastCode.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1]!, 10) + 1;
-  }
-  const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+  const referenceCode = await siguienteReferencia(adminForCode, session.company_id, "contracts", "C");
 
   // Crear contract — defensivo ante columnas opcionales (snapshots,
   // pending_fields) que pueden no estar en producción.
@@ -454,6 +438,18 @@ export async function createContractFromProposal(proposalId: string) {
       if (r2.error) throw r2.error;
       createdRow = r2.data as { id: string };
     } else if (cErr) {
+      // Otro clic creó el contrato de esta propuesta a la vez: se va a ese.
+      if (/uniq_contracts_source_proposal|duplicate key/i.test(cErr.message ?? "")) {
+        const { data: ganador } = await adminCheck
+          .from("contracts")
+          .select("id")
+          .eq("source_proposal_id", proposalId)
+          .eq("company_id", session.company_id)
+          .is("deleted_at", null)
+          .limit(1)
+          .maybeSingle();
+        if (ganador) redirect(`/contratos/${(ganador as { id: string }).id}` as never);
+      }
       throw cErr;
     } else {
       createdRow = r.data as { id: string };
@@ -461,6 +457,14 @@ export async function createContractFromProposal(proposalId: string) {
   }
   if (!createdRow) throw new Error("No se pudo crear el contrato");
   const contractId = createdRow.id;
+  // I26: si falla la copia de líneas o del plan de pagos, el contrato a
+  // medias se deshace (antes quedaba un contrato sin líneas o sin pagos).
+  const deshacerContrato = async (motivo: string): Promise<never> => {
+    await adminCheck.from("contract_payments").delete().eq("contract_id", contractId).eq("company_id", session.company_id);
+    await adminCheck.from("contract_items").delete().eq("contract_id", contractId).eq("company_id", session.company_id);
+    await adminCheck.from("contracts").delete().eq("id", contractId).eq("company_id", session.company_id);
+    throw new Error(`No se pudo crear el contrato: ${motivo}`);
+  };
 
   // Copiar items desde proposal_items con TODA la configuración de la propuesta.
   // Mismo patrón defensivo que arriba: si la migración 20260503340000 no
@@ -532,10 +536,13 @@ export async function createContractFromProposal(proposalId: string) {
       unit_price_cents: it.unit_price_cash_cents ?? 0,
       display_order: idx,
     }));
-    const { data: insertedContractItems } = await supabase
+    const { data: insertedContractItems, error: itemsInsErr } = await supabase
       .from("contract_items")
       .insert(rows as never)
       .select("id, display_order");
+    if (itemsInsErr) {
+      await deshacerContrato(`líneas del contrato (${itemsInsErr.message})`);
+    }
     // Pack: propagar el vínculo padre-hijo de proposal_items a contract_items.
     // Fetch defensivo aparte para NO romper la copia si la columna no existe.
     {
@@ -665,7 +672,7 @@ export async function createContractFromProposal(proposalId: string) {
       .select("id", { count: "exact", head: true })
       .eq("contract_id", contractId);
     if ((existingPayments ?? 0) === 0) {
-      await supabase.from("contract_payments").insert(
+      const { error: payInsErr } = await supabase.from("contract_payments").insert(
         payments.map((pay) => ({
           contract_id: contractId,
           company_id: session.company_id,
@@ -676,6 +683,9 @@ export async function createContractFromProposal(proposalId: string) {
           status: "pending",
         })) as never,
       );
+      if (payInsErr) {
+        await deshacerContrato(`plan de pagos (${payInsErr.message})`);
+      }
     } else {
       console.warn(
         `[createContractFromProposal] contract ${contractId} ya tiene ${existingPayments} contract_payments — skip insert para evitar duplicados.`,
@@ -895,12 +905,37 @@ export async function markContractSigned(id: string) {
     updates.pending_fields = [];
   }
 
+  // I26: update CONDICIONAL. Solo firma un contrato que aún no esté firmado;
+  // si toca 0 filas (doble clic, otra pestaña o ya firmado en remoto) no se
+  // repite nada de lo de abajo (sales_records, wallets, instalación…). Antes
+  // volver a firmar un contrato `active` lo devolvía a `signed` y duplicaba
+  // las ventas en objetivos y comisiones.
   const r = await admin
     .from("contracts")
     .update(updates)
     .eq("id", id)
-    .eq("company_id", session.company_id);
+    .eq("company_id", session.company_id)
+    .in("status", ["draft", "pending_data", "pending_signature"])
+    .is("signed_at", null)
+    .select("id");
   if (r.error) throw new Error(r.error.message);
+  if (((r.data ?? []) as unknown[]).length === 0) {
+    throw new Error("Este contrato ya está firmado o ha cambiado de estado. Recarga la página.");
+  }
+
+  // I21: firmado en persona → las firmas remotas aún vivas de este contrato
+  // dejan de servir (si no, el cliente podría "firmar" otra vez por el enlace).
+  try {
+    await admin
+      .from("contract_remote_signatures")
+      .update({ cancelled_at: new Date().toISOString() })
+      .eq("contract_id", id)
+      .eq("company_id", session.company_id)
+      .is("signed_at", null)
+      .is("cancelled_at", null);
+  } catch (e) {
+    console.error("[markContractSigned] cancelar firmas remotas vivas falló:", e);
+  }
 
   // Cuando se firma el contrato, el lead origen (si existía) ya cumplió
   // su ciclo: lo soft-deleteamos para que desaparezca de /leads.
@@ -909,30 +944,43 @@ export async function markContractSigned(id: string) {
   // (bug 2026-05-25: si no se setea customer_id, /wallet sale "—").
   let contractCustomerId: string | null = null;
   try {
-    const { data: contractRow } = await supabase
+    // Admin + company_id: con el cliente normal la RLS del lead (scope del
+    // comercial) dejaba el UPDATE en 0 filas sin error y el lead no se
+    // borraba nunca (mismo fallo que I6).
+    const { data: contractRow } = await admin
       .from("contracts")
       .select("customer_id")
       .eq("id", id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     contractCustomerId =
       (contractRow as { customer_id: string | null } | null)?.customer_id ??
       null;
     if (contractCustomerId) {
-      const { data: cust } = await supabase
+      const { data: cust } = await admin
         .from("customers")
         .select("source_lead_id")
         .eq("id", contractCustomerId)
+        .eq("company_id", session.company_id)
         .maybeSingle();
       const sourceLeadId = (cust as { source_lead_id: string | null } | null)?.source_lead_id;
       if (sourceLeadId) {
-        await supabase
+        const { data: borrados, error: leadErr } = await admin
           .from("leads")
           .update({ deleted_at: new Date().toISOString() })
-          .eq("id", sourceLeadId);
+          .eq("id", sourceLeadId)
+          .eq("company_id", session.company_id)
+          .is("deleted_at", null)
+          .select("id");
+        if (leadErr) {
+          console.error("[markContractSigned] borrar lead origen falló:", leadErr.message);
+        } else if (((borrados ?? []) as unknown[]).length === 0) {
+          console.warn("[markContractSigned] el lead origen ya estaba borrado o no es de la empresa:", sourceLeadId);
+        }
       }
     }
-  } catch {
-    /* fail-soft */
+  } catch (e) {
+    console.error("[markContractSigned] lead origen:", e);
   }
 
   // Crear automáticamente wallet entries para todos los contract_payments
@@ -1026,24 +1074,8 @@ export async function markContractSigned(id: string) {
       .eq("contract_id", id)
       .is("deleted_at", null);
     if (instModuleOn && (instCount ?? 0) === 0) {
-      // Generar reference_code I-YYYY-NNNN
-      const year = new Date().getFullYear();
-      const yearPrefix = `I-${year}-`;
-      const { data: lastCoded } = await admin
-        .from("installations")
-        .select("reference_code")
-        .eq("company_id", session.company_id!)
-        .like("reference_code", `${yearPrefix}%`)
-        .order("reference_code", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      let nextNum = 1;
-      const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-      if (lastCode) {
-        const m = lastCode.match(/-(\d+)$/);
-        if (m) nextNum = parseInt(m[1]!, 10) + 1;
-      }
-      const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+      // Generar reference_code I-YYYY-NNNN (I25: contador con bloqueo)
+      const referenceCode = await siguienteReferencia(admin, session.company_id!, "installations", "I");
 
       const { data: contractFull } = await admin
         .from("contracts")
@@ -1287,8 +1319,9 @@ export async function markContractSigned(id: string) {
       quantity: number;
     }>);
 
-    const periodYear = new Date().getFullYear();
-    const periodMonth = new Date().getMonth() + 1;
+    // Periodo de la venta en hora de Madrid (en UTC, una firma el día 1 entre
+    // las 00:00 y las 02:00 contaba en el mes anterior).
+    const { anio: periodYear, mes: periodMonth } = mesMadrid();
 
     // Si no hay items (raro), creamos 1 sales_record genérico para que
     // el contrato cuente al menos como 1 unidad.
@@ -1659,17 +1692,54 @@ export async function cancelContractAction(
       }
     }
 
-    // Cancelar wallet entries pendientes (rejected o cancelled)
-    await admin
-      .from("wallet_entries")
-      .update({
-        status: "cancelled",
-        rejected_reason: `Contrato cancelado: ${reason}`,
-        validated_at: new Date().toISOString(),
-        validated_by_user_id: session.user_id,
-      })
+    // C6: cancelar lo que aún se iba a cobrar. Antes el update de wallets a
+    // "cancelled" fallaba (no estaba en el enum) sin que nadie mirara el
+    // error, y los contract_payments pendientes ni se tocaban: la remesa SEPA
+    // le seguía domiciliando al cliente un contrato cancelado.
+    //
+    // [decide] Solo se cancela lo que NO se ha cobrado: contract_payments
+    // `pending` y wallets `pending`. Un `pending_settlement` es efectivo que
+    // el comercial YA tiene en la mano: no se anula, se avisa para que se
+    // devuelva o se liquide a mano.
+    const { data: cpsPend, error: cpsErr } = await admin
+      .from("contract_payments")
+      .select("id, sepa_batch_id")
       .eq("contract_id", id)
-      .in("status", ["pending", "pending_settlement"]);
+      .eq("company_id", session.company_id)
+      .eq("status", "pending");
+    if (cpsErr) return { ok: false, error: cpsErr.message };
+    const enRemesa = ((cpsPend ?? []) as Array<{ sepa_batch_id: string | null }>).filter(
+      (p) => p.sepa_batch_id,
+    ).length;
+    if (((cpsPend ?? []) as unknown[]).length > 0) {
+      const { error: cpUpdErr } = await admin
+        .from("contract_payments")
+        .update({ status: "cancelled", notes: `Contrato cancelado: ${reason}` })
+        .eq("contract_id", id)
+        .eq("company_id", session.company_id)
+        .eq("status", "pending");
+      if (cpUpdErr) return { ok: false, error: `No se pudieron cancelar los cobros: ${cpUpdErr.message}` };
+    }
+    try {
+      const { cancelarCobrosWallet } = await import("@/modules/wallet/cancelar");
+      await cancelarCobrosWallet(
+        admin,
+        { companyId: session.company_id, contractId: id, estados: ["pending"] },
+        `Contrato cancelado: ${reason}`,
+        session.user_id,
+      );
+    } catch (e) {
+      return {
+        ok: false,
+        error: `No se pudieron cancelar los cobros del wallet: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+    const { count: efectivoEnMano } = await admin
+      .from("wallet_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("contract_id", id)
+      .eq("company_id", session.company_id)
+      .eq("status", "pending_settlement");
 
     const r = await admin
       .from("contracts")
@@ -1680,8 +1750,47 @@ export async function cancelContractAction(
         cancellation_reason: reason,
         deleted_at: new Date().toISOString(),
       })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("company_id", session.company_id);
     if (r.error) return { ok: false, error: r.error.message };
+
+    // I21: el enlace de firma remota de un contrato cancelado deja de valer.
+    {
+      const { error: rsErr } = await admin
+        .from("contract_remote_signatures")
+        .update({ cancelled_at: new Date().toISOString() })
+        .eq("contract_id", id)
+        .eq("company_id", session.company_id)
+        .is("signed_at", null)
+        .is("cancelled_at", null);
+      if (rsErr) console.error("[cancelContract] cancelar firmas remotas falló:", rsErr.message);
+    }
+
+    if (enRemesa > 0 || (efectivoEnMano ?? 0) > 0) {
+      try {
+        const { notifyByRoles } = await import("@/modules/notifications/notifier");
+        await notifyByRoles(session.company_id, ["company_admin"], {
+          kind: "contract.cancelled_money_pending",
+          severity: "warning",
+          title: "Contrato cancelado con dinero en curso",
+          body: [
+            enRemesa > 0
+              ? `${enRemesa} cobro(s) estaban en una remesa SEPA abierta: cancela esa remesa y genérala de nuevo antes de enviarla al banco.`
+              : null,
+            (efectivoEnMano ?? 0) > 0
+              ? `${efectivoEnMano} cobro(s) en efectivo pendientes de liquidar: devuélvelos o liquídalos a mano.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" "),
+          subject_type: "contract",
+          subject_id: id,
+          action_url: `/contratos/${id}`,
+        });
+      } catch (e) {
+        console.error("[cancelContract] aviso de dinero en curso falló:", e);
+      }
+    }
 
     // Liberar reservas de stock activas asociadas al contrato (fail-soft)
     try {

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { parseOrFriendly } from "@/shared/lib/zod-friendly";
+import { parseOrFriendly, zOptionalInt } from "@/shared/lib/zod-friendly";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface Ephemeris {
@@ -155,7 +155,12 @@ const upsertSchema = z.object({
   ]),
   ephemeris_id: z.string().uuid().nullish(),
   campaign_id: z.string().uuid().nullish(),
-  campaign_phase: z.coerce.number().int().min(1).max(3).nullish(),
+  // Vacío → null (z.coerce convertía "" en 0 y fallaba con un "too small"
+  // críptico, o guardaba 0 si se quitaba el min).
+  campaign_phase: zOptionalInt(1, "La fase de campaña va de 1 a 3").refine(
+    (v) => v == null || v <= 3,
+    "La fase de campaña va de 1 a 3",
+  ),
   topic: z.string().min(1),
   copy_main: z.string().min(1),
   copy_short: z.string().nullish(),

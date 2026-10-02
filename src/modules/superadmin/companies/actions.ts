@@ -119,6 +119,22 @@ function serverSlugify(s: string): string {
     .slice(0, 50);
 }
 
+/**
+ * Wrapper Safe de createCompanyAction (auditoría 2026-10-01 I7): lo que aún
+ * lanza (ensureSuperadmin, fallos inesperados) llega al formulario como dato
+ * y no como el genérico de producción. El éxito redirige y se deja pasar.
+ */
+export async function createCompanySafeAction(
+  formData: FormData,
+): Promise<{ ok: false; error: string } | undefined> {
+  try {
+    const r = await createCompanyAction(formData);
+    return r && r.ok === false ? { ok: false, error: r.error } : undefined;
+  } catch (e) {
+    return { ok: false, error: toActionError(e, "createCompany") };
+  }
+}
+
 export async function createCompanyAction(formData: FormData) {
   await ensureSuperadmin();
 
@@ -187,9 +203,12 @@ export async function createCompanyAction(formData: FormData) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const code = (insertResult.error as any).code;
     if (code === "23505") {
-      throw new Error(`Ya existe una empresa con el slug "${parsed.slug}". Elige otro.`);
+      return {
+        ok: false as const,
+        error: `Ya existe una empresa con el slug "${parsed.slug}". Elige otro.`,
+      };
     }
-    throw insertResult.error;
+    return { ok: false as const, error: toActionError(insertResult.error, "createCompany") };
   }
   const companyId = (insertResult.data as { id: string }).id;
 

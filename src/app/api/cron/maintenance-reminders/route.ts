@@ -6,6 +6,12 @@ import { sendViaSmtp } from "@/modules/mailing/smtp";
 import { renderTemplate, buildEmailHtml } from "@/modules/mailing/templates";
 import { getSystemTemplateByKey } from "@/modules/mailing/system-templates";
 import { ensureConfirmationToken } from "@/modules/maintenance/public-confirmation-actions";
+import { startCronRun } from "@/shared/lib/cron/telemetry";
+import {
+  claveDiaMadrid,
+  rangoDiaMadridUtc,
+  sumarDiasClave,
+} from "@/modules/scheduling/fechas-madrid";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -19,9 +25,12 @@ export const maxDuration = 300;
  *     Plantilla `maintenance_confirm_request`. Permite al cliente confirmar,
  *     elegir otra fecha o posponer (vía deep-link público /m/[token]).
  *
- *  2. **Víspera (24h antes)** — para jobs `scheduled` con scheduled_at ∈
- *     [23h, 25h]. Plantilla `maintenance_day_before`. Permite reconfirmar
- *     o posponer.
+ *  2. **Víspera** — para jobs `scheduled` cuyo día natural de Madrid es
+ *     MAÑANA. Plantilla `maintenance_day_before`. Permite reconfirmar o
+ *     posponer. (Auditoría 2026-10-01, I34: antes era la ventana
+ *     [ahora+23 h, ahora+25 h] y, con el cron una vez al día a las 09:00 UTC,
+ *     solo avisaba de las visitas de 10:00 a 12:00; una a las 16:00 no recibía
+ *     aviso nunca.)
  *
  * Idempotente: cada job tiene `customer_reminder_sent_at` y
  * `customer_day_before_sent_at` que evitan duplicados.
@@ -32,6 +41,7 @@ export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
   if (denied) return denied;
 
+  const tracker = await startCronRun("maintenance-reminders");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const stats = { confirm_request: 0, day_before: 0, errors: 0 };
@@ -76,21 +86,23 @@ export async function GET(req: NextRequest) {
       }
     }
   } catch (e) {
-    console.error("[cron/maintenance-reminders] 14d block", e);
+    tracker.error("confirm-request-14d", e);
   }
 
   // === 2) Recordatorio víspera (24h antes) ===
   try {
-    const from = new Date(Date.now() + 23 * 3600_000);
-    const to = new Date(Date.now() + 25 * 3600_000);
-    const { data: jobs } = await admin
+    // Día natural de mañana en Madrid, completo.
+    const manana = sumarDiasClave(claveDiaMadrid(new Date()), 1);
+    const { desde, hasta } = rangoDiaMadridUtc(manana);
+    const { data: jobs, error: errJobs } = await admin
       .from("maintenance_jobs")
       .select("id, company_id, customer_id, scheduled_at, technician_user_id")
       .eq("status", "scheduled")
       .is("customer_day_before_sent_at", null)
-      .gte("scheduled_at", from.toISOString())
-      .lte("scheduled_at", to.toISOString())
-      .limit(200);
+      .gte("scheduled_at", desde)
+      .lt("scheduled_at", hasta)
+      .limit(500);
+    if (errJobs) throw new Error(errJobs.message);
     for (const j of (jobs ?? []) as Array<{
       id: string;
       company_id: string;
@@ -115,9 +127,10 @@ export async function GET(req: NextRequest) {
       }
     }
   } catch (e) {
-    console.error("[cron/maintenance-reminders] 24h block", e);
+    tracker.error("day-before", e);
   }
 
+  await tracker.finish({ summary: stats });
   return NextResponse.json({ ok: true, stats });
 }
 

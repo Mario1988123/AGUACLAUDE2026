@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { MENSAJE_VERIFACTU_DESHABILITADO, VERIFACTU_HABILITADO } from "./verifactu-flag";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -21,6 +22,12 @@ export async function setVerifactuModeAction(
   const session = await ensureAdmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // I31: interruptor global. Mientras VeriFactu esté deshabilitado no se
+  // puede activar (ni en pruebas) desde la configuración.
+  if (mode !== "no_envio" && !VERIFACTU_HABILITADO) {
+    throw new Error(MENSAJE_VERIFACTU_DESHABILITADO);
+  }
 
   // Mutex automático: no se puede activar Verifactu (test o producción) sin
   // certificado FNMT instalado. El certificado ES la señal de "quiero

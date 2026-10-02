@@ -11,6 +11,7 @@ import {
   computeSavings,
 } from "./calc";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 
 const DEFAULT_CONFIG: CalcConfig = {
   osmosis_annual_cost_cents: 15000,
@@ -415,49 +416,37 @@ export async function convertSavingsToProposalAction(
       });
     }
 
-    const { createProposalAction } = await import("@/modules/proposals/actions");
-    let proposalId = "";
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (createProposalAction as any)({
-        customer_id: s.customer_id ?? undefined,
-        lead_id: s.lead_id ?? undefined,
-        chosen_plan_type: s.plan_type,
-        chosen_duration_months: s.duration_months,
-        items,
-        notes:
-          `Convertida desde ${s.reference_code ?? "propuesta de ahorro"}. ` +
-          `Ahorro estimado 5y: ${(s.total_saved_5y_cents ?? 0) / 100}€.`,
-      });
-    } catch (err) {
-      // createProposalAction lanza NEXT_REDIRECT — capturamos el id de la URL
-      if (err && typeof err === "object" && "digest" in err) {
-        const d = String((err as { digest?: unknown }).digest);
-        const m = d.match(/\/propuestas\/([0-9a-f-]+)/);
-        if (m && m[1]) proposalId = m[1];
-      }
-    }
-
+    const { createProposalReturningIdAction } = await import("@/modules/proposals/actions");
+    // Variante que devuelve el id (antes había que sacarlo del digest del
+    // redirect). Un fallo real llega como {ok:false} y se propaga.
+    const creada = await createProposalReturningIdAction({
+      customer_id: s.customer_id ?? undefined,
+      lead_id: s.lead_id ?? undefined,
+      chosen_plan_type: s.plan_type,
+      chosen_duration_months: s.duration_months,
+      items,
+      notes:
+        `Convertida desde ${s.reference_code ?? "propuesta de ahorro"}. ` +
+        `Ahorro estimado 5y: ${(s.total_saved_5y_cents ?? 0) / 100}€.`,
+    });
+    if (!creada.ok) throw new Error(creada.error);
+    const proposalId = creada.proposal_id;
     if (!proposalId) {
-      // Fallback: buscar la propuesta más reciente del comercial
-      const { data: latest } = await admin
-        .from("proposals")
-        .select("id")
-        .eq("created_by", session.user_id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      proposalId = (latest as { id: string } | null)?.id ?? "";
+      throw new Error("No se ha podido crear la propuesta");
     }
 
-    if (proposalId) {
-      await admin
-        .from("savings_proposals")
-        .update({
-          converted_to_proposal_id: proposalId,
-          status: "converted",
-        })
-        .eq("id", savingsId);
+    const { data: enlazada, error: errEnlace } = await admin
+      .from("savings_proposals")
+      .update({
+        converted_to_proposal_id: proposalId,
+        status: "converted",
+      })
+      .eq("id", savingsId)
+      .eq("company_id", session.company_id)
+      .select("id");
+    if (errEnlace) throw errEnlace;
+    if (!enlazada || enlazada.length === 0) {
+      throw new Error("No se ha podido enlazar la propuesta de ahorro");
     }
 
     revalidatePath("/calculadora-ahorro");
@@ -810,23 +799,14 @@ export async function saveSavingsProposalAction(
     const admin = createAdminClient() as any;
 
     // Ref code AH-YYYY-NNNN
-    const year = new Date().getFullYear();
-    const yearPrefix = `AH-${year}-`;
-    const { data: last } = await admin
-      .from("savings_proposals")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${yearPrefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastRef = (last as { reference_code: string | null } | null)?.reference_code;
-    if (lastRef) {
-      const m = lastRef.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
-    const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    // Contador atómico por empresa (auditoría 2026-10-01 I25): el máximo + 1
+    // repetía números con dos altas a la vez y ordenaba como texto.
+    const referenceCode = await siguienteReferencia(
+      admin,
+      session.company_id,
+      "savings_proposals",
+      "AH",
+    );
 
     const { data, error } = await admin
       .from("savings_proposals")

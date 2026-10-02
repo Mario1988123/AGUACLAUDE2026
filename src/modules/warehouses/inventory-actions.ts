@@ -1,5 +1,6 @@
 "use server";
 
+import { adjustStockBatch } from "./adjust-stock";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
@@ -59,43 +60,20 @@ export async function addStockAction(input: {
   if (input.quantity <= 0) throw new Error("Cantidad debe ser > 0");
   // SEGURIDAD: el admin client salta RLS → verificar que el almacén es tuyo.
   await assertWarehouseCompany(input.warehouse_id, session.company_id);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
-
-  const { data: existing } = await admin
-    .from("warehouse_stock")
-    .select("id, quantity")
-    .eq("warehouse_id", input.warehouse_id)
-    .eq("product_id", input.product_id)
-    .eq("state", "new")
-    .is("location_id", null)
-    .maybeSingle();
-  const row = existing as { id: string; quantity: number } | null;
-  if (row) {
-    await admin
-      .from("warehouse_stock")
-      .update({ quantity: row.quantity + input.quantity })
-      .eq("id", row.id);
-  } else {
-    await admin.from("warehouse_stock").insert({
-      company_id: session.company_id,
+  // Entrada ATÓMICA vía RPC adjust_stock_batch (auditoría 2026-10-01, I42):
+  // antes leer-sumar-escribir, y dos entradas simultáneas perdían una.
+  // La RPC registra también el stock_movement.
+  await adjustStockBatch(session.company_id, session.user_id, [
+    {
       warehouse_id: input.warehouse_id,
       product_id: input.product_id,
-      quantity: input.quantity,
       state: "new",
-    });
-  }
-
-  await admin.from("stock_movements").insert({
-    company_id: session.company_id,
-    product_id: input.product_id,
-    warehouse_id: input.warehouse_id,
-    movement_type: "inbound",
-    quantity: input.quantity,
-    state_after: "new",
-    performed_by: session.user_id,
-    notes: input.notes ?? null,
-  });
+      location_id: null,
+      delta: input.quantity,
+      movement_type: "inbound",
+      notes: input.notes ?? null,
+    },
+  ]);
 
   revalidatePath(`/almacenes/${input.warehouse_id}`);
   revalidatePath("/almacenes");
@@ -120,7 +98,7 @@ export async function setStockQuantityAction(input: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { data: existing } = await admin
+  const { data: existing, error: errRead } = await admin
     .from("warehouse_stock")
     .select("id, quantity")
     .eq("warehouse_id", input.warehouse_id)
@@ -128,37 +106,29 @@ export async function setStockQuantityAction(input: {
     .eq("state", "new")
     .is("location_id", null)
     .maybeSingle();
+  if (errRead) throw new Error(errRead.message);
   const row = existing as { id: string; quantity: number } | null;
   const oldQty = row?.quantity ?? 0;
   const delta = input.new_quantity - oldQty;
   if (delta === 0) return;
 
-  if (row) {
-    await admin
-      .from("warehouse_stock")
-      .update({ quantity: input.new_quantity })
-      .eq("id", row.id);
-  } else if (input.new_quantity > 0) {
-    await admin.from("warehouse_stock").insert({
-      company_id: session.company_id,
+  // Se aplica la DIFERENCIA con la RPC atómica (auditoría 2026-10-01, I42).
+  // [decide] Si entre la lectura y el ajuste otro movimiento cambia el stock,
+  // se conserva ese movimiento (queda new_quantity + lo concurrente) en vez de
+  // pisarlo: así el stock sigue cuadrando con la suma de movimientos.
+  await adjustStockBatch(session.company_id, session.user_id, [
+    {
       warehouse_id: input.warehouse_id,
       product_id: input.product_id,
-      quantity: input.new_quantity,
       state: "new",
-    });
-  }
-
-  await admin.from("stock_movements").insert({
-    company_id: session.company_id,
-    product_id: input.product_id,
-    warehouse_id: input.warehouse_id,
-    movement_type: delta > 0 ? "adjustment_plus" : "adjustment_minus",
-    quantity: Math.abs(delta),
-    state_after: "new",
-    performed_by: session.user_id,
-    notes: input.notes ?? `Inventario: ${oldQty} → ${input.new_quantity}`,
-    reason: input.reason ?? null,
-  });
+      location_id: null,
+      delta,
+      movement_type: delta > 0 ? "adjustment_plus" : "adjustment_minus",
+      allow_partial: true,
+      notes: input.notes ?? `Inventario: ${oldQty} → ${input.new_quantity}`,
+      reason: input.reason ?? null,
+    },
+  ]);
 
   revalidatePath(`/almacenes/${input.warehouse_id}`);
   revalidatePath("/almacenes");

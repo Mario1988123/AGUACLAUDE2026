@@ -10,6 +10,7 @@ import {
   isMasterKeyConfigured,
 } from "@/shared/lib/crypto/aes-gcm";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { VERIFACTU_HABILITADO } from "./verifactu-flag";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -152,7 +153,12 @@ export async function uploadCertificateAction(
     verifactu_cert_password_encrypted: passwordEncrypted,
     verifactu_cert_expires_at: info.valid_to.slice(0, 10),
   };
-  if (!existingRow || existingRow.verifactu_mode === "no_envio" || !existingRow.verifactu_mode) {
+  // I31: con VeriFactu deshabilitado globalmente, el certificado se guarda
+  // pero el modo NO se eleva (seguiría en no_envio).
+  if (
+    VERIFACTU_HABILITADO &&
+    (!existingRow || existingRow.verifactu_mode === "no_envio" || !existingRow.verifactu_mode)
+  ) {
     payload.verifactu_mode = "verifactu_test";
     payload.verifactu_environment = "test";
   }

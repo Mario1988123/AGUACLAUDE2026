@@ -19,6 +19,7 @@ function normalizePhoneSafe(v: string | null | undefined): string | null {
 }
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { CAMPOS_EDITABLES_LEAD, elegirCampos } from "@/modules/customers/campos-editables";
 
 export async function listLeads(filters?: {
   status?: LeadStatus;
@@ -745,12 +746,30 @@ export async function updateLeadAction(
 ): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  // I13: solo columnas de la lista blanca (nunca status, assigned_user_id,
+  // deleted_at, company_id…), y los enums se validan aquí porque el update
+  // va con el admin client.
+  const permitido = elegirCampos(input, CAMPOS_EDITABLES_LEAD);
+  if (
+    permitido.party_kind !== undefined &&
+    permitido.party_kind !== "individual" &&
+    permitido.party_kind !== "company"
+  ) {
+    throw new Error("Tipo de lead no válido");
+  }
+  if (
+    permitido.potential !== undefined &&
+    !["unknown", "A", "B", "C"].includes(permitido.potential as string)
+  ) {
+    throw new Error("Potencial no válido");
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const payload: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(input)) {
+  for (const [k, v] of Object.entries(permitido)) {
     payload[k] = v === "" ? null : v;
   }
+  if (Object.keys(payload).length === 0) throw new Error("Nada que actualizar");
   // SEGURIDAD: admin salta RLS → filtrar por company_id.
   const r = await admin
     .from("leads")

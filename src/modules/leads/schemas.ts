@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { zBoolean } from "@/shared/lib/zod-friendly";
+import { zBoolean, zOptionalNumber } from "@/shared/lib/zod-friendly";
 import { validateSpanishPostalCode } from "@/shared/lib/validations/spanish";
 import { validatePhoneWithPrefix } from "@/shared/lib/phone/prefixes";
 
@@ -96,8 +96,10 @@ export const leadCreateSchema = z
     address_postal_code: z.string().optional().default(""),
     address_city: z.string().optional().default(""),
     address_province: z.string().optional().default(""),
-    address_latitude: z.coerce.number().optional().nullable(),
-    address_longitude: z.coerce.number().optional().nullable(),
+    // Vacío → null (antes z.coerce convertía "" en 0 y el lead quedaba
+    // geolocalizado en el golfo de Guinea, lat 0 / lng 0).
+    address_latitude: zOptionalNumber(-90, "Latitud fuera de rango"),
+    address_longitude: zOptionalNumber(-180, "Longitud fuera de rango"),
   })
   .refine(
     (v) => {

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 
 // ============================================================================
 // Fase C — generar CONTRATOS HEREDADOS desde la modalidad de cada equipo.
@@ -87,23 +88,8 @@ export async function generateLegacyContractsAction(input?: {
     };
     if (batch.length === 0) return { ok: true, result };
 
-    // Base del reference_code "C-YYYY-NNNN".
-    const year = new Date().getFullYear();
-    const prefix = `C-${year}-`;
-    const { data: lastCoded } = await admin
-      .from("contracts")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${prefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-    if (lastCode) {
-      const m = lastCode.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
+    // reference_code "C-YYYY-NNNN": uno por contrato con el contador con
+    // bloqueo (I25), dentro del bucle.
 
     const now = new Date();
     const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
@@ -114,7 +100,7 @@ export async function generateLegacyContractsAction(input?: {
       const type = e.acquisition_type as "cash" | "rental" | "renting";
       const amount = e.acquisition_amount_cents ?? null;
       const start = e.acquisition_started_at ?? null;
-      const ref = `${prefix}${String(nextNum).padStart(4, "0")}`;
+      const ref = await siguienteReferencia(admin, session.company_id, "contracts", "C");
       const eurMonth =
         amount != null
           ? (amount / 100).toLocaleString("es-ES", { minimumFractionDigits: 2 })
@@ -151,7 +137,6 @@ export async function generateLegacyContractsAction(input?: {
         result.errors += 1;
         continue;
       }
-      nextNum += 1;
       result.created += 1;
     }
 

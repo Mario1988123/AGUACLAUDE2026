@@ -342,6 +342,8 @@ function drawLinesTable(
     unit_price_cents: number;
     discount_percent: number;
     tax_rate_percent: number;
+    /** Base guardada de la línea (manda sobre el recálculo). */
+    subtotal_cents?: number;
   }>,
 ): number {
   const w = PAGE_W - 2 * MARGIN;
@@ -386,8 +388,10 @@ function drawLinesTable(
       });
     }
     zebra = !zebra;
+    // Se pinta la base GUARDADA: en líneas con IVA incluido o rectificativas
+    // el recálculo precio × cantidad puede diferir un céntimo del total.
     const subtotal =
-      l.unit_price_cents * l.quantity * (1 - l.discount_percent / 100);
+      l.subtotal_cents ?? l.unit_price_cents * l.quantity * (1 - l.discount_percent / 100);
     // Descripción con wrap si excede
     const descLines = wrap(d.font, l.description, 9, 260);
     text(d, descLines[0] ?? "", colDesc, y - 7, { size: 9 });

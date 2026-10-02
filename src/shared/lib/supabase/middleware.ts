@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { publicEnv } from "@/shared/lib/env";
 import type { Database } from "@/shared/types/database.types";
+import { isPublicPath } from "./public-paths";
 
 export async function updateSession(request: NextRequest) {
   // Bypass de auth en local dev (ver .env.local NEXT_PUBLIC_LOCAL_AUTOLOGIN)
@@ -55,31 +56,8 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  // Rutas públicas (solo aplica a GET):
-  //  · /login + recuperación de contraseña
-  //  · /api/health para uptime checks
-  //  · /m/[token] — confirmación pública de mantenimiento por cliente
-  //  · /i/[token] — confirmación pública de instalación por cliente
-  //  · /firmar-contrato — firma remota de contrato
-  const PUBLIC_PATHS = [
-    "/login",
-    "/recuperar-password",
-    "/restablecer-password",
-    "/api/health",
-    "/m/",
-    "/i/",
-    "/firmar-contrato",
-    "/baja", // baja de comunicaciones comerciales (link en emails de campaña)
-    "/api/webhooks/", // webhooks externos (Resend, GoCardless) verifican su propia firma
-    "/api/track/", // tracking de aperturas/clics SMTP (pixel + redirect)
-    // Crons de Vercel: llegan sin cookie de sesión, así que el middleware los
-    // redirigía a /login con un 307 y el handler NUNCA llegaba a ejecutarse
-    // (cron_runs vacía, VeriFactu sin enviar, recordatorios sin salir).
-    // No abre ningún agujero: cada ruta empieza por verifyCronAuth(), que exige
-    // el CRON_SECRET y es fail-closed si la variable no está definida.
-    "/api/cron/",
-  ];
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  // Rutas públicas (solo aplica a GET): ver public-paths.ts
+  const isPublic = isPublicPath(pathname);
 
   if (!user && !isPublic) {
     url.pathname = "/login";

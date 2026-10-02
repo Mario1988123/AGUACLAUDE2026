@@ -5,7 +5,19 @@ import { notifyByRoles } from "@/modules/notifications/notifier";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
-import { createContractMonthlyInvoice } from "@/modules/invoices/create-core";
+import { registrarCuotaMensualContrato } from "@/modules/invoices/create-core";
+import { madridHour, madridLocalToUtcISO } from "@/shared/lib/format-date";
+import {
+  diaMananaCron,
+  diaReferenciaCron,
+  rangoDiaMadridUtc,
+  sumarDiasClave,
+} from "@/modules/scheduling/fechas-madrid";
+import {
+  mesMadrid,
+  sumarMesesClave,
+  sumarMesesMadrid,
+} from "@/modules/scheduling/fechas-madrid";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +39,20 @@ export async function GET(req: NextRequest) {
 
   // Telemetría (decisión 2026-05-20)
   const tracker = await startCronRun("daily");
+
+  // Presupuesto de tiempo (auditoría 2026-10-01, C2). Vercel corta a los
+  // 300 s (maxDuration) sin dar opción a registrar nada: el cron llevaba 22
+  // ejecuciones con ended_at null. Los bucles no críticos se cortan a los
+  // 240 s y lo pendiente queda para la noche siguiente (todas las secciones
+  // son idempotentes). La facturación mensual NO se corta. Lo que se salta se
+  // anota en el resumen de cron_runs.
+  const PRESUPUESTO_MS = 240_000;
+  const seccionesCortadas: string[] = [];
+  const fueraDeTiempo = (seccion: string): boolean => {
+    if (Date.now() - tracker.startedAt <= PRESUPUESTO_MS) return false;
+    if (!seccionesCortadas.includes(seccion)) seccionesCortadas.push(seccion);
+    return true;
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
@@ -63,19 +89,21 @@ export async function GET(req: NextRequest) {
   // 0a) Autocierre de fichajes olvidados (también lo hace el cron horario,
   // pero lo repetimos aquí por si el horario fallara o no estuviera activo)
   try {
-    const { data: closed } = await admin.rpc("autoclose_stale_punches");
+    const { data: closed, error } = await admin.rpc("autoclose_stale_punches");
+    if (error) throw new Error(error.message);
     stats.punches_autoclosed = Number(closed) || 0;
-  } catch {
-    /* no-op */
+  } catch (e) {
+    tracker.error("autoclose-punches", e);
   }
 
   // 0b) Incidencia automática si AYER alguien no cumplió su horario.
   // Solo se ejecuta si la empresa tiene time_tracking activado.
   try {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().slice(0, 10);
-    const dow = (yesterday.getDay() + 6) % 7; // 0=Lun
+    // "Ayer" en hora de Madrid (auditoría 2026-10-01). Antes era el día UTC
+    // anterior: con el cron a las 00:00 de Madrid (verano) se revisaba
+    // ANTEAYER, y la ventana de fichajes iba de 02:00 a 01:59.
+    const yStr = sumarDiasClave(diaReferenciaCron(), -1);
+    const dow = (new Date(`${yStr}T12:00:00Z`).getUTCDay() + 6) % 7; // 0=Lun
 
     const { data: activeCompanies } = await admin
       .from("company_modules")
@@ -84,6 +112,7 @@ export async function GET(req: NextRequest) {
       .eq("is_active", true);
     type CM = { company_id: string };
     for (const cm of ((activeCompanies ?? []) as CM[])) {
+      if (fueraDeTiempo("schedule-incidents")) break;
       // Horarios de ayer (qué usuarios tenían turno)
       const { data: scheds } = await admin
         .from("user_work_schedules")
@@ -102,14 +131,13 @@ export async function GET(req: NextRequest) {
       if (schedList.length === 0) continue;
 
       // Punches de ayer agrupados por usuario
-      const startIso = new Date(yStr + "T00:00:00").toISOString();
-      const endIso = new Date(yStr + "T23:59:59.999").toISOString();
+      const { desde: startIso, hasta: endIso } = rangoDiaMadridUtc(yStr);
       const { data: punches } = await admin
         .from("time_punches")
         .select("user_id, punch_kind, punched_at, auto_closed")
         .eq("company_id", cm.company_id)
         .gte("punched_at", startIso)
-        .lte("punched_at", endIso);
+        .lt("punched_at", endIso);
       type Punch = {
         user_id: string;
         punch_kind: string;
@@ -263,7 +291,8 @@ export async function GET(req: NextRequest) {
 
   // 0) Contratos con service_start_date <= hoy y status=signed → activar y
   // programar mantenimientos. Cubre el caso "instalado hoy pero arranca el 1 del mes".
-  const todayIsoDate = new Date().toISOString().slice(0, 10);
+  // Día de referencia en Madrid (no el día UTC).
+  const todayIsoDate = diaReferenciaCron();
   const { data: dueContracts } = await admin
     .from("contracts")
     .select("id, company_id")
@@ -272,6 +301,7 @@ export async function GET(req: NextRequest) {
     .lte("service_start_date", todayIsoDate)
     .is("deleted_at", null);
   for (const c of ((dueContracts ?? []) as Array<{ id: string; company_id: string }>)) {
+    if (fueraDeTiempo("contracts-activation")) break;
     try {
       await admin.from("contracts").update({ status: "active" }).eq("id", c.id);
       const mod = await import("@/modules/maintenance/auto-schedule");
@@ -307,6 +337,7 @@ export async function GET(req: NextRequest) {
     lead_expiry_days_tmk: number | null;
     lead_expiry_days_commercial: number | null;
   }>) {
+    if (fueraDeTiempo("leads-expired")) break;
     const tmkDays = cs.lead_expiry_days_tmk ?? cs.lead_expiry_days ?? 15;
     const commercialDays = cs.lead_expiry_days_commercial ?? cs.lead_expiry_days ?? 30;
     const maxDays = Math.max(tmkDays, commercialDays);
@@ -419,19 +450,20 @@ export async function GET(req: NextRequest) {
   }
 
   // 2) Instalaciones para mañana -----------------------------------------------
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayStart = new Date(tomorrow);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(tomorrow);
-  dayEnd.setHours(23, 59, 59, 999);
+  // "Mañana" en hora de Madrid (auditoría 2026-10-01, I33). Antes se
+  // calculaba en UTC: en verano el cron corre a las 00:00 de Madrid y avisaba
+  // como "mañana" de las instalaciones de ESE MISMO día, con una ventana de
+  // 02:00 a 01:59. Ver diaMananaCron() para el criterio exacto.
+  const tomorrowKey = diaMananaCron();
+  const { desde: tomorrowStartIso, hasta: tomorrowEndIso } =
+    rangoDiaMadridUtc(tomorrowKey);
 
   const { data: insts } = await admin
     .from("installations")
     .select("id, company_id, reference_code, scheduled_at, installer_user_id")
     .in("status", ["scheduled"])
-    .gte("scheduled_at", dayStart.toISOString())
-    .lte("scheduled_at", dayEnd.toISOString())
+    .gte("scheduled_at", tomorrowStartIso)
+    .lt("scheduled_at", tomorrowEndIso)
     .is("deleted_at", null);
   for (const inst of (insts ?? []) as Array<{
     id: string;
@@ -440,6 +472,7 @@ export async function GET(req: NextRequest) {
     scheduled_at: string;
     installer_user_id: string | null;
   }>) {
+    if (fueraDeTiempo("installations-tomorrow")) break;
     if (offInstallations.has(inst.company_id)) continue;
     const time = new Date(inst.scheduled_at).toLocaleTimeString("es-ES", {
       timeZone: "Europe/Madrid",
@@ -578,14 +611,15 @@ export async function GET(req: NextRequest) {
     .from("maintenance_jobs")
     .select("id, company_id, scheduled_at, technician_user_id")
     .eq("status", "scheduled")
-    .gte("scheduled_at", dayStart.toISOString())
-    .lte("scheduled_at", dayEnd.toISOString());
+    .gte("scheduled_at", tomorrowStartIso)
+    .lt("scheduled_at", tomorrowEndIso);
   for (const j of (jobs ?? []) as Array<{
     id: string;
     company_id: string;
     scheduled_at: string;
     technician_user_id: string | null;
   }>) {
+    if (fueraDeTiempo("maintenance-tomorrow")) break;
     if (offMaintenance.has(j.company_id)) continue;
     const time = new Date(j.scheduled_at).toLocaleTimeString("es-ES", {
       timeZone: "Europe/Madrid",
@@ -657,6 +691,7 @@ export async function GET(req: NextRequest) {
   }
 
   for (const ls of lowStockRows) {
+    if (fueraDeTiempo("stock-low")) break;
     if (offWarehouses.has(ls.company_id)) continue;
     try {
       // Idempotencia: solo notifica si no ha habido otra notif del mismo producto en 24h
@@ -713,12 +748,19 @@ export async function GET(req: NextRequest) {
     const { ensureMaintenanceWindow } = await import(
       "@/modules/maintenance/auto-schedule"
     );
-    const { data: activeContracts } = await admin
+    const { data: activeContracts, error: errActive } = await admin
       .from("contracts")
-      .select("id")
+      .select("id, company_id")
       .eq("maintenance_included", true)
-      .in("status", ["signed", "active", "installed"]);
-    for (const c of (activeContracts ?? []) as Array<{ id: string }>) {
+      // `installed` no existe en contract_status: la consulta daba 22P02 y
+      // esta ventana no se recalculaba nunca desde el cron (auditoría I1).
+      .in("status", ["signed", "active"])
+      .not("service_start_date", "is", null)
+      .is("deleted_at", null);
+    if (errActive) throw new Error(errActive.message);
+    for (const c of (activeContracts ?? []) as Array<{ id: string; company_id: string }>) {
+      if (offMaintenance.has(c.company_id)) continue;
+      if (fueraDeTiempo("maintenance-window")) break;
       try {
         const n = await ensureMaintenanceWindow(c.id, 12);
         maintenanceWindowStats.processed += 1;
@@ -728,7 +770,7 @@ export async function GET(req: NextRequest) {
       }
     }
   } catch (e) {
-    console.error("[cron/daily] ensureMaintenanceWindow failed:", e);
+    tracker.error("maintenance-window", e);
   }
 
   // 4b) Generar órdenes de carga sugeridas para mañana (furgonetas)
@@ -753,6 +795,7 @@ export async function GET(req: NextRequest) {
       "@/modules/warehouses/alert-actions"
     );
     for (const c of (companiesAll ?? []) as Array<{ id: string }>) {
+      if (fueraDeTiempo("stock-alerts")) break;
       if (offWarehouses.has(c.id)) continue;
       const r = await recomputeStockAlertsForCompany(c.id);
       stockAlertsStats.companies += 1;
@@ -854,6 +897,7 @@ export async function GET(req: NextRequest) {
     };
 
     for (const inc of (openIncidents ?? []) as Inc[]) {
+      if (fueraDeTiempo("incident-sla")) break;
       const created = new Date(inc.created_at).getTime();
       const deadline = new Date(inc.deadline_at).getTime();
       const totalMs = deadline - created;
@@ -1077,32 +1121,12 @@ export async function GET(req: NextRequest) {
     free_trials_expired: 0,
     next_maintenance_scheduled: 0,
     installations_forgotten_notified: 0,
-    churn_scores_updated: 0,
   };
 
-  // P2-F) Recalcular churn_score para clientes con equipo activo (max 500/día)
-  try {
-    const { data: actives } = await admin
-      .from("customer_equipment")
-      .select("customer_id")
-      .eq("is_active", true); // customer_equipment usa is_active, no status
-    const customerIds = Array.from(
-      new Set(
-        ((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id),
-      ),
-    );
-    if (customerIds.length > 0) {
-      const { recomputeChurnScoreAction } = await import(
-        "@/modules/customers/churn-score"
-      );
-      for (const cid of customerIds.slice(0, 500)) {
-        const r = await recomputeChurnScoreAction(cid);
-        if (r.ok) phase2.churn_scores_updated += 1;
-      }
-    }
-  } catch (e) {
-    console.error("[phase2/churn-scores]", e);
-  }
+  // P2-F) (eliminado, auditoría 2026-10-01 C2) Recalculaba el churn con
+  // recomputeChurnScoreAction, que empieza con requireSession(): en un cron
+  // no hay sesión, así que fallaba siempre. El churn vive ahora en su propio
+  // cron (/api/cron/churn) con un cálculo por conjuntos.
 
   // P2-A) Auto-expire propuestas enviadas hace > 30 días (validez por defecto)
   try {
@@ -1140,6 +1164,7 @@ export async function GET(req: NextRequest) {
       company_id: string;
       created_by: string | null;
     }>)) {
+      if (fueraDeTiempo("proposals-followup")) break;
       if (!p.created_by) continue;
       try {
         await admin.from("notifications").insert({
@@ -1164,7 +1189,7 @@ export async function GET(req: NextRequest) {
 
   // P2-C) Marcar pruebas gratuitas caducadas (expires_at < hoy, status installed)
   try {
-    const todayDate = new Date().toISOString().slice(0, 10);
+    const todayDate = diaReferenciaCron();
     const { data: expiredTrials } = await admin
       .from("free_trials")
       .update({ status: "expired" })
@@ -1203,7 +1228,7 @@ export async function GET(req: NextRequest) {
   // P2-D) Programar siguiente mantenimiento para contratos activos con
   // maintenance_included que no tengan job futuro programado.
   try {
-    const todayDate2 = new Date().toISOString().slice(0, 10);
+    const todayDate2 = rangoDiaMadridUtc(diaReferenciaCron()).desde;
     const { data: activeContracts } = await admin
       .from("contracts")
       .select("id, company_id, customer_id, service_start_date")
@@ -1216,6 +1241,7 @@ export async function GET(req: NextRequest) {
       customer_id: string;
       service_start_date: string | null;
     }>) {
+      if (fueraDeTiempo("next-maintenance")) break;
       if (offMaintenance.has(c.company_id)) continue;
       // ¿Tiene job futuro? Incluimos 'preprogrammed' y 'needs_callback' además
       // de scheduled/in_progress: el bloque 4a-bis (ensureMaintenanceWindow) ya
@@ -1240,25 +1266,24 @@ export async function GET(req: NextRequest) {
       const baseDate = (last as { completed_at: string | null } | null)?.completed_at
         ?? c.service_start_date
         ?? todayDate2;
-      const next = new Date(baseDate);
-      next.setMonth(next.getMonth() + 6);
+      // +6 meses sin desbordar (31-ago → 28-feb, no 3-mar) y conservando la
+      // hora de Madrid (auditoría I35).
+      const next = sumarMesesMadrid(baseDate, 6);
       if (next < new Date()) {
         // Si por fechas raras quedaría en el pasado, lo programamos en +14d.
         next.setTime(Date.now() + 14 * 86400000);
       }
-      try {
-        await admin.from("maintenance_jobs").insert({
-          company_id: c.company_id,
-          customer_id: c.customer_id,
-          contract_id: c.id,
-          kind: "contracted",
-          status: "scheduled",
-          scheduled_at: next.toISOString(),
-        });
-        phase2.next_maintenance_scheduled += 1;
-      } catch {
-        /* */
-      }
+      const { error: errNext } = await admin.from("maintenance_jobs").insert({
+        company_id: c.company_id,
+        customer_id: c.customer_id,
+        contract_id: c.id,
+        kind: "contracted",
+        status: "scheduled",
+        scheduled_at: next.toISOString(),
+        original_scheduled_at: next.toISOString(),
+      });
+      if (errNext) tracker.error("next-maintenance", new Error(errNext.message));
+      else phase2.next_maintenance_scheduled += 1;
     }
   } catch (e) {
     console.error("[phase2/next-maintenance]", e);
@@ -1267,10 +1292,13 @@ export async function GET(req: NextRequest) {
   // P2-E) Avisar de instalaciones del día que siguen in_progress después de
   // las 22:00 (probable olvido del técnico).
   try {
-    const nowHour = new Date().getHours();
-    if (nowHour >= 22) {
-      const dayStart = new Date();
-      dayStart.setHours(0, 0, 0, 0);
+    // Hora y día en Madrid: el cron corre a las 23:00 (invierno) o 00:00
+    // (verano). Se revisan las instalaciones del día que acaba de terminar.
+    const nowHour = madridHour(new Date());
+    if (nowHour >= 22 || nowHour < 3) {
+      const dayStart = new Date(
+        rangoDiaMadridUtc(sumarDiasClave(diaReferenciaCron(), -1)).desde,
+      );
       const { data: forgotten } = await admin
         .from("installations")
         .select("id, company_id, installer_user_id, reference_code")
@@ -1338,8 +1366,16 @@ export async function GET(req: NextRequest) {
   if (today.getDate() === 1) {
     monthlyInvoicing = { contracts: 0, generated: 0, errors: 0, payments_created: 0 };
     try {
-      const monthIso = today.toISOString().slice(0, 10);
-      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+      // Mes de Madrid "AAAA-MM". El cron corre a las 22:00 UTC del día 1
+      // (00:00 del día 2 en verano, 23:00 del día 1 en invierno): siempre el
+      // mismo mes que el día UTC.
+      const { anio: anioCuota, mes: mesCuota } = mesMadrid(today);
+      const monthLabel = `${anioCuota}-${String(mesCuota).padStart(2, "0")}`;
+      // Último día del mes como vencimiento (igual que antes).
+      const monthDueDate = sumarDiasClave(
+        sumarMesesClave(`${monthLabel}-01`, 1),
+        -1,
+      );
       // Query defensiva — paused_at y billing_starts_at se añadieron en
       // migraciones tardías. Probamos con todo y vamos quitando si falta.
       let activeContractsRaw: unknown[] | null = null;
@@ -1383,129 +1419,33 @@ export async function GET(req: NextRequest) {
         // Skip empresas con módulo invoicing OFF.
         if (offInvoicing.has(c.company_id)) continue;
         monthlyInvoicing.contracts += 1;
-        // Rollback manual ante fallos en cadena (Supabase sin transacciones
-        // de cliente). Si fallamos a mitad, deshacemos lo creado para evitar
-        // estados inconsistentes (invoice sin payment, etc.).
-        let createdInvoiceId: string | null = null;
-        let createdPaymentId: string | null = null;
+        // Factura + contract_payment + wallet ENLAZADO a la factura en un
+        // solo sitio (registrarCuotaMensualContrato, módulo de facturación;
+        // auditoría 2026-10-01 C3): antes el wallet se creaba sin invoice_id
+        // y al validar el cobro se podía facturar el mismo mes dos veces.
+        // Es idempotente por (contrato, mes) y deshace lo creado si falla.
         try {
-          const monthLabel = monthIso.slice(0, 7); // "2026-05"
-          // Idempotencia previa al insert (en cualquier paso podría haber).
-          // Se mira `issue_date`, no `issued_at`: `issued_at` solo se rellena
-          // al EMITIR, así que en un borrador es NULL y el filtro no casaba
-          // nunca — habría facturado otra vez cada día.
-          const { count: already } = await admin
-            .from("invoices")
-            .select("id", { count: "exact", head: true })
-            .eq("contract_id", c.id)
-            .gte("issue_date", monthStart.slice(0, 10))
-            .is("deleted_at", null);
-          if ((already ?? 0) > 0) continue;
-          const { count: cpAlready } = await admin
-            .from("contract_payments")
-            .select("id", { count: "exact", head: true })
-            .eq("contract_id", c.id)
-            .ilike("concept", `Cuota mensual%${monthLabel}%`);
-          if ((cpAlready ?? 0) > 0) continue;
-
-          // 1) Factura de la cuota, por el MISMO camino que el alta manual:
-          //    serie fiscal + allocate_next_invoice_number + full_reference.
-          //    Antes se insertaba a pelo con `pending_cents` (columna que no
-          //    existe) y sin series_id/number/fiscal_year/full_reference, las
-          //    cuatro NOT NULL: no llegó a crearse una sola factura nunca.
-          let charged = c.monthly_cents;
-          try {
-            const inv = await createContractMonthlyInvoice({
-              admin,
-              companyId: c.company_id,
-              contract: {
-                id: c.id,
-                customer_id: c.customer_id,
-                monthly_cents: c.monthly_cents,
-                reference_code: c.reference_code,
-              },
-              monthLabel,
-              dueDate: new Date(today.getFullYear(), today.getMonth() + 1, 0)
-                .toISOString()
-                .slice(0, 10),
-            });
-            createdInvoiceId = inv.id;
-            // Lo que se cobra es lo que se factura. Para empresa/autónomo la
-            // cuota del contrato es BASE y la factura lleva el IVA encima.
-            charged = inv.total_cents;
-          } catch (e) {
-            monthlyInvoicing.errors += 1;
-            console.error(
-              "[phase2/monthly-invoice]",
-              e instanceof Error ? e.message : e,
-            );
-            continue;
-          }
-          monthlyInvoicing.generated += 1;
-
-          // 2) Insert contract_payment
-          const { data: cpRow, error: cpErr } = await admin
-            .from("contract_payments")
-            .insert({
-              company_id: c.company_id,
-              contract_id: c.id,
-              concept: `Cuota mensual · ${monthLabel}`,
-              amount_cents: charged,
-              method: "direct_debit",
-              moment: "periodic",
-              status: "pending",
-            })
-            .select("id")
-            .single();
-          if (cpErr) {
-            // Rollback invoice
-            await admin.from("invoices").delete().eq("id", createdInvoiceId);
-            monthlyInvoicing.errors += 1;
-            monthlyInvoicing.generated -= 1;
-            console.error("[phase2/monthly-payment]", cpErr.message);
-            continue;
-          }
-          createdPaymentId = (cpRow as { id: string }).id;
-
-          // 3) Insert wallet_entry
-          const { error: weErr } = await admin.from("wallet_entries").insert({
-            company_id: c.company_id,
-            contract_id: c.id,
-            contract_payment_id: createdPaymentId,
-            customer_id: c.customer_id,
-            concept: `Cuota mensual ${monthLabel}`,
-            amount_cents: charged,
-            method: "direct_debit",
-            status: "pending",
+          const r = await registrarCuotaMensualContrato({
+            admin,
+            companyId: c.company_id,
+            contract: {
+              id: c.id,
+              customer_id: c.customer_id,
+              monthly_cents: c.monthly_cents,
+              reference_code: c.reference_code,
+            },
+            monthLabel,
+            dueDate: monthDueDate,
           });
-          if (weErr) {
-            // Rollback payment + invoice
-            await admin.from("contract_payments").delete().eq("id", createdPaymentId);
-            await admin.from("invoices").delete().eq("id", createdInvoiceId);
-            monthlyInvoicing.errors += 1;
-            monthlyInvoicing.generated -= 1;
-            console.error("[phase2/monthly-wallet]", weErr.message);
-            continue;
+          if (r.estado === "creada") {
+            monthlyInvoicing.generated += 1;
+            monthlyInvoicing.payments_created += 1;
+          } else if (r.estado === "omitida") {
+            console.warn("[phase2/monthly-invoice] omitida:", c.id, r.motivo);
           }
-          monthlyInvoicing.payments_created += 1;
         } catch (e) {
-          // Rollback completo si algo lanzó excepción
-          if (createdPaymentId) {
-            await admin
-              .from("contract_payments")
-              .delete()
-              .eq("id", createdPaymentId)
-              .then(() => {}, () => {});
-          }
-          if (createdInvoiceId) {
-            await admin
-              .from("invoices")
-              .delete()
-              .eq("id", createdInvoiceId)
-              .then(() => {}, () => {});
-          }
           monthlyInvoicing.errors += 1;
-          console.error("[phase2/monthly-invoice exception]", e);
+          tracker.error("monthly-invoice", e);
         }
       }
     } catch (e) {
@@ -1606,7 +1546,7 @@ export async function GET(req: NextRequest) {
   try {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const todayDate = new Date().toISOString().slice(0, 10);
+    const todayDate = rangoDiaMadridUtc(diaReferenciaCron()).desde;
     const { data: pausedContracts } = await admin
       .from("contracts")
       .select("id, company_id, customer_id, paused_at, reference_code")
@@ -1622,6 +1562,7 @@ export async function GET(req: NextRequest) {
       paused_at: string;
       reference_code: string | null;
     }>)) {
+      if (fueraDeTiempo("paused-maintenance")) break;
       if (offMaintenance.has(c.company_id)) continue;
       pausedMaintenance.contracts_scanned += 1;
       try {
@@ -1629,21 +1570,29 @@ export async function GET(req: NextRequest) {
           .from("maintenance_jobs")
           .select("id", { count: "exact", head: true })
           .eq("contract_id", c.id)
-          .in("status", ["scheduled", "in_progress"])
+          // También cuentan las visitas teóricas (preprogrammed /
+          // needs_callback) de la ventana de 12 meses: si no, se duplicaban.
+          .in("status", ["preprogrammed", "needs_callback", "scheduled", "in_progress"])
           .gte("scheduled_at", todayDate);
         if ((futureJobs ?? 0) > 0) continue;
-        const scheduled = new Date();
-        scheduled.setDate(scheduled.getDate() + 7);
-        scheduled.setHours(9, 0, 0, 0);
-        await admin.from("maintenance_jobs").insert({
+        // Dentro de 7 días a las 09:00 de Madrid (antes 09:00 UTC = 11:00).
+        const scheduledIso =
+          madridLocalToUtcISO(`${sumarDiasClave(diaReferenciaCron(), 7)}T09:00`) ??
+          new Date(Date.now() + 7 * 86400000).toISOString();
+        // kind "preventive" no existe en maintenance_kind (auditoría I1): el
+        // insert fallaba siempre y aun así se avisaba de una revisión
+        // "agendada" que no existía.
+        const { error: errIns } = await admin.from("maintenance_jobs").insert({
           company_id: c.company_id,
           customer_id: c.customer_id,
           contract_id: c.id,
-          kind: "preventive",
+          kind: "contracted",
           status: "scheduled",
-          scheduled_at: scheduled.toISOString(),
+          scheduled_at: scheduledIso,
+          original_scheduled_at: scheduledIso,
           notes: `Mantenimiento preventivo automático — alquiler pausado >30d`,
         });
+        if (errIns) throw new Error(errIns.message);
         pausedMaintenance.jobs_created += 1;
         try {
           await notifyByRoles(c.company_id, ["company_admin", "technical_director"], {
@@ -1692,6 +1641,7 @@ export async function GET(req: NextRequest) {
       "@/modules/sales/reconcile"
     );
     for (const c of (companiesAll ?? []) as Array<{ id: string }>) {
+      if (fueraDeTiempo("sales-reconcile")) break;
       salesReconcile.companies += 1;
       try {
         const r = await reconcileSalesRecordsForCompany(admin, c.id, {
@@ -1722,98 +1672,10 @@ export async function GET(req: NextRequest) {
     console.error("[cron/daily] sales reconcile outer failed:", e);
   }
 
-  // ===== Score CHURN automático (decisión 2026-05-20) =====
-  // Recalcula customers.churn_score (0-100) cada noche.
-  // Heurística simple:
-  //   · Días desde último mantenimiento > 365  → +30
-  //   · Días desde último mantenimiento 180-365 → +15
-  //   · Pagos fallados últimos 6m              → +25
-  //   · NPS ≤ 2 último mantenimiento           → +15
-  //   · Incidencias abiertas                   → +15
-  //   · Contratos cancelados anteriores        → +15
-  // Resultado clampeado 0-100.
-  const churnStats = { recalculated: 0, errors: 0 };
-  try {
-    // Recalcula churn de TODAS las empresas (por eso no filtra company_id;
-    // selecciona company_id y lo usa por fila). El .limit(5000) hacía que solo
-    // se recalculasen los 1000 primeros por el max-rows de PostgREST.
-    const custs = await fetchAllRows<{
-      id: string;
-      company_id: string;
-      created_at: string;
-    }>(
-      (from, to) =>
-        admin
-          .from("customers")
-          .select("id, company_id, created_at")
-          .is("deleted_at", null)
-          .order("id")
-          .range(from, to),
-      { label: "cron/churn" },
-    );
-    type C = { id: string; company_id: string; created_at: string };
-    for (const c of ((custs ?? []) as C[])) {
-      try {
-        let score = 0;
-        // Último mantenimiento
-        const { data: lastM } = await admin
-          .from("maintenance_jobs")
-          .select("completed_at")
-          .eq("customer_id", c.id)
-          .eq("status", "completed")
-          .not("completed_at", "is", null)
-          .order("completed_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const lastMaint = (lastM as { completed_at: string | null } | null)
-          ?.completed_at;
-        if (lastMaint) {
-          const days = Math.floor(
-            (Date.now() - new Date(lastMaint).getTime()) / 86400000,
-          );
-          if (days > 365) score += 30;
-          else if (days > 180) score += 15;
-        }
-        // Pagos fallados 6m
-        const sixMonthsAgo = new Date(Date.now() - 180 * 86400000).toISOString();
-        const { count: failed } = await admin
-          .from("wallet_entries")
-          .select("id", { count: "exact", head: true })
-          .eq("customer_id", c.id)
-          .eq("status", "rejected")
-          .gte("created_at", sixMonthsAgo);
-        if ((failed ?? 0) > 0) score += 25;
-        // Incidencias abiertas
-        const { count: openInc } = await admin
-          .from("incidents")
-          .select("id", { count: "exact", head: true })
-          .eq("customer_id", c.id)
-          .in("status", ["open", "assigned", "in_progress"]);
-        if ((openInc ?? 0) > 0) score += 15;
-        // Contratos cancelados previos
-        const { count: cancelledContracts } = await admin
-          .from("contracts")
-          .select("id", { count: "exact", head: true })
-          .eq("customer_id", c.id)
-          .eq("status", "cancelled");
-        if ((cancelledContracts ?? 0) > 0) score += 15;
-
-        score = Math.max(0, Math.min(100, score));
-        await admin
-          .from("customers")
-          .update({
-            churn_score: score,
-            churn_score_at: new Date().toISOString(),
-          })
-          .eq("id", c.id);
-        churnStats.recalculated += 1;
-      } catch {
-        churnStats.errors += 1;
-      }
-    }
-  } catch (e) {
-    tracker.error("churn-score-outer", e);
-  }
+  // ===== Score CHURN: movido a /api/cron/churn (auditoría 2026-10-01, C2) =====
+  // Aquí hacía ~5 consultas secuenciales por cliente (1.857 clientes) y el
+  // cron moría a los 300 s en este bucle: nunca llegaba a los recordatorios
+  // de impago ni registraba su fin en cron_runs.
 
   // ===== Auto-cron leads stale (decisión 2026-05-20) =====
   // Leads status=new asignados hace > 14 días sin events lead.contacted
@@ -1836,6 +1698,7 @@ export async function GET(req: NextRequest) {
       assigned_at: string | null;
     };
     for (const l of ((candidates ?? []) as L[])) {
+      if (fueraDeTiempo("stale-leads")) break;
       try {
         // Verificar que NO haya contacto reciente
         const { count: contacts } = await admin
@@ -1870,316 +1733,9 @@ export async function GET(req: NextRequest) {
     tracker.error("stale-leads-outer", e);
   }
 
-  // ===== Recordatorios de impago automáticos (decisión 2026-05-20) =====
-  // Para cada factura vencida con saldo pendiente, mandar el recordatorio
-  // correspondiente al nivel de retraso:
-  //  · 7d  → recordatorio suave (template payment_reminder_1)
-  //  · 14d → recordatorio formal (template payment_reminder_2)
-  //  · 30d → requerimiento (template payment_reminder_3)
-  //  · 45d → alerta admin "considera vía legal" (no envío al cliente)
-  // Idempotencia vía invoice_reminders_sent.
-  const remindersStats = {
-    level1: 0,
-    level2: 0,
-    level3: 0,
-    legal_alerts: 0,
-    errors: 0,
-    skipped_no_consent: 0,
-  };
-  try {
-    const now = Date.now();
-    // `pending_cents` NO existe en la tabla: pedirla hacía fallar el select
-    // entero y ningún recordatorio salió jamás. Lo pendiente es
-    // total_cents − cobros de invoice_payments, igual que en getInvoice().
-    const { data: overdue } = await admin
-      .from("invoices")
-      .select(
-        "id, company_id, customer_id, customer_fiscal_snapshot, full_reference, total_cents, due_date, status",
-      )
-      .in("status", ["issued", "overdue"])
-      .lt("due_date", new Date(now).toISOString().slice(0, 10))
-      .is("deleted_at", null);
-    type Inv = {
-      id: string;
-      company_id: string;
-      customer_id: string | null;
-      customer_fiscal_snapshot: Record<string, unknown> | null;
-      full_reference: string;
-      total_cents: number;
-      due_date: string;
-      status: string;
-    };
-    const overdueList = (overdue ?? []) as Inv[];
-    // Cobros parciales de todas ellas en una sola consulta.
-    const paidByInvoice = new Map<string, number>();
-    if (overdueList.length > 0) {
-      const { data: paysData } = await admin
-        .from("invoice_payments")
-        .select("invoice_id, amount_cents")
-        .in("invoice_id", overdueList.map((i) => i.id));
-      for (const p of (paysData ?? []) as Array<{
-        invoice_id: string;
-        amount_cents: number;
-      }>) {
-        paidByInvoice.set(
-          p.invoice_id,
-          (paidByInvoice.get(p.invoice_id) ?? 0) + (p.amount_cents ?? 0),
-        );
-      }
-    }
-    for (const inv of overdueList) {
-      if (offInvoicing.has(inv.company_id)) continue;
-      const pendingCents = inv.total_cents - (paidByInvoice.get(inv.id) ?? 0);
-      if (pendingCents <= 0) continue;
-      try {
-        const daysOverdue = Math.floor(
-          (now - new Date(inv.due_date).getTime()) / 86400000,
-        );
-        let level: 1 | 2 | 3 | null = null;
-        if (daysOverdue >= 45) {
-          // No envío al cliente — solo notif admin
-          if (daysOverdue === 45 || daysOverdue === 46) {
-            await notifyByRoles(
-              inv.company_id,
-              ["company_admin", "commercial_director"],
-              {
-                kind: "invoice.legal_action_suggested",
-                severity: "warning",
-                title: `Factura ${inv.full_reference} +45d vencida`,
-                body: `Considera vía legal. Cliente impagado más de 45 días por ${(pendingCents / 100).toFixed(2)}€.`,
-                subject_type: "invoice",
-                subject_id: inv.id,
-                action_url: `/facturas/${inv.id}`,
-              },
-            );
-            remindersStats.legal_alerts += 1;
-          }
-          continue;
-        } else if (daysOverdue >= 30) level = 3;
-        else if (daysOverdue >= 14) level = 2;
-        else if (daysOverdue >= 7) level = 1;
-        if (!level) continue;
-
-        // ¿Ya enviamos este nivel?
-        const { count: already } = await admin
-          .from("invoice_reminders_sent")
-          .select("id", { count: "exact", head: true })
-          .eq("invoice_id", inv.id)
-          .eq("level", level);
-        if ((already ?? 0) > 0) continue;
-
-        // Consentimiento + email cliente
-        const snap = inv.customer_fiscal_snapshot ?? {};
-        const recipientEmail = (snap as { email?: string }).email ?? null;
-        if (!recipientEmail) {
-          remindersStats.skipped_no_consent += 1;
-          continue;
-        }
-
-        // RGPD: `customers.commercial_consent` no existe — el consentimiento
-        // vive en `customer_consents`. Un recordatorio de impago es
-        // transaccional, no marketing, así que se mira `data_processing`,
-        // igual que los emails de incidencia (incidents/email-from-cron.ts).
-        let hasConsent = true;
-        if (inv.customer_id) {
-          try {
-            const { data: consent } = await admin
-              .from("customer_consents")
-              .select("granted")
-              .eq("customer_id", inv.customer_id)
-              .eq("kind", "data_processing")
-              .order("granted_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            hasConsent = (consent as { granted?: boolean } | null)?.granted !== false;
-          } catch {
-            /* */
-          }
-        }
-        if (!hasConsent) {
-          remindersStats.skipped_no_consent += 1;
-          // Crear tarea agenda al admin: llamar al cliente
-          try {
-            await admin.from("agenda_events").insert({
-              company_id: inv.company_id,
-              kind: "task",
-              title: `Llamar — factura ${inv.full_reference} impagada ${daysOverdue}d`,
-              description: `El cliente no acepta comunicaciones comerciales. Pendiente: ${(pendingCents / 100).toFixed(2)}€.`,
-              starts_at: new Date(now + 24 * 3600000).toISOString(),
-              subject_type: "invoice",
-              subject_id: inv.id,
-            });
-          } catch {
-            /* */
-          }
-          continue;
-        }
-
-        // Registrar recordatorio (idempotencia primero — un solo recordatorio
-        // por nivel y factura, aunque el envío falle: si reintentamos al día
-        // siguiente la siguiente vuelta del cron no duplica).
-        await admin.from("invoice_reminders_sent").insert({
-          invoice_id: inv.id,
-          level,
-          channel: "email",
-          recipient_email: recipientEmail,
-          template_key: `payment_reminder_${level}`,
-        });
-
-        // Envío REAL del recordatorio al cliente vía SMTP (auditoría 2026-05-30
-        // detectó que antes solo notificaba al admin internamente y NO al
-        // cliente — el campo "ya le mandamos 3 recordatorios" era falso).
-        try {
-          const templateKey = `payment_reminder_${level}`;
-          // Plantilla per-empresa; fallback al catálogo de sistema.
-          const { data: tplRow } = await admin
-            .from("email_templates")
-            .select("id, subject, body_html, kind")
-            .eq("company_id", inv.company_id)
-            .eq("key", templateKey)
-            .eq("is_active", true)
-            .maybeSingle();
-          let tplId: string | null = null;
-          let tplSubject = "";
-          let tplBody = "";
-          let tplKind = "transactional";
-          if (tplRow) {
-            const tr = tplRow as {
-              id: string;
-              subject: string;
-              body_html: string;
-              kind: string;
-            };
-            tplId = tr.id;
-            tplSubject = tr.subject;
-            tplBody = tr.body_html;
-            tplKind = tr.kind;
-          } else {
-            const { getSystemTemplateByKey } = await import(
-              "@/modules/mailing/system-templates"
-            );
-            const sys = getSystemTemplateByKey(templateKey);
-            if (sys) {
-              tplSubject = sys.subject;
-              tplBody = sys.body_html;
-            } else {
-              // Genérico mínimo si no hay seed: que al menos llegue algo
-              // útil. (system-templates debería tener payment_reminder_*).
-              tplSubject = `Recordatorio: factura ${inv.full_reference} pendiente`;
-              tplBody = `<p>Hola,</p><p>Te recordamos que la factura <b>${inv.full_reference}</b> de ${(pendingCents / 100).toFixed(2)} € está pendiente de pago desde hace ${daysOverdue} días.</p><p>Si ya la has abonado, ignora este aviso. Si no, ponte en contacto con nosotros.</p>`;
-            }
-          }
-
-          const snapFull = inv.customer_fiscal_snapshot as
-            | Record<string, unknown>
-            | null;
-          const firstName = (snapFull?.first_name as string | null) ?? "";
-          const customerName =
-            (snapFull?.trade_name as string | null) ??
-            (snapFull?.legal_name as string | null) ??
-            `${firstName} ${snapFull?.last_name ?? ""}`.trim() ??
-            "Cliente";
-          const vars: Record<string, string> = {
-            customer_first_name: firstName || customerName,
-            customer_name: customerName,
-            invoice_ref: inv.full_reference ?? "",
-            days_overdue: String(daysOverdue),
-            pending_amount: (pendingCents / 100).toFixed(2),
-            due_date: new Date(inv.due_date).toLocaleDateString("es-ES"),
-          };
-          const render = (s: string) =>
-            s.replace(/\{\{(\w+)\}\}/g, (_m, k: string) =>
-              vars[k] !== undefined ? vars[k] : `{{${k}}}`,
-            );
-
-          const { loadCompanyEmailContext } = await import(
-            "@/modules/mailing/company-context"
-          );
-          const ctx = await loadCompanyEmailContext(inv.company_id, admin);
-          const { buildEmailHtml } = await import("@/modules/mailing/templates");
-          const subjectRendered = render(tplSubject);
-          const htmlWrapped = buildEmailHtml({
-            body_html: render(tplBody),
-            company: ctx.company,
-            branding: ctx.branding,
-            kind: "transactional",
-          });
-
-          const { sendViaSmtp } = await import("@/modules/mailing/smtp");
-          const sendRes = await sendViaSmtp({
-            companyId: inv.company_id,
-            senderUserId: null,
-            to: recipientEmail,
-            toName: customerName,
-            subject: subjectRendered,
-            html: htmlWrapped,
-            sendType: "automated",
-            triggerEvent: "payment_reminder",
-            relatedType: "invoice",
-            relatedId: inv.id,
-          });
-
-          try {
-            await admin.from("email_sends").insert({
-              company_id: inv.company_id,
-              template_id: tplId,
-              template_key: templateKey,
-              kind: tplKind,
-              to_email: recipientEmail,
-              to_name: customerName,
-              subject: subjectRendered,
-              body_html: htmlWrapped,
-              customer_id: inv.customer_id,
-              related_subject_type: "invoice",
-              related_subject_id: inv.id,
-              status: sendRes.ok ? "sent" : "failed",
-              error_message: sendRes.ok ? null : sendRes.error,
-              sent_at: sendRes.ok ? new Date().toISOString() : null,
-              send_type: "automated",
-              trigger_event: "payment_reminder",
-              from_account_type: sendRes.ok ? sendRes.accountType : null,
-              resend_id: sendRes.ok ? sendRes.resend_id ?? null : null,
-            });
-          } catch {
-            /* fail-soft del registro */
-          }
-        } catch (e) {
-          tracker.error("payment-reminder-send", e);
-        }
-
-        // Notificar también al admin internamente para que vea el resumen.
-        await notifyByRoles(
-          inv.company_id,
-          ["company_admin", "commercial_director"],
-          {
-            kind: `invoice.reminder_${level}_sent`,
-            severity: level === 3 ? "warning" : "info",
-            title: `Recordatorio nivel ${level}: ${inv.full_reference}`,
-            body: `Factura impagada ${daysOverdue} días. ${(pendingCents / 100).toFixed(2)}€.`,
-            subject_type: "invoice",
-            subject_id: inv.id,
-            action_url: `/facturas/${inv.id}`,
-          },
-        );
-        if (level === 1) remindersStats.level1 += 1;
-        if (level === 2) remindersStats.level2 += 1;
-        if (level === 3) remindersStats.level3 += 1;
-
-        // Marcar factura como overdue si no lo está aún
-        if (inv.status === "issued") {
-          await admin
-            .from("invoices")
-            .update({ status: "overdue" })
-            .eq("id", inv.id);
-        }
-      } catch (e) {
-        remindersStats.errors += 1;
-        tracker.error("invoice-reminder", e);
-      }
-    }
-  } catch (e) {
-    tracker.error("invoice-reminders-outer", e);
-  }
+  // ===== Recordatorios de impago: movidos a /api/cron/invoice-reminders
+  // (auditoría 2026-10-01, C2). Corren por la mañana, en horario de oficina,
+  // y no dependen de que este cron termine a tiempo.
 
   // Retención de media "instrucciones para el técnico" (category tech_prep):
   //  · vídeos → se borran cuando la instalación está completed (ya instalado).
@@ -2206,6 +1762,7 @@ export async function GET(req: NextRequest) {
         .eq("status", "completed");
       const done = new Set(((completed ?? []) as Array<{ id: string }>).map((r) => r.id));
       for (const v of vidList) {
+        if (fueraDeTiempo("tech-prep-videos")) break;
         if (!done.has(v.installation_id)) continue;
         try {
           await admin.storage.from("installation-photos").remove([v.storage_path]);
@@ -2226,6 +1783,7 @@ export async function GET(req: NextRequest) {
       .lt("taken_at", sixMonthsAgo.toISOString())
       .limit(1000);
     for (const p of (oldPhotos ?? []) as Array<{ id: string; storage_path: string }>) {
+      if (fueraDeTiempo("tech-prep-photos")) break;
       try {
         await admin.storage.from("installation-photos").remove([p.storage_path]);
         await admin.from("installation_photos").delete().eq("id", p.id);
@@ -2262,9 +1820,9 @@ export async function GET(req: NextRequest) {
     paused_maintenance: pausedMaintenance,
     wallet_reconcile: walletReconcile,
     rrss_auto_generate: rrssAuto,
-    invoice_reminders: remindersStats,
-    churn_score: churnStats,
     stale_leads: staleStats,
+    cut_by_time: seccionesCortadas,
+    duration_ms_before_finish: Date.now() - tracker.startedAt,
   };
   await tracker.finish({ summary });
   return NextResponse.json({

@@ -8,7 +8,9 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { notify } from "@/shared/hooks/use-toast";
+import { MoneyInput } from "@/shared/components/money-input";
 import { createInvoiceSafeAction, type InvoiceLine } from "./actions";
+import { calcularLinea, validarLineasFactura } from "./importes";
 
 interface CustomerOpt {
   id: string;
@@ -59,14 +61,17 @@ export function NewInvoiceForm({
     setLines((cur) => cur.filter((_, i) => i !== idx));
   }
 
+  // Misma fórmula que el servidor (./importes). Una línea a medio escribir
+  // (cantidad vacía, etc.) suma 0 en vez de romper la vista.
   const totals = lines.reduce(
     (acc, l) => {
-      const gross = l.unit_price_cents * l.quantity;
-      const discount = Math.round((gross * l.discount_percent) / 100);
-      const subtotal = gross - discount;
-      const tax = Math.round((subtotal * l.tax_rate_percent) / 100);
-      acc.subtotal += subtotal;
-      acc.tax += tax;
+      try {
+        const t = calcularLinea(l);
+        acc.subtotal += t.subtotal_cents;
+        acc.tax += t.tax_cents;
+      } catch {
+        /* línea incompleta */
+      }
       return acc;
     },
     { subtotal: 0, tax: 0 },
@@ -77,8 +82,11 @@ export function NewInvoiceForm({
       notify.warning("Elige un cliente");
       return;
     }
-    if (lines.some((l) => !l.description || l.unit_price_cents < 0)) {
-      notify.warning("Cada línea necesita descripción y precio");
+    // I39: se valida antes de enviar (y el servidor lo vuelve a validar ANTES
+    // de numerar): cantidad vacía o 0, descuento > 100 %, etc.
+    const err = validarLineasFactura(lines, "invoice");
+    if (err) {
+      notify.warning(err);
       return;
     }
     startTransition(async () => {
@@ -146,19 +154,21 @@ export function NewInvoiceForm({
                 <Input
                   type="number"
                   step="0.01"
-                  value={l.quantity}
-                  onChange={(e) => setLine(idx, { quantity: Number(e.target.value) })}
+                  value={Number.isNaN(l.quantity) ? "" : l.quantity}
+                  onChange={(e) =>
+                    setLine(idx, {
+                      // Vacío → NaN, que la validación rechaza (antes Number("") = 0
+                      // llegaba al servidor y quemaba un número de factura).
+                      quantity: e.target.value.trim() === "" ? Number.NaN : Number(e.target.value),
+                    })
+                  }
                 />
               </div>
               <div className="col-span-4 sm:col-span-2 space-y-1">
                 <Label className="text-xs">Precio unidad (€)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={(l.unit_price_cents / 100).toFixed(2)}
-                  onChange={(e) =>
-                    setLine(idx, { unit_price_cents: Math.round(Number(e.target.value) * 100) })
-                  }
+                <MoneyInput
+                  valueCents={l.unit_price_cents}
+                  onChangeCents={(c) => setLine(idx, { unit_price_cents: c })}
                 />
               </div>
               <div className="col-span-2 sm:col-span-1 space-y-1">

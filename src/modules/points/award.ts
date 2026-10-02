@@ -1,7 +1,12 @@
-"use server";
+// Sin "use server" (auditoría 2026-10-01): son funciones internas que llaman
+// otras acciones con el admin client. Como server actions cualquiera podía
+// invocarlas desde el navegador con empresa, usuario y puntos arbitrarios.
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { DEFAULT_POINTS_SETTINGS, type PointsSettings } from "./settings";
+import { mesMadrid } from "@/modules/scheduling/fechas-madrid";
+import { isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
+import { yaOtorgado, type AsientoPuntos } from "./idempotencia";
 
 /**
  * Lee la configuración de puntos para una empresa. Si no hay valores guardados,
@@ -50,48 +55,77 @@ export async function awardPoints(args: AwardArgs): Promise<void> {
   const admin = createAdminClient() as any;
   const now = new Date();
 
-  // Idempotencia (decisión 2026-05-20): si ya existe una entrada con
-  // mismo user_id + reason + subject_type + subject_id, no insertamos
-  // otra. Caso típico: webhook que reintenta o cron que reprocesa.
-  // Sólo aplica si subject_id/subject_type informados (sin ellos no
-  // hay unicidad lógica).
-  if (args.subject_type && args.subject_id) {
-    try {
-      const { count } = await admin
+  // Mes y año del asiento en hora de Madrid (auditoría 2026-10-01, I36): un
+  // contrato firmado el 1-oct a las 01:30 de Madrid contaba para septiembre.
+  const { anio: periodYear, mes: periodMonth } = mesMadrid(now);
+  const points = Math.round(args.points);
+
+  // Idempotencia ATÓMICA vía RPC award_points_once (auditoría 2026-10-01,
+  // I43; migración 20261002090400): serializa por (empresa, usuario, motivo,
+  // sujeto) y permite volver a otorgar tras una reversión.
+  let inserted = false;
+  const { data: rpcData, error: rpcErr } = await admin.rpc("award_points_once", {
+    p_company_id: args.company_id,
+    p_user_id: args.user_id,
+    p_points: points,
+    p_reason: args.reason,
+    p_subject_type: args.subject_type ?? null,
+    p_subject_id: args.subject_id ?? null,
+    p_contract_id: args.contract_id ?? null,
+    p_installation_id: args.installation_id ?? null,
+    p_metadata: args.metadata ?? {},
+    p_period_year: periodYear,
+    p_period_month: periodMonth,
+  });
+  if (!rpcErr) {
+    inserted = rpcData === true;
+  } else if (isFunctionMissingError(rpcErr)) {
+    // Migración sin aplicar: comprobación en código (sin bloqueo, como antes)
+    // pero ya sin contar lo revertido.
+    if (args.subject_type && args.subject_id) {
+      const { data: previos, error: errPrev } = await admin
         .from("points_ledger")
-        .select("id", { count: "exact", head: true })
+        .select("points, reason, awarded_at")
         .eq("company_id", args.company_id)
         .eq("user_id", args.user_id)
-        .eq("reason", args.reason)
         .eq("subject_type", args.subject_type)
-        .eq("subject_id", args.subject_id)
-        .gt("points", 0);
-      if ((count ?? 0) > 0) {
-        // Ya otorgado — log y salir sin insertar.
+        .eq("subject_id", args.subject_id);
+      if (errPrev) {
+        console.error("[awardPoints] points_ledger:", errPrev.message);
+        return;
+      }
+      if (yaOtorgado((previos ?? []) as AsientoPuntos[], args.reason)) {
         console.log(
           `[awardPoints] skip duplicate ${args.reason} ${args.subject_type}=${args.subject_id} user=${args.user_id}`,
         );
         return;
       }
-    } catch {
-      /* fail-soft: si el SELECT falla, intentamos insertar igual */
     }
+    const { error: errIns } = await admin.from("points_ledger").insert({
+      company_id: args.company_id,
+      user_id: args.user_id,
+      points,
+      reason: args.reason,
+      contract_id: args.contract_id ?? null,
+      installation_id: args.installation_id ?? null,
+      subject_type: args.subject_type ?? null,
+      subject_id: args.subject_id ?? null,
+      metadata: args.metadata ?? {},
+      period_year: periodYear,
+      period_month: periodMonth,
+      awarded_at: now.toISOString(),
+    });
+    if (errIns) {
+      console.error("[awardPoints] points_ledger insert:", errIns.message);
+      return;
+    }
+    inserted = true;
+  } else {
+    // Fail-soft (contrato de esta función): no tumba el flujo principal.
+    console.error("[awardPoints] award_points_once:", rpcErr.message);
+    return;
   }
-
-  await admin.from("points_ledger").insert({
-    company_id: args.company_id,
-    user_id: args.user_id,
-    points: Math.round(args.points),
-    reason: args.reason,
-    contract_id: args.contract_id ?? null,
-    installation_id: args.installation_id ?? null,
-    subject_type: args.subject_type ?? null,
-    subject_id: args.subject_id ?? null,
-    metadata: args.metadata ?? {},
-    period_year: now.getFullYear(),
-    period_month: now.getMonth() + 1,
-    awarded_at: now.toISOString(),
-  });
+  if (!inserted) return;
   // Comprobar hitos del mes (no recursivo: bonus de hito tiene reason
   // distinto y la función filtra para no contarse a sí mismo)
   if (args.points > 0 && args.reason !== "milestone_reached") {
@@ -138,8 +172,8 @@ export async function reversePointsForSubject(
       reason,
       subject_type: subjectType,
       subject_id: subjectId,
-      period_year: now.getFullYear(),
-      period_month: now.getMonth() + 1,
+        period_year: mesMadrid(now).anio,
+      period_month: mesMadrid(now).mes,
       awarded_at: now.toISOString(),
     });
   }

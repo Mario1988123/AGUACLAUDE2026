@@ -8,10 +8,17 @@
  * 20260604101100_seed_helpers.sql. Las funciones SQL ya validan permisos
  * (company_admin de la empresa o superadmin), pero replicamos el guard aquí
  * para devolver mensajes amigables al cliente.
+ *
+ * Auditoría 2026-10-01 (I2): las funciones viven en el schema `app`, que
+ * PostgREST no expone, y se llamaban con el cliente ADMIN. Fallaban siempre:
+ * por PGRST202 y, aunque hubiera wrapper, porque su guardia lee auth.uid() y
+ * el JWT, que con service_role son NULL. Ahora se llaman con el cliente del
+ * USUARIO contra los wrappers `public.*` de la migración
+ * 20261002100500_rpc_wrappers_voz_y_semillas_productos.sql.
  */
 
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import {
   isProductEditor,
@@ -36,12 +43,12 @@ export async function importStandardWaterCategoriesAction(): Promise<SeedImportR
       return { ok: false, error: PRODUCTS_NOT_EDITOR_ERROR };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
-    const { data, error } = await admin.rpc("import_global_water_categories", {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase.rpc("import_global_water_categories", {
       p_company_id: session.company_id,
     });
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: toActionError(error, "seed-productos") };
 
     const row = Array.isArray(data) ? data[0] : data;
     const inserted = Number(row?.inserted_count ?? 0);
@@ -69,12 +76,12 @@ export async function importStandardServiceLinesAction(): Promise<SeedImportResu
       return { ok: false, error: PRODUCTS_NOT_EDITOR_ERROR };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
-    const { data, error } = await admin.rpc("import_standard_service_lines", {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase.rpc("import_standard_service_lines", {
       p_company_id: session.company_id,
     });
 
-    if (error) return { ok: false, error: error.message };
+    if (error) return { ok: false, error: toActionError(error, "seed-productos") };
 
     const row = Array.isArray(data) ? data[0] : data;
     const inserted = Number(row?.inserted_count ?? 0);

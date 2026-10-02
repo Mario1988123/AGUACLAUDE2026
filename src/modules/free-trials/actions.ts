@@ -1,5 +1,6 @@
 "use server";
 
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -304,23 +305,14 @@ export async function installFreeTrialAction(
     if (!installationsModuleActive) {
       throw new Error("__skip__"); // saltar bloque
     }
-    const year = now.getFullYear();
-    const yearPrefix = `I-${year}-`;
-    const { data: lastCoded } = await admin
-      .from("installations")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${yearPrefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-    if (lastCode) {
-      const m = lastCode.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
-    const refCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    // Numeración con contador atómico (auditoría 2026-10-01, I25: antes
+    // max()+1 sin bloqueo, orden de texto y año UTC).
+    const refCode = await siguienteReferencia(
+      admin,
+      session.company_id,
+      "installations",
+      "I",
+    );
     const { data: inst, error: instErr } = await admin
       .from("installations")
       .insert({
@@ -837,23 +829,14 @@ export async function acceptFreeTrialAction(input: {
     if (!customerId) return { ok: false, error: "Prueba sin cliente ni lead" };
 
     // 3) Reference code C-YYYY-NNNN
-    const year = new Date().getFullYear();
-    const yearPrefix = `C-${year}-`;
-    const { data: lastCoded } = await admin
-      .from("contracts")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${yearPrefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastCode = (lastCoded as { reference_code: string | null } | null)?.reference_code;
-    if (lastCode) {
-      const m = lastCode.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
-    const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    // Numeración con contador atómico (auditoría 2026-10-01, I25: antes
+    // max()+1 sin bloqueo, orden de texto y año UTC).
+    const referenceCode = await siguienteReferencia(
+      admin,
+      session.company_id,
+      "contracts",
+      "C",
+    );
 
     // 3.5) Construir customer_snapshot inmutable para el contrato
     let customerSnapshot: Record<string, unknown> = {};

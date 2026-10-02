@@ -1,6 +1,7 @@
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 
 export interface SessionClaims {
   user_id: string;
@@ -56,7 +57,7 @@ function decodeJwt(token: string): Record<string, unknown> {
  * Custom Access Token Hook en el JWT, así que hay que decodificar el
  * access_token para leerlos (NO viven en user.app_metadata).
  */
-export async function requireSession(): Promise<SessionClaims> {
+async function requireSessionUncached(): Promise<SessionClaims> {
   if (DEV_AUTOLOGIN) return DEV_FAKE_SESSION;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,6 +149,20 @@ export async function requireSession(): Promise<SessionClaims> {
     must_change_password: mustChangePassword,
   };
 }
+
+/**
+ * Sesión del usuario actual, memoizada POR PETICIÓN con `cache()` de React.
+ *
+ * Auditoría 2026-10-01 (I38): cada llamada hacía 4 viajes a Supabase
+ * (getUser, getSession, user_profiles, user_roles) y una página como
+ * /clientes/[id] encadena unos 25 helpers que la piden cada uno. `cache()`
+ * deduplica dentro del mismo render de servidor / la misma server action;
+ * entre peticiones no comparte nada (no hay riesgo de mezclar usuarios).
+ *
+ * Misma firma que antes: `requireSession(): Promise<SessionClaims>`.
+ * El objeto devuelto es COMPARTIDO dentro de la petición: no lo mutes.
+ */
+export const requireSession: () => Promise<SessionClaims> = cache(requireSessionUncached);
 
 /**
  * Si el usuario debe cambiar la contraseña, redirige a /restablecer-password.

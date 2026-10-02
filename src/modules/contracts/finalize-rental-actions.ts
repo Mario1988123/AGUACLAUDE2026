@@ -20,8 +20,13 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
  *                       resto se retiene como penalización.
  *
  * El movimiento se registra como un nuevo `contract_payment` con
- * `amount_cents` negativo si hay devolución (la concepto explica el caso)
- * y un wallet_entry vinculado para que la salida quede en caja.
+ * `amount_cents` negativo si hay devolución (el concepto explica el caso)
+ * y un wallet_entry vinculado para que la salida quede en caja. Requiere la
+ * migración 20261002130100 (CHECK que admite negativos solo en devoluciones).
+ *
+ * [decide] Los cobros PENDIENTES ya facturados (p. ej. la cuota del último
+ * mes) no se cancelan al finalizar: el servicio se prestó y se deben. Solo
+ * al CANCELAR un contrato se anulan los pendientes. Ver pregunta de negocio 4.
  */
 const finalizeSchema = z.object({
   contract_id: z.string().uuid(),
@@ -55,6 +60,7 @@ export async function finalizeRentalContractAction(
       .from("contracts")
       .select("id, status, plan_type, company_id, customer_id")
       .eq("id", parsed.contract_id)
+      .eq("company_id", session.company_id)
       .maybeSingle();
     const c = row as
       | {
@@ -78,6 +84,7 @@ export async function finalizeRentalContractAction(
       .from("contract_payments")
       .select("amount_cents, status, concept")
       .eq("contract_id", parsed.contract_id)
+      .eq("company_id", session.company_id)
       .ilike("concept", "Fianza%");
     type D = { amount_cents: number; status: string; concept: string };
     const depositRows = ((deps ?? []) as D[]).filter(
@@ -104,8 +111,43 @@ export async function finalizeRentalContractAction(
       retainCents = depositTotal - part;
     }
 
-    // 3) Si hay devolución, generar contract_payment "Devolución fianza"
-    // con importe negativo + wallet_entry salida.
+    // 3) Cerrar el contrato PRIMERO y de forma condicional: si dos clics
+    //    llegan a la vez, solo uno pasa de signed/active a completed y solo
+    //    ese registra la devolución (antes un doble clic devolvía dos veces).
+    const { data: cerrado, error: upErr } = await admin
+      .from("contracts")
+      .update({ status: "completed" })
+      .eq("id", parsed.contract_id)
+      .eq("company_id", session.company_id)
+      .in("status", ["signed", "active"])
+      .select("id");
+    if (upErr) return { ok: false, error: upErr.message };
+    if (((cerrado ?? []) as unknown[]).length === 0) {
+      return { ok: false, error: "El contrato ya se ha finalizado o ha cambiado de estado" };
+    }
+    const deshacerCierre = async () => {
+      await admin
+        .from("contracts")
+        .update({ status: c.status })
+        .eq("id", parsed.contract_id)
+        .eq("company_id", session.company_id)
+        .eq("status", "completed");
+    };
+    const creados: Array<{ tabla: string; id: string }> = [];
+    const deshacerMovimientos = async () => {
+      for (const x of creados.reverse()) {
+        await admin.from(x.tabla).delete().eq("id", x.id);
+      }
+    };
+
+    // 4) Devolución de fianza: movimiento de SALIDA. Las tablas no tienen
+    //    columna de sentido, así que la salida es un importe negativo con
+    //    concepto "Devolución fianza"; la migración 20261002130100 permite
+    //    importes negativos SOLO para devoluciones validadas. Antes el insert
+    //    chocaba con CHECK (amount_cents >= 0), solo se escribía en
+    //    console.error y el contrato quedaba cerrado sin rastro de la
+    //    devolución. Ahora, si falla, no se cierra nada.
+    const ahora = new Date().toISOString();
     if (returnCents > 0) {
       const { data: cpRow, error: cpErr } = await admin
         .from("contract_payments")
@@ -117,43 +159,63 @@ export async function finalizeRentalContractAction(
           method: "transfer",
           moment: "intermediate",
           status: "validated",
-          collected_at: new Date().toISOString(),
+          collected_at: ahora,
           collected_by_user_id: session.user_id,
-          validated_at: new Date().toISOString(),
+          validated_at: ahora,
           validated_by_user_id: session.user_id,
           notes: parsed.reason,
         })
         .select("id")
         .single();
       if (cpErr) {
-        console.error("[finalize-rental] contract_payment devolución falló:", cpErr);
-      } else {
-        try {
-          await admin.from("wallet_entries").insert({
-            company_id: c.company_id,
-            contract_id: c.id,
-            contract_payment_id: (cpRow as { id: string }).id,
-            customer_id: c.customer_id,
-            concept: "Devolución fianza",
-            amount_cents: -returnCents,
-            method: "transfer",
-            status: "validated",
-            collected_at: new Date().toISOString(),
-            validated_at: new Date().toISOString(),
-            validated_by_user_id: session.user_id,
-            notes: parsed.reason,
-          });
-        } catch (e) {
-          console.error("[finalize-rental] wallet_entry devolución falló:", e);
-        }
+        await deshacerCierre();
+        return {
+          ok: false,
+          error: /amount_cents_check/i.test(cpErr.message ?? "")
+            ? "Falta aplicar la migración de facturación del 02-10-2026 para registrar devoluciones de fianza. No se ha cerrado el contrato."
+            : `No se pudo registrar la devolución de la fianza: ${cpErr.message}`,
+        };
       }
+      const cpId = (cpRow as { id: string }).id;
+      creados.push({ tabla: "contract_payments", id: cpId });
+      const { data: weRow, error: weErr } = await admin
+        .from("wallet_entries")
+        .insert({
+          company_id: c.company_id,
+          contract_id: c.id,
+          contract_payment_id: cpId,
+          customer_id: c.customer_id,
+          concept: "Devolución fianza",
+          amount_cents: -returnCents,
+          method: "transfer",
+          status: "validated",
+          collected_at: ahora,
+          validated_at: ahora,
+          validated_by_user_id: session.user_id,
+          notes: parsed.reason,
+        })
+        .select("id")
+        .single();
+      if (weErr) {
+        await deshacerMovimientos();
+        await deshacerCierre();
+        return { ok: false, error: `No se pudo registrar la salida de caja de la fianza: ${weErr.message}` };
+      }
+      creados.push({ tabla: "wallet_entries", id: (weRow as { id: string }).id });
+      await admin
+        .from("contract_payments")
+        .update({ wallet_entry_id: (weRow as { id: string }).id })
+        .eq("id", cpId);
     }
 
-    // 4) Si hay retención, registramos un contract_payment "Penalización"
-    // por trazabilidad (no genera salida de caja, sigue siendo ingreso).
+    // 5) Retención: se deja constancia (no es salida de caja). Pendiente de
+    //    negocio (pregunta 8): si la fianza retenida es un ingreso aparte o
+    //    la misma fianza que cambia de concepto. Se mantiene como estaba,
+    //    pero ahora si falla no se cierra el contrato a medias.
     if (retainCents > 0) {
-      try {
-        await admin.from("contract_payments").insert({
+      const { data: rtRow, error: rtErr } = await admin
+        .from("contract_payments")
+        .insert({
           company_id: c.company_id,
           contract_id: c.id,
           concept: "Retención fianza (penalización)",
@@ -161,25 +223,21 @@ export async function finalizeRentalContractAction(
           method: "transfer",
           moment: "intermediate",
           status: "validated",
-          collected_at: new Date().toISOString(),
+          collected_at: ahora,
           collected_by_user_id: session.user_id,
-          validated_at: new Date().toISOString(),
+          validated_at: ahora,
           validated_by_user_id: session.user_id,
           notes: parsed.reason,
-        });
-      } catch (e) {
-        console.error("[finalize-rental] penalización trace falló:", e);
+        })
+        .select("id")
+        .single();
+      if (rtErr) {
+        await deshacerMovimientos();
+        await deshacerCierre();
+        return { ok: false, error: `No se pudo registrar la retención de la fianza: ${rtErr.message}` };
       }
+      creados.push({ tabla: "contract_payments", id: (rtRow as { id: string }).id });
     }
-
-    // 5) Cerrar contrato como completed
-    const { error: upErr } = await admin
-      .from("contracts")
-      .update({
-        status: "completed",
-      })
-      .eq("id", parsed.contract_id);
-    if (upErr) return { ok: false, error: upErr.message };
 
     // 6) Evento timeline
     await admin.from("events").insert({

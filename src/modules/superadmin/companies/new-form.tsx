@@ -6,7 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { createCompanyAction } from "./actions";
+import { createCompanySafeAction } from "./actions";
 
 /** Convierte cualquier nombre en un slug válido [a-z0-9-]+, máx 50.
  *  Quita acentos, baja a minúsculas, sustituye no-alfanuméricos por
@@ -51,7 +51,7 @@ export function NewCompanyForm() {
     fd.delete("monthly_cost_euros");
     startTransition(async () => {
       try {
-        const res = await createCompanyAction(fd);
+        const res = await createCompanySafeAction(fd);
         // En éxito redirige (NEXT_REDIRECT). Si devuelve {ok:false} es un aviso legible.
         if (res && res.ok === false) {
           notify.error("No se pudo crear", res.error);

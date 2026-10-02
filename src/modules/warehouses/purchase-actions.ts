@@ -1,5 +1,6 @@
 "use server";
 
+import { adjustStockBatch, isInsufficientStockError } from "./adjust-stock";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
@@ -157,44 +158,21 @@ export async function createPurchaseAction(input: {
         .eq("id", it.product_id)
         .eq("company_id", session.company_id);
 
-      // Suma stock en almacén destino
-      const { data: existing } = await admin
-        .from("warehouse_stock")
-        .select("id, quantity")
-        .eq("warehouse_id", input.warehouse_id)
-        .eq("product_id", it.product_id)
-        .eq("company_id", session.company_id)
-        .eq("state", "new")
-        .is("location_id", null)
-        .maybeSingle();
-      const row = existing as { id: string; quantity: number } | null;
-      if (row) {
-        await admin
-          .from("warehouse_stock")
-          .update({ quantity: row.quantity + it.quantity })
-          .eq("id", row.id);
-      } else {
-        await admin.from("warehouse_stock").insert({
-          company_id: session.company_id,
+      // Suma stock en almacén destino + movimiento inbound enlazado a la
+      // compra, ATÓMICO vía RPC adjust_stock_batch (auditoría 2026-10-01,
+      // I42: antes leer-sumar-escribir).
+      await adjustStockBatch(session.company_id, session.user_id, [
+        {
           warehouse_id: input.warehouse_id,
           product_id: it.product_id,
-          quantity: it.quantity,
           state: "new",
-        });
-      }
-
-      // Movimiento inbound enlazado a la compra
-      await admin.from("stock_movements").insert({
-        company_id: session.company_id,
-        product_id: it.product_id,
-        warehouse_id: input.warehouse_id,
-        movement_type: "inbound",
-        quantity: it.quantity,
-        state_after: "new",
-        purchase_id: purchaseId,
-        performed_by: session.user_id,
-        notes: `Albarán ${input.invoice_number} (${input.supplier_name})`,
-      });
+          location_id: null,
+          delta: it.quantity,
+          movement_type: "inbound",
+          purchase_id: purchaseId,
+          notes: `Albarán ${input.invoice_number} (${input.supplier_name})`,
+        },
+      ]);
 
       // Auto-crear lote FIFO para trazabilidad. Fail-soft si la tabla no
       // está migrada todavía. lot_code preferentemente el del proveedor
@@ -383,38 +361,27 @@ export async function returnToSupplierAction(input: {
     );
   }
 
-  // Stock disponible en el almacén
-  const { data: stock } = await admin
-    .from("warehouse_stock")
-    .select("id, quantity")
-    .eq("warehouse_id", input.warehouse_id)
-    .eq("product_id", input.product_id)
-    .eq("company_id", session.company_id)
-    .eq("state", "new")
-    .is("location_id", null)
-    .maybeSingle();
-  const sRow = stock as { id: string; quantity: number } | null;
-  if (!sRow || sRow.quantity < input.quantity) {
-    throw new Error(
-      `Stock insuficiente en este almacén (${sRow?.quantity ?? 0} ud)`,
-    );
+  // Salida ATÓMICA vía RPC (auditoría 2026-10-01, I42). Estricta: si no
+  // hay stock suficiente la RPC lanza INSUFFICIENT_STOCK y no toca nada.
+  try {
+    await adjustStockBatch(session.company_id, session.user_id, [
+      {
+        warehouse_id: input.warehouse_id,
+        product_id: input.product_id,
+        state: "new",
+        location_id: null,
+        delta: -input.quantity,
+        movement_type: "outbound_return_supplier",
+        purchase_id: input.purchase_id,
+        reason: input.reason ?? "Devolución a proveedor",
+      },
+    ]);
+  } catch (e) {
+    if (isInsufficientStockError(e)) {
+      throw new Error("Stock insuficiente en este almacén para devolver esa cantidad");
+    }
+    throw e;
   }
-  await admin
-    .from("warehouse_stock")
-    .update({ quantity: sRow.quantity - input.quantity })
-    .eq("id", sRow.id)
-    .eq("company_id", session.company_id);
-
-  await admin.from("stock_movements").insert({
-    company_id: session.company_id,
-    product_id: input.product_id,
-    warehouse_id: input.warehouse_id,
-    movement_type: "outbound_return_supplier",
-    quantity: input.quantity,
-    purchase_id: input.purchase_id,
-    performed_by: session.user_id,
-    reason: input.reason ?? "Devolución a proveedor",
-  });
 
   revalidatePath(`/almacenes/${input.warehouse_id}`);
 }

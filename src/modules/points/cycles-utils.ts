@@ -3,6 +3,12 @@
  * Se separan de cycles-actions.ts para no violar la regla de Next.js
  * "Server Actions must be async functions".
  */
+import { madridParts } from "@/shared/lib/format-date";
+import {
+  inicioDiaMadridUtc,
+  rangoMesMadridUtc,
+  sumarMesesClave,
+} from "@/modules/scheduling/fechas-madrid";
 
 /**
  * Resuelve el ciclo al que pertenece una fecha dada según `cycle_close_day`.
@@ -17,40 +23,37 @@ export function computeCycleRange(
   date: Date,
   closeDay: number,
 ): { cycle_year: number; cycle_month: number; start_at: Date; end_at: Date } {
+  // Todo en hora de Madrid (auditoría 2026-10-01, I36): el servidor está en
+  // UTC y una venta del 1-oct a las 01:30 de Madrid caía en el ciclo de
+  // septiembre. Los límites son las 00:00 de Madrid.
+  const p = madridParts(date);
+  const y = p.year;
+  const m = p.month; // 1-12
   if (closeDay <= 0 || closeDay > 28) {
-    const y = date.getFullYear();
-    const m = date.getMonth();
-    const start = new Date(y, m, 1, 0, 0, 0);
-    const end = new Date(y, m + 1, 1, 0, 0, 0);
+    const r = rangoMesMadridUtc(y, m);
     return {
       cycle_year: y,
-      cycle_month: m + 1,
-      start_at: start,
-      end_at: end,
+      cycle_month: m,
+      start_at: new Date(r.desde),
+      end_at: new Date(r.hasta),
     };
   }
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const day = date.getDate();
-  let cycleYear: number;
-  let cycleMonth: number;
-  if (day >= closeDay) {
-    cycleMonth = m + 1;
-    cycleYear = y;
-    if (cycleMonth > 11) {
-      cycleMonth = 0;
-      cycleYear = y + 1;
+  // Mes (1-12) en que CIERRA el ciclo.
+  let cierreAnio = y;
+  let cierreMes = m;
+  if (p.day >= closeDay) {
+    cierreMes = m + 1;
+    if (cierreMes > 12) {
+      cierreMes = 1;
+      cierreAnio = y + 1;
     }
-  } else {
-    cycleMonth = m;
-    cycleYear = y;
   }
-  const end = new Date(cycleYear, cycleMonth, closeDay, 0, 0, 0);
-  const start = new Date(cycleYear, cycleMonth - 1, closeDay, 0, 0, 0);
+  const claveFin = `${cierreAnio}-${String(cierreMes).padStart(2, "0")}-${String(closeDay).padStart(2, "0")}`;
+  const claveInicio = sumarMesesClave(claveFin, -1);
   return {
-    cycle_year: end.getFullYear(),
-    cycle_month: end.getMonth() + 1,
-    start_at: start,
-    end_at: end,
+    cycle_year: cierreAnio,
+    cycle_month: cierreMes,
+    start_at: new Date(inicioDiaMadridUtc(claveInicio)),
+    end_at: new Date(inicioDiaMadridUtc(claveFin)),
   };
 }

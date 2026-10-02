@@ -33,9 +33,11 @@ export function WarehouseSettingsForm({ initial }: Props) {
     startTransition(async () => {
       const r = await saveWarehouseSettingsAction({
         valuation_method: valuation,
-        alert_no_rotation_days: Number(noRot),
-        alert_min_company_age_days: Number(minAge),
-        default_iva_pct: Number(iva),
+        // Se envía el texto tal cual: el servidor valida y, si está en
+        // blanco, devuelve un error claro (Number("") era 0 → IVA del 0 %).
+        alert_no_rotation_days: noRot,
+        alert_min_company_age_days: minAge,
+        default_iva_pct: iva,
         alerts_enabled: enabled,
       });
       if (!r.ok) {

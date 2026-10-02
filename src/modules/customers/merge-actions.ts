@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { toActionError } from "@/shared/lib/actions/safe-error";
@@ -119,6 +120,15 @@ export async function mergeCustomersAction(
   if (list.some((r) => r.company_id !== session.company_id))
     throw new Error("Cliente de otra empresa");
 
+  // I6: las escrituras van con el admin client (filtrando SIEMPRE por la
+  // empresa de la sesión). Con el cliente RLS el borrado suave del
+  // secundario fallaba en silencio: la política de SELECT exige
+  // deleted_at IS NULL y Postgres rechaza un UPDATE cuya fila nueva deja de
+  // ser visible. La lectura de arriba, con RLS, ya ha comprobado que el
+  // usuario ve los dos clientes.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
   // Mover relaciones (todas usan customer_id como FK).
   // Defensa cross-tenant (decisión 2026-05-20): SIEMPRE añadimos
   // .eq("company_id", session.company_id) — aunque la query de arriba
@@ -135,9 +145,19 @@ export async function mergeCustomersAction(
     "free_trials",
     "customer_equipment",
   ];
+  // Las direcciones del secundario pasan como NO principales: si no, el
+  // índice único parcial uniq_address_primary_per_customer rechaza el
+  // traslado entero (dos principales para el mismo cliente) y las
+  // direcciones se quedaban colgando del cliente borrado.
+  await admin
+    .from("addresses")
+    .update({ is_primary: false })
+    .eq("customer_id", secondaryId)
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null);
   for (const t of tables) {
     try {
-      await supabase
+      await admin
         .from(t)
         .update({ customer_id: primaryId })
         .eq("customer_id", secondaryId)
@@ -151,7 +171,7 @@ export async function mergeCustomersAction(
   // Antes iba en el bucle genérico y fallaba en silencio → la timeline del
   // cliente secundario se perdía al fusionar.
   try {
-    await supabase
+    await admin
       .from("events")
       .update({ subject_id: primaryId })
       .eq("subject_type", "customer")
@@ -162,14 +182,20 @@ export async function mergeCustomersAction(
   }
 
   // Soft-delete el secundario (sigue con scope company_id por defensa)
-  await supabase
+  const { data: borrado, error: errBorrado } = await admin
     .from("customers")
     .update({
       deleted_at: new Date().toISOString(),
       notes: `Fusionado en ${primaryId} por ${session.user_id}`,
     })
     .eq("id", secondaryId)
-    .eq("company_id", session.company_id);
+    .eq("company_id", session.company_id)
+    .is("deleted_at", null)
+    .select("id");
+  if (errBorrado) throw errBorrado;
+  if (!borrado || borrado.length === 0) {
+    throw new Error("No se ha podido dar de baja el cliente duplicado");
+  }
 
   await supabase.from("events").insert({
     company_id: session.company_id,

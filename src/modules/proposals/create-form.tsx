@@ -7,7 +7,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { MoneyInput } from "@/shared/components/money-input";
 import { notify } from "@/shared/hooks/use-toast";
-import { createProposalAction, updateProposalAction } from "./actions";
+import { createProposalSafeAction, updateProposalSafeAction } from "./actions";
 import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
 import type { ProductForProposal } from "@/modules/products/actions";
 import { pickPrice } from "./pick-price";
@@ -347,10 +347,16 @@ export function ProposalCreateForm({
           financier_residual_cents: null,
           financier_reserve_cents: null,
         };
-        if (isEdit && editId) {
-          await updateProposalAction(editId, payload);
-        } else {
-          await createProposalAction(payload);
+        // Variantes Safe: devuelven el error como dato. Con las acciones que
+        // lanzan, en producción Next ocultaba el mensaje y aquí llegaba un
+        // genérico (auditoría 2026-10-01 I7). El éxito sigue redirigiendo.
+        const r =
+          isEdit && editId
+            ? await updateProposalSafeAction(editId, payload)
+            : await createProposalSafeAction(payload);
+        if (!r.ok) {
+          notify.error("No se pudo guardar la propuesta", r.error);
+          return;
         }
       } catch (err) {
         if (err && typeof err === "object" && "digest" in err) {

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import crypto from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
@@ -334,6 +335,18 @@ export async function submitRemoteSignatureAction(input: {
     // Rate limit (decisión 2026-05-20): endpoint público sin auth.
     // Max 5 intentos por (token + IP) en 60s para evitar brute-force.
     const { checkRate } = await import("@/shared/lib/rate-limit");
+    // I21: la IP la pone el SERVIDOR (x-forwarded-for de Vercel), no el
+    // navegador: antes llegaba siempre null desde el cliente y la prueba de
+    // la firma quedaba sin IP.
+    let ipServidor: string | null = null;
+    try {
+      const h = await headers();
+      ipServidor =
+        h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip")?.trim() || null;
+    } catch {
+      /* fuera de una petición */
+    }
+    input = { ...input, client_ip: ipServidor };
     const rlKey = `remote-sign:${input.token}:${input.client_ip ?? "noip"}`;
     if (!checkRate(rlKey, 5, 60_000)) {
       return {
@@ -382,6 +395,27 @@ export async function submitRemoteSignatureAction(input: {
       };
     }
 
+    // I21: el CONTRATO tiene que seguir pendiente de firma. Si ya se firmó en
+    // persona, se canceló o se completó, el enlace no sirve (antes se volvía
+    // a marcar como firmado y se relanzaban todos los efectos post-firma).
+    {
+      const { data: cEstado } = await admin
+        .from("contracts")
+        .select("status, signed_at, deleted_at")
+        .eq("id", s.contract_id)
+        .eq("company_id", s.company_id)
+        .maybeSingle();
+      const ce = cEstado as { status: string; signed_at: string | null; deleted_at: string | null } | null;
+      if (
+        !ce ||
+        ce.deleted_at ||
+        ce.signed_at ||
+        !["draft", "pending_data", "pending_signature"].includes(ce.status)
+      ) {
+        return { ok: false, error: "Este contrato ya no está pendiente de firma." };
+      }
+    }
+
     // Guardar firma + IP + UA. Update CONDICIONAL a signed_at IS NULL: si dos
     // POST concurrentes pasan el chequeo de arriba, solo uno hará match aquí
     // (el otro afecta 0 filas) → evita doble firma por carrera.
@@ -395,6 +429,7 @@ export async function submitRemoteSignatureAction(input: {
       })
       .eq("id", s.id)
       .is("signed_at", null)
+      .is("cancelled_at", null)
       .select("id");
     if (r1.error) return { ok: false, error: r1.error.message };
     if (!r1.data || r1.data.length === 0) {
@@ -470,6 +505,7 @@ export async function submitRemoteSignatureAction(input: {
     // del cliente es ES00 o no validado, no queda 'signed' limpio sino
     // 'pending_data' (luego el admin valida el IBAN). Antes la firma remota se
     // saltaba esto y dejaba contratos 'signed' sin domiciliación válida.
+    let contratoFirmado = false;
     try {
       let nextStatus = "signed";
       let provisional = false;
@@ -496,7 +532,10 @@ export async function submitRemoteSignatureAction(input: {
         /* si no podemos comprobar el IBAN, firmamos normal */
       }
       if (provisional) nextStatus = "pending_data";
-      await admin
+      // I21: update CONDICIONAL. Si en este instante se firmó en persona o se
+      // canceló, toca 0 filas y NO se lanzan los efectos post-firma (wallet,
+      // instalación, sales_records…), que se duplicarían.
+      const { data: marcado, error: markErr } = await admin
         .from("contracts")
         .update({
           status: nextStatus,
@@ -505,9 +544,21 @@ export async function submitRemoteSignatureAction(input: {
             ? { has_provisional_data: true, pending_fields: ["iban"] }
             : { has_provisional_data: false, pending_fields: [] }),
         })
-        .eq("id", s.contract_id);
+        .eq("id", s.contract_id)
+        .eq("company_id", s.company_id)
+        .in("status", ["draft", "pending_data", "pending_signature"])
+        .is("signed_at", null)
+        .select("id");
+      if (markErr) throw markErr;
+      contratoFirmado = ((marcado ?? []) as unknown[]).length > 0;
     } catch (e) {
       console.error("[remote-sign] mark signed failed:", e);
+    }
+    if (!contratoFirmado) {
+      return {
+        ok: false,
+        error: "Este contrato ya no está pendiente de firma. Tu firma ha quedado registrada; contacta con la empresa.",
+      };
     }
 
     // Disparar TODOS los efectos post-firma (paridad con la firma presencial):
@@ -576,8 +627,10 @@ async function sendSignedContractCopy(
   },
 ): Promise<void> {
   try {
-    const { generateContractPdf } = await import("./pdf-generator");
-    const bytes = await generateContractPdf(args.contractId);
+    // Sin sesión (firma remota): la variante por empresa, no la de sesión,
+    // que fallaba siempre aquí y la copia firmada no llegaba a enviarse.
+    const { generateContractPdfForCompany } = await import("./pdf-generator");
+    const bytes = await generateContractPdfForCompany(args.contractId, args.companyId);
 
     const { loadCompanyEmailContext } = await import(
       "@/modules/mailing/company-context"

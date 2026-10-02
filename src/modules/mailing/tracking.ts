@@ -34,6 +34,28 @@ export function decodeUrlSafe(encoded: string): string | null {
   }
 }
 
+/**
+ * Anti open-redirect del clic (auditoría 2026-10-01, I20).
+ *
+ * Solo se redirige a un destino que esté como enlace en el HTML ORIGINAL del
+ * correo (email_outbox.body_html, que se guarda antes de reescribir los
+ * enlaces). Así el endpoint no sirve para mandar a nadie a un dominio
+ * arbitrario, y siguen funcionando los correos ya enviados (no hace falta
+ * firmar los enlaces). Mismo criterio que la reescritura de wrapWithTracking:
+ * el destino tiene que aparecer como valor literal de un href http(s).
+ */
+export function destinoClicPermitido(
+  destino: string | null,
+  htmlOriginal: string | null | undefined,
+): boolean {
+  if (!destino || !htmlOriginal) return false;
+  const re = /<a\b[^>]*?href\s*=\s*(["'])(https?:\/\/[^"']+)\1/gi;
+  for (const m of htmlOriginal.matchAll(re)) {
+    if (m[2] === destino) return true;
+  }
+  return false;
+}
+
 /** Devuelve la URL base (NEXT_PUBLIC_APP_URL o vercel). Vacío si no hay. */
 function trackingBaseUrl(): string {
   return (

@@ -1,5 +1,6 @@
 "use server";
 
+import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -77,15 +78,23 @@ export async function scheduleFreeTrialUninstallAction(
 
     // 2) Comprobar que no haya ya una orden de uninstall abierta para
     // esta prueba (idempotencia).
-    const { data: existing } = await admin
+    // Auditoría 2026-10-01, I5: "agendada" no existe en installation_status;
+    // la consulta fallaba (22P02), `existing` quedaba null y se podían crear
+    // órdenes de desinstalación duplicadas. Ahora solo valores válidos, filtro
+    // por empresa (admin client) y, si la consulta falla, NO se crea nada.
+    const { data: existing, error: errExisting } = await admin
       .from("installations")
       .select("id, status, reference_code")
+      .eq("company_id", session.company_id)
       .eq("free_trial_id", input.trial_id)
       .eq("kind", "uninstall")
       .is("deleted_at", null)
-      .in("status", ["scheduled", "agendada", "unscheduled", "in_progress", "paused"])
+      .in("status", ["unscheduled", "scheduled", "in_progress", "paused", "incident_pending"])
       .limit(1)
       .maybeSingle();
+    if (errExisting) {
+      return { ok: false, error: "No se pudo comprobar si ya hay una desinstalación abierta" };
+    }
     if (existing) {
       return {
         ok: true,
@@ -109,24 +118,14 @@ export async function scheduleFreeTrialUninstallAction(
     }
 
     // 4) Reference code I-YYYY-NNNN
-    const year = new Date().getFullYear();
-    const yearPrefix = `I-${year}-`;
-    const { data: lastCoded } = await admin
-      .from("installations")
-      .select("reference_code")
-      .eq("company_id", session.company_id)
-      .like("reference_code", `${yearPrefix}%`)
-      .order("reference_code", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    let nextNum = 1;
-    const lastCode = (lastCoded as { reference_code: string | null } | null)
-      ?.reference_code;
-    if (lastCode) {
-      const m = lastCode.match(/-(\d+)$/);
-      if (m) nextNum = parseInt(m[1]!, 10) + 1;
-    }
-    const referenceCode = `${yearPrefix}${String(nextNum).padStart(4, "0")}`;
+    // Numeración con contador atómico (auditoría 2026-10-01, I25: antes
+    // max()+1 sin bloqueo, orden de texto y año UTC).
+    const referenceCode = await siguienteReferencia(
+      admin,
+      session.company_id,
+      "installations",
+      "I",
+    );
 
     // 5) Items que vamos a retirar (snapshot de free_trial_items)
     const { data: tItems } = await admin

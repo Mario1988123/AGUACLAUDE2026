@@ -13,12 +13,14 @@ export function InstallationsConfigForm({
 }: {
   initial: { geo_tolerance_m: number; time_tolerance_min: number };
 }) {
-  const [geo, setGeo] = useState(initial.geo_tolerance_m);
-  const [time, setTime] = useState(initial.time_tolerance_min);
+  const [geo, setGeo] = useState(String(initial.geo_tolerance_m));
+  const [time, setTime] = useState(String(initial.time_tolerance_min));
   const [pending, startTransition] = useTransition();
 
   function save() {
     startTransition(async () => {
+      // Se envía el texto tal cual: el servidor decide (vacío = valor por
+      // defecto). Antes Number("") mandaba 0.
       const r = await saveInstallationsConfigSafeAction({
         installation_geo_tolerance_m: geo,
         installation_time_tolerance_min: time,
@@ -40,7 +42,7 @@ export function InstallationsConfigForm({
           min={50}
           max={5000}
           value={geo}
-          onChange={(e) => setGeo(Number(e.target.value))}
+          onChange={(e) => setGeo(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
           Si el técnico está a más metros del cliente al pulsar «Iniciar parte»,
@@ -54,7 +56,7 @@ export function InstallationsConfigForm({
           min={5}
           max={240}
           value={time}
-          onChange={(e) => setTime(Number(e.target.value))}
+          onChange={(e) => setTime(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
           Margen para considerar el parte «iniciado a tiempo».

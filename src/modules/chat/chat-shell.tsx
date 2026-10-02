@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient as createBrowserSupabase } from "@/shared/lib/supabase/client";
+import { filtroRealtimeHilos } from "./hilo-acceso";
 import {
   Megaphone,
   Users,
@@ -171,17 +172,33 @@ export function ChatShell({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  // Realtime: suscribir al canal de mensajes globales y refrescar cuando llega
-  // uno del hilo activo o cualquiera (para actualizar badges del sidebar).
+  // Realtime: escuchar SOLO los mensajes de mis hilos (filtro thread_id=in.(…)).
+  // La RLS de chat_messages (app.chat_puede_leer_hilo) es la que de verdad
+  // impide recibir mensajes ajenos; el filtro es defensa en profundidad y
+  // ahorra tráfico. Para enterarse de hilos nuevos (p. ej. alguien abre un
+  // directo conmigo) se escucha también el UPDATE de chat_threads, que el
+  // trigger de last_message_at dispara con cada mensaje; la RLS de
+  // chat_threads solo deja pasar los hilos que puedo leer.
+  const threadIdsKey = threads.map((t) => t.id).join(",");
   useEffect(() => {
     if (typeof window === "undefined") return;
     let cancelled = false;
     const supabase = createBrowserSupabase();
-    const channel = supabase
-      .channel("chat-realtime")
+    const filtro = filtroRealtimeHilos(threadIdsKey ? threadIdsKey.split(",") : []);
+    let channel = supabase.channel("chat-realtime").on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "chat_threads" },
+      (payload) => {
+        if (cancelled) return;
+        const id = (payload.new as { id?: string } | null)?.id;
+        // Hilo que aún no tengo en la lista → refrescar para que aparezca.
+        if (id && !threadsRef.current.some((t) => t.id === id)) router.refresh();
+      },
+    );
+    if (filtro) channel = channel
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "chat_messages" },
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: filtro },
         (payload) => {
           if (cancelled) return;
           const row = payload.new as {
@@ -228,13 +245,13 @@ export function ChatShell({
           // Refrescar layout (sidebar badges, lista de hilos)
           router.refresh();
         },
-      )
-      .subscribe();
+      );
+    channel.subscribe();
     return () => {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [activeId, router, currentUserId]);
+  }, [activeId, router, currentUserId, threadIdsKey]);
 
   function send() {
     if (!activeId || !draft.trim()) return;

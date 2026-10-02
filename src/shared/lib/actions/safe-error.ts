@@ -36,6 +36,63 @@ export function isNextControlFlowError(e: unknown): boolean {
 }
 
 /**
+ * Extrae un texto legible de cualquier valor lanzado, SIN efectos (no relanza
+ * ni registra). Sirve para logs y telemetría: un PostgrestError de Supabase es
+ * un objeto plano (no `instanceof Error`) y `String(e)` lo dejaba en
+ * "[object Object]" (visto en cron_runs de voice-retention, auditoría
+ * 2026-10-01 I2).
+ */
+export function errorMessage(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof e === "string" && e.trim()) return e;
+  if (e && typeof e === "object") {
+    const o = e as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const partes: string[] = [];
+    for (const v of [o.message, o.details, o.hint]) {
+      if (typeof v === "string" && v.trim()) partes.push(v.trim());
+    }
+    if (partes.length > 0) {
+      const code = typeof o.code === "string" && o.code ? ` (${o.code})` : "";
+      return partes.join(" · ") + code;
+    }
+    try {
+      const json = JSON.stringify(e);
+      if (json && json !== "{}") return json;
+    } catch {
+      /* referencias circulares: seguimos */
+    }
+  }
+  return String(e);
+}
+
+/**
+ * Ejecuta `fn` y convierte cualquier excepción en `{ ok: false, error }`.
+ *
+ * Por qué: en producción Next oculta el mensaje de cualquier excepción que
+ * salga de una server action y el usuario ve un genérico ("Algo ha fallado en
+ * el servidor"), incluido el texto amable de parseOrFriendly (auditoría
+ * 2026-10-01 I7). Las acciones que se llaman desde el cliente deben DEVOLVER
+ * el error como dato.
+ * Los redirect/notFound de Next se RELANZAN (ver toActionError).
+ *
+ *   export async function crearXSafeAction(input: unknown) {
+ *     return runSafe(() => crearXAction(input), "crearX");
+ *   }
+ *
+ * Devuelve `{ ok: true, data }` con lo que devuelva `fn`.
+ */
+export async function runSafe<T>(
+  fn: () => Promise<T>,
+  context?: string,
+): Promise<{ ok: true; data: T } | { ok: false; error: string }> {
+  try {
+    return { ok: true, data: await fn() };
+  } catch (e) {
+    return { ok: false, error: toActionError(e, context) };
+  }
+}
+
+/**
  * Convierte la excepción en mensaje para el usuario.
  *
  * OJO: si la excepción es un redirect/notFound de Next, **la relanza** en vez

@@ -1,5 +1,6 @@
 "use server";
 
+import { adjustStockBatch, type StockAdjustment } from "./adjust-stock";
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -143,63 +144,11 @@ export async function completeStockCountAction(
       .maybeSingle();
     if (!count) return { ok: false, error: "Conteo no encontrado o no pertenece a tu empresa" };
     const whId = (count as { warehouse_id?: string } | null)?.warehouse_id;
-    let adjustments = 0;
-    if (whId) {
-      for (const i of rows) {
-        const counted = Number(i.counted_qty);
-        const diff = counted - Number(i.expected_qty);
-        if (diff === 0) continue;
 
-        // 1) RECONCILIAR el stock real al valor contado (antes solo se
-        //    registraba el movimiento pero warehouse_stock no se tocaba →
-        //    el descuadre seguía ahí).
-        const { data: existing } = await admin
-          .from("warehouse_stock")
-          .select("id")
-          .eq("warehouse_id", whId)
-          .eq("product_id", i.product_id)
-          .eq("company_id", session.company_id)
-          .eq("state", "new")
-          .is("location_id", null)
-          .maybeSingle();
-        const exRow = existing as { id: string } | null;
-        if (exRow) {
-          await admin
-            .from("warehouse_stock")
-            .update({ quantity: counted })
-            .eq("id", exRow.id)
-            .eq("company_id", session.company_id);
-        } else if (counted > 0) {
-          await admin.from("warehouse_stock").insert({
-            company_id: session.company_id,
-            warehouse_id: whId,
-            product_id: i.product_id,
-            quantity: counted,
-            state: "new",
-          });
-        }
-
-        // 2) Registrar el movimiento con el tipo VÁLIDO del enum
-        //    (adjustment_plus/adjustment_minus; 'adjustment' no existe) y
-        //    cantidad positiva.
-        const { error: movErr } = await admin.from("stock_movements").insert({
-          company_id: session.company_id,
-          product_id: i.product_id,
-          warehouse_id: whId,
-          movement_type: diff > 0 ? "adjustment_plus" : "adjustment_minus",
-          quantity: Math.abs(diff),
-          state_after: "new",
-          notes: `Ajuste por conteo ${countId.slice(0, 8)}`,
-          performed_by: session.user_id,
-          performed_at: new Date().toISOString(),
-        });
-        if (movErr) {
-          console.error("[applyStockCount] movimiento falló:", movErr.message);
-        }
-        adjustments++;
-      }
-    }
-    await admin
+    // Reclamar el conteo ANTES de tocar stock (compare-and-set): solo un
+    // envío pasa de 'open' a 'completed'. Un doble clic aplicaba los ajustes
+    // dos veces (auditoría 2026-10-01, I42).
+    const { data: reclamado, error: errClaim } = await admin
       .from("stock_counts")
       .update({
         status: "completed",
@@ -207,7 +156,52 @@ export async function completeStockCountAction(
         completed_by: session.user_id,
       })
       .eq("id", countId)
-      .eq("company_id", session.company_id);
+      .eq("company_id", session.company_id)
+      .eq("status", "open")
+      .select("id");
+    if (errClaim) return { ok: false, error: errClaim.message };
+    if (!reclamado || (reclamado as unknown[]).length === 0) {
+      return { ok: false, error: "Este conteo ya está cerrado" };
+    }
+
+    let adjustments = 0;
+    if (whId) {
+      // Ajustes ATÓMICOS vía RPC adjust_stock_batch (antes leer-escribir).
+      // [decide] Se aplica la diferencia contada − esperada, no se fija el
+      // valor absoluto: los movimientos que hubo DESPUÉS de abrir el conteo
+      // se conservan y el stock sigue cuadrando con stock_movements.
+      const ajustes: StockAdjustment[] = [];
+      for (const i of rows) {
+        const counted = Number(i.counted_qty);
+        const diff = counted - Number(i.expected_qty);
+        if (diff === 0) continue;
+        ajustes.push({
+          warehouse_id: whId,
+          product_id: i.product_id,
+          state: "new",
+          location_id: null,
+          delta: diff,
+          movement_type: diff > 0 ? "adjustment_plus" : "adjustment_minus",
+          allow_partial: true,
+          notes: `Ajuste por conteo ${countId.slice(0, 8)}`,
+        });
+      }
+      if (ajustes.length > 0) {
+        try {
+          await adjustStockBatch(session.company_id, session.user_id, ajustes);
+        } catch (e) {
+          // Si los ajustes fallan, el conteo vuelve a quedar abierto para
+          // poder reintentarlo (la RPC es una sola transacción: o todo o nada).
+          await admin
+            .from("stock_counts")
+            .update({ status: "open", completed_at: null, completed_by: null })
+            .eq("id", countId)
+            .eq("company_id", session.company_id);
+          throw e;
+        }
+        adjustments = ajustes.length;
+      }
+    }
     revalidatePath("/almacenes/conteo");
     revalidatePath("/almacenes");
     return { ok: true, adjustments };

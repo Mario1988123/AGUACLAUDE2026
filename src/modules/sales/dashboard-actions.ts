@@ -1,5 +1,6 @@
 "use server";
 
+import { mesMadrid, rangoMesActualMadridUtc } from "@/modules/scheduling/fechas-madrid";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 
@@ -114,9 +115,8 @@ async function _getDashboardObjectives(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  // Año y mes en hora de Madrid (auditoría 2026-10-01, I36).
+  const { anio: year, mes: month } = mesMadrid(new Date());
 
   // Scope efectivo
   // - level 3: targetUserId = session.user_id, dept = myDept
@@ -361,8 +361,8 @@ export async function getMonthRanking(
   if (!session.company_id) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  // Inicio del mes en hora de Madrid (auditoría 2026-10-01, I36).
+  const monthStart = rangoMesActualMadridUtc().desde;
 
   const { data: rows } = await supabase
     .from("sales_records")

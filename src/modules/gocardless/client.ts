@@ -253,12 +253,56 @@ export async function createPayment(
     description?: string;
     chargeDate?: string;  // YYYY-MM-DD
     metadata?: Record<string, string>;
+    /**
+     * Clave determinista (ver estados.ts → claveIdempotenciaCobro). Con la
+     * misma clave GoCardless devuelve el pago ya creado en vez de otro. Sin
+     * clave (cobro suelto) se usa una aleatoria, como antes.
+     */
+    idempotencyKey?: string | null;
+  },
+): Promise<GcPayment> {
+  try {
+    return await crearPagoGc(config, input);
+  } catch (e) {
+    // Clave ya usada: GoCardless responde 409 idempotent_creation_conflict
+    // con el id del pago que ya creó. Se devuelve ESE pago (no se crea otro).
+    const conflicto = idDeConflictoIdempotencia(e);
+    if (conflicto) return getPayment(config, conflicto);
+    throw e;
+  }
+}
+
+function idDeConflictoIdempotencia(e: unknown): string | null {
+  if (!(e instanceof GoCardlessError) || e.status !== 409) return null;
+  const errs = Array.isArray(e.errors) ? (e.errors as Array<Record<string, unknown>>) : [];
+  for (const x of errs) {
+    if (x?.reason === "idempotent_creation_conflict") {
+      const id = (x.links as { conflicting_resource_id?: string } | undefined)?.conflicting_resource_id;
+      if (id) return id;
+    }
+  }
+  return null;
+}
+
+async function crearPagoGc(
+  config: GoCardlessConfig,
+  input: {
+    mandateId: string;
+    amountCents: number;
+    currency?: string;
+    description?: string;
+    chargeDate?: string;
+    metadata?: Record<string, string>;
+    idempotencyKey?: string | null;
   },
 ): Promise<GcPayment> {
   const res = await request<{ payments: GcPayment }>(config, {
     method: "POST",
     path: "/payments",
-    idempotencyKey: crypto.randomUUID(),
+    // Se resume con SHA-256 para no pasar del tamaño de cabecera admitido.
+    idempotencyKey: input.idempotencyKey
+      ? crypto.createHash("sha256").update(input.idempotencyKey).digest("hex")
+      : crypto.randomUUID(),
     body: {
       payments: {
         amount: input.amountCents,

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
+import { startCronRun } from "@/shared/lib/cron/telemetry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,58 +26,84 @@ export async function GET(req: NextRequest) {
   const denied = verifyCronAuth(req);
   if (denied) return denied;
 
+  const tracker = await startCronRun("hourly");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
   let punchesClosed = 0;
   let notifiedUsers = 0;
   try {
-    const { data } = await admin.rpc("autoclose_stale_punches");
+    const { data, error } = await admin.rpc("autoclose_stale_punches");
+    if (error) throw new Error(error.message);
     punchesClosed = Number(data) || 0;
-
-    // Notificar a usuarios afectados por autocierre. Buscamos fichajes
-    // marcados auto_closed=true en la última hora (igual que la ventana
-    // del cron) y emitimos una notificación con kind=time_tracking.autoclose
-    // para que puedan abrir /fichajes y solicitar corrección si la hora
-    // no se ajusta a la realidad.
-    if (punchesClosed > 0) {
-      const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-      const { data: closed } = await admin
-        .from("time_punches")
-        .select("user_id, company_id, punched_at")
-        .eq("auto_closed", true)
-        .gte("punched_at", since);
-      type Row = { user_id: string; company_id: string; punched_at: string };
-      const rows = (closed ?? []) as Row[];
-      // Dedupe por user_id (puede haber varios fichajes autocerrados a la vez)
-      const seen = new Set<string>();
-      for (const r of rows) {
-        if (seen.has(r.user_id)) continue;
-        seen.add(r.user_id);
-        try {
-          await admin.from("notifications").insert({
-            company_id: r.company_id,
-            recipient_user_id: r.user_id,
-            kind: "time_tracking.autoclose",
-            severity: "warning",
-            title: "Fichaje cerrado automáticamente",
-            body: "El sistema cerró tu fichaje por inactividad. Si la hora no es correcta, pide una corrección desde /fichajes.",
-            subject_type: "time_punch",
-            subject_id: null,
-          });
-          notifiedUsers++;
-        } catch {
-          /* fail-soft */
-        }
-      }
-    }
-  } catch {
-    /* no-op */
+  } catch (e) {
+    tracker.error("autoclose", e);
   }
 
+  // Notificar a los trabajadores con fichajes autocerrados (auditoría
+  // 2026-10-01, C8). Antes se buscaba `punched_at >= ahora − 1 h`, pero la
+  // función solo cierra cuando ya han pasado 2 h desde el fin de jornada y
+  // pone `punched_at` = fin de jornada: nunca encontraba nada. Ahora se miran
+  // los autocierres de los últimos 3 días que aún no tienen su aviso
+  // (dedupe por subject_id = id del fichaje), así que también se recuperan
+  // los que una ejecución anterior no llegó a notificar.
+  try {
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: closed, error } = await admin
+      .from("time_punches")
+      .select("id, user_id, company_id, punched_at")
+      .eq("auto_closed", true)
+      .gte("punched_at", since)
+      .limit(500);
+    if (error) throw new Error(error.message);
+    type Row = { id: string; user_id: string; company_id: string; punched_at: string };
+    const rows = (closed ?? []) as Row[];
+    if (rows.length > 0) {
+      const { data: ya } = await admin
+        .from("notifications")
+        .select("subject_id")
+        .eq("kind", "time_tracking.autoclose")
+        .in(
+          "subject_id",
+          rows.map((r) => r.id),
+        );
+      const avisados = new Set(
+        ((ya ?? []) as Array<{ subject_id: string | null }>).map((n) => n.subject_id),
+      );
+      for (const r of rows) {
+        if (avisados.has(r.id)) continue;
+        const hora = new Date(r.punched_at).toLocaleString("es-ES", {
+          timeZone: "Europe/Madrid",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const { error: errIns } = await admin.from("notifications").insert({
+          company_id: r.company_id,
+          recipient_user_id: r.user_id,
+          kind: "time_tracking.autoclose",
+          category: "alert",
+          severity: "warning",
+          title: "Fichaje cerrado automáticamente",
+          body: `El sistema cerró tu fichaje a las ${hora}. Si la hora no es correcta, pide una corrección desde /fichajes.`,
+          subject_type: "time_punch",
+          subject_id: r.id,
+          action_url: "/fichajes",
+        });
+        if (errIns) tracker.error("autoclose-notify", new Error(errIns.message));
+        else notifiedUsers++;
+      }
+    }
+  } catch (e) {
+    tracker.error("autoclose-notify-outer", e);
+  }
+
+  const stats = { punches_closed: punchesClosed, notified_users: notifiedUsers };
+  await tracker.finish({ summary: stats });
   return NextResponse.json({
     ok: true,
-    stats: { punches_closed: punchesClosed, notified_users: notifiedUsers },
+    stats,
     ranAt: new Date().toISOString(),
   });
 }

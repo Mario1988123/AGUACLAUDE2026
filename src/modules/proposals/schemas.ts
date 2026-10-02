@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { zBoolean } from "@/shared/lib/zod-friendly";
+import { zBoolean, zOptionalInt } from "@/shared/lib/zod-friendly";
 
 export const PROPOSAL_STATUS = [
   "draft",
@@ -52,19 +52,19 @@ const proposalItemSchema = z.object({
   quantity: z.coerce.number().int().min(1).default(1),
   unit_price_cents: z.coerce.number().int().min(0),
   installation_included: zBoolean().default(true),
-  installation_price_cents: z.coerce.number().int().min(0).nullable().default(null),
+  installation_price_cents: zOptionalInt(0),
   maintenance_included: zBoolean().default(false),
   maintenance_until_date: z.string().nullable().default(null),
-  maintenance_price_cents: z.coerce.number().int().min(0).nullable().default(null),
-  maintenance_periodicity_months: z.coerce.number().int().nullable().default(null),
-  deposit_cents: z.coerce.number().int().min(0).nullable().default(null),
+  maintenance_price_cents: zOptionalInt(0),
+  maintenance_periodicity_months: zOptionalInt(0),
+  deposit_cents: zOptionalInt(0),
   charge_first_payment_now: zBoolean().default(false),
   /**
    * Pack: índice (dentro de este array de items) del EQUIPO PRINCIPAL del que
    * cuelga este extra. null = línea principal o suelta. Se resuelve a
    * parent_item_id tras insertar (no conocemos los ids en cliente).
    */
-  parent_index: z.coerce.number().int().min(0).nullable().default(null),
+  parent_index: zOptionalInt(0),
 });
 
 export const proposalCreateSchema = z
@@ -72,7 +72,7 @@ export const proposalCreateSchema = z
     customer_id: z.string().uuid().optional(),
     lead_id: z.string().uuid().optional(),
     chosen_plan_type: z.enum(["cash", "rental", "renting"]),
-    chosen_duration_months: z.coerce.number().int().min(1).nullable().default(null),
+    chosen_duration_months: zOptionalInt(1, "La duración tiene que ser de 1 mes o más"),
     validity_until: z.string().optional().default(""),
     notes: z.string().optional().default(""),
     items: z.array(proposalItemSchema).min(1, "Añade al menos un producto"),
@@ -83,11 +83,14 @@ export const proposalCreateSchema = z
     auto_accept: zBoolean().default(false),
     // Datos de financiera (Fase 4 — solo aplicables cuando plan = renting).
     financier_id: z.string().uuid().optional().nullable(),
-    financier_payment_cents: z.coerce.number().int().min(0).optional().nullable(),
-    financier_term_months: z.coerce.number().int().min(1).optional().nullable(),
-    financier_coefficient: z.coerce.number().positive().optional().nullable(),
-    financier_residual_cents: z.coerce.number().int().min(0).optional().nullable(),
-    financier_reserve_cents: z.coerce.number().int().min(0).optional().nullable(),
+    financier_payment_cents: zOptionalInt(0),
+    financier_term_months: zOptionalInt(1),
+    financier_coefficient: z.preprocess(
+      (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : v),
+      z.coerce.number().positive().nullable(),
+    ),
+    financier_residual_cents: zOptionalInt(0),
+    financier_reserve_cents: zOptionalInt(0),
   })
   .refine((v) => Boolean(v.customer_id) !== Boolean(v.lead_id), {
     message: "La propuesta debe estar asociada a un cliente o a un lead, no ambos",
