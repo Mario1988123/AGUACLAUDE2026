@@ -415,8 +415,8 @@ async function reducirCuotaContrato(
 /**
  * Equipos que están en RENTING (Mario 2026-11-09: no se pueden retirar). Lo
  * es si algún contrato enlazado (por su instalación o, en los heredados, por
- * source_equipment_id) es de renting y no está cancelado ni finalizado. Si el
- * equipo no tiene ningún contrato enlazado, se mira su `acquisition_type`.
+ * source_equipment_id) es de renting y no está cancelado ni finalizado. Sin
+ * contrato enlazado no es renting, diga lo que diga `acquisition_type`.
  * Lanza si no puede comprobarlo (mejor no retirar que retirar un renting).
  */
 export async function equiposEnRenting(

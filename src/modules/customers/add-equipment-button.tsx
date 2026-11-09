@@ -419,7 +419,7 @@ export function AddEquipmentButton({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Próximo programado</Label>
+                    <Label>Fecha para llamarle y ofrecer mantenimiento</Label>
                     <Input
                       type="date"
                       value={nextMaintenanceAt}
@@ -440,8 +440,10 @@ export function AddEquipmentButton({
                     onChange={(e) => setPeriodicityMonths(e.target.value)}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Si la indicas, se generan automáticamente las visitas del próximo año
-                    según esa periodicidad (desde el próximo programado o desde la instalación).
+                    Si pones fecha, se crea una tarea (una para todo el pack) para llamar al
+                    cliente ese día y ofrecerle el mantenimiento (sale en tu agenda y en «Mi
+                    día»). No se programan visitas: la periodicidad se aplicará cuando acepte
+                    «Proponer mantenimiento».
                   </p>
                 </div>
 

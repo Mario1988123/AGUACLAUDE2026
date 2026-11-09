@@ -8,6 +8,9 @@ import { notify } from "@/shared/hooks/use-toast";
 import { generateLegacyContractsAction } from "./legacy-contracts-actions";
 
 /**
+ * RETIRADO (Mario 2026-11-09): ya no se pinta en ninguna página y la acción
+ * devuelve error. Ver legacy-contracts-actions.ts.
+ *
  * Botón admin (migración): genera los contratos heredados a partir de la
  * modalidad de cada equipo. Procesa por lotes hasta terminar. Idempotente.
  */

@@ -26,7 +26,7 @@ import { puedeRetirar } from "./retirada-logica";
  * En los tres últimos el equipo se da de baja igual, pero NO entra en ningún
  * almacén (queda registrado el motivo en notas + evento de auditoría).
  */
-export type EquipmentDisposition = "warehouse" | "lost" | "broken" | "stolen";
+export type EquipmentDisposition = "warehouse" | "lost" | "broken" | "stolen" | "not_ours";
 
 export interface UninstallEquipmentInput {
   customer_id: string;

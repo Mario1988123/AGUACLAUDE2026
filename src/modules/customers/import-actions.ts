@@ -432,6 +432,7 @@ export async function importCustomersAction(rows: ImportCustomerRow[]): Promise<
         const ownId = productByName.get(norm(name)) ?? null;
         try {
           await addCustomerEquipmentAction({
+            origen: "importacion",
             customer_id: customerId,
             product_id: ownId,
             external_brand: ownId ? undefined : (er.equipment_brand?.trim() || "Sin marca"),

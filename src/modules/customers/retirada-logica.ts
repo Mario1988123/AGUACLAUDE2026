@@ -5,14 +5,30 @@
  */
 
 export type EstadoVuelta = "used" | "damaged" | "refurbished";
-export type DestinoEquipo = "warehouse" | "lost" | "broken" | "stolen";
+/**
+ * Destino de cada equipo retirado. Todos menos 'warehouse' dan de baja el
+ * equipo SIN mover stock. 'not_ours' (Mario 2026-11-09): «No vuelve al
+ * almacén (no es nuestro / era de otra empresa)»; es el único posible para
+ * un equipo externo (sin producto del catálogo).
+ */
+export type DestinoEquipo = "warehouse" | "lost" | "broken" | "stolen" | "not_ours";
 
 export const DESTINOS_EQUIPO: readonly DestinoEquipo[] = [
   "warehouse",
   "lost",
   "broken",
   "stolen",
+  "not_ours",
 ] as const;
+
+/** Destino efectivo: un equipo sin producto (externo) solo puede ser 'not_ours'. */
+export function destinoEfectivo(
+  productId: string | null,
+  elegido: DestinoEquipo | undefined,
+): DestinoEquipo {
+  if (!productId) return "not_ours";
+  return elegido ?? "warehouse";
+}
 
 /** Marca que se añade a las notas de la orden creada por la retirada manual. */
 export const MARCA_RETIRADA_MANUAL = "[RETIRADA MANUAL — sin agendar]";
@@ -447,9 +463,11 @@ export const ERROR_RENTING = "Este equipo está en renting: no se puede retirar"
 
 /**
  * Decide qué equipos están en renting a partir de sus contratos enlazados.
- * Renting = algún contrato enlazado (por instalación o source_equipment_id)
- * de plan `renting` que no esté cancelado ni finalizado. Sin contrato
- * enlazado, manda el `acquisition_type` del equipo.
+ * Renting = algún contrato REAL enlazado (installations.contract_id o
+ * contracts.source_equipment_id) de plan `renting` que no esté cancelado ni
+ * finalizado. Sin contrato enlazado NO es renting aunque su
+ * `acquisition_type` diga 'renting' (Mario 2026-11-09: los equipos antiguos
+ * importados son «equipos instalados»).
  */
 export function equiposRentingPuro(
   equipos: Array<{ id: string; installation_id: string | null; acquisition_type: string | null }>,
@@ -461,11 +479,7 @@ export function equiposRentingPuro(
   for (const e of equipos) {
     const cid = e.installation_id ? contratoDeInstalacion.get(e.installation_id) : undefined;
     const suyos = contratos.filter((c) => (cid && c.id === cid) || c.source_equipment_id === e.id);
-    const renting =
-      suyos.length > 0
-        ? suyos.some((c) => c.plan_type === "renting" && vivo(c.status))
-        : e.acquisition_type === "renting";
-    if (renting) fuera.push(e.id);
+    if (suyos.some((c) => c.plan_type === "renting" && vivo(c.status))) fuera.push(e.id);
   }
   return fuera;
 }

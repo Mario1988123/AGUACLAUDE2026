@@ -11,6 +11,7 @@ import {
   ESTADO_EQUIPO_LABEL,
   MARCA_RETIRADA_MANUAL,
   clasificarOrdenesAbiertas,
+  destinoEfectivo,
   instanteRetirada,
   necesitaAlmacen,
   puedeRetirar,
@@ -108,6 +109,10 @@ export async function retirarEquipoManualAction(
 
     // 2) Almacén: mismo criterio que la orden normal (solo si algún equipo
     //    nuestro vuelve a almacén). La pertenencia se verifica en el núcleo.
+    // Un equipo externo (sin producto) solo puede «no volver al almacén».
+    for (const e of equipos) {
+      d.destinos.set(e.id.toLowerCase(), destinoEfectivo(e.product_id, d.destinos.get(e.id.toLowerCase())));
+    }
     const hayStock = necesitaAlmacen(equipos, d.destinos);
     if (hayStock && !d.destination_warehouse_id) {
       return { ok: false, error: "Elige el almacén al que vuelve el equipo" };
@@ -257,6 +262,9 @@ export async function retirarEquipoManualAction(
         estado_equipo: d.estado_equipo,
         estado_vuelta: d.estado_vuelta,
         destinos: Array.from(d.destinos.entries()).map(([id, destino]) => ({ id, destino })),
+        no_es_nuestro: Array.from(d.destinos.entries())
+          .filter(([, destino]) => destino === "not_ours")
+          .map(([id]) => id),
         stock_devuelto: cierre.moved,
         equipos_baja: cierre.deactivated,
         ordenes_canceladas: canceladas,

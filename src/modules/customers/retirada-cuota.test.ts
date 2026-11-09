@@ -78,8 +78,9 @@ describe("equiposRentingPuro", () => {
     { id: "k2", plan_type: "rental", status: "active", source_equipment_id: null },
     { id: "k3", plan_type: "renting", status: "completed", source_equipment_id: null },
   ];
-  it("bloquea renting vivo; renting terminado no; sin contrato manda acquisition_type", () => {
-    expect(equiposRentingPuro(eqs, instMap, contratos)).toEqual(["a", "c"]);
+  it("bloquea solo renting vivo de contrato real; el equipo antiguo sin contrato no", () => {
+    // "c" no tiene contrato: es un equipo antiguo instalado, aunque diga renting.
+    expect(equiposRentingPuro(eqs, instMap, contratos)).toEqual(["a"]);
   });
   it("contrato heredado por source_equipment_id", () => {
     expect(

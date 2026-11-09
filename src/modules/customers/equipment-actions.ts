@@ -5,6 +5,15 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { madridLocalToUtcISO } from "@/shared/lib/format-date";
+import {
+  HORA_LLAMADA,
+  descripcionLlamada,
+  programacionMantenimiento,
+  type OrigenAltaEquipo,
+  diaLlamada,
+  tituloLlamada,
+} from "./alta-equipo-logica";
 
 export interface CustomerEquipmentRow {
   id: string;
@@ -327,6 +336,14 @@ export async function addCustomerEquipmentAction(input: {
   acquisition_amount_cents?: number | null;
   /** Fecha de inicio del contrato heredado. */
   acquisition_started_at?: string | null;
+  /**
+   * Origen del alta (explícito). Solo "alta_manual" («Añadir equipo» de la
+   * ficha) convierte la fecha en una tarea de llamada; "pack" e
+   * "importacion" generan las visitas de siempre.
+   */
+  origen: OrigenAltaEquipo;
+  /** Solo origen "pack": nº de extras, para el título de la llamada. */
+  extras_en_pack?: number;
 }): Promise<{ id: string }> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
@@ -430,13 +447,70 @@ export async function addCustomerEquipmentAction(input: {
     }
   }
 
-  // Programar mantenimientos:
+  // ¿El cliente tiene ya un contrato de mantenimiento ACTIVO que lo cubra?
+  // Los contratos son por equipo (este acaba de nacer, no puede tener uno);
+  // uno sin equipo cubre al cliente entero → comportamiento de siempre.
+  let cubiertoPorContrato = false;
+  if (input.origen !== "importacion") {
+    const { count, error } = await admin
+      .from("maintenance_contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", session.company_id)
+      .eq("customer_id", input.customer_id)
+      .is("customer_equipment_id", null)
+      .eq("status", "active")
+      .is("deleted_at", null);
+    if (error) console.error("[addCustomerEquipment] contrato de mantenimiento:", error.message);
+    else cubiertoPorContrato = (count ?? 0) > 0;
+  }
+
+  // SIN contrato de mantenimiento (Mario 2026-11-09): la fecha «próximo
+  // mantenimiento» es para LLAMAR al cliente ese día y ofrecérselo. Se crea
+  // UNA tarea de llamada en la agenda (kind 'call', asignada a quien da de
+  // alta el equipo; sale en su agenda y en «Mi día» ese día). Ni visitas
+  // contratadas ni serie: la periodicidad se aplica cuando acepte
+  // «Proponer mantenimiento».
+  let llamadaCreada = false;
+  const periodicity = input.maintenance_periodicity_months ?? null;
+  const modo = programacionMantenimiento(input.origen, cubiertoPorContrato);
+  const dia = modo === "llamada" ? diaLlamada(input.next_maintenance_at) : null;
+  if (dia) {
+    let nombreEquipo = "Equipo";
+    if (productId) {
+      const { data: prod } = await admin
+        .from("products")
+        .select("name")
+        .eq("id", productId)
+        .maybeSingle();
+      nombreEquipo = (prod as { name: string } | null)?.name ?? "Equipo";
+    } else {
+      nombreEquipo = `${(input.external_brand ?? "").trim()} ${(input.external_model ?? "").trim()}`.trim() || "Equipo externo";
+    }
+    const inicio = madridLocalToUtcISO(`${dia}T${HORA_LLAMADA}`);
+    const { error: llErr } = await admin.from("agenda_events").insert({
+      company_id: session.company_id,
+      kind: "call",
+      title: tituloLlamada(nombreEquipo, input.origen === "pack" ? input.extras_en_pack ?? 0 : 0),
+      description: descripcionLlamada(periodicity),
+      starts_at: inicio,
+      ends_at: null,
+      all_day: false,
+      assigned_user_id: session.user_id,
+      subject_type: "customer",
+      subject_id: input.customer_id,
+      is_outside_hours: false,
+      created_by: session.user_id,
+    });
+    if (llErr) console.error("[addCustomerEquipment] tarea de llamada:", llErr.message);
+    else llamadaCreada = true;
+  }
+
+  // CON contrato de mantenimiento activo del cliente → como siempre:
   //  - Si hay PERIODICIDAD → generar la SERIE de visitas de los próximos 12
   //    meses (igual que contratos). firstDue = próximo indicado, o si no se
   //    indica, instalación + periodicidad.
-  //  - Si NO hay periodicidad pero sí "próximo" → un único job (comportamiento previo).
-  const periodicity = input.maintenance_periodicity_months ?? null;
-  if (periodicity && periodicity > 0) {
+  //  - Si NO hay periodicidad pero sí "próximo" → un único job.
+  if (modo === "visitas" && periodicity && periodicity > 0) {
     try {
       let firstDue: Date | null = null;
       if (input.next_maintenance_at) {
@@ -466,7 +540,7 @@ export async function addCustomerEquipmentAction(input: {
     } catch (e) {
       console.error("[addCustomerEquipment] generar serie mantenimientos:", e);
     }
-  } else if (input.next_maintenance_at) {
+  } else if (modo === "visitas" && input.next_maintenance_at) {
     try {
       await admin.from("maintenance_jobs").insert({
         company_id: session.company_id,
@@ -493,6 +567,10 @@ export async function addCustomerEquipmentAction(input: {
       installed_by_other: !productId,
       had_last_maintenance: !!input.last_maintenance_at,
       had_next_maintenance: !!input.next_maintenance_at,
+      llamada_ofrecer_mantenimiento: llamadaCreada ? dia : null,
+      periodicidad_meses: periodicity,
+      cubierto_por_contrato_mantenimiento: cubiertoPorContrato,
+      origen: input.origen,
     },
     actor_user_id: session.user_id,
   });
@@ -594,7 +672,12 @@ export async function addCustomerEquipmentSafeAction(
   input: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    await addCustomerEquipmentAction(input as never);
+    // Única entrada desde el navegador: el botón «Añadir equipo» de la ficha.
+    // El origen se fija aquí, no se acepta del cliente.
+    await addCustomerEquipmentAction({
+      ...(input as Omit<Parameters<typeof addCustomerEquipmentAction>[0], "origen">),
+      origen: "alta_manual",
+    });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

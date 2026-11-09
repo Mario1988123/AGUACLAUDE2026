@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  destinoEfectivo,
   anadirNota,
   decidirContrato,
   estadoStockDeEquipo,
@@ -115,6 +116,30 @@ describe("validarRetiradaManual", () => {
         HOY,
       ).ok,
     ).toBe(false);
+  });
+});
+
+describe("destino no es nuestro", () => {
+  it("un externo solo puede no volver al almacén; los nuestros eligen", () => {
+    expect(destinoEfectivo(null, "warehouse")).toBe("not_ours");
+    expect(destinoEfectivo("p1", undefined)).toBe("warehouse");
+    expect(destinoEfectivo("p1", "not_ours")).toBe("not_ours");
+  });
+  it("«no es nuestro» no pide almacén ni mueve stock", () => {
+    expect(necesitaAlmacen([{ id: EQ1, product_id: "p1" }], new Map([[EQ1, "not_ours"]]))).toBe(false);
+  });
+  it("la validación acepta not_ours", () => {
+    const r = validarRetiradaManual(
+      {
+        customer_id: CLI,
+        equipment_ids: [EQ1],
+        fecha_retirada: "2026-11-09",
+        motivo: "Era de otra empresa",
+        destinos: [{ equipment_id: EQ1, destino: "not_ours" }],
+      },
+      "2026-11-09",
+    );
+    expect(r.ok && r.datos.destinos.get(EQ1)).toBe("not_ours");
   });
 });
 

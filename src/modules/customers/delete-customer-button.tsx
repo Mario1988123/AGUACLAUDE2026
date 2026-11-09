@@ -12,7 +12,7 @@ import {
   deleteEmptyCustomerAction,
 } from "./delete-flow-actions";
 
-type Disposition = "warehouse" | "lost" | "broken" | "stolen";
+type Disposition = "warehouse" | "lost" | "broken" | "stolen" | "not_ours";
 
 interface EquipmentOption {
   id: string;
@@ -37,6 +37,9 @@ const DISPOSITION_LABEL: Record<Disposition, string> = {
   lost: "Perdida (no se sabe dónde)",
   broken: "Rota (a la basura)",
   stolen: "Robada",
+  // Mario 2026-11-09: se da de baja sin mover stock. Única opción si el
+  // equipo es externo (sin producto del catálogo).
+  not_ours: "No vuelve al almacén (no es nuestro)",
 };
 
 export function DeleteCustomerButton({
@@ -66,7 +69,7 @@ export function DeleteCustomerButton({
     for (const e of equipment) {
       init[e.id] = {
         action: suggestRemove ? "remove" : "keep",
-        disposition: "warehouse",
+        disposition: e.is_ours ? "warehouse" : "not_ours",
       };
     }
     return init;
@@ -289,22 +292,20 @@ export function DeleteCustomerButton({
                                   }
                                   className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
                                 >
-                                  {(
-                                    Object.keys(
-                                      DISPOSITION_LABEL,
-                                    ) as Disposition[]
+                                  {(e.is_ours
+                                    ? (Object.keys(DISPOSITION_LABEL) as Disposition[])
+                                    : (["not_ours"] as Disposition[])
                                   ).map((d) => (
                                     <option key={d} value={d}>
                                       {DISPOSITION_LABEL[d]}
                                     </option>
                                   ))}
                                 </select>
-                                {!e.is_ours &&
-                                  dec.disposition === "warehouse" && (
-                                    <p className="mt-1 text-[11px] text-muted-foreground">
-                                      Equipo externo: no suma a tu stock.
-                                    </p>
-                                  )}
+                                {!e.is_ours && (
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    Equipo externo: se da de baja sin tocar tu stock.
+                                  </p>
+                                )}
                               </div>
                             )}
                           </li>

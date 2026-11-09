@@ -25,6 +25,16 @@ export interface LegacyContractsResult {
   errors: number;
 }
 
+/**
+ * RETIRADO (decisión Mario 2026-11-09): «lo heredado no serán contratos:
+ * serán equipos que ya están instalados y les haremos mantenimientos o no».
+ * Nunca se llegó a usar en producción (0 contratos is_legacy). Se deja el
+ * código por referencia, pero la acción ya no hace nada y su botón se quitó
+ * de /clientes. Si algún día se recupera, revisar antes que no duplique
+ * contratos de equipos instalados por el CRM.
+ */
+const GENERADOR_RETIRADO: boolean = true;
+
 export async function generateLegacyContractsAction(input?: {
   limit?: number;
 }): Promise<
@@ -35,6 +45,12 @@ export async function generateLegacyContractsAction(input?: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     if (!session.is_superadmin && !session.roles.includes("company_admin")) {
       return { ok: false, error: "Solo el administrador puede generar contratos heredados" };
+    }
+    if (GENERADOR_RETIRADO) {
+      return {
+        ok: false,
+        error: "El generador de contratos heredados está retirado: los equipos antiguos se tratan como equipos instalados.",
+      };
     }
     const limit = Math.min(Math.max(input?.limit ?? 50, 1), 200);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

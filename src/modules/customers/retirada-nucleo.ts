@@ -120,6 +120,7 @@ export async function crearOrdenRetirada(
     lost: " [PERDIDA]",
     broken: " [ROTA]",
     stolen: " [ROBADA]",
+    not_ours: " [NO ES NUESTRO]",
   };
   const items = valid.map((x) => {
     const name = x.product_id ? nameById.get(x.product_id) ?? "Equipo" : "Equipo externo";

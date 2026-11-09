@@ -5,7 +5,6 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { CustomersFilteredView } from "@/modules/customers/filtered-view";
 import { listTeamMembers } from "@/modules/agenda/actions";
 import { ImportCustomersButton } from "@/modules/customers/import-form";
-import { GenerateLegacyContractsButton } from "@/modules/contracts/generate-legacy-button";
 import {
   CustomerSmartAlerts,
   getCustomerAlerts,
@@ -49,9 +48,8 @@ export default async function CustomersPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {isUpperLevel && <ImportCustomersButton />}
-          {(session.is_superadmin || session.roles.includes("company_admin")) && (
-            <GenerateLegacyContractsButton />
-          )}
+          {/* Generador de contratos heredados RETIRADO (Mario 2026-11-09): lo
+              heredado no son contratos, son equipos ya instalados. */}
           {isUpperLevel && (
             <Link
               href={"/clientes/duplicados" as never}

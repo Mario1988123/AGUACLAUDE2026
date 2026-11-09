@@ -47,6 +47,7 @@ const DESTINO_LABEL: Record<DestinoEquipo, string> = {
   lost: "Perdido",
   broken: "Roto (se tira)",
   stolen: "Robado",
+  not_ours: "No vuelve al almacén (no es nuestro / era de otra empresa)",
 };
 
 const SELECT_CLS =
@@ -116,7 +117,10 @@ export function RetiradaManualButton({
         destination_warehouse_id: vuelveStock ? almacenId : null,
         estado_equipo: estado,
         motivo: motivo.trim(),
-        destinos: elegidos.map((e) => ({ equipment_id: e.id, destino: destinoDe(e.id) })),
+        destinos: elegidos.map((e) => ({
+          equipment_id: e.id,
+          destino: e.is_ours ? destinoDe(e.id) : ("not_ours" as DestinoEquipo),
+        })),
       });
       if (!r.ok) {
         notify.error("No se pudo retirar el equipo", r.error);
@@ -167,7 +171,7 @@ export function RetiradaManualButton({
                         </span>
                         <span className="block text-xs text-muted-foreground">
                           {e.serial_number ? `S/N ${e.serial_number}` : "Sin número de serie"}
-                          {!e.is_ours && " · externo, no vuelve a stock"}
+                          {!e.is_ours && " · externo"}
                         </span>
                         {e.en_renting && (
                           <span className="mt-0.5 block text-xs font-medium text-destructive">
@@ -176,6 +180,11 @@ export function RetiradaManualButton({
                         )}
                       </span>
                     </label>
+                    {marcado && !e.is_ours && (
+                      <p className="mt-2 rounded-lg bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
+                        {DESTINO_LABEL.not_ours}
+                      </p>
+                    )}
                     {marcado && e.is_ours && (
                       <select
                         aria-label={`Destino de ${e.display_name}`}

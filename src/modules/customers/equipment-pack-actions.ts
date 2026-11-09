@@ -53,6 +53,11 @@ export async function addCustomerEquipmentPackAction(input: {
       customer_id: input.customer_id,
       address_id: input.address_id ?? null,
       ...input.main,
+      // La llamada (si hay fecha y no hay contrato) es UNA para todo el pack.
+      origen: "pack",
+      extras_en_pack: input.extras.filter(
+        (x) => !!x.product_id || !!(x.external_brand?.trim() && x.external_model?.trim()),
+      ).length,
     });
     const mainId = main.id;
 
@@ -71,6 +76,7 @@ export async function addCustomerEquipmentPackAction(input: {
         customer_id: input.customer_id,
         address_id: input.address_id ?? null,
         ...extra,
+        origen: "pack_extra",
       });
       extraIds.push(created.id);
 
