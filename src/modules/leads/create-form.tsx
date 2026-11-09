@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, MapPin, Check, Crosshair, Search } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -21,8 +21,9 @@ import { PhoneInput } from "@/shared/components/phone-input";
 import { DedupeWarning } from "@/shared/components/dedupe-warning";
 import { useDedupe } from "@/shared/hooks/use-dedupe";
 import { STREET_TYPE, STREET_TYPE_LABEL, type StreetType } from "@/modules/addresses/schemas";
-import { reverseGeocodeAction, forwardGeocodeAction } from "@/shared/lib/geocoding/actions";
 import { detectStreetType } from "@/shared/lib/geocoding/street-type";
+import { useDireccion, type ParcheDireccion } from "@/shared/lib/geocoding/use-direccion";
+import { DireccionEstadoMapa } from "@/shared/components/direccion-estado-mapa";
 
 /**
  * Wizard 2 pasos. Tablet-first.
@@ -64,72 +65,37 @@ export function LeadCreateForm() {
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [geoLoading, setGeoLoading] = useState(false);
 
-  async function fillFromCoords(lat: number, lng: number, force = false) {
-    setLatitude(lat);
-    setLongitude(lng);
-    const rev = await reverseGeocodeAction(lat, lng);
-    if (!rev) {
-      notify.warning(
-        "Coordenadas capturadas",
-        "El servicio de mapas no respondió. Rellena la calle a mano.",
-      );
-      return;
+  // Lógica compartida con address-form: CartoCiudad → Google → Nominatim,
+  // chincheta obligatoria si la calle no aparece, CP ↔ población.
+  const aplicarDireccion = useCallback((p: ParcheDireccion) => {
+    if (p.street_type !== undefined && STREET_TYPE.includes(p.street_type as StreetType)) {
+      setStreetType(p.street_type as StreetType);
     }
-    if (STREET_TYPE.includes(rev.street_type as StreetType)) {
-      setStreetType(rev.street_type as StreetType);
-    }
-    const filled: string[] = [];
-    // Functional updaters: leen el valor actual real, no el del cierre.
-    // Solo machaca si force=true. Solo aplica si rev.X existe (no
-    // sobreescribe lo escrito con un undefined).
-    if (rev.street) {
-      setStreet((cur) => (force || !cur ? rev.street : cur));
-      filled.push("calle");
-    }
-    if (rev.street_number) {
-      setStreetNumber((cur) =>
-        force || !cur ? (rev.street_number as string) : cur,
-      );
-      filled.push("nº");
-    }
-    if (rev.postal_code) {
-      setPostal((cur) => (force || !cur ? (rev.postal_code as string) : cur));
-      filled.push("CP");
-    }
-    if (rev.city) {
-      setCity((cur) => (force || !cur ? (rev.city as string) : cur));
-      filled.push("ciudad");
-    }
-    // Provincia: si el CP es válido y la provincia derivada NO coincide
-    // con la devuelta por reverse, confiamos en el CP (siempre fiable
-    // en España). Resuelve casos como OSM devolviendo "Galicia" en vez
-    // de "A Coruña" para CP 15220.
-    const cpForProv = rev.postal_code ?? "";
-    const cpProv = cpForProv ? provinceFromPostalCode(cpForProv) : null;
-    // Conserva la variante cooficial del mapa (Bizkaia/Vizcaya); solo
-    // fuerza el nombre del CP cuando de verdad son provincias distintas.
-    const provinceFinal =
-      cpProv && !provincesMatch(rev.province, cpProv) ? cpProv : rev.province;
-    if (provinceFinal) {
-      setProvince((cur) => (force || !cur ? provinceFinal : cur));
-      filled.push("provincia");
-    }
-    if (filled.length === 0) {
-      notify.warning(
-        "Coordenadas capturadas",
-        "No se pudo identificar la dirección. Escríbela a mano.",
-      );
-    } else if (!rev.street) {
-      notify.success(
-        "Dirección parcial",
-        `Rellenado ${filled.join(", ")}. La calle no está disponible — escríbela a mano.`,
-      );
-    } else {
-      notify.success("Dirección autorrellenada");
-    }
-  }
+    if (p.calle !== undefined) setStreet(p.calle);
+    if (p.numero !== undefined) setStreetNumber(p.numero);
+    if (p.cp !== undefined) setPostal(p.cp);
+    if (p.poblacion !== undefined) setCity(p.poblacion);
+    if (p.provincia !== undefined) setProvince(p.provincia);
+    if (p.lat !== undefined) setLatitude(p.lat);
+    if (p.lng !== undefined) setLongitude(p.lng);
+  }, []);
+  const dir = useDireccion({
+    valores: {
+      street_type: streetType,
+      calle: street,
+      numero: streetNumber,
+      cp: postal,
+      poblacion: city,
+      provincia: province,
+      lat: latitude,
+      lng: longitude,
+    },
+    aplicar: aplicarDireccion,
+    // En el alta de lead la chincheta manda: rellena todo lo que el mapa
+    // sepa (salvo la calle si la escribió el usuario).
+    modoChincheta: "todo",
+  });
 
   function captureMyLocation() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -139,10 +105,8 @@ export function LeadCreateForm() {
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        // force=true: la fuente GPS es más fiable que el texto que el
-        // comercial pueda haber tecleado a medias, así que sobrescribimos
-        // todos los campos.
-        await fillFromCoords(pos.coords.latitude, pos.coords.longitude, true);
+        // El GPS es más fiable que el texto tecleado a medias: pisa todo.
+        await dir.desdeCoordenadas(pos.coords.latitude, pos.coords.longitude, "gps");
         setGpsLoading(false);
       },
       (err) => {
@@ -156,29 +120,10 @@ export function LeadCreateForm() {
     );
   }
 
-  async function searchByAddress() {
-    const parts = [street, streetNumber, postal, city, province, "España"].filter(Boolean);
-    if (parts.length < 2) {
-      notify.warning("Escribe al menos calle y población");
-      return;
-    }
-    setGeoLoading(true);
-    const result = await forwardGeocodeAction(parts.join(", "));
-    if (!result) {
-      setGeoLoading(false);
-      notify.warning("No se encontró la dirección");
-      return;
-    }
-    // Tras encontrar las coordenadas, hacemos reverse-geocode para
-    // completar/corregir los campos vacíos (ej. si solo escribió la
-    // calle, ahora le rellenamos CP, ciudad y provincia).
-    await fillFromCoords(result.lat, result.lng);
-    setGeoLoading(false);
-  }
-
   const dedupeMatches = useDedupe({ tax_id: taxId, email, phone });
 
   function onPostalChange(v: string) {
+    dir.marcarEscrito("cp");
     setPostal(v);
     if (v.length === 5) {
       const p = provinceFromPostalCode(v);
@@ -288,41 +233,13 @@ export function LeadCreateForm() {
     // verdad (calle + CP; es lo que persiste el servidor). Así un lead sin
     // dirección, o con solo el CP, no obliga a fijar chincheta. El técnico
     // necesita lat/lng para validar GPS, pero eso aplica cuando hay calle.
+    // Si la calle no está en ningún mapa (pasa: «Carrer Monasteri, Inca»),
+    // ya no sale el error rojo: el hook centra el mapa en la calle o el
+    // pueblo y pide mover la chincheta; no se guarda hasta que la mueva.
     const willPersistAddress = Boolean(street.trim() && postal.trim());
-    let lat = latitude;
-    let lng = longitude;
-    if (willPersistAddress && (lat == null || lng == null)) {
-      // ANTES: se bloqueaba aquí directamente y se mandaba al usuario a pulsar
-      // «Buscar en mapa» a mano. Era el error más repetido del panel de
-      // superadmin (96 veces entre junio y agosto de 2026) para algo que el
-      // sistema sabe hacer solo: geocodificamos primero y solo bloqueamos si
-      // de verdad no se encuentra la dirección. La regla de fondo no cambia
-      // (sin lat/lng no se guarda: el técnico las necesita para validar GPS).
-      setGeoLoading(true);
-      try {
-        const parts = [street, streetNumber, postal, city, province, "España"].filter(
-          Boolean,
-        );
-        const auto = await forwardGeocodeAction(parts.join(", "));
-        if (auto) {
-          lat = auto.lat;
-          lng = auto.lng;
-          setLatitude(auto.lat);
-          setLongitude(auto.lng);
-        }
-      } catch {
-        /* si el geocoder falla, cae al aviso de abajo */
-      } finally {
-        setGeoLoading(false);
-      }
-    }
-    if (willPersistAddress && (lat == null || lng == null)) {
-      notify.error(
-        "No hemos podido localizar la dirección",
-        "Revisa la calle y el código postal, o coloca la chincheta a mano con «Buscar en mapa» / tu ubicación actual. Sin coordenadas el técnico no puede validar el GPS al instalar.",
-      );
-      return;
-    }
+    const coords = await dir.prepararGuardado(willPersistAddress);
+    if (!coords) return;
+    const { lat, lng } = coords;
     if (lat != null) fd.set("address_latitude", String(lat));
     if (lng != null) fd.set("address_longitude", String(lng));
     startTransition(async () => {
@@ -564,25 +481,8 @@ export function LeadCreateForm() {
               <Label>🪄 Búsqueda inteligente (Google)</Label>
               <PlacesAutocomplete
                 placeholder="Calle, número, ciudad…"
-                onSelect={(addr) => {
-                  // Google devuelve `route` con el tipo de vía
-                  // ("Avenida de la Paz"). Lo dividimos en select +
-                  // campo para que street_type quede correcto.
-                  if (addr.street) {
-                    const { type, rest } = detectStreetType(addr.street);
-                    if (STREET_TYPE.includes(type as StreetType)) {
-                      setStreetType(type as StreetType);
-                    }
-                    setStreet(rest || addr.street);
-                  }
-                  if (addr.street_number) setStreetNumber(addr.street_number);
-                  if (addr.postal_code) setPostal(addr.postal_code);
-                  if (addr.city) setCity(addr.city);
-                  if (addr.province) setProvince(addr.province);
-                  setLatitude(addr.lat);
-                  setLongitude(addr.lng);
-                  notify.success("Dirección rellenada", addr.formatted);
-                }}
+                onManual={dir.alEscribirManual}
+                onSelect={dir.alElegirSugerencia}
               />
             </div>
           )}
@@ -601,15 +501,20 @@ export function LeadCreateForm() {
             <Button
               type="button"
               variant="outline"
-              onClick={searchByAddress}
-              disabled={geoLoading}
+              onClick={() => void dir.buscarAhora()}
+              disabled={dir.buscando}
             >
               <Search className="h-4 w-4" />
-              {geoLoading ? "Buscando…" : "Buscar por dirección"}
+              {dir.buscando ? "Buscando…" : "Buscar por dirección"}
             </Button>
-            {latitude != null && longitude != null && (
+            {latitude != null && longitude != null && dir.origen !== "aproximada" && (
               <span className="inline-flex items-center gap-1 rounded-lg bg-success/10 px-2 py-1 text-xs font-bold text-success">
                 <MapPin className="h-3 w-3" /> Ubicación capturada
+              </span>
+            )}
+            {dir.origen === "aproximada" && (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-warning/15 px-2 py-1 text-xs font-bold text-foreground">
+                <MapPin className="h-3 w-3" /> Ubicación aproximada
               </span>
             )}
           </div>
@@ -617,19 +522,23 @@ export function LeadCreateForm() {
           {/* Mapa con chincheta arrastrable. Si aún no hay coordenadas se
               muestra placeholder. Cuando el usuario mueve la chincheta se
               hace reverse-geocode y se rellenan los campos. */}
-          <MapPicker
-            latitude={latitude}
-            longitude={longitude}
-            onChange={(lat, lng) => {
-              void fillFromCoords(lat, lng, true);
-            }}
-          />
-          {latitude != null && longitude != null && (
-            <p className="text-[11px] text-muted-foreground">
-              Arrastra la chincheta o pincha en el mapa para ajustar la posición
-              exacta. Al moverla se rellenará calle/CP/población según el mapa.
-            </p>
-          )}
+          <div ref={dir.mapaRef} className="scroll-mt-24 space-y-2">
+            <MapPicker
+              latitude={latitude}
+              longitude={longitude}
+              onChange={(lat, lng) => {
+                void dir.desdeCoordenadas(lat, lng, "chincheta");
+              }}
+            />
+            <DireccionEstadoMapa dir={dir} />
+            {latitude != null && longitude != null && !dir.aviso && (
+              <p className="text-[11px] text-muted-foreground">
+                Arrastra la chincheta o pincha en el mapa para ajustar la posición
+                exacta. Si escribiste la calle a mano, se mantiene; el resto se
+                completa según el mapa.
+              </p>
+            )}
+          </div>
 
           {/* Vía + número */}
           <div className="grid gap-4 sm:grid-cols-[180px_1fr_140px]">
@@ -664,10 +573,12 @@ export function LeadCreateForm() {
                       STREET_TYPE.includes(type as StreetType)
                     ) {
                       setStreetType(type as StreetType);
+                      dir.marcarEscrito("calle");
                       setStreet(rest);
                       return;
                     }
                   }
+                  dir.marcarEscrito("calle");
                   setStreet(raw);
                 }}
                 placeholder="Gran Vía"
@@ -675,7 +586,13 @@ export function LeadCreateForm() {
             </div>
             <div className="space-y-2">
               <Label>Número</Label>
-              <Input value={streetNumber} onChange={(e) => setStreetNumber(e.target.value)} />
+              <Input
+                value={streetNumber}
+                onChange={(e) => {
+                  dir.marcarEscrito("numero");
+                  setStreetNumber(e.target.value);
+                }}
+              />
             </div>
           </div>
 
@@ -708,13 +625,36 @@ export function LeadCreateForm() {
             </div>
             <div className="space-y-2">
               <Label>Población</Label>
-              <Input value={city} onChange={(e) => setCity(e.target.value)} />
+              <Input
+                value={city}
+                onChange={(e) => {
+                  dir.marcarEscrito("poblacion");
+                  setCity(e.target.value);
+                }}
+                onBlur={dir.alSalirPoblacion}
+                list="lead-city-options"
+                autoComplete="off"
+              />
+              <datalist id="lead-city-options">
+                {dir.municipiosDelCp.map((m) => (
+                  <option key={`${m.postal_code}-${m.municipality}`} value={m.municipality}>
+                    {m.province ? `${m.province} (${m.postal_code})` : m.postal_code}
+                  </option>
+                ))}
+              </datalist>
             </div>
             <div className="space-y-2">
               <Label>Provincia</Label>
-              <Input value={province} onChange={(e) => setProvince(e.target.value)} />
+              <Input
+                value={province}
+                onChange={(e) => {
+                  dir.marcarEscrito("provincia");
+                  setProvince(e.target.value);
+                }}
+              />
             </div>
           </div>
+          {dir.pistaCp && <p className="text-xs text-muted-foreground">{dir.pistaCp}</p>}
           {postal.length >= 5 && (() => {
             const err = geoIncoherence();
             return err ? (

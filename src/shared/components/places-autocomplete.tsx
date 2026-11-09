@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PencilLine } from "lucide-react";
 import { loadGoogleMaps } from "@/shared/lib/google-maps/loader";
 
 export interface PlacesAddress {
@@ -23,6 +24,12 @@ interface Props {
   className?: string;
   /** Restringir el autocomplete a un país (ISO 3166-1 alpha-2). Default ES. */
   country?: string;
+  /**
+   * Si se pasa, cuando el usuario escribe y no elige sugerencia aparece el
+   * botón «No aparece: escribirla a mano», que entrega el texto escrito para
+   * que el formulario lo reparta en calle / número / población.
+   */
+  onManual?: (texto: string) => void;
 }
 
 /**
@@ -40,9 +47,13 @@ export function PlacesAutocomplete({
   placeholder = "Empieza a escribir la dirección…",
   className,
   country = "es",
+  onManual,
 }: Props) {
   const ref = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
+  // Texto tecleado y si se eligió una sugerencia (oculta el botón manual).
+  const [texto, setTexto] = useState(defaultValue ?? "");
+  const [eligio, setEligio] = useState(false);
   const [failed, setFailed] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
 
@@ -80,6 +91,7 @@ export function PlacesAutocomplete({
     const listener = ac.addListener("place_changed", () => {
       const place = ac.getPlace();
       if (!place?.geometry?.location) return;
+      setEligio(true);
       const comp: Record<string, string> = {};
       for (const c of place.address_components ?? []) {
         const type = c.types[0];
@@ -114,11 +126,29 @@ export function PlacesAutocomplete({
     };
   }, [ready, onSelect, country]);
 
+  const alTeclear = (e: React.FormEvent<HTMLInputElement>) => {
+    setTexto(e.currentTarget.value);
+    setEligio(false);
+  };
+
+  const botonManual =
+    onManual && !eligio && texto.trim().length >= 4 ? (
+      <button
+        type="button"
+        onClick={() => onManual(texto.trim())}
+        className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary/50 bg-background px-3 py-2 text-center text-sm font-semibold text-primary hover:bg-primary/5 sm:w-auto sm:justify-start"
+      >
+        <PencilLine className="h-4 w-4 shrink-0" />
+        <span>No aparece: escribirla a mano</span>
+      </button>
+    ) : null;
+
   if (unavailable) {
     return (
       <div className="space-y-1">
         <input
           ref={ref}
+          onInput={alTeclear}
           defaultValue={defaultValue}
           placeholder={placeholder}
           className={
@@ -131,6 +161,7 @@ export function PlacesAutocomplete({
           Google Maps Tools en <code>/configuracion/google-maps</code> para
           activarlo (o usa los campos manuales debajo).
         </p>
+        {botonManual}
       </div>
     );
   }
@@ -139,6 +170,7 @@ export function PlacesAutocomplete({
     <div className="space-y-1">
       <input
         ref={ref}
+        onInput={alTeclear}
         defaultValue={defaultValue}
         placeholder={
           ready
@@ -157,8 +189,10 @@ export function PlacesAutocomplete({
         <p className="text-[11px] text-muted-foreground">
           🪄 Selecciona una sugerencia y los campos se rellenarán
           automáticamente. Después puedes editar lo que necesites.
+          {onManual ? " Si tu calle no sale, usa el botón de abajo." : ""}
         </p>
       )}
+      {botonManual}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { MapPin, Crosshair, Search } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -21,13 +21,13 @@ import {
   validateSpanishPostalCode,
   provincesMatch,
 } from "@/shared/lib/validations/spanish";
-import { reverseGeocodeAction as reverseGeocode, forwardGeocodeAction as forwardGeocode } from "@/shared/lib/geocoding/actions";
 import { detectStreetType } from "@/shared/lib/geocoding/street-type";
 import {
-  lookupMunicipalitiesByPostalCode,
   lookupPostalCodesByMunicipality,
   type MunicipalityHit,
 } from "@/shared/lib/geocoding/municipalities";
+import { useDireccion, type ParcheDireccion } from "@/shared/lib/geocoding/use-direccion";
+import { DireccionEstadoMapa } from "@/shared/components/direccion-estado-mapa";
 import { PlacesAutocomplete } from "@/shared/components/places-autocomplete";
 import type { AddressRow } from "./actions";
 
@@ -99,64 +99,45 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
   }, []);
 
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [geoLoading, setGeoLoading] = useState(false);
-  // Sugerencias para datalist:
-  //  · cpSuggestions  = municipios candidatos del CP actual (CP → ciudad)
-  //  · citySuggestions = CPs candidatos de la ciudad escrita (ciudad → CP)
-  const [cpSuggestions, setCpSuggestions] = useState<MunicipalityHit[]>([]);
+  // CPs candidatos de la población escrita (datalist del CP). Los municipios
+  // del CP (datalist de Población) y el autorrelleno CP ↔ población los da
+  // el hook compartido.
   const [citySuggestions, setCitySuggestions] = useState<MunicipalityHit[]>([]);
 
-  async function fillFromCoords(lat: number, lng: number, source: "user_pin" | "user_location" | "geocoded") {
-    setForm((f) => ({ ...f, latitude: lat, longitude: lng, geo_source: source }));
-    // Reverse geocoding. Si la fuente es user_location (el comercial ha
-    // pulsado «Usar mi ubicación»), SOBRESCRIBIMOS todos los campos
-    // aunque ya hubiera algo escrito — fuente más fiable que el texto
-    // tecleado. Para user_pin (arrastró la chincheta) o geocoded
-    // (resultado de búsqueda) solo rellenamos los huecos.
-    const rev = await reverseGeocode(lat, lng);
-    if (!rev) {
-      notify.warning("Coordenadas capturadas pero no se pudo identificar la calle");
-      return;
-    }
-    const replace = source === "user_location";
-    // Si el CP es válido y la provincia derivada NO coincide con la
-    // devuelta por reverse-geocode, confiamos en el CP (siempre fiable
-    // en España). Resuelve el caso "Galicia" devuelto por OSM cuando
-    // el CP 15220 dice claramente "A Coruña".
-    const cpForProvince = rev.postal_code ?? "";
-    const cpProvince = cpForProvince
-      ? provinceFromPostalCode(cpForProvince)
-      : null;
-    const revProvince = rev.province ?? "";
-    // Si el mapa devolvió una variante cooficial del mismo sitio
-    // (Bizkaia/Vizcaya), la conservamos; solo forzamos el nombre del CP
-    // cuando de verdad discrepan.
-    const provinceFromRev =
-      cpProvince && !provincesMatch(revProvince, cpProvince)
-        ? cpProvince
-        : revProvince;
-
+  // Lógica compartida con leads/create-form: CartoCiudad → Google →
+  // Nominatim, chincheta obligatoria si la calle no aparece en el mapa.
+  const aplicarDireccion = useCallback((p: ParcheDireccion) => {
     setForm((f) => ({
       ...f,
-      street_type: STREET_TYPE.includes(rev.street_type as StreetType)
-        ? (rev.street_type as StreetType)
-        : f.street_type,
-      street: replace ? rev.street : f.street || rev.street,
-      street_number: replace
-        ? rev.street_number ?? ""
-        : f.street_number || rev.street_number || "",
-      postal_code: replace
-        ? rev.postal_code ?? ""
-        : f.postal_code || rev.postal_code || "",
-      city: replace ? rev.city ?? "" : f.city || rev.city || "",
-      province: replace
-        ? provinceFromRev
-        : f.province || provinceFromRev || "",
+      ...(p.street_type !== undefined && STREET_TYPE.includes(p.street_type as StreetType)
+        ? { street_type: p.street_type as StreetType }
+        : {}),
+      ...(p.calle !== undefined ? { street: p.calle } : {}),
+      ...(p.numero !== undefined ? { street_number: p.numero } : {}),
+      ...(p.cp !== undefined ? { postal_code: p.cp } : {}),
+      ...(p.poblacion !== undefined ? { city: p.poblacion } : {}),
+      ...(p.provincia !== undefined ? { province: p.provincia } : {}),
+      ...(p.lat !== undefined ? { latitude: p.lat } : {}),
+      ...(p.lng !== undefined ? { longitude: p.lng } : {}),
+      ...(p.geo_source !== undefined ? { geo_source: p.geo_source } : {}),
     }));
-    notify.success(
-      replace ? "Dirección detectada y aplicada" : "Dirección autorrellenada",
-    );
-  }
+  }, []);
+  const dir = useDireccion({
+    valores: {
+      street_type: form.street_type,
+      calle: form.street,
+      numero: form.street_number,
+      cp: form.postal_code,
+      poblacion: form.city,
+      provincia: form.province,
+      lat: form.latitude,
+      lng: form.longitude,
+    },
+    aplicar: aplicarDireccion,
+    // Chincheta (cuando la calle no es manual): solo rellena los huecos.
+    modoChincheta: "huecos",
+  });
+  const cpSuggestions = dir.municipiosDelCp;
 
   function captureMyLocation() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -166,7 +147,9 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     setGpsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        await fillFromCoords(pos.coords.latitude, pos.coords.longitude, "user_location");
+        // «Usar mi ubicación» SOBRESCRIBE todos los campos: es más fiable
+        // que el texto tecleado.
+        await dir.desdeCoordenadas(pos.coords.latitude, pos.coords.longitude, "gps");
         setGpsLoading(false);
       },
       (err) => {
@@ -180,40 +163,12 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
     );
   }
 
-  async function searchByAddress() {
-    const parts = [
-      form.street,
-      form.street_number,
-      form.postal_code,
-      form.city,
-      form.province,
-      "España",
-    ].filter(Boolean);
-    if (parts.length < 2) {
-      notify.warning("Escribe al menos calle y población");
-      return;
-    }
-    setGeoLoading(true);
-    const result = await forwardGeocode(parts.join(", "));
-    setGeoLoading(false);
-    if (!result) {
-      notify.warning("No se encontró la dirección");
-      return;
-    }
-    setForm((f) => ({
-      ...f,
-      latitude: result.lat,
-      longitude: result.lng,
-      geo_source: "geocoded",
-    }));
-    notify.success("Localizado en el mapa");
-  }
-
-  function clearLocation() {
-    setForm((f) => ({ ...f, latitude: null, longitude: null, geo_source: null }));
-  }
-
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
+    if (key === "street_number") dir.marcarEscrito("numero");
+    if (key === "postal_code") dir.marcarEscrito("cp");
+    if (key === "city") dir.marcarEscrito("poblacion");
+    if (key === "province") dir.marcarEscrito("provincia");
+    if (key === "street") dir.marcarEscrito("calle");
     setForm((f) => {
       const next = { ...f, [key]: value };
       if (key === "postal_code" && typeof value === "string" && value.length === 5) {
@@ -228,62 +183,6 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       return next;
     });
   }
-
-  // Auto-geocode al completar el CP a 5 dígitos: centra el mapa en ese
-  // código postal Y autocompleta ciudad/provincia desde el reverse de
-  // OSM. Solo se dispara si no hay coords todavía (no pisa una chincheta
-  // ya colocada manualmente).
-  const cpRef = useRef<string>("");
-  useEffect(() => {
-    const cp = form.postal_code.trim();
-    if (cp.length !== 5 || cp === cpRef.current) return;
-    if (!validateSpanishPostalCode(cp)) return;
-    if (form.latitude != null && form.longitude != null) {
-      cpRef.current = cp; // sólo si no hay coords ya
-      return;
-    }
-    cpRef.current = cp;
-    let cancelled = false;
-    (async () => {
-      const res = await forwardGeocode(`${cp}, España`);
-      if (cancelled || !res) return;
-      await fillFromCoords(res.lat, res.lng, "geocoded");
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.postal_code]);
-
-  // Sugerencias CP → municipios para el datalist de "Población".
-  // Disparo independiente del auto-geocode; aquí no toca coordenadas,
-  // solo rellena un combobox.
-  useEffect(() => {
-    const cp = form.postal_code.trim();
-    if (cp.length !== 5 || !validateSpanishPostalCode(cp)) {
-      setCpSuggestions([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const list = await lookupMunicipalitiesByPostalCode(cp);
-      if (cancelled) return;
-      setCpSuggestions(list);
-      // Si solo hay un municipio para ese CP y la ciudad está vacía o
-      // coincide con la del único hit, lo autocompletamos.
-      if (list.length === 1) {
-        const only = list[0]!;
-        setForm((f) => ({
-          ...f,
-          city: f.city || only.municipality,
-          province: f.province || only.province,
-        }));
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [form.postal_code]);
 
   // Sugerencias ciudad → CPs para el datalist de "CP" (debounce 600ms
   // para no atacar Nominatim en cada keystroke).
@@ -307,39 +206,6 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       clearTimeout(t);
     };
   }, [form.city, form.province]);
-
-  // Auto-geocode al teclear la calle (debounce 1.2 s). Solo si tenemos CP
-  // y población — sin ellos OSM da resultados ambiguos. No pisa coords
-  // si el user ya colocó chincheta a mano.
-  const streetRef = useRef<string>("");
-  useEffect(() => {
-    const key = `${form.street}|${form.street_number}|${form.postal_code}|${form.city}`;
-    if (key === streetRef.current) return;
-    if (!form.street.trim() || !form.city.trim() || form.postal_code.length !== 5) return;
-    if (form.geo_source === "user_pin" || form.geo_source === "user_location") return;
-    const timer = setTimeout(async () => {
-      streetRef.current = key;
-      const query = [
-        form.street,
-        form.street_number,
-        form.postal_code,
-        form.city,
-        "España",
-      ]
-        .filter(Boolean)
-        .join(", ");
-      const res = await forwardGeocode(query);
-      if (!res) return;
-      setForm((f) => ({
-        ...f,
-        latitude: res.lat,
-        longitude: res.lng,
-        geo_source: "geocoded",
-      }));
-    }, 1200);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.street, form.street_number, form.postal_code, form.city]);
 
   /** Comprueba que CP, provincia y población forman una combinación posible. */
   function validateGeo(): string | null {
@@ -380,57 +246,22 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
       notify.warning("Revisa la dirección", geoErr);
     }
     // Coordenadas SIEMPRE obligatorias (decisión 2026-05-19): el técnico
-    // no puede iniciar parte ni validar GPS si faltan. Si no se han
-    // podido geocodificar, el usuario debe colocar chincheta manual en
-    // el mapa.
-    // Si faltan coordenadas intentamos geocodificar ANTES de bloquear. Era el
-    // error más repetido del panel de superadmin (96 veces en /leads/nuevo
-    // entre junio y agosto de 2026): se mandaba al usuario a pulsar «Buscar en
-    // mapa» a mano para algo que el sistema resuelve solo. La regla no cambia
-    // (sin lat/lng no se guarda), solo se deja de pedir trabajo manual
-    // innecesario. Mismo criterio en leads/create-form.tsx.
-    let lat = form.latitude as number | null;
-    let lng = form.longitude as number | null;
-    if (lat == null || lng == null) {
-      setGeoLoading(true);
-      try {
-        const parts = [
-          form.street,
-          form.street_number,
-          form.postal_code,
-          form.city,
-          form.province,
-          "España",
-        ].filter(Boolean);
-        const auto = await forwardGeocode(parts.join(", "));
-        if (auto) {
-          lat = auto.lat;
-          lng = auto.lng;
-          setForm((f) => ({
-            ...f,
-            latitude: auto.lat,
-            longitude: auto.lng,
-            geo_source: "geocoded",
-          }));
-        }
-      } catch {
-        /* cae al aviso de abajo */
-      } finally {
-        setGeoLoading(false);
-      }
-    }
-    if (lat == null || lng == null) {
-      notify.error(
-        "No hemos podido localizar la dirección",
-        "Revisa la calle y el código postal, o coloca la chincheta a mano con «Buscar en mapa» — sin coordenadas el técnico no puede validar el GPS al instalar.",
-      );
-      return;
-    }
+    // no puede iniciar parte ni validar GPS si faltan. Si la calle no está en
+    // ningún mapa ya no sale el error rojo: el hook centra el mapa en la calle
+    // o el pueblo y pide arrastrar la chincheta; no se guarda hasta entonces.
+    const coords = await dir.prepararGuardado(true);
+    if (!coords || coords.lat == null || coords.lng == null) return;
+    const lat = coords.lat;
+    const lng = coords.lng;
     startTransition(async () => {
       const r = await upsertAddressSafeAction({
         ...form,
         latitude: lat,
         longitude: lng,
+        // Si las coordenadas las acaba de resolver el guardado, `form` aún
+        // no las tiene: vienen del geocodificador.
+        geo_source:
+          form.latitude === lat && form.longitude === lng ? form.geo_source : "geocoded",
         id: initial?.id,
         customer_id: customerId,
         lead_id: leadId,
@@ -462,28 +293,8 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
           <Label>🪄 Búsqueda inteligente (Google)</Label>
           <PlacesAutocomplete
             placeholder="Calle, número, ciudad…"
-            onSelect={(addr) => {
-              // Google devuelve `route` con el tipo de vía incluido
-              // ("Avenida de la Paz"). Lo dividimos para alimentar el
-              // select street_type + campo street por separado.
-              const { type, rest } = detectStreetType(addr.street);
-              const validType = STREET_TYPE.includes(type as StreetType)
-                ? (type as StreetType)
-                : form.street_type;
-              setForm((f) => ({
-                ...f,
-                street_type: addr.street ? validType : f.street_type,
-                street: rest || f.street,
-                street_number: addr.street_number || f.street_number,
-                postal_code: addr.postal_code || f.postal_code,
-                city: addr.city || f.city,
-                province: addr.province || f.province,
-                latitude: addr.lat,
-                longitude: addr.lng,
-                geo_source: "geocoded",
-              }));
-              notify.success("Dirección rellenada", addr.formatted);
-            }}
+            onManual={dir.alEscribirManual}
+            onSelect={dir.alElegirSugerencia}
           />
         </div>
       )}
@@ -551,6 +362,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
                   )
                     ? (parsed.type as StreetType)
                     : form.street_type;
+                  dir.marcarEscrito("calle");
                   setForm((f) => ({
                     ...f,
                     street_type: validType,
@@ -616,6 +428,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
             id="city"
             value={form.city}
             onChange={(e) => update("city", e.target.value)}
+            onBlur={dir.alSalirPoblacion}
             list="address-city-options"
             autoComplete="off"
           />
@@ -647,6 +460,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
           />
         </div>
       </div>
+      {dir.pistaCp && <p className="text-xs text-muted-foreground">{dir.pistaCp}</p>}
       {geoWarning && form.postal_code.length >= 5 && (
         <div className="rounded-xl border-2 border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
           ⚠️ {geoWarning}
@@ -681,28 +495,37 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
             <Crosshair className="h-4 w-4" />
             {gpsLoading ? "Buscando GPS..." : "Usar mi ubicación"}
           </Button>
-          <Button type="button" variant="outline" onClick={searchByAddress} disabled={geoLoading}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void dir.buscarAhora()}
+            disabled={dir.buscando}
+          >
             <Search className="h-4 w-4" />
-            {geoLoading ? "Buscando..." : "Buscar por dirección"}
+            {dir.buscando ? "Buscando..." : "Buscar por dirección"}
           </Button>
           {hasGeo && (
-            <Button type="button" variant="ghost" onClick={clearLocation}>
+            <Button type="button" variant="ghost" onClick={dir.borrarUbicacion}>
               Borrar
             </Button>
           )}
         </div>
 
-        <MapPicker
-          latitude={form.latitude}
-          longitude={form.longitude}
-          onChange={(lat, lng) => {
-            void fillFromCoords(lat, lng, "user_pin");
-          }}
-        />
+        <div ref={dir.mapaRef} className="scroll-mt-24 space-y-2">
+          <MapPicker
+            latitude={form.latitude}
+            longitude={form.longitude}
+            onChange={(lat, lng) => {
+              void dir.desdeCoordenadas(lat, lng, "chincheta");
+            }}
+          />
+          <DireccionEstadoMapa dir={dir} />
+        </div>
 
         {hasGeo && (
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>
+              {dir.origen === "aproximada" ? "Aproximada · " : ""}
               Lat {form.latitude?.toFixed(6)} · Lng {form.longitude?.toFixed(6)}
             </span>
             {mapsUrl && (

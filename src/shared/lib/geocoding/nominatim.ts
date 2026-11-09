@@ -11,6 +11,8 @@ export interface ReverseGeocode {
   city: string | null;
   province: string | null;
   display_name: string;
+  /** Servicio que dio la respuesta (para la atribución de CartoCiudad). */
+  fuente?: "cartociudad" | "google" | "nominatim";
 }
 
 const STREET_TYPE_MAP: Record<string, string> = {
