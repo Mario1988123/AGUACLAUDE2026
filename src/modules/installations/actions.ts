@@ -21,6 +21,7 @@ import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-s
 import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
 import { assertInstallationCompany } from "./ownership";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { notasAlCerrar } from "@/modules/customers/retirada-logica";
 
 /**
  * Reasigna instalador. Solo admin/director técnico.
@@ -1543,7 +1544,15 @@ export async function completeInstallation(input: unknown) {
       duration_seconds: durationSec,
       geo_completed_lat: parsed.geo_lat ?? null,
       geo_completed_lng: parsed.geo_lng ?? null,
-      notes: parsed.notes ?? null,
+      // En una desinstalación se CONSERVAN las notas originales (destino y
+      // #UUID de cada equipo): el cierre las lee justo después. Antes el
+      // parte del wizard las sustituía y el equipo no se daba de baja ni
+      // volvía el stock. En el resto de tipos, igual que siempre.
+      notes: notasAlCerrar(
+        (inst as { kind: string | null }).kind ?? "",
+        (inst as { notes: string | null }).notes,
+        parsed.notes,
+      ),
     })
     .eq("id", parsed.id)
     .eq("company_id", session.company_id)
@@ -1719,7 +1728,8 @@ export async function completeInstallation(input: unknown) {
         console.error("[completeInstallation] free-trial uninstall hook:", e);
       }
     }
-    // No tocamos contratos ni mantenimientos en una desinstalación.
+    // Contratos y mantenimientos del equipo: los gestiona el cierre común
+    // (aplicarCierreRetirada → dejarDeCobrarEquipos): se deja de cobrar.
     revalidatePath(`/instalaciones/${parsed.id}`);
     revalidatePath(i.customer_id ? `/clientes/${i.customer_id}` : "/clientes");
     return;

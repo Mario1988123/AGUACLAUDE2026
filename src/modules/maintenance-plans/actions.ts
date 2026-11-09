@@ -367,14 +367,22 @@ export async function cancelMaintenanceContractAction(
   if (!session.company_id) throw new Error("Sin empresa");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  await admin
+  // SEGURIDAD: el admin client salta RLS → filtrar SIEMPRE por la empresa de
+  // la sesión. Antes cancelaba por id y podía tocar contratos de otra empresa.
+  const { data: cancelados, error: cancelError } = await admin
     .from("maintenance_contracts")
     .update({
       status: "cancelled",
       cancelled_at: new Date().toISOString(),
       cancelled_reason: reason,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .select("id");
+  if (cancelError) throw new Error(cancelError.message);
+  if (!Array.isArray(cancelados) || cancelados.length === 0) {
+    throw new Error("Contrato de mantenimiento no encontrado");
+  }
   await admin.from("events").insert({
     company_id: session.company_id,
     subject_type: "maintenance_contract",

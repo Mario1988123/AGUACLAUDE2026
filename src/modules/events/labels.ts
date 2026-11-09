@@ -2,6 +2,10 @@ export const EVENT_LABEL: Record<string, string> = {
   // Traspaso de titularidad de un equipo (particular ↔ autónomo ↔ empresa)
   "equipment.transferred_out": "Equipo traspasado a otra ficha del cliente",
   "equipment.transferred_in": "Equipo recibido de otra ficha del cliente",
+  // Traspaso de pagador de un contrato (las cuotas se facturan a otra empresa)
+  "contract.billing_payer_changed": "Cambio de empresa que paga el contrato",
+  "contract.billing_transferred_out": "Deja de pagar las cuotas de un contrato",
+  "contract.billing_transferred_in": "Pasa a pagar las cuotas de un contrato",
 
   // Agente de voz IA
   "voice_agent.inbound_call": "Llamada entrante atendida por la IA",
@@ -62,8 +66,11 @@ export const EVENT_LABEL: Record<string, string> = {
   "free_trial.accepted": "Prueba aceptada — contrato generado",
   "free_trial.rejected": "Prueba rechazada",
   "free_trial.returned": "Prueba retirada (stock devuelto)",
+  "free_trial.manual_uninstall": "Prueba retirada a mano (sin agendar)",
   "equipment.relocation_requested": "Reubicación de equipo solicitada",
   "equipment.uninstall_requested": "Desinstalación solicitada",
+  "equipment.manual_uninstall": "Equipo retirado a mano (sin agendar)",
+  "equipment.uninstall_completed": "Retirada completada (cobro revisado)",
   "installation.unscheduled_by_incident": "Instalación desagendada por incidencia",
   "installation.tomorrow": "Instalación programada para mañana",
   "loading.suggested": "Sugerencia de carga generada",

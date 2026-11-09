@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFreeTrial } from "@/modules/free-trials/actions";
 import { FreeTrialActionsPanel } from "@/modules/free-trials/actions-panel";
+import { RetiradaPruebaButton } from "@/modules/customers/retirada-prueba-button";
+import { puedeRetirar, pruebaRetirable } from "@/modules/customers/retirada-logica";
+import { requireSession } from "@/shared/lib/auth/session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { Timeline } from "@/modules/events/timeline";
@@ -41,6 +44,7 @@ export default async function FreeTrialDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const session = await requireSession();
   let trial;
   try {
     trial = await getFreeTrial(id);
@@ -234,6 +238,15 @@ export default async function FreeTrialDetailPage({
               installers={installers}
               pendingUninstall={pendingUninstall}
             />
+            {puedeRetirar(session) && pruebaRetirable(trial.status) && (
+              <div className="mt-4 border-t pt-4">
+                <RetiradaPruebaButton
+                  trialId={trial.id}
+                  warehouses={warehouses}
+                  hayRetiradaProgramada={!!pendingUninstall}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

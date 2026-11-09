@@ -11,6 +11,7 @@ import { listCustomerEquipment } from "@/modules/customers/equipment-actions";
 import { CustomerEquipmentList } from "@/modules/customers/equipment-list";
 import { AddEquipmentButton } from "@/modules/customers/add-equipment-button";
 import { UninstallEquipmentButton } from "@/modules/customers/uninstall-button";
+import { RetiradaManualButton } from "@/modules/customers/retirada-manual-button";
 import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-button";
 import { DeleteCustomerButton } from "@/modules/customers/delete-customer-button";
 import { listInstallers } from "@/modules/agenda/actions";
@@ -613,6 +614,11 @@ export default async function CustomerDetailPage({
                             serial_number: e.serial_number,
                             is_ours: !!e.product_name,
                           }))}
+                        warehouses={warehouseOptions}
+                      />
+                      <RetiradaManualButton
+                        customerId={id}
+                        equipment={activeEquipmentForDelete}
                         warehouses={warehouseOptions}
                       />
                     </>

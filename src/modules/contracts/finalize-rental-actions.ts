@@ -6,6 +6,11 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import {
+  cancelarMantenimientosProgramadosContrato,
+  marcarContratoCompletado,
+  revertirContratoCompletado,
+} from "./finalizar-contrato-nucleo";
 
 /**
  * Cierre de contrato de alquiler. A diferencia de cancelContract (que es
@@ -114,25 +119,18 @@ export async function finalizeRentalContractAction(
     // 3) Cerrar el contrato PRIMERO y de forma condicional: si dos clics
     //    llegan a la vez, solo uno pasa de signed/active a completed y solo
     //    ese registra la devolución (antes un doble clic devolvía dos veces).
-    const { data: cerrado, error: upErr } = await admin
-      .from("contracts")
-      .update({ status: "completed" })
-      .eq("id", parsed.contract_id)
-      .eq("company_id", session.company_id)
-      .in("status", ["signed", "active"])
-      .select("id");
-    if (upErr) return { ok: false, error: upErr.message };
-    if (((cerrado ?? []) as unknown[]).length === 0) {
+    //    Núcleo compartido con la retirada de equipos (finalizar-contrato-nucleo).
+    const { cerrado } = await marcarContratoCompletado(
+      admin,
+      session.company_id,
+      parsed.contract_id,
+    );
+    if (!cerrado) {
       return { ok: false, error: "El contrato ya se ha finalizado o ha cambiado de estado" };
     }
-    const deshacerCierre = async () => {
-      await admin
-        .from("contracts")
-        .update({ status: c.status })
-        .eq("id", parsed.contract_id)
-        .eq("company_id", session.company_id)
-        .eq("status", "completed");
-    };
+    const companyId = session.company_id;
+    const deshacerCierre = () =>
+      revertirContratoCompletado(admin, companyId, parsed.contract_id, c.status);
     const creados: Array<{ tabla: string; id: string }> = [];
     const deshacerMovimientos = async () => {
       for (const x of creados.reverse()) {
@@ -256,15 +254,7 @@ export async function finalizeRentalContractAction(
     });
 
     // 7) Cancelar mantenimientos futuros que ya no aplican
-    try {
-      await admin
-        .from("maintenance_jobs")
-        .update({ status: "cancelled" })
-        .eq("contract_id", parsed.contract_id)
-        .in("status", ["scheduled"]);
-    } catch (e) {
-      console.error("[finalize-rental] cancel future maintenance failed:", e);
-    }
+    await cancelarMantenimientosProgramadosContrato(admin, companyId, parsed.contract_id);
 
     revalidatePath(`/contratos/${parsed.contract_id}`);
     revalidatePath("/contratos");
