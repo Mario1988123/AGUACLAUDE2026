@@ -45,6 +45,10 @@ import { getMonthlyEvolution } from "@/modules/dashboard/evolution-actions";
 import { EvolutionChart } from "@/modules/dashboard/evolution-chart";
 import { ConfigProgressCard } from "@/modules/onboarding/config-progress-card";
 import { getOnboardingSummary } from "@/modules/onboarding/state-actions";
+import {
+  RetiradasPendientesCard,
+  getRetiradasPendientes,
+} from "@/modules/dashboard/retiradas-pendientes";
 
 export const dynamic = "force-dynamic";
 
@@ -366,6 +370,14 @@ async function renderDashboard({
 
       {consolidatedAlerts && (
         <ConsolidatedAlertsCard data={consolidatedAlerts} />
+      )}
+
+      {/* Retiradas antiguas que dejaron equipos activos (fallo de las notas,
+          arreglado el 2026-11-09). Solo admin; solo si hay casos. */}
+      {(session.is_superadmin || session.roles.includes("company_admin")) && (
+        <RetiradasPendientesCard
+          items={await getRetiradasPendientes().catch(() => [])}
+        />
       )}
 
       {/* Cabecera totales: el destacado es scope (yo / equipo / empresa según rol),
