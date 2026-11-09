@@ -9,8 +9,10 @@ export const maxDuration = 300;
 /**
  * Endpoint de procesamiento de la cola Verifactu.
  *
- * REGISTRADO en vercel.json cada 15 minutos (schedule "0,15,30,45 * * * *") desde que el
- * proyecto está en plan Vercel Pro (2026-08-28). El cron /api/cron/daily
+ * PAUSADO (2026-11-09): quitado de vercel.json porque VeriFactu no se usará
+ * como mínimo hasta 2028 (ver VERIFACTI_HABILITADO en invoices/verifactu-flag.ts).
+ * Para reactivarlo, volver a añadir a vercel.json el schedule
+ * "0,15,30,45 * * * *". El cron /api/cron/daily
  * sigue procesando la cola como red de seguridad (processVerifactuQueue es
  * idempotente: sólo toma registros pendientes).
  *

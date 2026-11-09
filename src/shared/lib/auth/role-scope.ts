@@ -224,6 +224,22 @@ export async function hasRecentSaleForCustomer(
 }
 
 /**
+ * ¿La sesión puede ver un registro cuyos "dueños" son estos user_ids?
+ * (creador, comercial asignado, instalador…). Misma regla que los listados:
+ * nivel 1 todo; nivel 2 lo de su equipo; nivel 3 solo lo suyo.
+ * Decisión de Mario (2026-11-09) para los PDF de propuesta, ahorro y prueba
+ * gratuita: cada comercial los suyos y el admin todos.
+ */
+export async function puedeVerRegistroPorDueno(
+  session: SessionClaims,
+  duenos: Array<string | null | undefined>,
+): Promise<boolean> {
+  const visibles = await resolveVisibleUserIds(session);
+  if (visibles === null) return true;
+  return duenos.some((d) => !!d && visibles.includes(d));
+}
+
+/**
  * Helpers de identificación de nivel (sin BD).
  */
 export function isLevel1(session: SessionClaims): boolean {

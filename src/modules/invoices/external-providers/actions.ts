@@ -8,6 +8,7 @@ import { cifrarParaBytea, descifrarDeBytea } from "./cifrado";
 import type { ProviderId, ProviderCredentials } from "./types";
 import { findProvider, getProviderClient, selectableProviders } from "./registry";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { MENSAJE_VERIFACTI_PAUSADO, VERIFACTI_HABILITADO } from "../verifactu-flag";
 
 async function ensureAdmin() {
   const session = await requireSession();
@@ -280,6 +281,9 @@ export async function setVerifactiActivoAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const session = await ensureAdmin();
+    if (activo && !VERIFACTI_HABILITADO) {
+      return { ok: false, error: MENSAJE_VERIFACTI_PAUSADO };
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     if (activo) {

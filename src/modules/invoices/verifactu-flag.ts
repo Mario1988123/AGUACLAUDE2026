@@ -22,5 +22,24 @@
  */
 export const VERIFACTU_HABILITADO = false;
 
+/**
+ * Interruptor GLOBAL de la vía Verifacti (pausada el 2026-11-09 a petición de
+ * Mario: VeriFactu no se va a usar como mínimo hasta 2028 y de momento no se
+ * factura desde el CRM).
+ *
+ * Mientras valga `false`:
+ *  · no se envía ningún alta, anulación ni consulta a Verifacti (ni al
+ *    emitir, ni al cobrar, ni desde el cron horario);
+ *  · no se puede activar Verifacti en Configuración → Facturación.
+ *
+ * Las facturas se siguen emitiendo con normalidad. Al reactivarlo, las
+ * emitidas mientras estuvo pausado NO se envían solas: habría que darlas de
+ * alta a mano.
+ */
+export const VERIFACTI_HABILITADO = false;
+
+export const MENSAJE_VERIFACTI_PAUSADO =
+  "El registro en VeriFactu está pausado en esta versión. Se sigue facturando en modo normal.";
+
 export const MENSAJE_VERIFACTU_DESHABILITADO =
   "VeriFactu está desactivado en esta versión mientras se revisa su implementación. Se sigue facturando en modo normal.";

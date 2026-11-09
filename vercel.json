@@ -14,10 +14,6 @@
       "schedule": "15 * * * *"
     },
     {
-      "path": "/api/cron/verifactu-send",
-      "schedule": "0,15,30,45 * * * *"
-    },
-    {
       "path": "/api/cron/boe-check",
       "schedule": "0 8 1 * *"
     },

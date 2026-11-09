@@ -136,17 +136,9 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
       new Date().getMonth(),
       1,
     ).toISOString();
-    const { data: usageRows } = await supabase
-      .from("google_api_usage")
-      .select("cost_micro_usd")
-      .eq("company_id", id)
-      .eq("success", true)
-      .gte("called_at", monthStart);
-    const micro = ((usageRows ?? []) as Array<{ cost_micro_usd: number }>).reduce(
-      (s, r) => s + Number(r.cost_micro_usd),
-      0,
-    );
-    gmapsMonthUsd = micro / 1_000_000;
+    // Por tramos: un select plano se cortaba en 1000 filas.
+    const { sumarGastoGoogleUsd } = await import("@/shared/lib/google-maps/gasto");
+    gmapsMonthUsd = await sumarGastoGoogleUsd(supabase, id, monthStart);
   }
 
   const companyAdmin = await getCompanyAdmin(id);

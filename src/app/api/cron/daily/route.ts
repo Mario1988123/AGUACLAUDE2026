@@ -555,26 +555,37 @@ export async function GET(req: NextRequest) {
           ? cust.trade_name ?? cust.legal_name ?? "Cliente"
           : cust.first_name ?? "Cliente";
 
-      // Importar dinámicamente para no cargar el módulo en cada deploy
-      const { sendTransactionalEmail } = await import(
-        "@/modules/mailing/actions"
-      );
-      await sendTransactionalEmail({
-        template_key: "installation_reminder",
-        to_email: cust.email,
-        to_name: customerFirstName,
-        customer_id: instFull.customer_id,
-        variables: {
-          customer_first_name: customerFirstName,
-          appointment_date: inst.scheduled_at,
-          appointment_time: time,
-          customer_address: address || "—",
-          technician_name: installer?.full_name ?? "Nuestro técnico",
-          technician_phone: installer?.phone ?? "—",
-        },
-        related_subject_type: "installation",
-        related_subject_id: inst.id,
-      });
+      // Envío SIN sesión: sendTransactionalEmail exige requireSession() y en
+      // el cron lanzaba siempre, así que este recordatorio no salía nunca.
+      // El fallo del correo NO debe impedir el WhatsApp de abajo.
+      try {
+        const { enviarCorreoAutomatico } = await import(
+          "@/modules/mailing/envio-automatico"
+        );
+        const r = await enviarCorreoAutomatico({
+          companyId: inst.company_id,
+          templateKey: "installation_reminder",
+          toEmail: cust.email,
+          toName: customerFirstName,
+          customerId: instFull.customer_id,
+          variables: {
+            customer_first_name: customerFirstName,
+            appointment_date: inst.scheduled_at,
+            appointment_time: time,
+            customer_address: address || "—",
+            technician_name: installer?.full_name ?? "Nuestro técnico",
+            technician_phone: installer?.phone ?? "—",
+          },
+          triggerEvent: "appointment_reminder",
+          relatedType: "installation",
+          relatedId: inst.id,
+        });
+        if (!r.ok) {
+          console.error("[cron/daily] installation_reminder email:", r.error);
+        }
+      } catch (e) {
+        console.error("[cron/daily] installation_reminder email failed:", e);
+      }
 
       // WhatsApp paralelo (si hay phone + Twilio configurado)
       try {

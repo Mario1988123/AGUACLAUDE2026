@@ -3,6 +3,7 @@ import "server-only";
 import { madridDateKey } from "@/shared/lib/format-date";
 import { descifrarDeBytea } from "./cifrado";
 import { VerifactiClient } from "./verifacti";
+import { MENSAJE_VERIFACTI_PAUSADO, VERIFACTI_HABILITADO } from "../verifactu-flag";
 import {
   claveIdempotencia,
   construirCuerpoAlta,
@@ -62,6 +63,11 @@ export async function leerConfigVerifacti(
   admin: Admin,
   companyId: string,
 ): Promise<{ ok: true; config: ConfigVerifacti } | { ok: false; activo: boolean; error: string }> {
+  // Pausa global: con esto ningún camino (emitir, cobrar, push manual,
+  // anular, consultar) llega a hablar con Verifacti.
+  if (!VERIFACTI_HABILITADO) {
+    return { ok: false, activo: false, error: MENSAJE_VERIFACTI_PAUSADO };
+  }
   const { data, error } = await admin
     .from("company_settings")
     .select(
@@ -587,6 +593,7 @@ export async function actualizarEstadosPendientesVerifacti(
   admin: Admin,
   limite = 50,
 ): Promise<{ consultados: number; errores: number }> {
+  if (!VERIFACTI_HABILITADO) return { consultados: 0, errores: 0 };
   const { data, error } = await admin
     .from("external_invoicing_submissions")
     .select("id, company_id")

@@ -3,6 +3,8 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { sendViaSmtp } from "@/modules/mailing/smtp";
+import { sumarGastoGoogleUsd } from "@/shared/lib/google-maps/gasto";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -80,28 +82,9 @@ export async function GET(req: NextRequest) {
       now.getMonth(),
       now.getDate(),
     ).toISOString();
-    const { data: mRows } = await admin
-      .from("google_api_usage")
-      .select("cost_micro_usd")
-      .eq("company_id", c.id)
-      .eq("success", true)
-      .gte("called_at", monthStart);
-    const monthUsd =
-      ((mRows ?? []) as Array<{ cost_micro_usd: number }>).reduce(
-        (s, r) => s + Number(r.cost_micro_usd),
-        0,
-      ) / 1_000_000;
-    const { data: dRows } = await admin
-      .from("google_api_usage")
-      .select("cost_micro_usd")
-      .eq("company_id", c.id)
-      .eq("success", true)
-      .gte("called_at", dayStart);
-    const dayUsd =
-      ((dRows ?? []) as Array<{ cost_micro_usd: number }>).reduce(
-        (s, r) => s + Number(r.cost_micro_usd),
-        0,
-      ) / 1_000_000;
+    // Por tramos: un select plano se cortaba en 1000 filas y la alerta no saltaba.
+    const monthUsd = await sumarGastoGoogleUsd(admin, c.id, monthStart);
+    const dayUsd = await sumarGastoGoogleUsd(admin, c.id, dayStart);
 
     // ── Salud de la key ────────────────────────────────────────────────
     // Google puede dejar de responder sin que cambie nada del código:
@@ -111,15 +94,20 @@ export async function GET(req: NextRequest) {
     // llamadas de las últimas 24 h fallan por algo que NO es "no hay
     // resultados", se avisa con el código real que devuelve Google.
     const dayAgo = new Date(Date.now() - 86400000).toISOString();
-    const { data: recentCalls } = await admin
-      .from("google_api_usage")
-      .select("success, error_code")
-      .eq("company_id", c.id)
-      .gte("called_at", dayAgo);
-    const calls = (recentCalls ?? []) as Array<{
+    const calls = await fetchAllRows<{
       success: boolean;
       error_code: string | null;
-    }>;
+    }>(
+      (from, to) =>
+        admin
+          .from("google_api_usage")
+          .select("success, error_code")
+          .eq("company_id", c.id)
+          .gte("called_at", dayAgo)
+          .order("id", { ascending: true })
+          .range(from, to),
+      { maxRows: 100000, label: "google_api_usage:salud" },
+    );
     const broken = calls.filter(
       (r) =>
         !r.success &&

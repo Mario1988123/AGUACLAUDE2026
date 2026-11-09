@@ -105,7 +105,10 @@ export async function loadVoiceSettings(
     await admin
       .from("voice_agent_settings")
       .update({ usage_month: anchor, minutes_used_month: 0 })
-      .eq("company_id", companyId);
+      .eq("company_id", companyId)
+      // Solo si sigue siendo de otro mes: si dos procesos reinician a la vez,
+      // el segundo no borra los minutos que el primero ya haya sumado.
+      .or(`usage_month.is.null,usage_month.neq.${anchor}`);
     row.usage_month = anchor;
     row.minutes_used_month = 0;
   }
@@ -258,14 +261,32 @@ export async function addMinutesUsed(
   if (!Number.isFinite(minutes) || minutes <= 0) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const s = await loadVoiceSettings(companyId);
-  await admin
-    .from("voice_agent_settings")
-    .update({
-      minutes_used_month: Number((s.minutes_used_month + minutes).toFixed(2)),
-      usage_month: currentMonthAnchor(),
-    })
-    .eq("company_id", companyId);
+  // Compare-and-set: leer → escribir SOLO si el contador sigue igual. Antes
+  // era leer-sumar-escribir a pelo y dos llamadas que acababan a la vez se
+  // pisaban (se perdían minutos del tope mensual). Si otro proceso escribió
+  // entre medias, el update no toca filas y se reintenta con el valor nuevo.
+  for (let intento = 0; intento < 5; intento++) {
+    const s = await loadVoiceSettings(companyId); // también reinicia si es mes nuevo
+    const anchor = currentMonthAnchor();
+    const { data, error } = await admin
+      .from("voice_agent_settings")
+      .update({
+        minutes_used_month: Number((s.minutes_used_month + minutes).toFixed(2)),
+        usage_month: anchor,
+      })
+      .eq("company_id", companyId)
+      .eq("usage_month", anchor)
+      .eq("minutes_used_month", s.minutes_used_month)
+      .select("company_id");
+    if (error) {
+      console.error("[voice-agent] addMinutesUsed:", error.message);
+      return;
+    }
+    if (Array.isArray(data) && data.length > 0) return;
+  }
+  console.error(
+    `[voice-agent] addMinutesUsed: no se pudo sumar ${minutes.toFixed(2)} min a ${companyId} tras 5 intentos`,
+  );
 }
 
 // ---------------------------------------------------------------------------

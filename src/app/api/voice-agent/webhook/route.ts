@@ -111,7 +111,10 @@ export async function POST(req: NextRequest) {
     null;
   const outcome = mapOutcome(data);
 
-  await admin
+  // Cierre atómico: solo se cierra si sigue abierto. La comprobación de
+  // arriba es un atajo; esta es la que manda. Si dos entregas llegan a la
+  // vez, solo una actualiza la fila y solo esa suma minutos.
+  const { data: closed, error: closeError } = await admin
     .from("voice_call_attempts")
     .update({
       ended_at: new Date().toISOString(),
@@ -122,7 +125,17 @@ export async function POST(req: NextRequest) {
       human_escalation_requested:
         typeof transcript === "string" && /hablar con (una |alguien|persona)/i.test(transcript),
     })
-    .eq("id", attempt.id);
+    .eq("id", attempt.id)
+    .is("ended_at", null)
+    .select("id");
+  if (closeError) {
+    // 500 para que la plataforma reintente: no se ha guardado nada.
+    console.error("[voice-agent/webhook] cierre del intento:", closeError.message);
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+  if (!Array.isArray(closed) || closed.length === 0) {
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
 
   // Gasto: se contabiliza SIEMPRE, aunque la llamada no sirviera de nada.
   // Un buzón de voz de 20 segundos también se factura.

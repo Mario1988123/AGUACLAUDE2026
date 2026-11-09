@@ -83,6 +83,14 @@ export async function generateSavingsPdf(savingsId: string): Promise<Uint8Array>
     .maybeSingle();
   const sp = row as SavingsRow | null;
   if (!sp) throw new Error("Propuesta de ahorro no encontrada");
+  {
+    // Scope por rol: el admin client salta RLS, así que se comprueba aquí.
+    const { puedeVerRegistroPorDueno } = await import("@/shared/lib/auth/role-scope");
+    const createdBy = (row as { created_by?: string | null }).created_by ?? null;
+    if (!(await puedeVerRegistroPorDueno(session, [createdBy]))) {
+      throw new Error("Propuesta de ahorro no encontrada");
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;

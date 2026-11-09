@@ -729,9 +729,9 @@ export async function generateFreeTrialDeliveryNotePdf(
   // columna de firma, cargamos solo lo core y dejamos los paths/nombres
   // en null. El PDF saldrá sin firmas pero al menos no peta.
   const FULL_COLS =
-    "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id, customer_signature_path, customer_signer_name, customer_signer_tax_id, customer_signed_at, representative_signature_path, representative_user_id, representative_signed_at";
+    "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id, created_by, assigned_installer_user_id, customer_signature_path, customer_signer_name, customer_signer_tax_id, customer_signed_at, representative_signature_path, representative_user_id, representative_signed_at";
   const CORE_COLS =
-    "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id";
+    "id, reference_code, status, duration_days, conditions_text, installed_at, expires_at, scheduled_at, created_at, installation_address_id, customer_id, lead_id, created_by, assigned_installer_user_id";
   // Scoping anti fuga cross-tenant: admin client salta RLS, así que filtramos
   // explícitamente por company_id de la sesión. Sin esto la empresa A podría
   // renderizar el PDF (con DNI/datos) de la prueba de la empresa B.
@@ -760,6 +760,15 @@ export async function generateFreeTrialDeliveryNotePdf(
   }
   const trialRow = trialRes.data;
   if (!trialRow) throw new Error("Prueba no encontrada");
+  {
+    // Scope por rol (lleva DNI): mismo criterio que el listado — creador o
+    // instalador asignado, equipo para directores, todo para el admin.
+    const { puedeVerRegistroPorDueno } = await import("@/shared/lib/auth/role-scope");
+    const t = trialRow as { created_by?: string | null; assigned_installer_user_id?: string | null };
+    if (!(await puedeVerRegistroPorDueno(session, [t.created_by, t.assigned_installer_user_id]))) {
+      throw new Error("Prueba no encontrada");
+    }
+  }
   const trial = trialRow as {
     id: string;
     reference_code: string | null;

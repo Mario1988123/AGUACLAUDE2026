@@ -39,6 +39,14 @@ export async function generateProposalPdf(proposalId: string): Promise<Uint8Arra
     getProposal(proposalId),
     getProposalItems(proposalId),
   ]);
+  {
+    // Scope por rol explícito (no fiarse solo de la RLS del remoto).
+    const { puedeVerRegistroPorDueno } = await import("@/shared/lib/auth/role-scope");
+    const createdBy = (proposal as { created_by?: string | null }).created_by ?? null;
+    if (!(await puedeVerRegistroPorDueno(session, [createdBy]))) {
+      throw new Error("Propuesta no encontrada");
+    }
+  }
 
   // Los datos fiscales de la empresa NO viven en `companies` (esa tabla es
   // del SaaS: name/slug/plan/etc.). Viven en `company_settings` con prefijo

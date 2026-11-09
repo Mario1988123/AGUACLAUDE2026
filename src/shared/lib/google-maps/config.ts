@@ -1,4 +1,8 @@
-"use server";
+import "server-only";
+
+// NO es "use server" a propósito: estas funciones reciben companyId por
+// parámetro y canUseGoogleMaps devuelve la clave de servidor. Como server
+// actions quedarían invocables desde fuera para cualquier empresa.
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import {
@@ -7,6 +11,8 @@ import {
   type GmapsFeature,
 } from "./pricing";
 import { resolveServerKey, resolveClientKey } from "./key-storage";
+import { sumarGastoGoogleUsd } from "./gasto";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 
 export type GmapsMode = "disabled" | "shared_key" | "own_key";
 
@@ -275,15 +281,8 @@ async function getUsageUsd(
       since.setDate(1);
       since.setHours(0, 0, 0, 0);
     }
-    const { data } = await admin
-      .from("google_api_usage")
-      .select("cost_micro_usd")
-      .eq("company_id", companyId)
-      .eq("success", true)
-      .gte("called_at", since.toISOString());
-    const rows = (data ?? []) as Array<{ cost_micro_usd: number }>;
-    const microSum = rows.reduce((s, r) => s + Number(r.cost_micro_usd ?? 0), 0);
-    return microSum / 1_000_000;
+    // Por tramos: un select plano se cortaba en 1000 filas y el tope dejaba de proteger.
+    return await sumarGastoGoogleUsd(admin, companyId, since.toISOString());
   } catch {
     return 0;
   }
@@ -312,19 +311,25 @@ export async function getGmapsUsageSummary(
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
   // Por API y por usuario (mes actual)
-  const { data: monthRows } = await admin
-    .from("google_api_usage")
-    .select("api, units, cost_micro_usd, called_by_user_id")
-    .eq("company_id", companyId)
-    .eq("success", true)
-    .gte("called_at", monthStart.toISOString());
   type R = {
     api: GmapsApi;
     units: number;
     cost_micro_usd: number;
     called_by_user_id: string | null;
   };
-  const month = (monthRows ?? []) as R[];
+  // Por tramos: PostgREST corta en 1000 filas sin avisar.
+  const month = await fetchAllRows<R>(
+    (from, to) =>
+      admin
+        .from("google_api_usage")
+        .select("api, units, cost_micro_usd, called_by_user_id")
+        .eq("company_id", companyId)
+        .eq("success", true)
+        .gte("called_at", monthStart.toISOString())
+        .order("id", { ascending: true })
+        .range(from, to),
+    { maxRows: 500000, label: "google_api_usage:resumen-mes" },
+  );
 
   const byApi = new Map<GmapsApi, { calls: number; units: number; cost: number }>();
   const byUser = new Map<string, { calls: number; cost: number }>();
@@ -344,28 +349,25 @@ export async function getGmapsUsageSummary(
     }
   }
 
-  let currentDayMicro = 0;
-  const { data: dayRows } = await admin
-    .from("google_api_usage")
-    .select("cost_micro_usd")
-    .eq("company_id", companyId)
-    .eq("success", true)
-    .gte("called_at", dayStart.toISOString());
-  currentDayMicro = ((dayRows ?? []) as Array<{ cost_micro_usd: number }>).reduce(
-    (s, r) => s + Number(r.cost_micro_usd),
-    0,
-  );
+  const currentDayMicro =
+    (await sumarGastoGoogleUsd(admin, companyId, dayStart.toISOString())) * 1_000_000;
 
   // Histórico 6 meses
-  const { data: histRows } = await admin
-    .from("google_api_usage")
-    .select("called_at, cost_micro_usd")
-    .eq("company_id", companyId)
-    .eq("success", true)
-    .gte("called_at", sixMonthsAgo.toISOString());
   type HR = { called_at: string; cost_micro_usd: number };
+  const histRows = await fetchAllRows<HR>(
+    (from, to) =>
+      admin
+        .from("google_api_usage")
+        .select("called_at, cost_micro_usd")
+        .eq("company_id", companyId)
+        .eq("success", true)
+        .gte("called_at", sixMonthsAgo.toISOString())
+        .order("id", { ascending: true })
+        .range(from, to),
+    { maxRows: 1000000, label: "google_api_usage:historico" },
+  );
   const histMap = new Map<string, number>();
-  for (const r of (histRows ?? []) as HR[]) {
+  for (const r of histRows) {
     const d = new Date(r.called_at);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     histMap.set(key, (histMap.get(key) ?? 0) + Number(r.cost_micro_usd));
