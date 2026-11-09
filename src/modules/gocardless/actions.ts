@@ -464,6 +464,24 @@ async function _createPayment(input: {
   if (mandate.company_id !== session.company_id) throw new Error("Otra empresa");
   // Todo lo que se enlaza al cobro tiene que ser de la empresa y del MISMO
   // cliente que el mandato.
+  // Traspaso de pagador: una cuota puede ser de un cliente distinto del
+  // titular del contrato. El deudor de ese cobro es el de su apunte de
+  // monedero, y el mandato tiene que ser SUYO (el del titular no vale).
+  let pagadorDelCobro: string | null = null;
+  if (input.contract_payment_id) {
+    const { data: we, error: weErr } = await admin
+      .from("wallet_entries")
+      .select("customer_id")
+      .eq("company_id", session.company_id)
+      .eq("contract_payment_id", input.contract_payment_id)
+      .limit(1)
+      .maybeSingle();
+    if (weErr) throw new Error(weErr.message);
+    pagadorDelCobro = (we as { customer_id: string | null } | null)?.customer_id ?? null;
+    if (pagadorDelCobro && pagadorDelCobro !== mandate.customer_id) {
+      throw new Error("Ese cobro se facturó a otro cliente: el mandato tiene que ser suyo");
+    }
+  }
   if (input.contract_id) {
     const { data: con } = await admin
       .from("contracts")
@@ -473,7 +491,9 @@ async function _createPayment(input: {
       .maybeSingle();
     if (!con) throw new Error("Contrato no encontrado");
     const k = con as { customer_id: string; status: string };
-    if (k.customer_id !== mandate.customer_id) throw new Error("El contrato es de otro cliente");
+    if (k.customer_id !== mandate.customer_id && pagadorDelCobro !== mandate.customer_id) {
+      throw new Error("El contrato es de otro cliente");
+    }
     if (k.status === "cancelled") throw new Error("No se cobra un contrato cancelado");
   }
   if (input.invoice_id) {

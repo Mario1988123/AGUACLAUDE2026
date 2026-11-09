@@ -684,6 +684,7 @@ export default async function CustomerDetailPage({
                 session.roles.includes("technical_director") ||
                 session.roles.includes("commercial_director")
               }
+              canTransfer={session.is_superadmin || session.roles.includes("company_admin")}
               canEditModality={
                 session.is_superadmin ||
                 session.roles.includes("company_admin") ||

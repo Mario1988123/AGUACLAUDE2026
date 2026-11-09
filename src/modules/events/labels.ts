@@ -1,11 +1,8 @@
 export const EVENT_LABEL: Record<string, string> = {
-  // Traspaso de titularidad de un equipo (particular ↔ autónomo ↔ empresa)
-  "equipment.transferred_out": "Equipo traspasado a otra ficha del cliente",
-  "equipment.transferred_in": "Equipo recibido de otra ficha del cliente",
-  // Traspaso de pagador de un contrato (las cuotas se facturan a otra empresa)
-  "contract.billing_payer_changed": "Cambio de empresa que paga el contrato",
-  "contract.billing_transferred_out": "Deja de pagar las cuotas de un contrato",
-  "contract.billing_transferred_in": "Pasa a pagar las cuotas de un contrato",
+  // Traspaso de un equipo (y lo que cuelga de él) a otro cliente
+  "equipment.transferred_out": "Equipo traspasado a otro cliente",
+  "equipment.transferred_in": "Equipo recibido de otro cliente",
+  "contract.transferred": "Contrato traspasado a otro cliente",
 
   // Agente de voz IA
   "voice_agent.inbound_call": "Llamada entrante atendida por la IA",

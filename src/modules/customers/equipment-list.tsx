@@ -36,6 +36,7 @@ export function CustomerEquipmentList({
   customerId,
   addresses = [],
   canRelocate = false,
+  canTransfer = false,
   canEditModality = false,
   canRemove = false,
   equipmentsWithActiveContract,
@@ -45,6 +46,8 @@ export function CustomerEquipmentList({
   customerId?: string;
   addresses?: AddressOption[];
   canRelocate?: boolean;
+  /** Si puede traspasar un equipo a otro cliente. Solo admin de empresa. */
+  canTransfer?: boolean;
   /** Si puede editar la modalidad (venta/alquiler/renting) del equipo. */
   canEditModality?: boolean;
   /** Si puede dar de baja equipos (sobre todo externos). Admin/director. */
@@ -208,10 +211,10 @@ export function CustomerEquipmentList({
                     addresses={addresses}
                   />
                 )}
-                {/* Cambiar el TITULAR (particular ↔ autónomo ↔ empresa). No es
-                    reubicar: el equipo se queda donde está, solo cambia a quién
-                    se factura. Mismo permiso que reubicar. */}
-                {canRelocate && e.is_active && customerId && (
+                {/* Traspasar a otro cliente: el equipo se queda donde está y
+                    se arrastra todo lo que cuelga de él (contrato incluido).
+                    Solo admin de empresa. */}
+                {canTransfer && e.is_active && customerId && (
                   <TransferEquipmentButton
                     equipmentId={e.id}
                     customerId={customerId}

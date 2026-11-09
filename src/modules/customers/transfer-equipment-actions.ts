@@ -4,56 +4,54 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import {
+  bloqueoPorContratoCompartido,
+  contratosConCuotas,
+  faltanDatosFacturacion,
+  resumenTraspasoEquipo,
+  validarMotivo,
+  type ContratoLigado,
+  type ResumenTraspaso,
+} from "./traspaso-equipo-logica";
 
 /**
- * TRASPASO DE TITULARIDAD DE UN EQUIPO
+ * TRASPASO DE UN EQUIPO A OTRO CLIENTE ("nos equivocamos de ficha")
  *
- * El caso real: un cliente de siempre —particular o autónomo— tiene tres
- * equipos y te dice que a partir de ahora quiere uno a nombre de su sociedad y
- * los otros dos a título personal. El equipo no se mueve de sitio, no va nadie
- * a tocarlo: lo único que cambia es a quién se le factura.
+ * El equipo no se mueve de sitio; se arrastra TODO lo que cuelga de él al
+ * cliente destino (de la misma empresa usuaria): el contrato de
+ * alquiler/renting/venta, la instalación, todos los mantenimientos y
+ * contratos de mantenimiento, las incidencias y los cobros pendientes que
+ * aún no se han facturado. La dirección se copia en la ficha destino porque
+ * `addresses.customer_id` va en CASCADE.
  *
- * Por eso esto NO es `relocateEquipmentAction` (que sí manda a un técnico a
- * llevárselo a otra dirección) ni `mergeCustomersAction` (que fusiona dos
- * fichas en una). Aquí las dos fichas siguen vivas y separadas a propósito:
- * son dos titulares fiscales distintos de la misma persona.
+ * NO se mueve nunca lo ya facturado: las facturas (y sus cobros) son de quien
+ * las recibió; con VeriFactu reasignar una factura emitida no es una
+ * corrección. Tampoco el snapshot, el PDF ni las firmas del contrato, que
+ * quedan como registro de quién firmó (el traspaso se anota en el contrato).
  *
- * QUÉ SE MUEVE
- *   · El equipo, y sus accesorios si es un pack (parent_equipment_id).
- *   · La dirección donde está instalado: se clona en la ficha destino, porque
- *     `addresses.customer_id` va en CASCADE y si un día se borra la ficha de
- *     origen el equipo se quedaría sin dirección.
- *   · Los mantenimientos PENDIENTES (todo lo que no esté completado ni
- *     cancelado) y el contrato de mantenimiento ACTIVO: las próximas visitas y
- *     las próximas cuotas son del titular nuevo.
- *   · Las incidencias ABIERTAS.
+ * El mandato SEPA del origen se revoca (no se borra) y el destino firma el
+ * suyo; mientras no lo haga, sus cuotas no entran en la remesa.
  *
- * QUÉ NO SE MUEVE, NUNCA
- *   · Facturas. Lo ya facturado es de quien lo pagó, y con VeriFactu de por
- *     medio reasignar una factura emitida no es una corrección, es un fraude.
- *   · Mantenimientos completados o cancelados, e incidencias cerradas: son
- *     historia de lo que le pasó a ese titular.
- *   · Monedero (`wallet_entries`) y contratos de financiación (`contracts`):
- *     son deuda de una persona concreta.
- *
- * O sea: el futuro se muda, el pasado se queda. Que es exactamente lo que
- * pide Hacienda y lo que espera cualquiera que mire la ficha antigua.
+ * Todo el movimiento va en UNA transacción: la función SQL
+ * `traspasar_equipo_a_cliente` (migración 20261110090000). Aquí solo se
+ * valida, se calcula qué se mueve y se copia la dirección (si la función
+ * falla, la copia se borra).
  */
 
-/** Mantenimientos que ya son historia y por tanto no se tocan. */
-const MAINTENANCE_DONE = ["completed", "cancelled"] as const;
-/** Incidencias que ya son historia. */
-const INCIDENT_DONE = ["closed", "cancelled", "resolved"] as const;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Admin = any;
+type Sesion = Awaited<ReturnType<typeof requireSession>>;
 
 export interface TransferEquipmentResult {
   equipment_moved: number;
-  jobs_moved: number;
   contracts_moved: number;
+  installations_moved: number;
+  jobs_moved: number;
+  maintenance_contracts_moved: number;
   incidents_moved: number;
+  wallet_moved: number;
+  sepa_mandates_revoked: number;
   address_cloned: boolean;
-  detached_from_pack: boolean;
-  /** Pasos que fallaron después de mover el equipo. Vacío = todo limpio. */
-  warnings: string[];
 }
 
 interface EquipmentRow {
@@ -78,6 +76,9 @@ interface CustomerRow {
   deleted_at: string | null;
 }
 
+const CUSTOMER_COLS =
+  "id, company_id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, tax_id, deleted_at";
+
 function customerLabel(c: CustomerRow): string {
   if (c.party_kind === "company") {
     return c.trade_name || c.legal_name || "Empresa sin nombre";
@@ -85,294 +86,502 @@ function customerLabel(c: CustomerRow): string {
   return `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim() || "Sin nombre";
 }
 
-export async function transferEquipmentAction(input: {
+/** [decide] Solo admin de empresa (y superadmin): cambia a quién se factura. */
+function puedeTraspasar(s: Sesion): boolean {
+  return s.is_superadmin || s.roles.includes("company_admin");
+}
+
+function err(e: { message: string } | null | undefined, que: string): void {
+  if (e) throw new Error(`${que}: ${e.message}`);
+}
+
+interface Plan {
+  equipment: EquipmentRow;
+  origin: CustomerRow;
+  target: CustomerRow;
+  ids: string[];
+  directChildren: string[];
+  includeChildren: boolean;
+  contratos: ContratoLigado[];
+  bloqueo: string | null;
+  resumen: ResumenTraspaso;
+  /** Dirección del equipo a copiar (null si no tiene o ya es del destino). */
+  addressToClone: Record<string, unknown> | null;
+  /** Dirección igual que el destino ya tiene. */
+  twinAddressId: string | null;
+}
+
+/**
+ * Lee todo lo necesario y decide qué se mueve. No escribe nada: lo usan la
+ * vista previa y el traspaso.
+ */
+async function planificar(
+  admin: Admin,
+  companyId: string,
+  input: { equipment_id: string; target_customer_id: string; include_children?: boolean },
+): Promise<{ ok: true; plan: Plan } | { ok: false; error: string }> {
+  // --- Equipo y fichas ----------------------------------------------------
+  const { data: eqData, error: eqErr } = await admin
+    .from("customer_equipment")
+    .select("id, company_id, customer_id, address_id, parent_equipment_id, serial_number")
+    .eq("id", input.equipment_id)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  err(eqErr, "Leer el equipo");
+  const equipment = eqData as EquipmentRow | null;
+  if (!equipment) return { ok: false, error: "Equipo no encontrado o no pertenece a tu empresa" };
+  if (equipment.customer_id === input.target_customer_id) {
+    return { ok: false, error: "El equipo ya es de ese cliente" };
+  }
+
+  const { data: bothData, error: bothErr } = await admin
+    .from("customers")
+    .select(CUSTOMER_COLS)
+    .in("id", [equipment.customer_id, input.target_customer_id])
+    .eq("company_id", companyId);
+  err(bothErr, "Leer los clientes");
+  const both = (bothData ?? []) as CustomerRow[];
+  const origin = both.find((c) => c.id === equipment.customer_id);
+  const target = both.find((c) => c.id === input.target_customer_id);
+  if (!origin || !target) return { ok: false, error: "Cliente de origen o destino no encontrado en tu empresa" };
+  if (target.deleted_at) return { ok: false, error: "El cliente destino está borrado" };
+
+  // --- Equipos que viajan (descendencia completa, acotada) ---------------
+  const includeChildren = input.include_children !== false;
+  const childrenOf = async (parents: string[]): Promise<string[]> => {
+    const { data, error } = await admin
+      .from("customer_equipment")
+      .select("id")
+      .in("parent_equipment_id", parents)
+      .eq("company_id", companyId);
+    err(error, "Leer los accesorios");
+    return ((data ?? []) as Array<{ id: string }>).map((k) => k.id);
+  };
+  const ids = [equipment.id];
+  const directChildren = await childrenOf([equipment.id]);
+  if (includeChildren) {
+    let frontier = directChildren;
+    for (let depth = 0; depth < 5 && frontier.length > 0; depth++) {
+      for (const id of frontier) if (!ids.includes(id)) ids.push(id);
+      frontier = (await childrenOf(frontier)).filter((id) => !ids.includes(id));
+    }
+  }
+
+  // --- Contratos de esos equipos (vía instalación o equipo de origen) -----
+  const { data: eqs, error: eqsErr } = await admin
+    .from("customer_equipment")
+    .select("id, installation_id")
+    .eq("company_id", companyId)
+    .in("id", ids);
+  err(eqsErr, "Leer las instalaciones de los equipos");
+  const instIds = Array.from(
+    new Set(((eqs ?? []) as Array<{ installation_id: string | null }>).map((e) => e.installation_id).filter(Boolean)),
+  ) as string[];
+  const contractIds = new Set<string>();
+  if (instIds.length > 0) {
+    const { data, error } = await admin
+      .from("installations")
+      .select("contract_id")
+      .eq("company_id", companyId)
+      .in("id", instIds);
+    err(error, "Leer los contratos de las instalaciones");
+    for (const r of (data ?? []) as Array<{ contract_id: string | null }>) {
+      if (r.contract_id) contractIds.add(r.contract_id);
+    }
+  }
+  {
+    const { data, error } = await admin
+      .from("contracts")
+      .select("id")
+      .eq("company_id", companyId)
+      .in("source_equipment_id", ids)
+      .is("deleted_at", null);
+    err(error, "Leer los contratos del equipo");
+    for (const r of (data ?? []) as Array<{ id: string }>) contractIds.add(r.id);
+  }
+
+  type K = {
+    id: string;
+    customer_id: string;
+    reference_code: string | null;
+    plan_type: string;
+    status: string;
+    financier_id: string | null;
+    source_equipment_id: string | null;
+  };
+  let contratosRaw: K[] = [];
+  if (contractIds.size > 0) {
+    const { data, error } = await admin
+      .from("contracts")
+      .select("id, customer_id, reference_code, plan_type, status, financier_id, source_equipment_id")
+      .eq("company_id", companyId)
+      .in("id", [...contractIds])
+      .is("deleted_at", null);
+    err(error, "Leer los contratos");
+    // Solo se arrastran los contratos del cliente de origen.
+    contratosRaw = ((data ?? []) as K[]).filter((k) => k.customer_id === origin.id);
+  }
+
+  // Otros equipos activos del origen que cubre cada contrato y que no viajan.
+  const contratos: ContratoLigado[] = [];
+  for (const k of contratosRaw) {
+    const { data: instK, error: e1 } = await admin
+      .from("installations")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("contract_id", k.id);
+    err(e1, "Leer las instalaciones del contrato");
+    const iIds = ((instK ?? []) as Array<{ id: string }>).map((i) => i.id);
+    const otros = new Set<string>();
+    if (iIds.length > 0) {
+      const { data: eqK, error: e2 } = await admin
+        .from("customer_equipment")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("customer_id", origin.id)
+        .eq("is_active", true)
+        .in("installation_id", iIds);
+      err(e2, "Leer los equipos del contrato");
+      for (const e of (eqK ?? []) as Array<{ id: string }>) if (!ids.includes(e.id)) otros.add(e.id);
+    }
+    if (k.source_equipment_id && !ids.includes(k.source_equipment_id)) otros.add(k.source_equipment_id);
+    contratos.push({
+      id: k.id,
+      reference_code: k.reference_code,
+      plan_type: k.plan_type,
+      status: k.status,
+      financier_id: k.financier_id,
+      otros_equipos: otros.size,
+    });
+  }
+  const kIds = contratos.map((k) => k.id);
+
+  // --- Conteos para el resumen --------------------------------------------
+  const contar = async (q: Promise<{ count: number | null; error: { message: string } | null }>, que: string) => {
+    const r = await q;
+    err(r.error, que);
+    return r.count ?? 0;
+  };
+  const head = { count: "exact" as const, head: true };
+  const orEquipoContrato = (colEq: string, colK: string) =>
+    kIds.length > 0 ? `${colEq}.in.(${ids.join(",")}),${colK}.in.(${kIds.join(",")})` : `${colEq}.in.(${ids.join(",")})`;
+
+  const [mantenimientos, contratosMant, incidencias, apuntes, cobrosFacturados, mandatos, instalaciones] =
+    await Promise.all([
+      contar(
+        admin
+          .from("maintenance_jobs")
+          .select("id", head)
+          .eq("company_id", companyId)
+          .eq("customer_id", origin.id)
+          .or(orEquipoContrato("customer_equipment_id", "contract_id")),
+        "Contar mantenimientos",
+      ),
+      contar(
+        admin
+          .from("maintenance_contracts")
+          .select("id", head)
+          .eq("company_id", companyId)
+          .eq("customer_id", origin.id)
+          .or(orEquipoContrato("customer_equipment_id", "source_contract_id")),
+        "Contar contratos de mantenimiento",
+      ),
+      contar(
+        admin
+          .from("incidents")
+          .select("id", head)
+          .eq("company_id", companyId)
+          .eq("customer_id", origin.id)
+          .in("customer_equipment_id", ids),
+        "Contar incidencias",
+      ),
+      kIds.length > 0
+        ? contar(
+            admin
+              .from("wallet_entries")
+              .select("id", head)
+              .eq("company_id", companyId)
+              .in("contract_id", kIds)
+              .eq("status", "pending")
+              .is("invoice_id", null)
+              .or(`customer_id.eq.${origin.id},customer_id.is.null`),
+            "Contar cobros pendientes",
+          )
+        : Promise.resolve(0),
+      kIds.length > 0
+        ? contar(
+            admin
+              .from("wallet_entries")
+              .select("id", head)
+              .eq("company_id", companyId)
+              .in("contract_id", kIds)
+              .eq("status", "pending")
+              .not("invoice_id", "is", null),
+            "Contar cuotas facturadas pendientes",
+          )
+        : Promise.resolve(0),
+      kIds.length > 0
+        ? contar(
+            admin
+              .from("sepa_mandates")
+              .select("id", head)
+              .eq("company_id", companyId)
+              .in("contract_id", kIds)
+              .in("status", ["draft", "active"]),
+            "Contar mandatos SEPA",
+          )
+        : Promise.resolve(0),
+      contar(
+        admin
+          .from("installations")
+          .select("id", head)
+          .eq("company_id", companyId)
+          .or(
+            [
+              instIds.length > 0 ? `id.in.(${instIds.join(",")})` : null,
+              kIds.length > 0 ? `contract_id.in.(${kIds.join(",")})` : null,
+            ]
+              .filter(Boolean)
+              .join(",") || "id.is.null",
+          ),
+        "Contar instalaciones",
+      ),
+    ]);
+
+  // --- Dirección -----------------------------------------------------------
+  let addressToClone: Record<string, unknown> | null = null;
+  let twinAddressId: string | null = null;
+  let direccion: "copia" | "reutiliza" | "sin_direccion" | "ya_es_suya" = "sin_direccion";
+  if (equipment.address_id) {
+    const { data: addrData, error: aErr } = await admin
+      .from("addresses")
+      .select("*")
+      .eq("id", equipment.address_id)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    err(aErr, "Leer la dirección");
+    const addr = addrData as Record<string, unknown> | null;
+    if (addr && addr.customer_id === target.id) {
+      direccion = "ya_es_suya";
+    } else if (addr) {
+      const { data: twinData, error: tErr } = await admin
+        .from("addresses")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("customer_id", target.id)
+        .eq("street", addr.street ?? "")
+        .eq("street_number", addr.street_number ?? "")
+        .eq("postal_code", addr.postal_code ?? "")
+        .is("deleted_at", null)
+        .limit(1)
+        .maybeSingle();
+      err(tErr, "Buscar la dirección en el destino");
+      twinAddressId = (twinData as { id: string } | null)?.id ?? null;
+      if (twinAddressId) direccion = "reutiliza";
+      else {
+        addressToClone = addr;
+        direccion = "copia";
+      }
+    }
+  }
+
+  // --- Datos de facturación del destino (si va a recibir cuotas) ----------
+  let bloqueo = bloqueoPorContratoCompartido(contratos);
+  const conCuotas = contratosConCuotas(contratos);
+  const extraAvisos: string[] = [];
+  {
+    const { data: dirP, error: dErr } = await admin
+      .from("addresses")
+      .select("street, postal_code, city")
+      .eq("company_id", companyId)
+      .eq("customer_id", target.id)
+      .eq("is_primary", true)
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+    err(dErr, "Leer la dirección principal del destino");
+    const faltan = faltanDatosFacturacion(target, dirP as never);
+    if (faltan.length > 0) {
+      const texto = `A ${customerLabel(target)} le falta para poder facturarle: ${faltan.join(", ")}.`;
+      if (conCuotas.length > 0 && !bloqueo) {
+        bloqueo = `${texto} Este traspaso le pasa cuotas de contrato: complétalo en su ficha antes.`;
+      } else {
+        extraAvisos.push(`${texto} Complétalo antes de facturarle.`);
+      }
+    }
+  }
+
+  const resumen = resumenTraspasoEquipo({
+    origenNombre: customerLabel(origin),
+    destinoNombre: customerLabel(target),
+    equipos: ids.length,
+    contratos,
+    instalaciones,
+    mantenimientos,
+    contratosMantenimiento: contratosMant,
+    incidencias,
+    apuntesPendientes: apuntes,
+    cobrosFacturadosPendientes: cobrosFacturados,
+    mandatosVivos: mandatos,
+    direccion,
+    seSueltaDelPack: equipment.parent_equipment_id !== null,
+    accesoriosQueSeQuedan: includeChildren ? 0 : directChildren.length,
+  });
+  resumen.avisos.push(...extraAvisos);
+
+  return {
+    ok: true,
+    plan: {
+      equipment,
+      origin,
+      target,
+      ids,
+      directChildren,
+      includeChildren,
+      contratos,
+      bloqueo,
+      resumen,
+      addressToClone,
+      twinAddressId,
+    },
+  };
+}
+
+/** Paso 1 del diálogo: qué se va a mover, sin tocar nada. */
+export async function previewTransferEquipmentAction(input: {
   equipment_id: string;
   target_customer_id: string;
-  /**
-   * Un pack (depuradora + descalcificador, por ejemplo) es una sola instalación
-   * física: por defecto viaja entero. Ponlo a false solo si de verdad quieres
-   * partir el pack entre dos titulares.
-   */
   include_children?: boolean;
-  notes?: string | null;
 }): Promise<
-  { ok: true; result: TransferEquipmentResult } | { ok: false; error: string }
+  | { ok: true; origen: string; destino: string; bloqueo: string | null; resumen: ResumenTraspaso }
+  | { ok: false; error: string }
 > {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!puedeTraspasar(session)) return { ok: false, error: "Solo un administrador puede traspasar equipos" };
+    const admin = createAdminClient() as Admin;
+    const r = await planificar(admin, session.company_id, input);
+    if (!r.ok) return r;
+    return {
+      ok: true,
+      origen: customerLabel(r.plan.origin),
+      destino: customerLabel(r.plan.target),
+      bloqueo: r.plan.bloqueo,
+      resumen: r.plan.resumen,
+    };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
 
-    // Mismo listón que reubicar o cambiar la modalidad de compra: cambia a
-    // quién se factura, así que no lo hace un comercial de nivel 3.
-    const isUpper =
-      session.is_superadmin ||
-      session.roles.includes("company_admin") ||
-      session.roles.includes("commercial_director") ||
-      session.roles.includes("technical_director");
-    if (!isUpper) {
-      return { ok: false, error: "Solo admin o dirección puede cambiar el titular de un equipo" };
-    }
+/** Paso 2: el traspaso de verdad (todo o nada). */
+export async function transferEquipmentAction(input: {
+  equipment_id: string;
+  target_customer_id: string;
+  /**
+   * Un pack es una sola instalación física: por defecto viaja entero. A
+   * false solo si de verdad se quiere partir el pack entre dos clientes.
+   */
+  include_children?: boolean;
+  motivo: string;
+}): Promise<{ ok: true; result: TransferEquipmentResult } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!puedeTraspasar(session)) return { ok: false, error: "Solo un administrador puede traspasar equipos" };
+    const motivoErr = validarMotivo(input.motivo);
+    if (motivoErr) return { ok: false, error: motivoErr };
+    const motivo = input.motivo.trim();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = createAdminClient() as any;
+    const admin = createAdminClient() as Admin;
     const companyId = session.company_id;
+    const r = await planificar(admin, companyId, input);
+    if (!r.ok) return r;
+    const p = r.plan;
+    if (p.bloqueo) return { ok: false, error: p.bloqueo };
 
-    // --- 1. El equipo, comprobando que es de esta empresa -------------------
-    const { data: eqData } = await admin
-      .from("customer_equipment")
-      .select("id, company_id, customer_id, address_id, parent_equipment_id, serial_number")
-      .eq("id", input.equipment_id)
-      .eq("company_id", companyId)
-      .maybeSingle();
-    const equipment = eqData as EquipmentRow | null;
-    if (!equipment) {
-      return { ok: false, error: "Equipo no encontrado o no pertenece a tu empresa" };
+    // Dirección: se copia ANTES de la transacción (si esta falla, se borra).
+    let newAddressId: string | null = p.twinAddressId ?? p.equipment.address_id;
+    let clonedId: string | null = null;
+    if (p.addressToClone) {
+      const clone: Record<string, unknown> = { ...p.addressToClone };
+      delete clone.id;
+      delete clone.created_at;
+      delete clone.updated_at;
+      clone.customer_id = p.target.id;
+      clone.lead_id = null;
+      // La principal de una ficha es asunto de esa ficha.
+      clone.is_primary = false;
+      clone.created_by = session.user_id;
+      const { data: insData, error: insErr } = await admin.from("addresses").insert(clone).select("id").single();
+      if (insErr) return { ok: false, error: `No se pudo copiar la dirección: ${insErr.message}` };
+      clonedId = (insData as { id: string }).id;
+      newAddressId = clonedId;
     }
+    const oldAddressId = p.equipment.address_id;
+    // Si la dirección ya era del destino, no hay nada que reapuntar.
+    if (!p.addressToClone && !p.twinAddressId) newAddressId = oldAddressId;
 
-    if (equipment.customer_id === input.target_customer_id) {
-      return { ok: false, error: "El equipo ya está a nombre de esa ficha" };
-    }
-
-    // --- 2. Las dos fichas -------------------------------------------------
-    const customerCols =
-      "id, company_id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, tax_id, deleted_at";
-    const { data: bothData } = await admin
-      .from("customers")
-      .select(customerCols)
-      .in("id", [equipment.customer_id, input.target_customer_id])
-      .eq("company_id", companyId);
-    const both = (bothData ?? []) as CustomerRow[];
-    const origin = both.find((c) => c.id === equipment.customer_id);
-    const target = both.find((c) => c.id === input.target_customer_id);
-    if (!origin || !target) {
-      return { ok: false, error: "Ficha de origen o destino no encontrada en tu empresa" };
-    }
-    if (target.deleted_at) {
-      return { ok: false, error: "La ficha de destino está borrada" };
-    }
-
-    // --- 3. Qué equipos viajan --------------------------------------------
-    const includeChildren = input.include_children !== false;
-    const ids = [equipment.id];
-    // Descendencia completa, no solo los hijos directos. Hoy el modelo solo
-    // encadena un nivel (extras colgando de un principal), pero nada en la BD
-    // impide un nieto y un nieto olvidado se queda apuntando a un equipo que
-    // ya es de otro titular. El bucle está acotado por si alguien crea un
-    // ciclo a mano.
-    const childrenOf = async (parents: string[]): Promise<string[]> => {
-      const { data: kids } = await admin
-        .from("customer_equipment")
-        .select("id")
-        .in("parent_equipment_id", parents)
-        .eq("company_id", companyId);
-      return ((kids ?? []) as Array<{ id: string }>).map((k) => k.id);
-    };
-    const directChildren = await childrenOf([equipment.id]);
-    if (includeChildren) {
-      let frontier = directChildren;
-      for (let depth = 0; depth < 5 && frontier.length > 0; depth++) {
-        for (const id of frontier) if (!ids.includes(id)) ids.push(id);
-        frontier = (await childrenOf(frontier)).filter((id) => !ids.includes(id));
-      }
-    }
-
-    // Si lo que se mueve es un accesorio de un pack que se queda, hay que
-    // soltarlo del padre: si no, quedaría colgando de un equipo que ya es de
-    // otro titular y la ficha del pack mentiría.
-    const detachFromPack = equipment.parent_equipment_id !== null;
-
-    // Sin transacción (PostgREST no las expone), así que lo que falle a mitad
-    // se recoge aquí y se devuelve: el traspaso queda hecho pero el llamante
-    // sabe exactamente qué se quedó a medias en vez de creerse que fue bien.
-    const partial: string[] = [];
-
-    // --- 4. La dirección ---------------------------------------------------
-    // El equipo sigue físicamente donde estaba, pero la dirección cuelga de la
-    // ficha de origen. Se clona en la de destino (o se reutiliza una idéntica
-    // que ya tenga) para que el equipo no dependa de una ficha ajena.
-    let newAddressId: string | null = equipment.address_id;
-    let addressCloned = false;
-    if (equipment.address_id) {
-      const { data: addrData } = await admin
-        .from("addresses")
-        .select("*")
-        .eq("id", equipment.address_id)
-        .eq("company_id", companyId)
-        .maybeSingle();
-      const addr = addrData as Record<string, unknown> | null;
-      if (addr && addr.customer_id !== target.id) {
-        const { data: twinData } = await admin
-          .from("addresses")
-          .select("id")
-          .eq("company_id", companyId)
-          .eq("customer_id", target.id)
-          .eq("street", addr.street ?? "")
-          .eq("street_number", addr.street_number ?? "")
-          .eq("postal_code", addr.postal_code ?? "")
-          .is("deleted_at", null)
-          .maybeSingle();
-        const twin = twinData as { id: string } | null;
-        if (twin) {
-          newAddressId = twin.id;
-        } else {
-          const clone: Record<string, unknown> = { ...addr };
-          delete clone.id;
-          delete clone.created_at;
-          delete clone.updated_at;
-          clone.customer_id = target.id;
-          clone.lead_id = null;
-          // La principal de una ficha es asunto de esa ficha: la copia entra
-          // como una dirección más y no le roba el "principal" a la de destino.
-          clone.is_primary = false;
-          clone.created_by = session.user_id;
-          const { data: insData, error: insErr } = await admin
-            .from("addresses")
-            .insert(clone)
-            .select("id")
-            .single();
-          if (insErr) {
-            return { ok: false, error: `No se pudo copiar la dirección: ${insErr.message}` };
-          }
-          newAddressId = (insData as { id: string }).id;
-          addressCloned = true;
-        }
-      }
-    }
-
-    // --- 5. Mover los equipos ---------------------------------------------
-    const equipmentPatch: Record<string, unknown> = {
-      customer_id: target.id,
-      address_id: newAddressId,
-    };
-    const { error: eqErr } = await admin
-      .from("customer_equipment")
-      .update(equipmentPatch)
-      .in("id", ids)
-      .eq("company_id", companyId);
-    if (eqErr) return { ok: false, error: eqErr.message };
-
-    if (detachFromPack) {
-      const { error } = await admin
-        .from("customer_equipment")
-        .update({ parent_equipment_id: null })
-        .eq("id", equipment.id)
-        .eq("company_id", companyId);
-      if (error) partial.push(`soltar del pack de origen: ${error.message}`);
-    }
-
-    // Si el pack se parte a propósito (include_children = false), los extras
-    // que se quedan NO pueden seguir colgando de un equipo que ya es de otro
-    // titular: la ficha vieja mostraría "Extra del pack" sin pack, y dar de
-    // baja el principal en la ficha nueva arrastraría en cascada equipos de
-    // un cliente distinto.
-    if (!includeChildren && directChildren.length > 0) {
-      const { error } = await admin
-        .from("customer_equipment")
-        .update({ parent_equipment_id: null })
-        .in("id", directChildren)
-        .eq("company_id", companyId);
-      if (error) partial.push(`soltar los extras que se quedan: ${error.message}`);
-    }
-
-    // --- 6. Mantenimientos pendientes -------------------------------------
-    const { data: jobsData } = await admin
-      .from("maintenance_jobs")
-      .select("id")
-      .in("customer_equipment_id", ids)
-      .eq("company_id", companyId)
-      .not("status", "in", `(${MAINTENANCE_DONE.join(",")})`);
-    const jobIds = ((jobsData ?? []) as Array<{ id: string }>).map((j) => j.id);
-    if (jobIds.length > 0) {
-      const { error } = await admin
-        .from("maintenance_jobs")
-        .update({ customer_id: target.id, address_id: newAddressId })
-        .in("id", jobIds)
-        .eq("company_id", companyId);
-      if (error) partial.push(`mover mantenimientos pendientes: ${error.message}`);
-    }
-
-    // --- 7. Contrato de mantenimiento activo ------------------------------
-    const { data: contractsData } = await admin
-      .from("maintenance_contracts")
-      .select("id")
-      .in("customer_equipment_id", ids)
-      .eq("company_id", companyId)
-      .eq("status", "active");
-    const contractIds = ((contractsData ?? []) as Array<{ id: string }>).map((c) => c.id);
-    if (contractIds.length > 0) {
-      const { error } = await admin
-        .from("maintenance_contracts")
-        .update({ customer_id: target.id })
-        .in("id", contractIds)
-        .eq("company_id", companyId);
-      if (error) partial.push(`mover el contrato de mantenimiento: ${error.message}`);
-    }
-
-    // --- 8. Incidencias abiertas ------------------------------------------
-    const { data: incData } = await admin
-      .from("incidents")
-      .select("id")
-      .in("customer_equipment_id", ids)
-      .eq("company_id", companyId)
-      .not("status", "in", `(${INCIDENT_DONE.join(",")})`);
-    const incidentIds = ((incData ?? []) as Array<{ id: string }>).map((i) => i.id);
-    if (incidentIds.length > 0) {
-      const { error } = await admin
-        .from("incidents")
-        .update({ customer_id: target.id, address_id: newAddressId })
-        .in("id", incidentIds)
-        .eq("company_id", companyId);
-      if (error) partial.push(`mover las incidencias abiertas: ${error.message}`);
-    }
-
-    // --- 9. Rastro en las dos fichas --------------------------------------
-    // Se escribe en las dos a propósito: quien mire la ficha vieja dentro de un
-    // año tiene que poder ver a dónde se fue el equipo, no encontrarse un hueco.
     const payload = {
-      equipment_id: equipment.id,
-      equipment_ids: ids,
-      serial_number: equipment.serial_number,
-      from_customer_id: origin.id,
-      from_customer_name: customerLabel(origin),
-      to_customer_id: target.id,
-      to_customer_name: customerLabel(target),
-      jobs_moved: jobIds.length,
-      contracts_moved: contractIds.length,
-      incidents_moved: incidentIds.length,
-      notes: input.notes ?? null,
+      equipment_id: p.equipment.id,
+      serial_number: p.equipment.serial_number,
+      from_customer_id: p.origin.id,
+      from_customer_name: customerLabel(p.origin),
+      to_customer_id: p.target.id,
+      to_customer_name: customerLabel(p.target),
+      contract_refs: p.contratos.map((k) => k.reference_code ?? k.id.slice(0, 8)),
+      actor_name: session.full_name ?? session.email ?? null,
+      resumen: `${customerLabel(p.origin)} → ${customerLabel(p.target)}. Motivo: ${motivo}`,
+      mueve: p.resumen.mueve,
+      no_mueve: p.resumen.noMueve,
     };
-    await admin.from("events").insert([
-      {
-        company_id: companyId,
-        subject_type: "customer",
-        subject_id: origin.id,
-        kind: "equipment.transferred_out",
-        payload,
-        actor_user_id: session.user_id,
-      },
-      {
-        company_id: companyId,
-        subject_type: "customer",
-        subject_id: target.id,
-        kind: "equipment.transferred_in",
-        payload,
-        actor_user_id: session.user_id,
-      },
-    ]);
 
-    revalidatePath(`/clientes/${origin.id}`);
-    revalidatePath(`/clientes/${target.id}`);
+    const { data: res, error: rpcErr } = await admin.rpc("traspasar_equipo_a_cliente", {
+      p_company_id: companyId,
+      p_origen_id: p.origin.id,
+      p_destino_id: p.target.id,
+      p_equipment_ids: p.ids,
+      p_contract_ids: p.contratos.map((k) => k.id),
+      p_old_address_id: oldAddressId,
+      p_new_address_id: newAddressId,
+      p_detach_root_id: p.equipment.parent_equipment_id ? p.equipment.id : null,
+      p_detach_children: !p.includeChildren ? p.directChildren : [],
+      p_motivo: motivo,
+      p_actor_user_id: session.user_id,
+      p_payload: payload,
+    });
+    if (rpcErr) {
+      if (clonedId) {
+        await admin.from("addresses").delete().eq("id", clonedId).eq("company_id", companyId);
+      }
+      if (/traspasar_equipo_a_cliente|PGRST202|Could not find the function/i.test(`${rpcErr.code ?? ""} ${rpcErr.message}`)) {
+        return {
+          ok: false,
+          error: "Falta aplicar la migración 20261110090000_traspaso_equipo_completo en la base de datos. No se ha cambiado nada.",
+        };
+      }
+      const msg = String(rpcErr.message ?? "").replace(/^TRASPASO:\s*/, "");
+      return { ok: false, error: `No se ha cambiado nada: ${msg}` };
+    }
 
+    revalidatePath(`/clientes/${p.origin.id}`);
+    revalidatePath(`/clientes/${p.target.id}`);
+    for (const k of p.contratos) revalidatePath(`/contratos/${k.id}`);
+
+    const d = (res ?? {}) as Partial<TransferEquipmentResult>;
     return {
       ok: true,
       result: {
-        equipment_moved: ids.length,
-        jobs_moved: jobIds.length,
-        contracts_moved: contractIds.length,
-        incidents_moved: incidentIds.length,
-        address_cloned: addressCloned,
-        detached_from_pack: detachFromPack,
-        warnings: partial,
+        equipment_moved: d.equipment_moved ?? 0,
+        contracts_moved: d.contracts_moved ?? 0,
+        installations_moved: d.installations_moved ?? 0,
+        jobs_moved: d.jobs_moved ?? 0,
+        maintenance_contracts_moved: d.maintenance_contracts_moved ?? 0,
+        incidents_moved: d.incidents_moved ?? 0,
+        wallet_moved: d.wallet_moved ?? 0,
+        sepa_mandates_revoked: d.sepa_mandates_revoked ?? 0,
+        address_cloned: clonedId !== null,
       },
     };
   } catch (e) {
@@ -380,97 +589,83 @@ export async function transferEquipmentAction(input: {
   }
 }
 
-/**
- * Fichas a las que tiene sentido traspasar: el mismo titular real dado de alta
- * con otra forma jurídica. Se detectan por DNI/CIF, email o teléfono
- * compartidos, que es exactamente lo que el anti-duplicados deja pasar cuando
- * cambia el `party_kind` (ver `isBlockingDuplicate`).
- *
- * Devuelve también las demás fichas de la empresa por si el traspaso es a un
- * tercero de verdad (una herencia, una empresa que compra el local), pero
- * marcadas como `related: false` para que la UI las separe.
- */
-export async function listTransferTargets(currentCustomerId: string): Promise<
-  Array<{
-    id: string;
-    label: string;
-    party_kind: "individual" | "company";
-    is_autonomo: boolean;
-    tax_id: string | null;
-    related: boolean;
-  }>
-> {
-  const session = await requireSession();
-  if (!session.company_id) return [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any;
+export interface TransferTarget {
+  id: string;
+  label: string;
+  party_kind: "individual" | "company";
+  is_autonomo: boolean;
+  tax_id: string | null;
+  related: boolean;
+}
 
-  const cols =
-    "id, company_id, party_kind, is_autonomo, legal_name, trade_name, first_name, last_name, tax_id, email, phone_primary, deleted_at";
-  const { data: meData } = await admin
+/**
+ * Clientes destino posibles (cualquiera de la empresa: empresa, autónomo o
+ * particular), sin el actual. Sin texto: los que comparten DNI/CIF, email o
+ * teléfono (la misma persona con otra forma jurídica) y los más recientes.
+ * Con texto: búsqueda por nombre, razón social, nombre comercial o DNI/CIF.
+ */
+export async function listTransferTargets(
+  currentCustomerId: string,
+  texto?: string,
+): Promise<TransferTarget[]> {
+  const session = await requireSession();
+  if (!session.company_id || !puedeTraspasar(session)) return [];
+  const admin = createAdminClient() as Admin;
+
+  const cols = `${CUSTOMER_COLS}, email, phone_primary`;
+  type Row = CustomerRow & { email: string | null; phone_primary: string | null };
+  const { data: meData, error: meErr } = await admin
     .from("customers")
     .select(cols)
     .eq("id", currentCustomerId)
     .eq("company_id", session.company_id)
     .maybeSingle();
-  const me = meData as (CustomerRow & { email: string | null; phone_primary: string | null }) | null;
+  if (meErr) throw new Error(meErr.message);
+  const me = meData as Row | null;
   if (!me) return [];
 
-  type Row = CustomerRow & { email: string | null; phone_primary: string | null };
-
-  // Las 500 más recientes son solo la lista "por si acaso". El caso de uso
-  // real —la misma persona dada de alta también como empresa— se busca
-  // aparte por DNI/CIF, email o teléfono: si no, con 1.800 fichas la ficha
-  // hermana se queda fuera de la ventana y el traspaso es imposible.
-  const orParts: string[] = [];
-  // Una coma o un paréntesis dentro del valor rompen la sintaxis del or=()
-  // de PostgREST: esos se dejan fuera y ya los pillará la lista de recientes.
-  const safe = (v: string | null) => (v && !/[,()]/.test(v) ? v : null);
-  const meTaxId = safe(me.tax_id);
-  const meEmail = safe(me.email);
-  const mePhone = safe(me.phone_primary);
-  if (meTaxId) orParts.push(`tax_id.eq.${meTaxId}`);
-  if (meEmail) orParts.push(`email.eq.${meEmail}`);
-  if (mePhone) orParts.push(`phone_primary.eq.${mePhone}`);
-
-  const [recent, relatives] = await Promise.all([
+  const base = () =>
     admin
       .from("customers")
       .select(cols)
       .eq("company_id", session.company_id)
       .is("deleted_at", null)
-      .neq("id", currentCustomerId)
-      .order("created_at", { ascending: false })
-      .limit(500),
-    orParts.length > 0
-      ? admin
-          .from("customers")
-          .select(cols)
-          .eq("company_id", session.company_id)
-          .is("deleted_at", null)
-          .neq("id", currentCustomerId)
-          .or(orParts.join(","))
-          .limit(200)
-      : Promise.resolve({ data: [] }),
+      .neq("id", currentCustomerId);
+
+  // Coma y paréntesis rompen el or=() de PostgREST; % y _ son comodines.
+  const q = (texto ?? "").replace(/[,()%_*\\]/g, " ").trim().slice(0, 60);
+  const safe = (v: string | null) => (v && !/[,()]/.test(v) ? v : null);
+  const orParts: string[] = [];
+  if (safe(me.tax_id)) orParts.push(`tax_id.eq.${safe(me.tax_id)}`);
+  if (safe(me.email)) orParts.push(`email.eq.${safe(me.email)}`);
+  if (safe(me.phone_primary)) orParts.push(`phone_primary.eq.${safe(me.phone_primary)}`);
+
+  const [lista, relatives] = await Promise.all([
+    q
+      ? base()
+          .or(
+            `legal_name.ilike.%${q}%,trade_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,tax_id.ilike.%${q}%`,
+          )
+          .limit(30)
+      : base().order("created_at", { ascending: false }).limit(30),
+    orParts.length > 0 ? base().or(orParts.join(",")).limit(50) : Promise.resolve({ data: [], error: null }),
   ]);
+  if (lista.error) throw new Error(lista.error.message);
+  if (relatives.error) throw new Error(relatives.error.message);
 
   const byId = new Map<string, Row>();
-  for (const r of ((recent?.data ?? []) as Row[])) byId.set(r.id, r);
-  for (const r of ((relatives?.data ?? []) as Row[])) byId.set(r.id, r);
-  const rows = [...byId.values()];
+  for (const r of (relatives.data ?? []) as Row[]) byId.set(r.id, r);
+  for (const r of (lista.data ?? []) as Row[]) byId.set(r.id, r);
 
-  return rows.map((r) => {
-    const related =
+  return [...byId.values()].map((r) => ({
+    id: r.id,
+    label: customerLabel(r),
+    party_kind: r.party_kind,
+    is_autonomo: !!r.is_autonomo,
+    tax_id: r.tax_id,
+    related:
       (!!me.email && r.email?.toLowerCase() === me.email.toLowerCase()) ||
       (!!me.phone_primary && r.phone_primary === me.phone_primary) ||
-      (!!me.tax_id && r.tax_id?.toUpperCase() === me.tax_id.toUpperCase());
-    return {
-      id: r.id,
-      label: customerLabel(r),
-      party_kind: r.party_kind,
-      is_autonomo: !!r.is_autonomo,
-      tax_id: r.tax_id,
-      related,
-    };
-  });
+      (!!me.tax_id && r.tax_id?.toUpperCase() === me.tax_id.toUpperCase()),
+  }));
 }

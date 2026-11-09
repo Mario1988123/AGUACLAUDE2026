@@ -164,8 +164,29 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
       };
     }
 
+    // Deudor de cada cobro = el cliente de su apunte de monedero (a quien se
+    // le facturó). Normalmente es el titular del contrato, pero con traspaso
+    // de pagador las cuotas nuevas son de OTRO cliente y no se le pueden
+    // cargar al titular ni con su mandato. Sin apunte, el titular.
+    const deudorPorPago = new Map<string, string>();
+    {
+      const ids = pays.map((p) => p.id);
+      for (let i = 0; i < ids.length; i += 150) {
+        const { data: wes, error: weErr } = await admin
+          .from("wallet_entries")
+          .select("contract_payment_id, customer_id")
+          .eq("company_id", session.company_id)
+          .in("contract_payment_id", ids.slice(i, i + 150));
+        if (weErr) return { ok: false, error: weErr.message };
+        for (const w of (wes ?? []) as Array<{ contract_payment_id: string; customer_id: string | null }>) {
+          if (w.customer_id) deudorPorPago.set(w.contract_payment_id, w.customer_id);
+        }
+      }
+    }
+    const deudorDe = (p: CP): string => deudorPorPago.get(p.id) ?? p.contracts.customer_id;
+
     // Para cada pago, resolver IBAN del cliente + datos
-    const customerIds = Array.from(new Set(pays.map((p) => p.contracts.customer_id)));
+    const customerIds = Array.from(new Set(pays.map(deudorDe)));
     const { data: customers } = await admin
       .from("customers")
       .select(
@@ -252,14 +273,23 @@ export async function generateSepaXmlForPendingDebits(): Promise<SepaXmlResult> 
     const rows: RemesaRow[] = [];
     const skipped: string[] = [];
     for (const p of pays) {
-      const cust = custMap.get(p.contracts.customer_id);
-      const bank = bankMap.get(p.contracts.customer_id);
-      const addr = addrMap.get(p.contracts.customer_id);
+      const deudorId = deudorDe(p);
+      const cust = custMap.get(deudorId);
+      const bank = bankMap.get(deudorId);
+      const addr = addrMap.get(deudorId);
       if (!cust) continue;
+      // El mandato del contrato solo vale si es del propio deudor: el del
+      // titular NO autoriza a cargar a otra empresa (traspaso de pagador).
+      const delContrato = mandateByContract.get(p.contract_id);
       const mandate =
-        mandateByContract.get(p.contract_id) ?? mandateMap.get(p.contracts.customer_id);
+        (delContrato && delContrato.customer_id === deudorId ? delContrato : undefined) ??
+        mandateMap.get(deudorId);
       if (!mandate?.umr || !mandate.signed_at) {
-        skipped.push(`${cust.legal_name ?? cust.first_name ?? cust.id}: sin mandato SEPA firmado`);
+        skipped.push(
+          deudorId !== p.contracts.customer_id
+            ? `${cust.legal_name ?? cust.first_name ?? cust.id}: paga un contrato de otro titular y no tiene mandato SEPA propio firmado`
+            : `${cust.legal_name ?? cust.first_name ?? cust.id}: sin mandato SEPA firmado`,
+        );
         continue;
       }
       // El IBAN autorizado es el del MANDATO; la cuenta del cliente solo si

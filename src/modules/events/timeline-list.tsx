@@ -78,6 +78,11 @@ export function TimelineList({ events }: { events: TimelineEvent[] }) {
                     por {ev.actor_name}
                   </div>
                 )}
+                {typeof (ev.payload as { resumen?: unknown } | null)?.resumen === "string" && (
+                  <div className="mt-1 break-words text-xs text-muted-foreground">
+                    {(ev.payload as { resumen: string }).resumen}
+                  </div>
+                )}
                 {ev.kind === "lead.unassigned_by_expiry" &&
                   (ev.payload as { previous_assigned_user_name?: string | null } | null)
                     ?.previous_assigned_user_name && (

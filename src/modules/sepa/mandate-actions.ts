@@ -47,6 +47,12 @@ export async function getSepaMandateByContract(
       )
       .eq("contract_id", contractId)
       .eq("company_id", session.company_id)
+      // Solo el mandato VIVO: tras traspasar el contrato a otro cliente, el
+      // del titular anterior queda cancelado como histórico y el nuevo
+      // titular tiene que poder generar el suyo.
+      .in("status", ["draft", "active"])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     return (data as SepaMandate | null) ?? null;
   } catch {
@@ -93,13 +99,17 @@ export async function createSepaMandateAction(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
-    // Idempotencia
-    const { data: existing } = await admin
+    // Idempotencia: solo cuenta el mandato VIVO. Uno cancelado (p. ej. del
+    // titular anterior tras un traspaso) no impide generar el del nuevo.
+    const { data: existing, error: exErr } = await admin
       .from("sepa_mandates")
       .select("id, status")
       .eq("contract_id", parsed.contract_id)
       .eq("company_id", session.company_id)
+      .in("status", ["draft", "active"])
+      .limit(1)
       .maybeSingle();
+    if (exErr) return { ok: false, error: toActionError(exErr) };
     if (existing) {
       return { ok: true, mandate_id: (existing as { id: string }).id };
     }
