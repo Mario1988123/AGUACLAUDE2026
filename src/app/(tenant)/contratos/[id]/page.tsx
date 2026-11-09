@@ -43,6 +43,7 @@ import { FinalizeRentalButton } from "@/modules/contracts/finalize-rental-modal"
 import { SepaMandatePanel } from "@/modules/sepa/sepa-mandate-panel";
 import { getSepaMandateByContract } from "@/modules/sepa/mandate-actions";
 import { SendRemoteSignButton } from "@/modules/contracts/remote-sign-button";
+import { ReintegrarFianzaSlot } from "@/modules/contracts/reintegrar-fianza-slot";
 
 export const dynamic = "force-dynamic";
 
@@ -417,6 +418,7 @@ export default async function ContractDetailPage({
           {(contract.status === "signed" || contract.status === "active" || contract.status === "completed") && (
             <SendByEmailButton documentId={contract.id} kind="contract" short />
           )}
+          <ReintegrarFianzaSlot contractId={contract.id} />
           <BackButton href="/contratos" />
         </div>
       </div>

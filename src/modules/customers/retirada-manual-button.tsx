@@ -17,6 +17,7 @@ import {
 import { notify } from "@/shared/hooks/use-toast";
 import { madridDateKey } from "@/shared/lib/format-date";
 import {
+  ERROR_RENTING,
   ESTADO_EQUIPO_LABEL,
   MOTIVO_MIN,
   type DestinoEquipo,
@@ -31,6 +32,8 @@ interface EquipoOpcion {
   serial_number: string | null;
   /** Equipo nuestro (con producto del catálogo): puede volver a stock. */
   is_ours: boolean;
+  /** En renting: no se puede retirar (Mario 2026-11-09). */
+  en_renting?: boolean;
 }
 
 interface AlmacenOpcion {
@@ -73,7 +76,10 @@ export function RetiradaManualButton({
     warehouses.find((w) => w.is_used_default)?.id ?? warehouses[0]?.id ?? "";
 
   const [seleccion, setSeleccion] = useState<Set<string>>(
-    () => new Set(equipment.length === 1 ? [equipment[0]!.id] : []),
+    () => {
+      const retirables = equipment.filter((e) => !e.en_renting);
+      return new Set(retirables.length === 1 ? [retirables[0]!.id] : []);
+    },
   );
   const [destinos, setDestinos] = useState<Record<string, DestinoEquipo>>({});
   const [fecha, setFecha] = useState(hoy);
@@ -152,6 +158,7 @@ export function RetiradaManualButton({
                         type="checkbox"
                         checked={marcado}
                         onChange={() => alternar(e.id)}
+                        disabled={!!e.en_renting}
                         className="h-5 w-5 shrink-0"
                       />
                       <span className="min-w-0 flex-1">
@@ -162,6 +169,11 @@ export function RetiradaManualButton({
                           {e.serial_number ? `S/N ${e.serial_number}` : "Sin número de serie"}
                           {!e.is_ours && " · externo, no vuelve a stock"}
                         </span>
+                        {e.en_renting && (
+                          <span className="mt-0.5 block text-xs font-medium text-destructive">
+                            {ERROR_RENTING}
+                          </span>
+                        )}
                       </span>
                     </label>
                     {marcado && e.is_ours && (

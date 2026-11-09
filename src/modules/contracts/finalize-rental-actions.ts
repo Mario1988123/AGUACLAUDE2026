@@ -11,6 +11,7 @@ import {
   marcarContratoCompletado,
   revertirContratoCompletado,
 } from "./finalizar-contrato-nucleo";
+import { registrarDevolucionFianza } from "./fianza-nucleo";
 
 /**
  * Cierre de contrato de alquiler. A diferencia de cancelContract (que es
@@ -147,63 +148,24 @@ export async function finalizeRentalContractAction(
     //    devolución. Ahora, si falla, no se cierra nada.
     const ahora = new Date().toISOString();
     if (returnCents > 0) {
-      const { data: cpRow, error: cpErr } = await admin
-        .from("contract_payments")
-        .insert({
+      try {
+        const dev = await registrarDevolucionFianza(admin, {
           company_id: c.company_id,
           contract_id: c.id,
-          concept: "Devolución fianza",
-          amount_cents: -returnCents,
-          method: "transfer",
-          moment: "intermediate",
-          status: "validated",
-          collected_at: ahora,
-          collected_by_user_id: session.user_id,
-          validated_at: ahora,
-          validated_by_user_id: session.user_id,
-          notes: parsed.reason,
-        })
-        .select("id")
-        .single();
-      if (cpErr) {
+          customer_id: c.customer_id,
+          cents: returnCents,
+          actor_user_id: session.user_id,
+          notas: parsed.reason,
+        });
+        creados.push({ tabla: "contract_payments", id: dev.contract_payment_id });
+        creados.push({ tabla: "wallet_entries", id: dev.wallet_entry_id });
+      } catch (e) {
         await deshacerCierre();
         return {
           ok: false,
-          error: /amount_cents_check/i.test(cpErr.message ?? "")
-            ? "Falta aplicar la migración de facturación del 02-10-2026 para registrar devoluciones de fianza. No se ha cerrado el contrato."
-            : `No se pudo registrar la devolución de la fianza: ${cpErr.message}`,
+          error: `${e instanceof Error ? e.message : String(e)} No se ha cerrado el contrato.`,
         };
       }
-      const cpId = (cpRow as { id: string }).id;
-      creados.push({ tabla: "contract_payments", id: cpId });
-      const { data: weRow, error: weErr } = await admin
-        .from("wallet_entries")
-        .insert({
-          company_id: c.company_id,
-          contract_id: c.id,
-          contract_payment_id: cpId,
-          customer_id: c.customer_id,
-          concept: "Devolución fianza",
-          amount_cents: -returnCents,
-          method: "transfer",
-          status: "validated",
-          collected_at: ahora,
-          validated_at: ahora,
-          validated_by_user_id: session.user_id,
-          notes: parsed.reason,
-        })
-        .select("id")
-        .single();
-      if (weErr) {
-        await deshacerMovimientos();
-        await deshacerCierre();
-        return { ok: false, error: `No se pudo registrar la salida de caja de la fianza: ${weErr.message}` };
-      }
-      creados.push({ tabla: "wallet_entries", id: (weRow as { id: string }).id });
-      await admin
-        .from("contract_payments")
-        .update({ wallet_entry_id: (weRow as { id: string }).id })
-        .eq("id", cpId);
     }
 
     // 5) Retención: se deja constancia (no es salida de caja). Pendiente de

@@ -365,3 +365,107 @@ export function validarRetiradaPrueba(
     },
   };
 }
+
+export interface LineaContrato {
+  product_id: string;
+  quantity: number;
+  unit_price_cents: number;
+}
+
+export interface EquipoContrato {
+  id: string;
+  product_id: string | null;
+  is_active: boolean;
+}
+
+/**
+ * CADA EQUIPO VA VINCULADO A SU PROPIA CUOTA (decisión Mario 2026-11-09).
+ *
+ * En un alquiler, la cuota del contrato (`contracts.monthly_cents`) nace como
+ * la suma de sus líneas (`contract_items.unit_price_cents × quantity`, que
+ * vienen de la propuesta con el precio mensual del plan). El equipo se enlaza
+ * a su línea por producto. Al retirar parte de los equipos, la cuota baja en
+ * el precio de su línea.
+ *
+ * Por seguridad NO se reparte nada a ojo: si el precio del equipo no se puede
+ * saber sin ambigüedad (producto sin línea, o el mismo producto a dos precios)
+ * o si la cuota actual no cuadra con las líneas menos lo ya retirado (la
+ * editaron a mano, descuento…), devuelve `ok: false` y la cuota no se toca.
+ */
+export function calcularReduccionCuota(a: {
+  cuota_actual: number;
+  lineas: LineaContrato[];
+  /** TODOS los equipos del contrato (activos y retirados). */
+  equipos: EquipoContrato[];
+  /** Equipos que se retiran ahora (pueden figurar ya como inactivos). */
+  retirando: string[];
+}): { ok: true; nueva: number; reduccion: number } | { ok: false; motivo: string } {
+  const precios = new Map<string, Set<number>>();
+  let sumaLineas = 0;
+  for (const l of a.lineas) {
+    sumaLineas += l.unit_price_cents * l.quantity;
+    const set = precios.get(l.product_id) ?? new Set<number>();
+    set.add(l.unit_price_cents);
+    precios.set(l.product_id, set);
+  }
+  const precioDe = (e: EquipoContrato): number | null => {
+    if (!e.product_id) return null;
+    const set = precios.get(e.product_id);
+    if (!set || set.size !== 1) return null;
+    return Array.from(set)[0]!;
+  };
+  const ahora = new Set(a.retirando.map((x) => x.toLowerCase()));
+  let antes = 0;
+  let reduccion = 0;
+  for (const e of a.equipos) {
+    const retiradoAhora = ahora.has(e.id.toLowerCase());
+    if (!retiradoAhora && e.is_active) continue;
+    const precio = precioDe(e);
+    if (precio === null) {
+      return {
+        ok: false,
+        motivo: "no se puede saber la cuota de cada equipo (producto sin línea en el contrato o con dos precios distintos)",
+      };
+    }
+    if (retiradoAhora) reduccion += precio;
+    else antes += precio;
+  }
+  const esperado = sumaLineas - antes;
+  if (a.cuota_actual !== esperado) {
+    return {
+      ok: false,
+      motivo: `la cuota actual (${a.cuota_actual} cts) no cuadra con la suma de sus líneas menos lo ya retirado (${esperado} cts)`,
+    };
+  }
+  const nueva = a.cuota_actual - reduccion;
+  if (nueva < 0) return { ok: false, motivo: "la cuota quedaría en negativo" };
+  return { ok: true, nueva, reduccion };
+}
+
+/** Mensaje único para el bloqueo de renting (decisión Mario 2026-11-09). */
+export const ERROR_RENTING = "Este equipo está en renting: no se puede retirar";
+
+/**
+ * Decide qué equipos están en renting a partir de sus contratos enlazados.
+ * Renting = algún contrato enlazado (por instalación o source_equipment_id)
+ * de plan `renting` que no esté cancelado ni finalizado. Sin contrato
+ * enlazado, manda el `acquisition_type` del equipo.
+ */
+export function equiposRentingPuro(
+  equipos: Array<{ id: string; installation_id: string | null; acquisition_type: string | null }>,
+  contratoDeInstalacion: Map<string, string>,
+  contratos: Array<{ id: string; plan_type: string; status: string; source_equipment_id: string | null }>,
+): string[] {
+  const vivo = (s: string) => s !== "cancelled" && s !== "completed";
+  const fuera: string[] = [];
+  for (const e of equipos) {
+    const cid = e.installation_id ? contratoDeInstalacion.get(e.installation_id) : undefined;
+    const suyos = contratos.filter((c) => (cid && c.id === cid) || c.source_equipment_id === e.id);
+    const renting =
+      suyos.length > 0
+        ? suyos.some((c) => c.plan_type === "renting" && vivo(c.status))
+        : e.acquisition_type === "renting";
+    if (renting) fuera.push(e.id);
+  }
+  return fuera;
+}

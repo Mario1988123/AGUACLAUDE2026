@@ -220,6 +220,24 @@ export default async function CustomerDetailPage({
       (k as { plan_type?: string }).plan_type === "rental" ||
       (k as { plan_type?: string }).plan_type === "renting",
   );
+  // Equipos en RENTING: no se pueden retirar (Mario 2026-11-09). Si la
+  // comprobación falla, no se marca nada aquí: la acción lo vuelve a mirar.
+  const equiposRenting = new Set<string>();
+  if (session.company_id) {
+    try {
+      const { equiposEnRenting } = await import("@/modules/customers/retirada-cobro");
+      const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+      for (const x of await equiposEnRenting(
+        createAdminClient(),
+        session.company_id,
+        equipment.filter((e) => e.is_active).map((e) => e.id),
+      )) {
+        equiposRenting.add(x);
+      }
+    } catch {
+      /* la acción lo comprueba igualmente */
+    }
+  }
   const activeEquipmentForDelete = equipment
     .filter((e) => e.is_active)
     .map((e) => ({
@@ -618,7 +636,10 @@ export default async function CustomerDetailPage({
                       />
                       <RetiradaManualButton
                         customerId={id}
-                        equipment={activeEquipmentForDelete}
+                        equipment={activeEquipmentForDelete.map((e) => ({
+                          ...e,
+                          en_renting: equiposRenting.has(e.id),
+                        }))}
                         warehouses={warehouseOptions}
                       />
                     </>

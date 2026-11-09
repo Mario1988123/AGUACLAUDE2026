@@ -5,7 +5,9 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridDateKey, madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { equiposEnRenting } from "./retirada-cobro";
 import {
+  ERROR_RENTING,
   ESTADO_EQUIPO_LABEL,
   MARCA_RETIRADA_MANUAL,
   clasificarOrdenesAbiertas,
@@ -29,6 +31,7 @@ export type ResultadoRetiradaManual = {
   ordenes_canceladas: string[];
   contratos_finalizados: string[];
   contratos_mantenidos: string[];
+  cuotas_reducidas: Array<{ contrato: string; antes: number; despues: number }>;
   mantenimientos_cancelados: number;
   contratos_mantenimiento_cancelados: number;
   avisos: string[];
@@ -96,6 +99,11 @@ export async function retirarEquipoManualAction(
     }
     if (equipos.some((e) => !e.is_active)) {
       return { ok: false, error: "Algún equipo ya estaba retirado. Recarga la ficha." };
+    }
+    // RENTING no se retira (Mario 2026-11-09). crearOrdenRetirada y el cierre
+    // lo vuelven a comprobar; aquí se para antes de tocar nada.
+    if ((await equiposEnRenting(admin, companyId, d.equipment_ids)).length > 0) {
+      return { ok: false, error: ERROR_RENTING };
     }
 
     // 2) Almacén: mismo criterio que la orden normal (solo si algún equipo
@@ -254,6 +262,7 @@ export async function retirarEquipoManualAction(
         ordenes_canceladas: canceladas,
         contratos_finalizados: cierre.contratos_finalizados,
         contratos_mantenidos: cierre.contratos_mantenidos,
+        cuotas_reducidas: cierre.cuotas_reducidas,
         contratos_mantenimiento_cancelados: cierre.contratos_mantenimiento_cancelados,
         mantenimientos_cancelados: cierre.mantenimientos_cancelados,
         avisos: cierre.avisos,
@@ -279,6 +288,7 @@ export async function retirarEquipoManualAction(
       ordenes_canceladas: canceladas,
       contratos_finalizados: cierre.contratos_finalizados,
       contratos_mantenidos: cierre.contratos_mantenidos,
+      cuotas_reducidas: cierre.cuotas_reducidas,
       mantenimientos_cancelados: cierre.mantenimientos_cancelados,
       contratos_mantenimiento_cancelados: cierre.contratos_mantenimiento_cancelados,
       avisos: cierre.avisos,

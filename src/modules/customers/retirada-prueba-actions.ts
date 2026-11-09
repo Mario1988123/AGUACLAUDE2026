@@ -195,6 +195,7 @@ export async function retirarPruebaManualAction(
       ordenes_canceladas: canceladas,
       contratos_finalizados: cierre.contratos_finalizados,
       contratos_mantenidos: cierre.contratos_mantenidos,
+      cuotas_reducidas: cierre.cuotas_reducidas,
       mantenimientos_cancelados: cierre.mantenimientos_cancelados,
       contratos_mantenimiento_cancelados: cierre.contratos_mantenimiento_cancelados,
       avisos: cierre.avisos,

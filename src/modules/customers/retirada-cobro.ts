@@ -5,7 +5,14 @@ import {
   cancelarMantenimientosProgramadosContrato,
   marcarContratoCompletado,
 } from "@/modules/contracts/finalizar-contrato-nucleo";
-import { anadirNota, decidirContrato } from "./retirada-logica";
+import {
+  anadirNota,
+  calcularReduccionCuota,
+  decidirContrato,
+  equiposRentingPuro,
+  type EquipoContrato,
+  type LineaContrato,
+} from "./retirada-logica";
 
 /**
  * "Al retirar un equipo SE DEJA DE COBRAR" (decisión Mario 2026-11-09).
@@ -29,6 +36,8 @@ type Admin = any;
 export interface ResultadoDejarDeCobrar {
   contratos_finalizados: string[];
   contratos_mantenidos: string[];
+  /** Contratos que siguen con otros equipos y bajan la cuota (céntimos/mes). */
+  cuotas_reducidas: Array<{ contrato: string; antes: number; despues: number }>;
   contratos_mantenimiento_cancelados: number;
   mantenimientos_cancelados: number;
   avisos: string[];
@@ -37,6 +46,7 @@ export interface ResultadoDejarDeCobrar {
 export const COBRO_VACIO: ResultadoDejarDeCobrar = {
   contratos_finalizados: [],
   contratos_mantenidos: [],
+  cuotas_reducidas: [],
   contratos_mantenimiento_cancelados: 0,
   mantenimientos_cancelados: 0,
   avisos: [],
@@ -61,6 +71,7 @@ export async function dejarDeCobrarEquipos(
   const r: ResultadoDejarDeCobrar = {
     contratos_finalizados: [],
     contratos_mantenidos: [],
+    cuotas_reducidas: [],
     contratos_mantenimiento_cancelados: 0,
     mantenimientos_cancelados: 0,
     avisos: [],
@@ -189,7 +200,7 @@ export async function dejarDeCobrarEquipos(
 
     const { data: cts, error: cErr } = await admin
       .from("contracts")
-      .select("id, status, plan_type, reference_code, source_equipment_id")
+      .select("id, status, plan_type, reference_code, source_equipment_id, monthly_cents")
       .eq("company_id", companyId)
       .in("id", Array.from(contratoIds))
       .is("deleted_at", null);
@@ -201,6 +212,7 @@ export async function dejarDeCobrarEquipos(
       plan_type: string;
       reference_code: string | null;
       source_equipment_id: string | null;
+      monthly_cents: number | null;
     }>) {
       // Solo contratos que cobran cuota y siguen vivos. Contado: el equipo
       // es del cliente, no hay cuota que parar.
@@ -239,10 +251,29 @@ export async function dejarDeCobrarEquipos(
       }
 
       if (decidirContrato(restantes) === "mantener") {
+        // CADA EQUIPO VA VINCULADO A SU PROPIA CUOTA (Mario 2026-11-09): el
+        // contrato sigue con los demás equipos, pero se deja de cobrar la
+        // parte del retirado (su línea del contrato).
         r.contratos_mantenidos.push(ref);
-        r.avisos.push(
-          `El contrato ${ref} cubre otros ${restantes} equipo(s) activos: NO se ha finalizado y sigue cobrando la cuota completa.`,
-        );
+        const red = await reducirCuotaContrato(admin, companyId, {
+          contract_id: c.id,
+          cuota_actual: c.monthly_cents ?? 0,
+          installation_ids: idsInst,
+          retirando: p.equipment_ids,
+          installation_id: p.installation_id,
+          referencia: p.referencia,
+          actor_user_id: p.actor_user_id,
+        });
+        if (red.ok) {
+          r.cuotas_reducidas.push({ contrato: ref, antes: c.monthly_cents ?? 0, despues: red.nueva });
+          r.avisos.push(
+            `El contrato ${ref} sigue con otros ${restantes} equipo(s): la cuota baja de ${fmtEur(c.monthly_cents ?? 0)} a ${fmtEur(red.nueva)} al mes.`,
+          );
+        } else {
+          r.avisos.push(
+            `El contrato ${ref} cubre otros ${restantes} equipo(s) activos y NO se ha podido rebajar la cuota (${red.motivo}): sigue cobrando la cuota completa, revísala a mano.`,
+          );
+        }
         continue;
       }
 
@@ -264,7 +295,7 @@ export async function dejarDeCobrarEquipos(
         .reduce((s, d) => s + d.amount_cents, 0);
       if (fianza > 0) {
         r.avisos.push(
-          `El contrato ${ref} tenía ${fmtEur(fianza)} de fianza cobrada: no se ha devuelto ni retenido; regístralo aparte.`,
+          `El contrato ${ref} tenía ${fmtEur(fianza)} de fianza cobrada: no se ha devuelto ni retenido. Puedes devolverla con «Reintegrar fianza» en la ficha del contrato.`,
         );
       }
 
@@ -305,4 +336,142 @@ export async function dejarDeCobrarEquipos(
   }
 
   return r;
+}
+
+/**
+ * Rebaja la cuota de un contrato que sigue con otros equipos en lo que vale
+ * (según su línea) el equipo retirado. Compare-and-set sobre monthly_cents:
+ * si otro proceso la cambió a la vez, no se toca y se avisa.
+ */
+async function reducirCuotaContrato(
+  admin: Admin,
+  companyId: string,
+  p: {
+    contract_id: string;
+    cuota_actual: number;
+    installation_ids: string[];
+    retirando: string[];
+    installation_id: string;
+    referencia: string;
+    actor_user_id: string | null;
+  },
+): Promise<{ ok: true; nueva: number } | { ok: false; motivo: string }> {
+  const { data: lineas, error: lErr } = await admin
+    .from("contract_items")
+    .select("product_id, quantity, unit_price_cents")
+    .eq("contract_id", p.contract_id)
+    .eq("company_id", companyId);
+  if (lErr) return { ok: false, motivo: lErr.message };
+  if (p.installation_ids.length === 0) return { ok: false, motivo: "contrato sin instalación" };
+  const { data: eqs, error: eErr } = await admin
+    .from("customer_equipment")
+    .select("id, product_id, is_active")
+    .eq("company_id", companyId)
+    .in("installation_id", p.installation_ids);
+  if (eErr) return { ok: false, motivo: eErr.message };
+  const equipos = (eqs ?? []) as EquipoContrato[];
+  const ids = new Set(equipos.map((e) => e.id));
+  const calc = calcularReduccionCuota({
+    cuota_actual: p.cuota_actual,
+    lineas: (lineas ?? []) as LineaContrato[],
+    equipos,
+    retirando: p.retirando.filter((x) => ids.has(x)),
+  });
+  if (!calc.ok) return calc;
+  if (calc.reduccion === 0) return { ok: true, nueva: p.cuota_actual };
+
+  const { data: upd, error: uErr } = await admin
+    .from("contracts")
+    .update({ monthly_cents: calc.nueva })
+    .eq("id", p.contract_id)
+    .eq("company_id", companyId)
+    .eq("monthly_cents", p.cuota_actual)
+    .in("status", ["signed", "active"])
+    .select("id");
+  if (uErr) return { ok: false, motivo: uErr.message };
+  if (((upd ?? []) as unknown[]).length === 0) {
+    return { ok: false, motivo: "la cuota ha cambiado mientras tanto" };
+  }
+  const { error: evErr } = await admin.from("events").insert({
+    company_id: companyId,
+    subject_type: "contract",
+    subject_id: p.contract_id,
+    kind: "contract.monthly_reduced",
+    payload: {
+      antes_cents: p.cuota_actual,
+      despues_cents: calc.nueva,
+      reduccion_cents: calc.reduccion,
+      motivo: `Equipo retirado (${p.referencia})`,
+      installation_id: p.installation_id,
+      equipment_ids: p.retirando,
+    },
+    actor_user_id: p.actor_user_id,
+  });
+  if (evErr) console.error("[reducirCuotaContrato] evento:", evErr.message);
+  return { ok: true, nueva: calc.nueva };
+}
+
+/**
+ * Equipos que están en RENTING (Mario 2026-11-09: no se pueden retirar). Lo
+ * es si algún contrato enlazado (por su instalación o, en los heredados, por
+ * source_equipment_id) es de renting y no está cancelado ni finalizado. Si el
+ * equipo no tiene ningún contrato enlazado, se mira su `acquisition_type`.
+ * Lanza si no puede comprobarlo (mejor no retirar que retirar un renting).
+ */
+export async function equiposEnRenting(
+  admin: Admin,
+  companyId: string,
+  equipmentIds: string[],
+): Promise<string[]> {
+  if (equipmentIds.length === 0) return [];
+  const { data: eqs, error: eErr } = await admin
+    .from("customer_equipment")
+    .select("id, installation_id, acquisition_type")
+    .eq("company_id", companyId)
+    .in("id", equipmentIds);
+  if (eErr) throw new Error(`No se pudo comprobar el contrato del equipo: ${eErr.message}`);
+  const lista = (eqs ?? []) as Array<{
+    id: string;
+    installation_id: string | null;
+    acquisition_type: string | null;
+  }>;
+  const instIds = Array.from(
+    new Set(lista.map((e) => e.installation_id).filter((x): x is string => !!x)),
+  );
+  const contratoDeInst = new Map<string, string>();
+  if (instIds.length > 0) {
+    const { data, error } = await admin
+      .from("installations")
+      .select("id, contract_id")
+      .eq("company_id", companyId)
+      .in("id", instIds);
+    if (error) throw new Error(`No se pudo comprobar el contrato del equipo: ${error.message}`);
+    for (const x of (data ?? []) as Array<{ id: string; contract_id: string | null }>) {
+      if (x.contract_id) contratoDeInst.set(x.id, x.contract_id);
+    }
+  }
+  type C = { id: string; plan_type: string; status: string; source_equipment_id: string | null };
+  const contratos: C[] = [];
+  const ids = Array.from(new Set(contratoDeInst.values()));
+  if (ids.length > 0) {
+    const { data, error } = await admin
+      .from("contracts")
+      .select("id, plan_type, status, source_equipment_id")
+      .eq("company_id", companyId)
+      .in("id", ids)
+      .is("deleted_at", null);
+    if (error) throw new Error(`No se pudo comprobar el contrato del equipo: ${error.message}`);
+    contratos.push(...((data ?? []) as C[]));
+  }
+  {
+    const { data, error } = await admin
+      .from("contracts")
+      .select("id, plan_type, status, source_equipment_id")
+      .eq("company_id", companyId)
+      .in("source_equipment_id", equipmentIds)
+      .is("deleted_at", null);
+    if (error) throw new Error(`No se pudo comprobar el contrato del equipo: ${error.message}`);
+    contratos.push(...((data ?? []) as C[]));
+  }
+  return equiposRentingPuro(lista, contratoDeInst, contratos);
 }

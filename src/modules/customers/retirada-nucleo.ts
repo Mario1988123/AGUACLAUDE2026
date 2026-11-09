@@ -3,10 +3,11 @@ import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
 import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { errorMessage } from "@/shared/lib/actions/safe-error";
-import { leerParametrosRetirada, type DestinoEquipo } from "./retirada-logica";
+import { ERROR_RENTING, leerParametrosRetirada, type DestinoEquipo } from "./retirada-logica";
 import {
   COBRO_VACIO,
   dejarDeCobrarEquipos,
+  equiposEnRenting,
   type ResultadoDejarDeCobrar,
 } from "./retirada-cobro";
 
@@ -84,6 +85,11 @@ export async function crearOrdenRetirada(
       (x.is_active || e.estricto === true),
   );
   if (valid.length === 0) throw new Error("Ningún equipo válido para desinstalar");
+
+  // RENTING no se retira (Mario 2026-11-09). Aplica a todo lo que crea
+  // órdenes: retirada agendada, agenda, baja de cliente y retirada manual.
+  const enRenting = await equiposEnRenting(admin, e.company_id, valid.map((x) => x.id));
+  if (enRenting.length > 0) throw new Error(ERROR_RENTING);
 
   const dispOf = (id: string): DestinoEquipo =>
     e.destinos?.get(id.toLowerCase()) ?? "warehouse";
@@ -245,6 +251,17 @@ export async function aplicarCierreRetirada(
   if (i.kind !== "uninstall") return vacio;
 
   const { destinoAlmacenId, estadoVuelta, equipoIds } = leerParametrosRetirada(i.notes);
+
+  // Red de seguridad: un equipo en RENTING no se retira aunque la orden se
+  // creara antes de la regla. Se para ANTES de mover stock.
+  try {
+    if ((await equiposEnRenting(admin, companyId, equipoIds)).length > 0) {
+      throw new ErrorCierreRetirada(ERROR_RENTING, false);
+    }
+  } catch (e) {
+    if (e instanceof ErrorCierreRetirada) throw e;
+    throw new ErrorCierreRetirada(errorMessage(e), false);
+  }
 
   // Líneas a devolver a stock (solo existen para los equipos 'warehouse').
   type IT = { product_id: string; quantity: number; serial_number: string | null; notes: string | null };
