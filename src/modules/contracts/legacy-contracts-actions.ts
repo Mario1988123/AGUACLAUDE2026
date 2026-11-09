@@ -48,7 +48,9 @@ export async function generateLegacyContractsAction(input?: {
       )
       .eq("company_id", session.company_id)
       .eq("is_active", true)
-      .not("acquisition_type", "is", null);
+      // Solo modalidades con contrato ("installed" = equipo que se queda en
+      // el cliente sin cuota, p. ej. tras finalizar un renting).
+      .in("acquisition_type", ["cash", "rental", "renting"]);
     if (eqRes.error) {
       if (/acquisition_/i.test(eqRes.error.message ?? "")) {
         return { ok: false, error: "Aplica antes la migración 20260628100000 (campos de modalidad)." };

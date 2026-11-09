@@ -183,7 +183,9 @@ export function CustomerEquipmentList({
                         ? "Venta"
                         : e.acquisition_type === "rental"
                           ? "Alquiler"
-                          : "Renting"}
+                          : e.acquisition_type === "installed"
+                            ? "Equipo instalado"
+                            : "Renting"}
                     </span>
                   ) : null}
                 </div>

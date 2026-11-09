@@ -11,7 +11,7 @@ import {
   marcarContratoCompletado,
   revertirContratoCompletado,
 } from "./finalizar-contrato-nucleo";
-import { registrarDevolucionFianza } from "./fianza-nucleo";
+import { registrarDevolucionFianza, registrarRetencionFianza } from "./fianza-nucleo";
 
 /**
  * Cierre de contrato de alquiler. A diferencia de cancelContract (que es
@@ -146,7 +146,6 @@ export async function finalizeRentalContractAction(
     //    chocaba con CHECK (amount_cents >= 0), solo se escribía en
     //    console.error y el contrato quedaba cerrado sin rastro de la
     //    devolución. Ahora, si falla, no se cierra nada.
-    const ahora = new Date().toISOString();
     if (returnCents > 0) {
       try {
         const dev = await registrarDevolucionFianza(admin, {
@@ -173,30 +172,20 @@ export async function finalizeRentalContractAction(
     //    la misma fianza que cambia de concepto. Se mantiene como estaba,
     //    pero ahora si falla no se cierra el contrato a medias.
     if (retainCents > 0) {
-      const { data: rtRow, error: rtErr } = await admin
-        .from("contract_payments")
-        .insert({
+      try {
+        const rt = await registrarRetencionFianza(admin, {
           company_id: c.company_id,
           contract_id: c.id,
-          concept: "Retención fianza (penalización)",
-          amount_cents: retainCents,
-          method: "transfer",
-          moment: "intermediate",
-          status: "validated",
-          collected_at: ahora,
-          collected_by_user_id: session.user_id,
-          validated_at: ahora,
-          validated_by_user_id: session.user_id,
-          notes: parsed.reason,
-        })
-        .select("id")
-        .single();
-      if (rtErr) {
+          cents: retainCents,
+          actor_user_id: session.user_id,
+          notas: parsed.reason,
+        });
+        creados.push({ tabla: "contract_payments", id: rt.contract_payment_id });
+      } catch (e) {
         await deshacerMovimientos();
         await deshacerCierre();
-        return { ok: false, error: `No se pudo registrar la retención de la fianza: ${rtErr.message}` };
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
       }
-      creados.push({ tabla: "contract_payments", id: (rtRow as { id: string }).id });
     }
 
     // 6) Evento timeline

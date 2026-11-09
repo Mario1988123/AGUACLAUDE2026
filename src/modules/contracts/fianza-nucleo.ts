@@ -1,5 +1,5 @@
 import "server-only";
-import { CONCEPTO_DEVOLUCION_FIANZA } from "./fianza-logica";
+import { CONCEPTO_DEVOLUCION_FIANZA, CONCEPTO_RETENCION_FIANZA } from "./fianza-logica";
 
 /**
  * Devolución de fianza: movimiento de SALIDA (importe negativo con concepto
@@ -93,4 +93,44 @@ export async function deshacerDevolucionFianza(
   await admin.from("contract_payments").update({ wallet_entry_id: null }).eq("id", ids.contract_payment_id);
   await admin.from("wallet_entries").delete().eq("id", ids.wallet_entry_id);
   await admin.from("contract_payments").delete().eq("id", ids.contract_payment_id);
+}
+
+/**
+ * Retención de fianza ("nos la quedamos"): se deja constancia con un
+ * contract_payment validado "Retención fianza (penalización)". No es salida
+ * de caja (la fianza ya se cobró). Es el paso 5 de
+ * `finalizeRentalContractAction`, sacado aquí para reutilizarlo.
+ */
+export async function registrarRetencionFianza(
+  admin: Admin,
+  p: {
+    company_id: string;
+    contract_id: string;
+    cents: number;
+    actor_user_id: string;
+    notas: string | null;
+  },
+): Promise<{ contract_payment_id: string }> {
+  if (!Number.isInteger(p.cents) || p.cents <= 0) throw new Error("Importe de retención no válido");
+  const ahora = new Date().toISOString();
+  const { data, error } = await admin
+    .from("contract_payments")
+    .insert({
+      company_id: p.company_id,
+      contract_id: p.contract_id,
+      concept: CONCEPTO_RETENCION_FIANZA,
+      amount_cents: p.cents,
+      method: "transfer",
+      moment: "intermediate",
+      status: "validated",
+      collected_at: ahora,
+      collected_by_user_id: p.actor_user_id,
+      validated_at: ahora,
+      validated_by_user_id: p.actor_user_id,
+      notes: p.notas,
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`No se pudo registrar la retención de la fianza: ${error.message}`);
+  return { contract_payment_id: (data as { id: string }).id };
 }

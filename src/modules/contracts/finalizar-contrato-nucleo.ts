@@ -8,7 +8,8 @@ import "server-only";
  * Qué hace, y nada más:
  *  1. Pasa el contrato de signed/active a `completed` con compare-and-set
  *     (dos llamadas a la vez → solo una lo cierra).
- *  2. Cancela sus mantenimientos `scheduled`.
+ *  2. Cancela TODOS sus mantenimientos pendientes (no completed / cancelled /
+ *     in_progress).
  * El cron de cuotas (`/api/cron/daily`, día 1) solo factura contratos
  * `active`, así que desde ese momento no se generan más cuotas. NO toca
  * facturas ni cobros ya emitidos y NO hace prorrateo ni penalización: la
@@ -56,7 +57,16 @@ export async function revertirContratoCompletado(
   if (error) console.error("[finalizarContrato] revertir:", error.message);
 }
 
-/** Cancela los mantenimientos `scheduled` del contrato (igual que siempre). */
+/**
+ * Estados de mantenimiento que se cancelan al finalizar un contrato o retirar
+ * el equipo (Mario 2026-11-09): todo lo pendiente. Enum real
+ * app.maintenance_status: preprogrammed, needs_callback, scheduled,
+ * in_progress, completed, cancelled, rescheduled. Se quedan como están
+ * `completed`, `cancelled` e `in_progress` (hay un técnico en ello ahora).
+ */
+export const ESTADOS_MANTENIMIENTO_NO_CANCELABLES = "(completed,cancelled,in_progress)";
+
+/** Cancela TODOS los mantenimientos pendientes del contrato. */
 export async function cancelarMantenimientosProgramadosContrato(
   admin: Admin,
   companyId: string,
@@ -67,7 +77,8 @@ export async function cancelarMantenimientosProgramadosContrato(
     .update({ status: "cancelled" })
     .eq("contract_id", contractId)
     .eq("company_id", companyId)
-    .in("status", ["scheduled"])
+    .is("completed_at", null)
+    .not("status", "in", ESTADOS_MANTENIMIENTO_NO_CANCELABLES)
     .select("id");
   if (error) {
     console.error("[finalizarContrato] cancelar mantenimientos:", error.message);

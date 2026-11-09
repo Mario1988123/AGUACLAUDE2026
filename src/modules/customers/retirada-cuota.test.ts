@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { calcularReduccionCuota, equiposRentingPuro } from "./retirada-logica";
-import { resumenFianza } from "@/modules/contracts/fianza-logica";
+import {
+  calcularReduccionCuota,
+  equiposRentingPuro,
+  mensajeBajaBloqueadaPorRenting,
+  notaRentingFinalizado,
+} from "./retirada-logica";
+import {
+  fianzaDecidible,
+  fianzaExcedida,
+  resumenFianza,
+  validarMotivoRetencion,
+} from "@/modules/contracts/fianza-logica";
 
 const lineas = [
   { product_id: "osmosis", quantity: 1, unit_price_cents: 3000 },
@@ -106,5 +116,33 @@ describe("resumenFianza", () => {
       { concept: "Retención fianza (penalización)", amount_cents: 4000, status: "validated" },
     ]);
     expect(r.pendiente).toBe(6000);
+  });
+});
+
+describe("decisión de la fianza en contratos cerrados", () => {
+  it("solo en finalizados o cancelados", () => {
+    expect(fianzaDecidible("completed")).toBe(true);
+    expect(fianzaDecidible("cancelled")).toBe(true);
+    expect(fianzaDecidible("active")).toBe(false);
+  });
+  it("la retención exige motivo", () => {
+    expect(validarMotivoRetencion("").ok).toBe(false);
+    expect(validarMotivoRetencion("  abc ").ok).toBe(false);
+    expect(validarMotivoRetencion("Devuelto roto")).toEqual({ ok: true, motivo: "Devuelto roto" });
+  });
+  it("detecta un segundo envío que sobra", () => {
+    expect(fianzaExcedida({ cobrada: 100, devuelta: 100, retenida: 0 })).toBe(false);
+    expect(fianzaExcedida({ cobrada: 100, devuelta: 100, retenida: 100 })).toBe(true);
+  });
+});
+
+describe("renting y baja de cliente", () => {
+  it("el mensaje dice qué contrato lo impide y qué hacer", () => {
+    const m = mensajeBajaBloqueadaPorRenting(["C-2026-0007"]);
+    expect(m).toContain("C-2026-0007");
+    expect(m).toContain("Finalizar renting");
+  });
+  it("la nota del equipo dice mantenimiento no obligatorio", () => {
+    expect(notaRentingFinalizado("C-1", "09/11/2026")).toContain("mantenimiento no obligatorio");
   });
 });

@@ -73,6 +73,8 @@ export const EVENT_LABEL: Record<string, string> = {
   "equipment.uninstall_completed": "Retirada completada (cobro revisado)",
   "contract.rental_finalized": "Alquiler finalizado",
   "contract.deposit_returned": "Fianza reintegrada",
+  "contract.deposit_retained": "Fianza retenida",
+  "contract.renting_finalized": "Renting finalizado (mantenimiento no obligatorio)",
   "contract.monthly_reduced": "Cuota rebajada por equipo retirado",
   "installation.unscheduled_by_incident": "Instalación desagendada por incidencia",
   "installation.tomorrow": "Instalación programada para mañana",

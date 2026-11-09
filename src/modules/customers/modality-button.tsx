@@ -9,11 +9,14 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { setEquipmentModalityAction } from "./equipment-actions";
 
-type Plan = "cash" | "rental" | "renting";
+type Plan = "cash" | "rental" | "renting" | "installed";
 const LABEL: Record<Plan, string> = {
   cash: "Venta",
   rental: "Alquiler",
   renting: "Renting",
+  // Tras finalizar un renting: el equipo se queda en el cliente, sin cuota
+  // (Mario 2026-11-09). Texto libre en BD, sin migración.
+  installed: "Equipo instalado",
 };
 
 function fmtEur(cents: number): string {
@@ -126,12 +129,13 @@ export function EquipmentModalityButton({
                   <option value="cash">Venta</option>
                   <option value="rental">Alquiler</option>
                   <option value="renting">Renting</option>
+                  <option value="installed">Equipo instalado</option>
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">
-                    Importe (€{type === "cash" ? " venta" : type ? "/mes" : ""})
+                    Importe (€{type === "cash" ? " venta" : type && type !== "installed" ? "/mes" : ""})
                   </Label>
                   <Input
                     type="text"

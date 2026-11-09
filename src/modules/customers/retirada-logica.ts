@@ -469,3 +469,22 @@ export function equiposRentingPuro(
   }
   return fuera;
 }
+
+/**
+ * Mensaje de la baja de cliente bloqueada por renting (Mario 2026-11-09):
+ * dice qué contrato lo impide y qué hacer.
+ */
+export function mensajeBajaBloqueadaPorRenting(contratos: string[]): string {
+  const lista = contratos.length > 0 ? contratos.join(", ") : "de renting";
+  const plural = contratos.length > 1;
+  return (
+    `No se puede dar de baja: el cliente tiene ${plural ? "los contratos" : "el contrato"} ` +
+    `de renting ${lista} en vigor. Finaliza el renting desde la ficha del contrato ` +
+    `(«Finalizar renting») y después podrás darlo de baja o retirar el equipo.`
+  );
+}
+
+/** Nota que queda en el equipo al acabar su renting. */
+export function notaRentingFinalizado(referencia: string, fecha: string): string {
+  return `Renting ${referencia} finalizado el ${fecha}: el equipo se queda en el cliente con mantenimiento no obligatorio.`;
+}

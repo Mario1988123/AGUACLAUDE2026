@@ -25,7 +25,7 @@ export interface CustomerEquipmentRow {
    *  ficha del cliente lo muestra como cuenta atrás "en X días". */
   next_maintenance_at: string | null;
   /** Modalidad heredada: 'cash' venta | 'rental' alquiler | 'renting'. */
-  acquisition_type: "cash" | "rental" | "renting" | null;
+  acquisition_type: "cash" | "rental" | "renting" | "installed" | null;
   acquisition_amount_cents: number | null;
   acquisition_started_at: string | null;
   /** Pack: id del equipo principal si este equipo es un extra. NULL = principal/suelto. */
@@ -170,7 +170,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
   // select falla y queda vacío — NO tumba la lista, que es plana arriba).
   const acq: Record<
     string,
-    { type: "cash" | "rental" | "renting" | null; cents: number | null; started: string | null }
+    { type: "cash" | "rental" | "renting" | "installed" | null; cents: number | null; started: string | null }
   > = {};
   {
     const { data, error } = await supabase
@@ -180,7 +180,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     if (!error) {
       for (const a of (data ?? []) as Array<{
         id: string;
-        acquisition_type: "cash" | "rental" | "renting" | null;
+        acquisition_type: "cash" | "rental" | "renting" | "installed" | null;
         acquisition_amount_cents: number | null;
         acquisition_started_at: string | null;
       }>) {
@@ -240,7 +240,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
  */
 export async function setEquipmentModalityAction(input: {
   equipment_id: string;
-  acquisition_type: "cash" | "rental" | "renting" | null;
+  acquisition_type: "cash" | "rental" | "renting" | "installed" | null;
   acquisition_amount_cents: number | null;
   acquisition_started_at: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -322,7 +322,7 @@ export async function addCustomerEquipmentAction(input: {
    */
   maintenance_periodicity_months?: number | null;
   /** Modalidad heredada (importación): 'cash' venta | 'rental' alquiler | 'renting'. */
-  acquisition_type?: "cash" | "rental" | "renting" | null;
+  acquisition_type?: "cash" | "rental" | "renting" | "installed" | null;
   /** Cuota €/mes (alquiler/renting) o precio venta, en céntimos. */
   acquisition_amount_cents?: number | null;
   /** Fecha de inicio del contrato heredado. */

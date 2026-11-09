@@ -9,6 +9,7 @@ import {
   type EquipmentDisposition,
 } from "./uninstall-actions";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { mensajeBajaBloqueadaPorRenting } from "./retirada-logica";
 
 // ============================================================================
 // Flujo "Borrar cliente" (decisión 2026-06-16)
@@ -108,6 +109,21 @@ export async function churnCustomerAction(
     const activeIds = new Set(
       ((activeEq ?? []) as Array<{ id: string }>).map((e) => e.id),
     );
+
+    // RENTING ACTIVO BLOQUEA LA BAJA (Mario 2026-11-09): ni «retirar» ni «se
+    // queda». Primero hay que finalizar el contrato de renting.
+    {
+      const { rentingVivoDeEquipos } = await import("./retirada-cobro");
+      const renting = await rentingVivoDeEquipos(admin, session.company_id, Array.from(activeIds));
+      if (renting.equipos.length > 0) {
+        return {
+          ok: false,
+          error: mensajeBajaBloqueadaPorRenting(
+            renting.contratos.map((c) => c.reference_code ?? c.id.slice(0, 8)),
+          ),
+        };
+      }
+    }
 
     const removeDecisions = input.decisions.filter(
       (d) => d.action === "remove" && activeIds.has(d.equipment_id),

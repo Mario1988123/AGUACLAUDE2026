@@ -2,6 +2,7 @@ import "server-only";
 import { errorMessage } from "@/shared/lib/actions/safe-error";
 import { formatDateES } from "@/shared/lib/format-date";
 import {
+  ESTADOS_MANTENIMIENTO_NO_CANCELABLES,
   cancelarMantenimientosProgramadosContrato,
   marcarContratoCompletado,
 } from "@/modules/contracts/finalizar-contrato-nucleo";
@@ -88,8 +89,8 @@ export async function dejarDeCobrarEquipos(
       .eq("company_id", companyId)
       .in("customer_equipment_id", p.equipment_ids)
       .is("completed_at", null)
-      // [decide] 'in_progress' no se toca: hay un técnico en ello ahora.
-      .not("status", "in", "(completed,cancelled,in_progress)");
+      // 'in_progress' no se toca: hay un técnico en ello ahora.
+      .not("status", "in", ESTADOS_MANTENIMIENTO_NO_CANCELABLES);
     if (error) throw error;
     for (const j of (jobs ?? []) as Array<{ id: string; notes: string | null }>) {
       const { data: u, error: uErr } = await admin
@@ -97,7 +98,7 @@ export async function dejarDeCobrarEquipos(
         .update({ status: "cancelled", notes: anadirNota(j.notes, nota) })
         .eq("id", j.id)
         .eq("company_id", companyId)
-        .not("status", "in", "(completed,cancelled,in_progress)")
+        .not("status", "in", ESTADOS_MANTENIMIENTO_NO_CANCELABLES)
         .select("id");
       if (uErr) throw uErr;
       r.mantenimientos_cancelados += ((u ?? []) as unknown[]).length;
@@ -423,7 +424,22 @@ export async function equiposEnRenting(
   companyId: string,
   equipmentIds: string[],
 ): Promise<string[]> {
-  if (equipmentIds.length === 0) return [];
+  return (await rentingVivoDeEquipos(admin, companyId, equipmentIds)).equipos;
+}
+
+/**
+ * Como `equiposEnRenting`, pero devuelve también los contratos de renting
+ * vivos que los atan (para decir en el mensaje cuál lo impide).
+ */
+export async function rentingVivoDeEquipos(
+  admin: Admin,
+  companyId: string,
+  equipmentIds: string[],
+): Promise<{
+  equipos: string[];
+  contratos: Array<{ id: string; reference_code: string | null }>;
+}> {
+  if (equipmentIds.length === 0) return { equipos: [], contratos: [] };
   const { data: eqs, error: eErr } = await admin
     .from("customer_equipment")
     .select("id, installation_id, acquisition_type")
@@ -450,13 +466,19 @@ export async function equiposEnRenting(
       if (x.contract_id) contratoDeInst.set(x.id, x.contract_id);
     }
   }
-  type C = { id: string; plan_type: string; status: string; source_equipment_id: string | null };
+  type C = {
+    id: string;
+    plan_type: string;
+    status: string;
+    source_equipment_id: string | null;
+    reference_code: string | null;
+  };
   const contratos: C[] = [];
   const ids = Array.from(new Set(contratoDeInst.values()));
   if (ids.length > 0) {
     const { data, error } = await admin
       .from("contracts")
-      .select("id, plan_type, status, source_equipment_id")
+      .select("id, plan_type, status, source_equipment_id, reference_code")
       .eq("company_id", companyId)
       .in("id", ids)
       .is("deleted_at", null);
@@ -466,12 +488,24 @@ export async function equiposEnRenting(
   {
     const { data, error } = await admin
       .from("contracts")
-      .select("id, plan_type, status, source_equipment_id")
+      .select("id, plan_type, status, source_equipment_id, reference_code")
       .eq("company_id", companyId)
       .in("source_equipment_id", equipmentIds)
       .is("deleted_at", null);
     if (error) throw new Error(`No se pudo comprobar el contrato del equipo: ${error.message}`);
     contratos.push(...((data ?? []) as C[]));
   }
-  return equiposRentingPuro(lista, contratoDeInst, contratos);
+  const equipos = equiposRentingPuro(lista, contratoDeInst, contratos);
+  const vistos = new Map<string, { id: string; reference_code: string | null }>();
+  for (const c of contratos) {
+    if (c.plan_type !== "renting" || c.status === "cancelled" || c.status === "completed") continue;
+    const ata = lista.some(
+      (e) =>
+        equipos.includes(e.id) &&
+        ((e.installation_id && contratoDeInst.get(e.installation_id) === c.id) ||
+          c.source_equipment_id === e.id),
+    );
+    if (ata) vistos.set(c.id, { id: c.id, reference_code: c.reference_code });
+  }
+  return { equipos, contratos: Array.from(vistos.values()) };
 }

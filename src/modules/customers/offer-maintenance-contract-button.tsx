@@ -63,7 +63,7 @@ export function OfferMaintenanceContractButton({
         className="inline-flex items-center gap-1.5 rounded-md border-2 border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
       >
         <ShieldCheck className="h-3 w-3" />
-        Ofrecer contrato
+        Proponer mantenimiento
       </button>
 
       {open && (
