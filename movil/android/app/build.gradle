@@ -16,8 +16,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Firma de subida: los datos viven FUERA del repo. Sin el fichero, el
+    // release sale sin firmar (y el debug compila igual).
+    def rutaFirma = System.getenv("HIDROMANAGER_FIRMA") ?: "D:/CREDENCIALES PROYECTOS/hidromanager-android/firma.properties"
+    def ficheroFirma = new File(rutaFirma)
+    def datosFirma = new Properties()
+    if (ficheroFirma.exists()) {
+        ficheroFirma.withInputStream { datosFirma.load(it) }
+        signingConfigs {
+            subida {
+                storeFile new File(datosFirma['storeFile'])
+                storePassword datosFirma['storePassword']
+                keyAlias datosFirma['keyAlias']
+                keyPassword datosFirma['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (ficheroFirma.exists()) {
+                signingConfig signingConfigs.subida
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

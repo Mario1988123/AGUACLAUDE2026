@@ -69,12 +69,14 @@ npx cap open android     # abre Android Studio
 - **Probar en un móvil**: activa «Opciones de desarrollador» y «Depuración USB», conéctalo y dale a
   *Run*. O *Build > Build APK(s)* y pasa el APK. En compilación *debug* puedes inspeccionar el
   webview desde Chrome del PC en `chrome://inspect`.
-- **Clave de subida** (una vez): *Build > Generate Signed App Bundle or APK > Android App Bundle >
-  Create new…*. Guarda el `.jks` **fuera del repo** (el `.gitignore` ya ignora `*.jks` y
-  `*.keystore`) y la contraseña y el alias en Accesos del Cerebro. Si se pierde, Google puede
-  restablecerla, pero tarda días.
-- **AAB firmado**: el mismo asistente, variante `release` → `android/app/release/app-release.aab`.
-  En Play Console activa **Play App Signing** (Google guarda la clave de firma; tú solo la de subida).
+- **Clave de subida** (creada el 2026-11-10): `D:\CREDENCIALES PROYECTOS\hidromanager-android\subida-hidromanager.jks`,
+  alias `subida`; la contraseña está en Accesos del Cerebro y en `firma.properties` de esa carpeta.
+  `android/app/build.gradle` lee ese fichero (o el de la variable `HIDROMANAGER_FIRMA`); sin él, el
+  release sale sin firmar. Si se pierde, Google puede restablecerla, pero tarda días.
+- **AAB firmado** (sin Android Studio): con `JAVA_HOME`, `ANDROID_HOME` y `GRADLE_USER_HOME` apuntando a
+  `D:/herramientas-android`, `./gradlew.bat bundleRelease --no-daemon` en `movil/android` →
+  `android/app/build/outputs/bundle/release/app-release.aab`. En Play Console, **Play App Signing**
+  activado (Google guarda la clave de firma; tú solo la de subida).
 - Comprobar antes de subir: `targetSdk 36`, `versionCode` mayor que el anterior.
 
 Permisos declarados (`android/app/src/main/AndroidManifest.xml`): `INTERNET`,
@@ -87,6 +89,10 @@ queremos: vertical en teléfonos), y `<queries>` para que `tel:`, `mailto:`, Wha
 encuentren su app.
 
 ## iOS (en un Mac)
+
+> **Sin Mac**: se compila y se sube a TestFlight desde GitHub Actions con el repo privado
+> `Mario1988123/hidromanager-ios` (`D:\IOS_HIDROMANAGER`, copia de esta carpeta sin `android/`).
+> Tras cambiar algo aquí, cópialo allí, commit y `gh workflow run ios-testflight.yml -R Mario1988123/hidromanager-ios`.
 
 Requisitos: macOS con **Xcode 26**, cuenta de Apple Developer (99 USD/año) dada de alta en Xcode,
 Node instalado. **No hace falta CocoaPods**: el proyecto usa Swift Package Manager
