@@ -80,6 +80,19 @@ export interface SendEmailParams {
   relatedId?: string;
   replyTo?: string;
   attachments?: Array<{ filename: string; content: Buffer | string }>;
+  /** Textos que se envían pero NO se guardan en email_outbox (p. ej. una
+   *  contraseña). En el registro quedan como «••••». */
+  ocultarEnRegistro?: string[];
+}
+
+/** Sustituye en `texto` cada valor secreto por «••••». */
+export function taparSecretos(texto: string, secretos?: string[]): string;
+export function taparSecretos(texto: string | null | undefined, secretos?: string[]): string | null | undefined;
+export function taparSecretos(texto: string | null | undefined, secretos?: string[]) {
+  if (!texto || !secretos?.length) return texto;
+  let r = texto;
+  for (const s of secretos) if (s) r = r.split(s).join("••••");
+  return r;
 }
 
 export interface SendResult {
@@ -332,9 +345,9 @@ export async function sendViaSmtp(params: SendEmailParams): Promise<SendResult |
       company_id: params.companyId,
       to_email: params.to,
       to_name: params.toName ?? null,
-      subject: params.subject,
-      body_html: params.html,
-      body_text: params.text ?? null,
+      subject: taparSecretos(params.subject, params.ocultarEnRegistro),
+      body_html: taparSecretos(params.html, params.ocultarEnRegistro),
+      body_text: taparSecretos(params.text ?? null, params.ocultarEnRegistro),
       kind: params.triggerEvent,
       send_type: params.sendType,
       trigger_event: params.triggerEvent,

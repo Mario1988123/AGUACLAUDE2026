@@ -62,3 +62,31 @@ tmp/
 
 # graphify knowledge graphs (local, no commitear)
 graphify-out/
+
+# App movil (Capacitor, movil/). Se versionan android/ e ios/; se ignora
+# lo que se regenera (dependencias, builds, Pods, copias de la web).
+movil/node_modules/
+movil/android/.gradle/
+movil/android/build/
+movil/android/app/build/
+movil/android/local.properties
+movil/android/app/src/main/assets/public/
+movil/android/app/src/main/assets/capacitor.config.json
+movil/android/app/src/main/res/xml/config.xml
+movil/android/capacitor-cordova-android-plugins/
+movil/android/app/google-services.json
+movil/ios/App/Pods/
+movil/ios/App/build/
+movil/ios/App/DerivedData/
+movil/ios/App/App/public/
+movil/ios/App/App/capacitor.config.json
+movil/ios/App/App/config.xml
+movil/ios/App/App/GoogleService-Info.plist
+movil/ios/App/**/xcuserdata/
+movil/ios/capacitor-cordova-ios-plugins/
+# Claves de firma: NUNCA al repo (van a Accesos del Cerebro)
+*.jks
+*.keystore
+*.p8
+*.p12
+*.mobileprovision

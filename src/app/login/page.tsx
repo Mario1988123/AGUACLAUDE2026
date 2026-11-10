@@ -98,6 +98,11 @@ export default function LoginPage() {
             ¿Has olvidado la contraseña?
           </a>
         </div>
+        <div className="border-t pt-4 text-center">
+          <a href="/portal/entrar" className="text-sm text-muted-foreground hover:text-primary hover:underline">
+            ¿Eres cliente? Entra con tu DNI
+          </a>
+        </div>
       </div>
     </div>
   );

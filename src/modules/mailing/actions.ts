@@ -18,6 +18,7 @@ import {
   pickSmtpConfig,
   testSmtpConnection,
   sendViaSmtp,
+  taparSecretos,
   type TriggerEvent,
 } from "./smtp";
 import { encryptSecret } from "./encryption";
@@ -571,6 +572,9 @@ export interface SendTransactionalInput {
   attachments?: Array<{ filename: string; content_base64: string }>;
   related_subject_type?: string;
   related_subject_id?: string;
+  /** Valores que viajan en el correo pero no se guardan en el historial
+   *  (email_outbox / email_sends). Para contraseñas del portal de clientes. */
+  ocultar_en_registro?: string[];
 }
 
 /**
@@ -709,6 +713,7 @@ export async function sendTransactionalEmail(
     toName: input.to_name,
     subject,
     html,
+    ocultarEnRegistro: input.ocultar_en_registro,
     sendType: "manual",
     triggerEvent: "manual_send",
     relatedType:
@@ -741,8 +746,8 @@ export async function sendTransactionalEmail(
       lead_id: input.lead_id ?? null,
       from_email: fromEmail,
       from_name: fromName,
-      subject,
-      body_html: html,
+      subject: taparSecretos(subject, input.ocultar_en_registro),
+      body_html: taparSecretos(html, input.ocultar_en_registro),
       kind: tpl.kind,
       status: sendOk ? "sent" : "failed",
       error_message: sendError,

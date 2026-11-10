@@ -37,6 +37,10 @@ export const PUBLIC_PATHS: readonly string[] = [
   // No abre ningún agujero: cada ruta empieza por verifyCronAuth(), que exige
   // el CRON_SECRET y es fail-closed si la variable no está definida.
   "/api/cron/",
+  // Portal de clientes: solo la pantalla de entrada y la salida son públicas.
+  // El resto de /portal exige sesión de cliente (requireSesionPortal).
+  "/portal/entrar",
+  "/portal/salir",
 ];
 
 /** ¿Se puede abrir esta ruta sin sesión? Comparación por prefijo. */

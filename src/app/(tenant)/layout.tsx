@@ -46,6 +46,10 @@ export default async function TenantLayout({ children }: { children: React.React
   }
 
   if (!session.company_id) {
+    // Cliente del portal (usuario sin empresa con cuenta de portal): a su área.
+    // Sin esto, /login → / → /dashboard → /login entraba en bucle.
+    const { esUsuarioPortal } = await import("@/modules/portal-clientes/sesion");
+    if (await esUsuarioPortal(session.user_id)) redirect("/portal");
     redirect("/login?error=no_company");
   }
 

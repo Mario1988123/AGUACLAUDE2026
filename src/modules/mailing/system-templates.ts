@@ -592,6 +592,31 @@ const TEMPLATES: SystemTemplate[] = [
       "due_date",
     ],
   },
+  {
+    key: "portal_access",
+    name: "Acceso al área de clientes",
+    description: "Usuario (DNI) y contraseña para que el cliente entre en su área.",
+    kind: "transactional",
+    subject: "Tu acceso al área de clientes de {{company_name}}",
+    body_html: `
+      <h2 style="margin: 0 0 16px 0; color: #222;">Hola {{customer_first_name}}:</h2>
+      <p>Ya puedes consultar en internet tus equipos, tus próximas visitas de
+      mantenimiento, tus contratos y tus facturas con <strong>{{company_name}}</strong>.</p>
+      <p style="background: #f0f9ff; border-left: 4px solid #0ea5e9; padding: 14px 16px; margin: 16px 0;">
+        <strong>Usuario:</strong> {{portal_user}} (tu DNI)<br>
+        <strong>Contraseña:</strong> <span style="font-family: monospace; font-size: 16px;">{{portal_password}}</span>
+      </p>
+      <p style="text-align: center; margin: 24px 0;">
+        <a href="{{portal_url}}" style="display: inline-block; background: #0B4F8A; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+          Entrar en mi área
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #666;">Escribe la contraseña tal cual, con los guiones.
+      Te recomendamos cambiarla la primera vez que entres (opción «Contraseña»).
+      Si no has pedido este acceso, responde a este correo.</p>
+    `,
+    variables: ["customer_first_name", "company_name", "portal_user", "portal_password", "portal_url"],
+  },
 ];
 
 export function getSystemTemplates(): SystemTemplate[] {

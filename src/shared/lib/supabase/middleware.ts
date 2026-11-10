@@ -59,6 +59,22 @@ export async function updateSession(request: NextRequest) {
   // Rutas públicas (solo aplica a GET): ver public-paths.ts
   const isPublic = isPublicPath(pathname);
 
+  // Portal de clientes: sin sesión va a su propia entrada (con DNI), no al
+  // login de empleados; con sesión, la entrada lleva al portal.
+  if (pathname === "/portal" || pathname.startsWith("/portal/")) {
+    if (!user && !isPublic) {
+      url.pathname = "/portal/entrar";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    if (user && pathname === "/portal/entrar") {
+      url.pathname = "/portal";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+    return supabaseResponse;
+  }
+
   if (!user && !isPublic) {
     url.pathname = "/login";
     url.searchParams.set("next", pathname);

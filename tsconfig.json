@@ -23,5 +23,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["next-env.d.ts", "src/**/*.ts", "src/**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "legacy_reference", "supabase"]
+  "exclude": ["node_modules", "legacy_reference", "supabase", "movil"]
 }

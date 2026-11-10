@@ -16,6 +16,7 @@ import { CreateMaintenanceButton } from "@/modules/customers/create-maintenance-
 import { DeleteCustomerButton } from "@/modules/customers/delete-customer-button";
 import { listInstallers } from "@/modules/agenda/actions";
 import { CustomerConsentsCard } from "@/modules/customers/consents-card";
+import { PortalAccesoCard } from "@/modules/portal-clientes/acceso-card";
 import { getCustomerConsents } from "@/modules/customers/consents-actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
@@ -759,6 +760,11 @@ export default async function CustomerDetailPage({
           casi idénticas — RgpdCard y RGPDPanel. Unificadas en una sola
           con la copy de derechos del cliente + funcionalidad export +
           anonimizar, ambas para admin de empresa. */}
+      {/* Acceso del cliente a su área (portal, 2026-11-11). Solo admin. */}
+      {session.roles.includes("company_admin") && (
+        <PortalAccesoCard customerId={id} customerName={displayName} />
+      )}
+
       {(session.is_superadmin || session.roles.includes("company_admin")) && (
         <CustomerRGPDPanel customerId={id} customerName={displayName} />
       )}

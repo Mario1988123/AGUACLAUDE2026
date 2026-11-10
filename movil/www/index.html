@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B4F8A">
+  <title>Hidromanager · Sin conexión</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: #F4F8FB; color: #0F2537;
+      display: flex; align-items: center; justify-content: center;
+      padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+      text-align: center;
+    }
+    main { max-width: 340px; width: 100%; }
+    .logo {
+      width: 72px; height: 72px; margin: 0 auto 24px; border-radius: 18px;
+      background: linear-gradient(135deg, #0EA5E9, #0B4F8A);
+      color: #fff; font-weight: 900; font-size: 30px; letter-spacing: -1px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    h1 { font-size: 22px; margin: 0 0 8px; }
+    p { font-size: 16px; line-height: 1.45; margin: 0 0 28px; color: #3D5568; }
+    button {
+      width: 100%; min-height: 48px; border: 0; border-radius: 12px;
+      background: #0B4F8A; color: #fff; font-size: 17px; font-weight: 600;
+    }
+    button:active { background: #083B68; }
+    button:disabled { opacity: .6; }
+    small { display: block; margin-top: 16px; color: #6B7F8E; font-size: 13px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo" aria-hidden="true">HM</div>
+    <h1>Sin conexión</h1>
+    <p>No hemos podido abrir Hidromanager. Comprueba que tienes cobertura o wifi y vuelve a intentarlo.</p>
+    <button id="reintentar" type="button">Reintentar</button>
+    <small id="estado" role="status" aria-live="polite"></small>
+  </main>
+  <script>
+    // Pantalla de respaldo: la app carga https://crm.hidromanager.es.
+    // Si no hay red, Capacitor muestra este fichero (server.errorPath).
+    var URL_APP = "https://crm.hidromanager.es/";
+    var boton = document.getElementById("reintentar");
+    var estado = document.getElementById("estado");
+    function reintentar() {
+      if (navigator.onLine === false) {
+        estado.textContent = "Sigues sin conexión.";
+        return;
+      }
+      boton.disabled = true;
+      estado.textContent = "Conectando…";
+      window.location.replace(URL_APP);
+    }
+    boton.addEventListener("click", reintentar);
+    window.addEventListener("online", reintentar);
+  </script>
+</body>
+</html>

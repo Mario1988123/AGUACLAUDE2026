@@ -1,0 +1,32 @@
+{
+  "name": "hidromanager-movil",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Envoltorio Capacitor de Hidromanager (carga https://crm.hidromanager.es). Independiente de la web.",
+  "scripts": {
+    "sync": "cap sync",
+    "sync:android": "cap sync android",
+    "sync:ios": "cap sync ios",
+    "abrir:android": "cap open android",
+    "abrir:ios": "cap open ios",
+    "iconos": "node scripts/generar-iconos.mjs && capacitor-assets generate --android --ios --assetPath assets --iconBackgroundColor \"#0B4F8A\" --iconBackgroundColorDark \"#0B4F8A\" --splashBackgroundColor \"#0B4F8A\" --splashBackgroundColorDark \"#0B4F8A\"",
+    "doctor": "cap doctor"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/camera": "^8.2.6",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/geolocation": "^8.2.4",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.0",
+    "typescript": "^5.9.3"
+  }
+}

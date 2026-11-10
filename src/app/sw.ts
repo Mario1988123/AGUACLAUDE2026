@@ -62,8 +62,8 @@ self.addEventListener("push", (event: PushEvent) => {
   const title = data.title ?? "AGUA CRM";
   const opts: NotificationOptions = {
     body: data.body ?? "",
-    icon: data.icon ?? "/icons/icon-192.svg",
-    badge: "/icons/icon-192.svg",
+    icon: data.icon ?? "/icons/icon-192.png",
+    badge: "/icons/icon-192.png",
     tag: data.tag,
     data: { url: data.url ?? "/" },
   };

@@ -13,6 +13,8 @@ describe("isPublicPath (auditoría 2026-10-01 I19)", () => {
       "/i/tok",
       "/m/tok",
       "/baja",
+      "/portal/entrar",
+      "/portal/salir",
     ]) {
       expect(isPublicPath(p), p).toBe(true);
     }
@@ -31,6 +33,8 @@ describe("isPublicPath (auditoría 2026-10-01 I19)", () => {
       "/clientes/1",
       "/catalogo", // sin token no hay nada que ver
       "/datasheet",
+      "/portal", // el área del cliente exige sesión
+      "/portal/clave",
     ]) {
       expect(isPublicPath(p), p).toBe(false);
     }
