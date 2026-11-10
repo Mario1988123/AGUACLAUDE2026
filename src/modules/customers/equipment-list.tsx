@@ -98,11 +98,11 @@ export function CustomerEquipmentList({
               isExtra ? " ml-4 border-l-4 border-l-sky-300 sm:ml-8" : ""
             }`}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1 space-y-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
+              <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <Package className="h-4 w-4 text-primary" />
-                  <span className="font-semibold">{name}</span>
+                  <span className="min-w-0 break-words font-semibold">{name}</span>
                   {isOurs ? (
                     <Badge variant="success">Propio</Badge>
                   ) : (
@@ -193,7 +193,7 @@ export function CustomerEquipmentList({
                   ) : null}
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-row flex-wrap items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end">
                 {e.installation_id && (
                   <Link
                     href={`/instalaciones/${e.installation_id}`}

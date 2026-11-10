@@ -133,11 +133,11 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
       onClick={close}
     >
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
@@ -179,7 +179,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
                 id="cat_intro"
                 value={intro}
                 onChange={(e) => setIntro(e.target.value)}
-                className="min-h-[60px] w-full rounded-xl border border-input bg-background p-3 text-sm"
+                className="min-h-[60px] w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
                 placeholder="Una breve presentación que verá el destinatario."
               />
             </div>
@@ -188,7 +188,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
               <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Qué precios mostrar
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <PriceCheck
                   label="Particular (con IVA)"
                   checked={!!pricing.cash_individual}
@@ -352,7 +352,7 @@ export function CatalogModal({ open, onClose, productIds }: Props) {
                 id="rem_msg"
                 value={customMessage}
                 onChange={(e) => setCustomMessage(e.target.value)}
-                className="min-h-[80px] w-full rounded-xl border border-input bg-background p-3 text-sm"
+                className="min-h-[80px] w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
                 placeholder="Si lo dejas en blanco se usa la plantilla por defecto."
               />
             </div>

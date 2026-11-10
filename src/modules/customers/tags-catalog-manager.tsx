@@ -136,7 +136,7 @@ export function TagsCatalogManager({ initial }: { initial: CustomerTag[] }) {
 
       {editing && (
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-3 space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">Etiqueta</Label>
               <Input

@@ -74,11 +74,11 @@ export function ReportErrorButton() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b p-4">
@@ -110,7 +110,7 @@ export function ReportErrorButton() {
                       e.target.value as "low" | "medium" | "high" | "critical",
                     )
                   }
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="low">Baja — molestia menor</option>
                   <option value="medium">Media — funciona mal pero hay workaround</option>
@@ -125,7 +125,7 @@ export function ReportErrorButton() {
                   onChange={(e) => setMessage(e.target.value)}
                   rows={4}
                   placeholder="He intentado X y me ha aparecido Y…"
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                 />
               </div>
               <div className="space-y-1">
@@ -135,7 +135,7 @@ export function ReportErrorButton() {
                   onChange={(e) => setSteps(e.target.value)}
                   rows={3}
                   placeholder="1. Voy a /facturas\n2. Pulso «Nueva factura»\n3. Se queda en blanco"
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm font-mono text-xs"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm font-mono text-base md:text-xs"
                 />
               </div>
               <div className="rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">

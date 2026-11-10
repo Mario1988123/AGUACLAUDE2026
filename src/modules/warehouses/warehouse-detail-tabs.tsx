@@ -292,13 +292,13 @@ function StockTab({
       {showAdd && (
         <div className="rounded-2xl border-2 border-success/40 bg-success/5 p-4 space-y-3">
           <h3 className="text-sm font-bold">Añadir entrada de stock</h3>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1 sm:col-span-2">
               <Label>Producto</Label>
               <select
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Elegir —</option>
                 {products.map((p) => (
@@ -343,7 +343,7 @@ function StockTab({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left">Producto</th>
@@ -445,7 +445,7 @@ function StockRow({
             <select
               value={locId}
               onChange={(e) => setLocId(e.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              className="h-8 rounded-md border border-input bg-background px-2 text-base md:text-xs"
             >
               <option value="">Sin ubicación</option>
               {locations.map((l) => (
@@ -609,13 +609,13 @@ function TransferTab({
         (salida + entrada) y se notifica al admin.
       </p>
       <div className="rounded-2xl border bg-card p-4 space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Producto</Label>
             <select
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">— Elegir —</option>
               {stock.map((s) => (
@@ -630,7 +630,7 @@ function TransferTab({
             <select
               value={destId}
               onChange={(e) => setDestId(e.target.value)}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               {otherWarehouses.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -739,7 +739,7 @@ function InventoryTab({
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border">
+      <div className="overflow-x-auto rounded-xl border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -828,7 +828,7 @@ function LocationsTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {locations.length} ubicación(es). Formato compacto: estantería + altura + hueco
           (ej. <span className="font-mono font-bold">22C</span> = estantería 2,
@@ -845,7 +845,7 @@ function LocationsTab({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left">Código</th>
@@ -935,7 +935,7 @@ function LocationForm({
       <h3 className="text-sm font-bold">
         {initial ? "Editar ubicación" : "Nueva ubicación"}
       </h3>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label>Estantería</Label>
           <Input value={shelf} onChange={(e) => setShelf(e.target.value)} placeholder="2" />
@@ -1002,8 +1002,8 @@ function ReservationsTab({
         {reservations.length} reserva(s) activa(s). El stock reservado sigue
         físicamente en el almacén pero no está disponible para nuevas ventas.
       </p>
-      <div className="overflow-hidden rounded-xl border">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border">
+        <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-2 text-left">Producto</th>
@@ -1131,7 +1131,7 @@ function HistoryTab({ movements }: { movements: StockMovementRow[] }) {
           <select
             value={productId}
             onChange={(e) => setProductId(e.target.value)}
-            className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-9 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos ({productOptions.length})</option>
             {productOptions.map((p) => (
@@ -1176,7 +1176,7 @@ function HistoryTab({ movements }: { movements: StockMovementRow[] }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-2 text-left">Fecha</th>

@@ -313,7 +313,7 @@ export function ProductsListClient({
             Sin productos con esos filtros.
           </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {products.map((p) => (
               <div
                 key={p.id}
@@ -491,7 +491,7 @@ export function ProductsListClient({
 
           {/* Desktop: tabla */}
           <div className="hidden overflow-x-auto rounded-lg border bg-card md:block">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[800px] text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   {canBulk && (

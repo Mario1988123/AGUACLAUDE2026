@@ -94,7 +94,7 @@ export function SepaMandatePanel({
           fianza se cobra siempre por transferencia o efectivo (nunca
           domiciliada). Por defecto domiciliación SEPA.
         </p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => canEdit && changeMethod("direct_debit")}
@@ -266,7 +266,7 @@ function MandateCard({
           </Button>
         )}
       </div>
-      <div className="grid gap-1 text-xs sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
         <div>
           <span className="text-muted-foreground">UMR:</span>{" "}
           <span className="font-mono">{mandate.umr}</span>
@@ -326,7 +326,8 @@ function SignMandateDialog({
     const r = c.getBoundingClientRect();
     const ctx = c.getContext("2d")!;
     ctx.beginPath();
-    ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
+    // El lienzo se pinta mas estrecho que su tamano interno: se escala para que el trazo siga al dedo.
+    ctx.moveTo((e.clientX - r.left) * (c.width / r.width), (e.clientY - r.top) * (c.height / r.height));
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#000";
     ctx.lineCap = "round";
@@ -336,7 +337,7 @@ function SignMandateDialog({
     const c = canvasRef.current!;
     const r = c.getBoundingClientRect();
     const ctx = c.getContext("2d")!;
-    ctx.lineTo(e.clientX - r.left, e.clientY - r.top);
+    ctx.lineTo((e.clientX - r.left) * (c.width / r.width), (e.clientY - r.top) * (c.height / r.height));
     ctx.stroke();
   }
   function stopDraw() {
@@ -377,11 +378,11 @@ function SignMandateDialog({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       onClick={() => !pending && onClose()}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border bg-card p-5 shadow-2xl"
+        className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-lg rounded-2xl border bg-card p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-3 text-lg font-bold">Firmar mandato SEPA</h2>

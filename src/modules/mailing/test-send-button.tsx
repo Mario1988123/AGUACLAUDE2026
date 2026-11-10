@@ -44,11 +44,11 @@ export function TestSendButton({ defaultEmail = "" }: { defaultEmail?: string })
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-base font-bold">Enviar todas las plantillas</h2>

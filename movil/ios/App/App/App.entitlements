@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Capacidad "Push Notifications". "production" porque la app solo se distribuye
+  por TestFlight y App Store (firma de distribucion, APNs de produccion). Para
+  lanzarla desde Xcode a un iPhone con firma de desarrollo habria que poner
+  "development" (y APNS_ENTORNO=sandbox en el servidor).
+  El Bundle ID es.hidromanager.crm tiene que tener la capacidad activada en
+  Apple, y el perfil de App Store tiene que ser posterior a activarla.
+-->
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>production</string>
+</dict>
+</plist>

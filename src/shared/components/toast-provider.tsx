@@ -7,6 +7,8 @@ import { Toaster } from "sonner";
  * Colores semánticos: success=verde, error=rojo, warning=naranja, info=neutro.
  * Duración 3s con barra de progreso. El botón de cerrar va integrado
  * dentro del propio toast (top-right, no fuera).
+ * La separación con la barra de estado y con la muesca en apaisado la pone
+ * el bloque del marco de globals.css (variables --safe-*).
  */
 export function ToastProvider() {
   return (
@@ -43,9 +45,21 @@ export function ToastProvider() {
           color: currentColor !important;
           opacity: 0.6;
         }
-        [data-sonner-toaster] [data-close-button]:hover {
-          opacity: 1;
-          background: rgba(0, 0, 0, 0.08) !important;
+        /* El hover solo con puntero fino: en táctil se queda pegado. */
+        @media (hover: hover) and (pointer: fine) {
+          [data-sonner-toaster] [data-close-button]:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.08) !important;
+          }
+        }
+        /* En táctil el aspa se ve igual pero se acierta con el dedo: el área
+           de toque crece a 44 px sin mover el dibujo. */
+        @media (pointer: coarse) {
+          [data-sonner-toaster] [data-close-button]::before {
+            content: "";
+            position: absolute;
+            inset: -11px;
+          }
         }
         /* Barra de progreso de tiempo en la base del toast */
         [data-sonner-toast] {

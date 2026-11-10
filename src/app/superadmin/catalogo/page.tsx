@@ -26,7 +26,7 @@ export default async function SuperadminCatalogoPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Link
           href={"/superadmin/catalogo/fabricantes" as never}
           className="flex items-center gap-3 rounded-xl border bg-card p-4 hover:bg-muted/40"

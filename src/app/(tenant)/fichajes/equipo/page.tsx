@@ -34,7 +34,7 @@ function PersonRow({
 }) {
   return (
     <div className="flex items-center gap-3 py-2">
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-xs font-bold">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold">
         {initials(p.full_name)}
       </div>
       <div className="min-w-0 flex-1">
@@ -89,7 +89,7 @@ export default async function WhosInPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Quién está</h1>
         <BackButton href="/fichajes" />
       </div>
@@ -97,7 +97,7 @@ export default async function WhosInPage() {
         Estado del equipo en este momento. Se actualiza con cada fichaje.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {sections.map((s) => {
           const Icon = s.icon;
           return (

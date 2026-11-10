@@ -21,7 +21,7 @@ export default async function ConfiguracionAgendaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Configuración · Agenda</h1>
           <p className="text-sm text-muted-foreground">
@@ -45,7 +45,7 @@ export default async function ConfiguracionAgendaPage() {
               No se pudo cargar la configuración. ¿Eres administrador?
             </p>
           ) : (
-            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {Object.entries(DAYS_LABEL).map(([k, label]) => {
                 const h = settings.business_hours[k];
                 return (
@@ -112,7 +112,7 @@ export default async function ConfiguracionAgendaPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ul className="grid gap-2 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {[
               { k: "visit", l: "Visita comercial" },
               { k: "call", l: "Llamada programada" },

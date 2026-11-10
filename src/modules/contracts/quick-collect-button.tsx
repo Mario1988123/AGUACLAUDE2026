@@ -110,11 +110,11 @@ export function QuickCollectButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={reset}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center gap-2 border-b p-4">
@@ -147,7 +147,7 @@ export function QuickCollectButton({
               )}
 
               {step === 1 && (
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <button
                     type="button"
                     onClick={() => chooseWhen("now")}
@@ -218,7 +218,7 @@ export function QuickCollectButton({
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
                       rows={2}
-                      className="mt-1 w-full rounded-xl border border-border bg-card p-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-border bg-card p-2 text-base md:text-sm"
                       placeholder="Ej. nº de operación, banco, observaciones…"
                     />
                   </div>

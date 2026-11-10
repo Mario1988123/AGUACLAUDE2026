@@ -173,9 +173,9 @@ export function MailHistoryTable({ isAdmin }: Props) {
             />
           </div>
           {showFilters && (
-            <div className="grid gap-3 border-t pt-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 border-t pt-2 sm:grid-cols-2 lg:grid-cols-3">
               <select
-                className="h-9 rounded-md border px-3 text-sm"
+                className="h-9 rounded-md border px-3 text-base md:text-sm"
                 value={filters.sendType ?? ""}
                 onChange={(e) =>
                   setFilters({
@@ -190,7 +190,7 @@ export function MailHistoryTable({ isAdmin }: Props) {
                 <option value="campaign">Campañas</option>
               </select>
               <select
-                className="h-9 rounded-md border px-3 text-sm"
+                className="h-9 rounded-md border px-3 text-base md:text-sm"
                 value={filters.status ?? ""}
                 onChange={(e) =>
                   setFilters({
@@ -207,7 +207,7 @@ export function MailHistoryTable({ isAdmin }: Props) {
                 <option value="queued">En cola</option>
               </select>
               <select
-                className="h-9 rounded-md border px-3 text-sm"
+                className="h-9 rounded-md border px-3 text-base md:text-sm"
                 value={filters.triggerEvent ?? ""}
                 onChange={(e) =>
                   setFilters({ ...filters, triggerEvent: e.target.value || undefined })
@@ -260,7 +260,7 @@ export function MailHistoryTable({ isAdmin }: Props) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b text-xs uppercase text-muted-foreground">
                     <th className="p-3 text-left">Fecha</th>

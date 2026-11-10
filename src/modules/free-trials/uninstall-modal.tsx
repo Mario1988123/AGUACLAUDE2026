@@ -132,7 +132,7 @@ export function ScheduleUninstallButton({
               <select
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Elegir —</option>
                 {warehouses.map((w) => (
@@ -148,7 +148,7 @@ export function ScheduleUninstallButton({
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Fecha programada</Label>
                 <Input
@@ -171,7 +171,7 @@ export function ScheduleUninstallButton({
                 <select
                   value={installerId}
                   onChange={(e) => setInstallerId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="">— Asignar luego —</option>
                   {installers.map((u) => (
@@ -217,7 +217,7 @@ export function ScheduleUninstallButton({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                 placeholder="Indicaciones para el técnico..."
               />
             </div>

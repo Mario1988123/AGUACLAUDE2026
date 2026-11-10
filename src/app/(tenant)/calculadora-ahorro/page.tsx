@@ -73,13 +73,13 @@ export default async function CalculadoraAhorroListPage({
         </div>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Estado</label>
           <select
             name="status"
             defaultValue={sp.status ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
@@ -208,7 +208,7 @@ export default async function CalculadoraAhorroListPage({
 
             {/* Desktop: tabla */}
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[800px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b">
                     <th className="py-2 text-left">Ref</th>

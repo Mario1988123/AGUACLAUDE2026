@@ -14,7 +14,7 @@ export default async function ConfigFiscalPage() {
   const initial = await getFiscalSettings();
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight">Configuración · Datos fiscales</h1>
           <p className="mt-1 text-sm text-muted-foreground">

@@ -70,7 +70,7 @@ export default async function CalculadoraAhorroConfigPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
             <thead className="text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="py-2 text-left">Marca</th>
@@ -114,7 +114,7 @@ export default async function CalculadoraAhorroConfigPage() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </CardContent>
       </Card>
     </div>

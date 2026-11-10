@@ -100,15 +100,15 @@ export function ContractPreviewButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6 print:p-0"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6 print:p-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-white shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl print:max-h-none print:overflow-visible print:shadow-none"
+            className="flex h-full max-h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl print:max-h-none print:overflow-visible print:shadow-none"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b p-3 print:hidden">
-              <h2 className="text-base font-bold">Vista previa del contrato</h2>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3 print:hidden">
+              <h2 className="min-w-0 truncate text-base font-bold">Vista previa del contrato</h2>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => window.print()}>
                   <Printer className="h-3 w-3" /> Imprimir
@@ -124,7 +124,7 @@ export function ContractPreviewButton({
               </div>
             </div>
 
-            <div className="flex-1 space-y-6 overflow-y-auto p-8 text-sm text-slate-900 print:overflow-visible">
+            <div className="flex-1 space-y-6 overflow-y-auto p-4 text-sm text-slate-900 sm:p-8 print:overflow-visible">
               {/* Cabecera */}
               <div className="border-b pb-4 text-center">
                 <h1 className="text-2xl font-extrabold uppercase tracking-wide text-primary">
@@ -156,7 +156,7 @@ export function ContractPreviewButton({
                   Plan contratado: <strong>{planLabel}</strong>
                   {durationMonths ? ` · ${durationMonths} meses` : ""}.
                 </p>
-                <table className="w-full border-collapse">
+                <div className="overflow-x-auto"><table className="w-full border-collapse">
                   <thead>
                     <tr className="border-b border-slate-300 text-left text-xs uppercase">
                       <th className="py-1">Producto</th>
@@ -187,7 +187,7 @@ export function ContractPreviewButton({
                       </td>
                     </tr>
                   </tfoot>
-                </table>
+                </table></div>
               </div>
 
               {/* Pagos */}
@@ -243,7 +243,7 @@ export function ContractPreviewButton({
               )}
 
               {/* Firmas */}
-              <div className="grid gap-6 border-t pt-6 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-6 border-t pt-6 sm:grid-cols-2">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase">La Empresa</p>
                   <div className="flex h-24 items-center justify-center rounded border border-slate-300 bg-slate-50">

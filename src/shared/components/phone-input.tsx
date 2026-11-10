@@ -96,7 +96,7 @@ export function PhoneInput({
           value={prefix}
           onChange={(e) => handlePrefixChange(e.target.value)}
           aria-label="Prefijo de país"
-          className="h-12 w-[108px] shrink-0 rounded-xl border border-border bg-card px-2 text-sm"
+          className="h-12 w-[108px] shrink-0 rounded-xl border border-border bg-card px-2 text-base md:text-sm"
         >
           {EUROPE_PHONE_PREFIXES.map((p) => (
             <option key={p.code + p.iso} value={p.code}>

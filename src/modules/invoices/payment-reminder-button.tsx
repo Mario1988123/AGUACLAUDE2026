@@ -102,7 +102,7 @@ export function PaymentReminderButton({
       <select
         value={level}
         onChange={(e) => setLevel(e.target.value as ReminderLevel)}
-        className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+        className="h-9 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
       >
         {(Object.keys(LEVEL_LABEL) as ReminderLevel[]).map((l) => (
           <option key={l} value={l}>

@@ -254,3 +254,169 @@
     --safe-left: env(safe-area-inset-left);
   }
 }
+
+/* ============================================================================
+ * MARCO MÓVIL Y TABLET (2026-11-10) — ver docs/DISENO_NAVEGACION_MOVIL.md
+ * Todo lo de aquí abajo es del marco de la app: muesca, cajón lateral y las
+ * correcciones de «web dentro de una app nativa». No añadir aquí estilos de
+ * módulos.
+ * ============================================================================ */
+
+/* Los márgenes seguros se leen SIEMPRE de estas variables, nunca de env()
+   suelto: tienen respaldo a 0px y se pueden forzar para simular la muesca. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* Margen lateral del marco; cada pieza lo ajusta con [--marco-pad:…]. */
+  --marco-pad: 1rem;
+  /* Alto de la fila de la barra inferior (sin el indicador de inicio). */
+  --nav-inferior: 4rem;
+}
+
+/* La Regla de la Tinta hasta el Borde: el fondo llega al borde físico y el
+   contenido se separa con padding. Con `max()` en los lados el margen normal
+   no se suma al de la muesca en apaisado: gana el mayor. */
+@utility marco-px {
+  padding-left: max(var(--marco-pad), var(--safe-left));
+  padding-right: max(var(--marco-pad), var(--safe-right));
+}
+@utility marco-pt {
+  padding-top: calc(var(--marco-pad) + var(--safe-top));
+}
+@utility marco-pb {
+  padding-bottom: calc(var(--marco-pad) + var(--safe-bottom));
+}
+
+html {
+  /* Sin el destello gris/azul al tocar: cada control del marco trae su :active. */
+  -webkit-tap-highlight-color: transparent;
+  /* Sin inflado de letra al girar el iPhone. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html,
+body {
+  /* Sin rebote de página entera ni «tirar para recargar» por detrás del marco. */
+  overscroll-behavior: none;
+}
+
+/* Sin la espera de doble toque en los controles. */
+a,
+button,
+summary,
+label,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Mantener pulsado un control no selecciona su texto ni abre el menú de copiar.
+   Solo controles: el contenido (direcciones, teléfonos) se tiene que poder copiar. */
+button,
+[role="button"],
+[role="tab"],
+nav a {
+  -webkit-user-select: none;
+  user-select: none;
+}
+nav a {
+  -webkit-touch-callout: none;
+}
+
+/* iOS amplía la página al enfocar un campo de menos de 16 px y no la devuelve.
+   La regla base ya pone 1rem en táctil, pero una utilidad `text-sm`/`text-xs`
+   en el propio campo le gana; esta, fuera de capa, gana a la utilidad. */
+@media (pointer: coarse) {
+  :is(input, select, textarea):is(
+      [class~="text-sm"],
+      [class~="text-xs"],
+      [class*=":text-sm"],
+      [class*=":text-xs"]
+    ):not([type="checkbox"], [type="radio"], [type="range"], [type="color"]) {
+    font-size: 16px;
+  }
+}
+
+/* La cabecera es de 56 px en móvil: los controles que caen dentro no pueden
+   heredar los 56 px de alto mínimo de la regla táctil general. 44 px bastan. */
+.marco-cabecera :is(button, a, [role="button"]) {
+  min-height: 44px;
+}
+
+/* --- Cajón lateral (cajon-lateral.tsx) ------------------------------------ */
+.cajon {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  visibility: hidden;
+  /* Al cerrar, la visibilidad espera a que el panel termine de salir. */
+  transition: visibility 0s linear 240ms;
+}
+.cajon[data-abierto="true"] {
+  visibility: visible;
+  transition-delay: 0s;
+}
+.cajon-velo {
+  position: absolute;
+  inset: 0;
+  /* Velo teñido de la tinta del CRM, no negro puro. */
+  background: oklch(0.2 0.05 255 / 0.55);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+.cajon[data-abierto="true"] .cajon-velo {
+  opacity: 1;
+}
+.cajon-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  /* Deja siempre una franja de velo a la derecha para cerrar tocando fuera. */
+  width: calc(min(20rem, 100vw - 3.5rem) + var(--safe-left));
+  padding-left: var(--safe-left);
+  translate: -100% 0;
+  transition: translate 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  /* El navegador se queda el desplazamiento vertical de la lista; el
+     arrastre horizontal para cerrar lo lleva el componente. */
+  touch-action: pan-y;
+  box-shadow: 12px 0 40px -12px oklch(0.2 0.08 255 / 0.35);
+  outline: none;
+}
+.cajon[data-abierto="true"] .cajon-panel {
+  translate: 0 0;
+}
+.cajon-panel[data-arrastrando="true"] {
+  transition: none;
+}
+.cajon-lista {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cajon,
+  .cajon-velo,
+  .cajon-panel {
+    transition: none !important;
+  }
+}
+
+/* --- Avisos (sonner): por debajo de la barra de estado -------------------- */
+[data-sonner-toaster][data-y-position="top"] {
+  top: calc(var(--safe-top) + 16px) !important;
+}
+[data-sonner-toaster][data-y-position="bottom"] {
+  bottom: calc(var(--safe-bottom) + 16px) !important;
+}
+@media (min-width: 601px) {
+  [data-sonner-toaster][data-x-position="right"] {
+    right: max(32px, calc(var(--safe-right) + 12px)) !important;
+  }
+  [data-sonner-toaster][data-x-position="left"] {
+    left: max(32px, calc(var(--safe-left) + 12px)) !important;
+  }
+}

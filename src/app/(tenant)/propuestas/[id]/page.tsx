@@ -165,7 +165,7 @@ export default async function ProposalDetailPage({
               <h3 className="font-bold text-lg">{PLAN_LABEL[planType] ?? planType}</h3>
             </div>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {/* Precio principal */}
               <div>
                 <div className="text-[11px] uppercase font-bold tracking-wider opacity-70">
@@ -259,7 +259,7 @@ export default async function ProposalDetailPage({
           {items.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin productos.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Producto</th>
@@ -294,7 +294,7 @@ export default async function ProposalDetailPage({
                   </tr>
                 </tfoot>
               )}
-            </table>
+            </table></div>
           )}
           {proposal.rejected_reason && (
             <div className="mt-4 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm">

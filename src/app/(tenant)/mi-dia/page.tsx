@@ -302,9 +302,10 @@ export default async function MiDiaPage({
                 return (
                   <li
                     key={`${it.kind}-${it.id}`}
-                    className="rounded-2xl border-2 border-border bg-card p-4 hover:border-primary/40 transition-colors"
+                    className="rounded-2xl border-2 border-border bg-card p-3 hover:border-primary/40 transition-colors sm:p-4"
                   >
-                    <div className="flex items-start gap-3">
+                    {/* En movil las acciones bajan a una fila propia a todo el ancho. */}
+                    <div className="flex flex-wrap items-start gap-3 sm:flex-nowrap">
                       <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-primary/10 text-primary">
                         <Icon className="h-5 w-5" />
                         <span className="mt-1 text-[10px] font-bold uppercase">
@@ -312,8 +313,8 @@ export default async function MiDiaPage({
                         </span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Clock className="h-4 w-4 text-primary" />
+                        <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <Clock className="h-4 w-4 shrink-0 text-primary" />
                           <span className="text-base font-bold tabular-nums">{time}</span>
                           <Badge variant={STATUS_VARIANT[it.status] ?? "default"}>
                             {STATUS_LABEL[it.status] ?? it.status}
@@ -321,16 +322,17 @@ export default async function MiDiaPage({
                         </div>
                         <Link
                           href={it.href as never}
-                          className="text-base font-semibold hover:underline"
+                          data-inline
+                          className="block break-words text-base font-semibold hover:underline"
                         >
                           {it.title}
                         </Link>
                         {it.subtitle && (
-                          <div className="text-xs text-muted-foreground">{it.subtitle}</div>
+                          <div className="break-words text-xs text-muted-foreground">{it.subtitle}</div>
                         )}
                         {it.address_summary && (
-                          <div className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
+                          <div className="mt-1 flex items-start gap-1 break-words text-xs text-muted-foreground">
+                            <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
                             {it.address_summary}
                           </div>
                         )}
@@ -357,10 +359,10 @@ export default async function MiDiaPage({
                           </div>
                         )}
                       </div>
-                      <div className="flex flex-col shrink-0 gap-1.5">
+                      <div className="flex w-full shrink-0 flex-row gap-1.5 sm:w-auto sm:flex-col">
                         <Link
                           href={it.href as never}
-                          className="flex h-12 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+                          className="flex h-12 flex-1 items-center justify-center gap-1 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:opacity-90 sm:flex-none"
                           aria-label={
                             it.kind === "installation"
                               ? "Abrir parte de instalación"
@@ -381,7 +383,7 @@ export default async function MiDiaPage({
                             href={mapsUrl}
                             target="_blank"
                             rel="noopener"
-                            className="flex h-9 items-center justify-center gap-1 rounded-xl border border-border bg-card px-2 text-xs font-bold hover:bg-muted"
+                            className="flex h-12 items-center justify-center gap-1 rounded-xl border border-border bg-card px-4 text-xs font-bold hover:bg-muted sm:h-9 sm:px-2"
                             aria-label="Abrir ruta en Google Maps"
                           >
                             <MapPin className="h-4 w-4" />

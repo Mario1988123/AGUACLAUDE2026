@@ -210,7 +210,7 @@ export default async function MaintenanceDetailPage({
       {/* Modal auto-abrir con avisos operativos al entrar a la ficha */}
       <MaintenanceAlertsModal maintenanceId={id} alerts={jobAlerts} />
 
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">Mantenimiento</h1>
@@ -245,7 +245,7 @@ export default async function MaintenanceDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
@@ -317,7 +317,7 @@ export default async function MaintenanceDetailPage({
                   {replacedList.map((r) => {
                     const p = products.find((pp) => pp.id === r.product_id);
                     return (
-                      <li key={r.id} className="flex justify-between border-b py-2">
+                      <li key={r.id} className="flex justify-between gap-3 border-b py-2">
                         <span>{p?.name ?? r.product_id.slice(0, 8)}</span>
                         <Badge variant="secondary">x{r.quantity}</Badge>
                       </li>

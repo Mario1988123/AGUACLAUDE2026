@@ -47,7 +47,7 @@ export function UserSmtpDialogButton({ userId, userEmail, userFullName }: Props)
           <Mail className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>SMTP de {userFullName ?? userEmail}</DialogTitle>
           <DialogDescription>
@@ -173,7 +173,7 @@ function UserSmtpForm({
               Elegir proveedor
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+          <DialogContent className="max-h-[85dvh] max-w-4xl overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Elige el proveedor de email del usuario</DialogTitle>
             </DialogHeader>
@@ -204,7 +204,7 @@ function UserSmtpForm({
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Servidor SMTP</Label>
           <Input
@@ -219,7 +219,7 @@ function UserSmtpForm({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Usuario SMTP</Label>
           <Input

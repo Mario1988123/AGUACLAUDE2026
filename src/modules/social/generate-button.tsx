@@ -62,7 +62,7 @@ export function GenerateMonthButton({ defaultYear, defaultMonth }: Props) {
       <select
         value={month}
         onChange={(e) => setMonth(Number(e.target.value))}
-        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+        className="h-9 rounded-md border border-input bg-background px-2 text-base md:text-sm"
         disabled={pending}
       >
         {MONTHS.map((m, i) => (
@@ -74,7 +74,7 @@ export function GenerateMonthButton({ defaultYear, defaultMonth }: Props) {
       <select
         value={year}
         onChange={(e) => setYear(Number(e.target.value))}
-        className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+        className="h-9 rounded-md border border-input bg-background px-2 text-base md:text-sm"
         disabled={pending}
       >
         {[now.getFullYear(), now.getFullYear() + 1, now.getFullYear() + 2].map((y) => (

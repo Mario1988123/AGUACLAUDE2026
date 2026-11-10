@@ -56,7 +56,7 @@ export function PurchasesTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {purchases.length} compra(s) registrada(s) en este almacén. Cada
           compra suma stock y queda enlazada a sus movimientos.
@@ -124,7 +124,7 @@ function PurchaseDetailView({
 }) {
   return (
     <div className="border-t bg-muted/10 p-3">
-      <table className="w-full text-sm">
+      <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
         <thead className="text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="py-2 text-left">Producto</th>
@@ -144,7 +144,7 @@ function PurchaseDetailView({
             />
           ))}
         </tbody>
-      </table>
+      </table></div>
       {detail.notes && (
         <p className="mt-3 text-xs text-muted-foreground">
           <strong>Notas:</strong> {detail.notes}
@@ -221,7 +221,7 @@ function PurchaseItemRow({
       {showReturn && (
         <tr>
           <td colSpan={5} className="bg-amber-50 p-3">
-            <div className="grid gap-2 sm:grid-cols-3 sm:items-end">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:items-end">
               <div className="space-y-1">
                 <Label className="text-xs">Cantidad a devolver</Label>
                 <Input
@@ -369,7 +369,7 @@ function NewPurchaseForm({
   return (
     <div className="space-y-4 rounded-2xl border-2 border-success/40 bg-success/5 p-4">
       <h3 className="text-sm font-bold">Nueva compra (albarán/factura)</h3>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <Label>Proveedor *</Label>
           <Input
@@ -405,7 +405,7 @@ function NewPurchaseForm({
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Label className="text-sm font-bold">Líneas</Label>
           <Button size="sm" variant="outline" onClick={addLine}>
             <Plus className="h-3.5 w-3.5" /> Línea
@@ -415,14 +415,14 @@ function NewPurchaseForm({
           {lines.map((l, idx) => (
             <div
               key={idx}
-              className="grid gap-2 sm:grid-cols-[1fr_80px_100px_120px_auto] items-end rounded-lg border bg-card p-2"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_80px_100px_120px_auto] items-end rounded-lg border bg-card p-2"
             >
               <div className="space-y-1">
                 <Label className="text-xs">Producto</Label>
                 <select
                   value={l.product_id}
                   onChange={(e) => onPickProduct(idx, e.target.value)}
-                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   <option value="">— Elegir —</option>
                   {products.map((p) => (
@@ -461,7 +461,7 @@ function NewPurchaseForm({
                   value={l.lot_code}
                   onChange={(e) => setLine(idx, { lot_code: e.target.value })}
                   placeholder="Opcional"
-                  className="h-9 font-mono text-xs"
+                  className="h-9 font-mono text-base md:text-xs"
                 />
               </div>
               <Button

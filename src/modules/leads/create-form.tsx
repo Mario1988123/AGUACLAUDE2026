@@ -260,7 +260,7 @@ export function LeadCreateForm() {
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-card p-6">
+    <div className="space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
       {/* Indicador pasos */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -339,7 +339,7 @@ export function LeadCreateForm() {
                 <div className="flex-1 font-bold">Autónomo</div>
               </label>
               {isAutonomo ? (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Nombre *</Label>
                     <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
@@ -358,7 +358,7 @@ export function LeadCreateForm() {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Razón social *</Label>
                     <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
@@ -392,7 +392,7 @@ export function LeadCreateForm() {
               )}
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nombre *</Label>
                 <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
@@ -408,7 +408,7 @@ export function LeadCreateForm() {
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Email</Label>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -422,7 +422,7 @@ export function LeadCreateForm() {
           <DedupeWarning matches={dedupeMatches} partyKind={partyKind} />
 
           <div className="border-t pt-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Origen</Label>
                 <select
@@ -458,7 +458,7 @@ export function LeadCreateForm() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full rounded-xl border border-input bg-background p-3 text-sm"
+                className="w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
               />
             </div>
           </div>
@@ -541,7 +541,7 @@ export function LeadCreateForm() {
           </div>
 
           {/* Vía + número */}
-          <div className="grid gap-4 sm:grid-cols-[180px_1fr_140px]">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[180px_1fr_140px]">
             <div className="space-y-2">
               <Label>Vía</Label>
               <select
@@ -597,7 +597,7 @@ export function LeadCreateForm() {
           </div>
 
           {/* Portal / Piso / Puerta */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>Portal</Label>
               <Input value={portal} onChange={(e) => setPortal(e.target.value)} />
@@ -613,7 +613,7 @@ export function LeadCreateForm() {
           </div>
 
           {/* CP / Población / Provincia */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>CP</Label>
               <Input

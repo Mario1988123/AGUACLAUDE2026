@@ -160,7 +160,7 @@ export function DocsAndCertsPanel({
   const availableCerts = catalog.filter((c) => !usedCertKeys.has(c.key));
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       {/* DOCUMENTOS */}
       <div className="space-y-3 rounded-2xl border bg-card p-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
@@ -169,13 +169,13 @@ export function DocsAndCertsPanel({
 
         {canEdit && (
           <form onSubmit={handleUpload} className="space-y-2 rounded-xl bg-muted/30 p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label className="text-xs">Tipo</Label>
                 <select
                   value={uploadKind}
                   onChange={(e) => setUploadKind(e.target.value as ProductDocKind)}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   {DOC_KINDS.map((k) => (
                     <option key={k} value={k}>
@@ -267,13 +267,13 @@ export function DocsAndCertsPanel({
 
         {canEdit && (
           <div className="space-y-2 rounded-xl bg-muted/30 p-3">
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div className="space-y-1 sm:col-span-2">
                 <Label className="text-xs">Certificación del catálogo</Label>
                 <select
                   value={certKey}
                   onChange={(e) => setCertKey(e.target.value)}
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   <option value="">— Selecciona —</option>
                   {availableCerts.map((c) => (

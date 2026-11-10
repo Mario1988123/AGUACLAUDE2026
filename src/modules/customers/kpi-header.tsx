@@ -47,7 +47,7 @@ export function CustomerKPIHeader({ kpis }: { kpis: CustomerKPIs }) {
             <span className="text-2xl tabular-nums">{kpis.churn_score}/100</span>
           </div>
         )}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Facturado año
@@ -109,7 +109,7 @@ export function CustomerKPIHeader({ kpis }: { kpis: CustomerKPIs }) {
 
         {/* Línea adicional con info crítica del cliente */}
         {(kpis.rental_months_left != null || kpis.next_maintenance_at || kpis.open_incidents > 0) && (
-          <div className="grid gap-3 sm:grid-cols-3 border-t pt-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 border-t pt-3">
             {kpis.rental_months_left != null && (
               <div className="rounded-xl bg-amber-50 border border-amber-200 p-2">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700">

@@ -82,7 +82,7 @@ export function UserPermissionsButton({ userId }: { userId: string }) {
           {loading ? (
             <div className="py-6 text-center text-sm text-muted-foreground">Cargando…</div>
           ) : (
-            <div className="max-h-[60vh] overflow-y-auto space-y-1.5">
+            <div className="max-h-[60dvh] overflow-y-auto space-y-1.5">
               {MODULES.map((m) => {
                 const cur = getState(m.key);
                 return (

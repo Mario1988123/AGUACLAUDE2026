@@ -240,7 +240,7 @@ function EditCategoryForm({
   }
 
   return (
-    <form onSubmit={submit} className="mt-3 grid gap-3 rounded-xl border-2 border-primary bg-primary/5 p-4 sm:grid-cols-2">
+    <form onSubmit={submit} className="mt-3 grid grid-cols-1 gap-3 rounded-xl border-2 border-primary bg-primary/5 p-4 sm:grid-cols-2">
       <div className="space-y-1 sm:col-span-2">
         <Label>Nombre</Label>
         <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
@@ -250,7 +250,7 @@ function EditCategoryForm({
         <select
           value={form.default_kind}
           onChange={(e) => setForm({ ...form, default_kind: e.target.value as ProductKind })}
-          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
         >
           {PRODUCT_KIND.map((k) => (
             <option key={k} value={k}>
@@ -264,7 +264,7 @@ function EditCategoryForm({
         <select
           value={form.parent_id}
           onChange={(e) => setForm({ ...form, parent_id: e.target.value })}
-          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
         >
           <option value="">— Ninguna (categoría principal) —</option>
           {categories

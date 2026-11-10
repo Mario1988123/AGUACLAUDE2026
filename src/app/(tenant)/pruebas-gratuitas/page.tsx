@@ -252,7 +252,7 @@ export default async function PruebasGratuitasPage() {
 
             {/* Desktop: tabla */}
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="py-2 text-left">Cliente / Lead</th>

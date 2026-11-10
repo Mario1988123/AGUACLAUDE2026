@@ -100,12 +100,12 @@ export function SubjectNotificationToast({ subjectType, subjectId }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`flex max-h-[90vh] w-full max-w-md flex-col rounded-2xl border-2 ${palette.border} ${palette.bg} shadow-2xl`}
+        className={`flex max-h-[90dvh] w-full max-w-md flex-col rounded-2xl border-2 ${palette.border} ${palette.bg} shadow-2xl`}
       >
         <div
           className={`flex items-center justify-between border-b ${palette.border} p-4`}

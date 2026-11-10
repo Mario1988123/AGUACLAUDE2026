@@ -96,7 +96,7 @@ export default async function IncidenciasPage() {
                       </Link>
                       <Link
                         href={`/incidencias/${i.id}` as never}
-                        className="block font-medium hover:underline"
+                        className="block font-medium break-words hover:underline"
                       >
                         {i.title}
                       </Link>
@@ -122,7 +122,7 @@ export default async function IncidenciasPage() {
             </ul>
 
             {/* Desktop: tabla */}
-            <table className="hidden w-full text-sm md:table">
+            <div className="overflow-x-auto"><table className="hidden w-full min-w-[800px] text-sm md:table">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Ref.</th>
@@ -185,7 +185,7 @@ export default async function IncidenciasPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             </>
           )}
         </CardContent>

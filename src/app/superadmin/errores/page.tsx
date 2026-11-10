@@ -147,13 +147,13 @@ export default async function SuperadminErroresPage({
         </Card>
       )}
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Periodo</label>
           <select
             name="days"
             defaultValue={String(days)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="1">Últimas 24 h</option>
             <option value="7">7 días</option>
@@ -167,7 +167,7 @@ export default async function SuperadminErroresPage({
           <select
             name="status"
             defaultValue={sp.status ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
@@ -182,7 +182,7 @@ export default async function SuperadminErroresPage({
           <select
             name="severity"
             defaultValue={sp.severity ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todas</option>
             {Object.entries(SEVERITY_LABEL).map(([k, v]) => (
@@ -197,7 +197,7 @@ export default async function SuperadminErroresPage({
           <select
             name="source"
             defaultValue={sp.source ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {Object.entries(SOURCE_LABEL).map(([k, v]) => (

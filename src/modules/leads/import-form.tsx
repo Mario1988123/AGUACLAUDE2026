@@ -144,7 +144,7 @@ export function ImportLeadsButton() {
                 <FileText className="h-4 w-4" /> {fileName} · {preview.length} filas
               </div>
               <div className="mt-2 max-h-48 overflow-auto rounded-lg border bg-card text-xs">
-                <table className="w-full">
+                <table className="w-full min-w-[560px]">
                   <thead className="bg-muted/60">
                     <tr>
                       <th className="px-2 py-1 text-left">#</th>

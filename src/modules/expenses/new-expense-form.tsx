@@ -229,13 +229,13 @@ export function NewExpenseForm({
       </div>
 
       {/* Categoría + cliente */}
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div className="space-y-1">
           <Label>2. Categoría *</Label>
           <select
             value={form.category_code}
             onChange={(e) => setForm({ ...form, category_code: e.target.value })}
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Elige categoría…</option>
             {categories.map((c) => (
@@ -258,7 +258,7 @@ export function NewExpenseForm({
           <select
             value={form.customer_id}
             onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">— Ninguno —</option>
             {customers.map((c) => (
@@ -271,10 +271,10 @@ export function NewExpenseForm({
       </div>
 
       {/* Pago */}
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div className="space-y-1">
           <Label>3. Forma de pago *</Label>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {PAYMENT_METHODS.map((m) => (
               <button
                 key={m.value}
@@ -307,7 +307,7 @@ export function NewExpenseForm({
       </div>
 
       {/* Datos del ticket */}
-      <div className="grid gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <div className="space-y-1">
           <Label>4. Establecimiento</Label>
           <Input
@@ -316,7 +316,7 @@ export function NewExpenseForm({
             placeholder="Restaurante Casa Pepe"
           />
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>NIF/CIF emisor</Label>
             <Input
@@ -348,7 +348,7 @@ export function NewExpenseForm({
                   | "invoice_full",
               })
             }
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {documentTypeOptions.map((o) => (
               <option key={o.value} value={o.value}>
@@ -365,7 +365,7 @@ export function NewExpenseForm({
           )}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <Label>Total € *</Label>
             <Input
@@ -404,7 +404,7 @@ export function NewExpenseForm({
             value={form.notes}
             onChange={(e) => setForm({ ...form, notes: e.target.value })}
             rows={3}
-            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm"
+            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
             placeholder="Comida con cliente Pepe S.L. cierre instalación…"
           />
         </div>

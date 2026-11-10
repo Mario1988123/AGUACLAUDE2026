@@ -220,7 +220,7 @@ export function CreateInstallationButton({
           <div className="space-y-2">
             <Label>Fecha y hora *</Label>
             <div className="rounded-2xl border-2 border-border bg-card p-3">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <button
                   type="button"
                   onClick={() =>

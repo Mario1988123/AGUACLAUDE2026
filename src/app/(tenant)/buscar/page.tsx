@@ -55,7 +55,7 @@ export default async function BuscarPage({
         </p>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <input type="hidden" name="entity" value={entity} />
         <div className="flex-1 min-w-60 space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Buscar</label>
@@ -65,7 +65,7 @@ export default async function BuscarPage({
               name="q"
               defaultValue={q}
               placeholder="Nombre, teléfono, DNI o referencia..."
-              className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm"
+              className="h-11 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-base md:text-sm"
             />
           </div>
         </div>

@@ -216,7 +216,7 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
 
             {/* Paso 3 — técnico + fecha */}
             {customer && equipment.length > 0 && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Técnico que retira</Label>
                   <select

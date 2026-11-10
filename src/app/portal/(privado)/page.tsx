@@ -169,7 +169,7 @@ export default async function PortalInicioPage() {
             {incidenciasAbiertas.map((i) => (
               <Tarjeta key={i.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium">{i.titulo}</p>
+                  <p className="min-w-0 break-words font-medium">{i.titulo}</p>
                   <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-900">
                     {ESTADO_INCIDENCIA[i.estado] ?? i.estado}
                   </span>
@@ -190,7 +190,7 @@ export default async function PortalInicioPage() {
           <Tarjeta>
             <ul className="divide-y text-sm">
               {d.mantenimientos_hechos.map((m) => (
-                <li key={m.id} className="flex justify-between py-2">
+                <li key={m.id} className="flex justify-between gap-3 py-2">
                   <span>{TIPO_MANT[m.tipo] ?? "Visita"}</span>
                   <span className="text-muted-foreground">{fecha(m.fecha)}</span>
                 </li>
@@ -206,7 +206,7 @@ export default async function PortalInicioPage() {
             {d.contratos.map((c) => (
               <Tarjeta key={c.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium">Contrato {c.referencia ?? ""}</p>
+                  <p className="min-w-0 break-words font-medium">Contrato {c.referencia ?? ""}</p>
                   <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-900">
                     {ESTADO_CONTRATO[c.estado] ?? c.estado}
                   </span>
@@ -220,7 +220,7 @@ export default async function PortalInicioPage() {
             {d.planes_mantenimiento.map((p) => (
               <Tarjeta key={p.id}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium">Plan de mantenimiento {p.referencia ?? ""}</p>
+                  <p className="min-w-0 break-words font-medium">Plan de mantenimiento {p.referencia ?? ""}</p>
                   {p.estado && (
                     <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-xs text-sky-900">
                       {ESTADO_PLAN[p.estado] ?? p.estado}
@@ -249,7 +249,7 @@ export default async function PortalInicioPage() {
                     <p className="truncate font-medium">{f.referencia ?? "Factura"}</p>
                     <p className="text-muted-foreground">{fecha(f.fecha)}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <p className="font-medium tabular-nums">{euros(f.total_cents)}</p>
                     <p className={f.estado === "overdue" ? "text-destructive" : "text-muted-foreground"}>
                       {ESTADO_FACTURA[f.estado] ?? f.estado}

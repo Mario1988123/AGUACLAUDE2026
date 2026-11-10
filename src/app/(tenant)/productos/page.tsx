@@ -161,14 +161,14 @@ export default async function ProductsPage({
         );
       })()}
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1 flex-1 min-w-48">
           <label className="text-xs uppercase text-muted-foreground">Buscar</label>
           <input
             name="q"
             defaultValue={sp.q ?? ""}
             placeholder="Nombre o referencia..."
-            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <div className="space-y-1">
@@ -176,7 +176,7 @@ export default async function ProductsPage({
           <select
             name="kind"
             defaultValue={kind ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {KIND_OPTIONS.map((k) => (
@@ -191,7 +191,7 @@ export default async function ProductsPage({
           <select
             name="cat"
             defaultValue={categoryId ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todas</option>
             {categories.map((c) => (
@@ -207,7 +207,7 @@ export default async function ProductsPage({
             <select
               name="tag"
               defaultValue={tagFilter ?? ""}
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">Todos</option>
               {tagsCatalog.map((t) => (

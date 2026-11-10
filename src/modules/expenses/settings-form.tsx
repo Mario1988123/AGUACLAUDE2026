@@ -56,7 +56,7 @@ export function ExpenseSettingsForm({ initial }: { initial: ExpenseSettings }) {
         <p className="text-xs text-muted-foreground">
           Importes diarios exentos de IRPF. Si pasas estos importes, lo que excede tributa.
         </p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Manutención CON pernocta · nacional (€/día)</Label>
             <Input
@@ -100,7 +100,7 @@ export function ExpenseSettingsForm({ initial }: { initial: ExpenseSettings }) {
         <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Kilometraje
         </h3>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Importe €/km (límite IRPF España: 0,26)</Label>
             <Input
@@ -117,7 +117,7 @@ export function ExpenseSettingsForm({ initial }: { initial: ExpenseSettings }) {
         <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Alertas
         </h3>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Alertar comida del comercial &gt; (€)</Label>
             <Input

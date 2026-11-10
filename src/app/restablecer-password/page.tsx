@@ -70,7 +70,7 @@ function RestablecerPasswordInner() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+    <div className="marco-px marco-pt marco-pb [--marco-pad:1rem] flex min-h-dvh items-center justify-center bg-muted/30">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-md space-y-5 rounded-lg border bg-card p-8 shadow-sm"

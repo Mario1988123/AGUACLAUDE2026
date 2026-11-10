@@ -149,7 +149,7 @@ export function NewInvoiceForm({
                   placeholder="Producto / servicio"
                 />
               </div>
-              <div className="col-span-3 sm:col-span-1 space-y-1">
+              <div className="col-span-4 sm:col-span-1 space-y-1">
                 <Label className="text-xs">Cant.</Label>
                 <Input
                   type="number"
@@ -164,14 +164,14 @@ export function NewInvoiceForm({
                   }
                 />
               </div>
-              <div className="col-span-4 sm:col-span-2 space-y-1">
+              <div className="col-span-8 sm:col-span-2 space-y-1">
                 <Label className="text-xs">Precio unidad (€)</Label>
                 <MoneyInput
                   valueCents={l.unit_price_cents}
                   onChangeCents={(c) => setLine(idx, { unit_price_cents: c })}
                 />
               </div>
-              <div className="col-span-2 sm:col-span-1 space-y-1">
+              <div className="col-span-4 sm:col-span-1 space-y-1">
                 <Label className="text-xs">Dto%</Label>
                 <Input
                   type="number"
@@ -180,12 +180,12 @@ export function NewInvoiceForm({
                   onChange={(e) => setLine(idx, { discount_percent: Number(e.target.value) })}
                 />
               </div>
-              <div className="col-span-2 sm:col-span-2 space-y-1">
+              <div className="col-span-5 sm:col-span-2 space-y-1">
                 <Label className="text-xs">IVA%</Label>
                 <select
                   value={l.tax_rate_percent}
                   onChange={(e) => setLine(idx, { tax_rate_percent: Number(e.target.value) })}
-                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   <option value={0}>0%</option>
                   <option value={4}>4%</option>
@@ -193,7 +193,7 @@ export function NewInvoiceForm({
                   <option value={21}>21%</option>
                 </select>
               </div>
-              <div className="col-span-1 sm:col-span-1 space-y-1">
+              <div className="col-span-3 sm:col-span-1 space-y-1">
                 <Label className="text-xs">&nbsp;</Label>
                 <Button
                   variant="ghost"
@@ -241,7 +241,7 @@ export function NewInvoiceForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+            className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
             placeholder="Concepto, observaciones..."
           />
         </CardContent>

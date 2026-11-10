@@ -118,7 +118,7 @@ export function ContractCompleteWizard({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-2 sm:p-6"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-2 sm:p-6 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={reset}
         >
           <div
@@ -126,10 +126,10 @@ export function ContractCompleteWizard({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between border-b p-4">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 border-b p-4">
+              <div className="flex min-w-0 items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                <h2 className="text-base font-bold">Completar contrato</h2>
+                <h2 className="min-w-0 truncate text-base font-bold">Completar contrato</h2>
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => setShowPreview(true)}>
@@ -178,7 +178,7 @@ export function ContractCompleteWizard({
             </div>
 
             {/* Body */}
-            <div className="max-h-[65vh] flex-1 overflow-y-auto p-4">
+            <div className="max-h-[65dvh] flex-1 overflow-y-auto p-4">
               {step === 1 && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
@@ -270,8 +270,8 @@ export function ContractCompleteWizard({
               {step === 4 && (
                 <div className="space-y-3">
                   <h3 className="font-bold">Resumen del contrato</h3>
-                  <div className="grid gap-2 text-sm">
-                    <div className="flex items-center justify-between rounded-xl border border-border p-3">
+                  <div className="grid grid-cols-1 gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-border p-3">
                       <span>
                         <Coins className="mr-1 inline h-4 w-4" /> Cobros
                       </span>
@@ -283,7 +283,7 @@ export function ContractCompleteWizard({
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center justify-between rounded-xl border border-border p-3">
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-border p-3">
                       <span>
                         <PenLine className="mr-1 inline h-4 w-4" /> Firmas
                       </span>
@@ -333,14 +333,14 @@ export function ContractCompleteWizard({
 
       {showPreview && (
         <div
-          className="fixed inset-0 z-[60] flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6"
+          className="fixed inset-0 z-[60] flex items-stretch justify-center bg-black/70 p-0 sm:items-center sm:p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           onClick={() => setShowPreview(false)}
         >
           <div
-            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-white shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl"
+            className="flex h-full max-h-dvh w-full flex-col overflow-hidden bg-white shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b p-3">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b p-3">
               <h3 className="text-base font-bold">Vista previa del contrato</h3>
               <button
                 type="button"
@@ -387,7 +387,7 @@ function PreviewBody({
   const hasTransfer = payments.some((p) => p.method === "transfer");
 
   return (
-    <div className="space-y-5 p-6 text-sm text-slate-900">
+    <div className="space-y-5 p-4 text-sm text-slate-900 sm:p-6">
       <div className="border-b pb-3 text-center">
         <h1 className="text-xl font-extrabold uppercase tracking-wide text-primary">
           Contrato de servicios
@@ -411,7 +411,7 @@ function PreviewBody({
           Plan: <strong>{planLabel}</strong>
           {durationMonths ? ` · ${durationMonths} meses` : ""}.
         </p>
-        <table className="w-full border-separate border-spacing-x-3 border-spacing-y-1">
+        <div className="overflow-x-auto"><table className="w-full border-separate border-spacing-x-3 border-spacing-y-1">
           <thead>
             <tr className="border-b border-slate-300 text-left text-xs uppercase">
               <th className="px-2 py-1">Producto</th>
@@ -440,7 +440,7 @@ function PreviewBody({
               <td className="px-2 py-1 text-right tabular-nums">{fmtEur(monthly ?? totalCash)}</td>
             </tr>
           </tfoot>
-        </table>
+        </table></div>
       </div>
       {payments.length > 0 && (
         <div className="space-y-1">
@@ -482,7 +482,7 @@ function PreviewBody({
             ))}
         </div>
       )}
-      <div className="grid gap-4 border-t pt-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 border-t pt-4 sm:grid-cols-2">
         <div className="space-y-1">
           <p className="text-xs font-semibold">La Empresa</p>
           <div className="flex h-20 items-center justify-center rounded border border-slate-300 bg-slate-50">

@@ -75,7 +75,7 @@ export default async function ComisionesPage() {
           <CardTitle>Configuración actual</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="rounded-xl bg-primary/5 p-3">
               <div className="text-xs font-bold uppercase text-muted-foreground">
                 Cierre del ciclo
@@ -118,7 +118,7 @@ export default async function ComisionesPage() {
             <p className="text-sm text-muted-foreground">Aún no hay ciclos.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="py-2">Periodo</th>

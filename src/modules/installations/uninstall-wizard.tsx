@@ -202,17 +202,18 @@ export function UninstallWizard({
       </Button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex h-full w-full flex-col bg-card">
-            <div className="flex items-center justify-between gap-2 border-b p-4">
-              <div>
+        <div className="fixed inset-0 z-50 flex flex-col bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <div className="flex h-full min-h-0 w-full flex-col bg-card">
+            <div className="flex items-center justify-between gap-2 border-b p-3 sm:p-4">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-base font-bold">Parte de retirada</h2>
                 <p className="truncate text-xs text-muted-foreground">{customerName}</p>
               </div>
               <button
                 type="button"
                 onClick={reset}
-                className="rounded-full p-2 hover:bg-muted"
+                className="shrink-0 rounded-full p-2 hover:bg-muted"
+                aria-label="Cerrar"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -230,12 +231,13 @@ export function UninstallWizard({
                         : "border-border bg-card text-muted-foreground"
                   }`}
                 >
-                  {n}. {stepLabels[n]}
+                  {n}
+                  <span className="hidden truncate sm:inline">. {stepLabels[n]}</span>
                 </div>
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
               {step === 1 && (
                 <div className="space-y-4">
                   <p className="text-sm">
@@ -268,7 +270,7 @@ export function UninstallWizard({
                   </p>
                   <div className="space-y-1">
                     <Label>Estado del equipo</Label>
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                       {STATES.map((s) => (
                         <button
                           key={s.value}
@@ -308,7 +310,7 @@ export function UninstallWizard({
                       value={damageDesc}
                       onChange={(e) => setDamageDesc(e.target.value)}
                       placeholder="Describe el desperfecto (tipo, ubicación, valoración estimada…)"
-                      className="w-full rounded-xl border-2 border-amber-300 bg-amber-50 p-2 text-sm"
+                      className="w-full rounded-xl border-2 border-amber-300 bg-amber-50 p-2 text-base md:text-sm"
                     />
                   )}
                   <Button onClick={() => setStep(3)} className="w-full">
@@ -418,9 +420,9 @@ export function UninstallWizard({
                                 : "border-border bg-card hover:bg-muted/30"
                             }`}
                           >
-                            <div className="flex items-center gap-2">
-                              <Warehouse className="h-4 w-4" />
-                              <span className="font-semibold">{w.name}</span>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <Warehouse className="h-4 w-4 shrink-0" />
+                              <span className="font-semibold break-words">{w.name}</span>
                             </div>
                             {w.is_used_default && (
                               <Badge variant="success">Recomendado (Usados)</Badge>
@@ -437,7 +439,7 @@ export function UninstallWizard({
                       value={retrievalNotes}
                       onChange={(e) => setRetrievalNotes(e.target.value)}
                       placeholder="Observaciones de la retirada…"
-                      className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                      className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                     />
                   </div>
                   <Button

@@ -204,7 +204,7 @@ export function ExternalProviderPanel({ current, options }: Props) {
       {/* Selector */}
       <div className="space-y-2">
         <Label>Proveedor externo</Label>
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {options.map((opt) => (
             <label
               key={opt.id}

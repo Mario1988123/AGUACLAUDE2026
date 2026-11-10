@@ -197,7 +197,7 @@ function PlanRow({ plan, productId }: { plan: PricingPlan; productId: string }) 
             )}
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Particular */}
             <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
               <div className="text-[10px] font-bold uppercase tracking-wider text-blue-700">
@@ -421,7 +421,7 @@ function PlanForm({
       </div>
 
       {planType !== "cash" && (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Duración (meses) *</Label>
             <Input
@@ -467,7 +467,7 @@ function PlanForm({
       )}
 
       {/* PRECIOS DUALES */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {/* Particular */}
         <div className="space-y-3 rounded-xl border-2 border-blue-200 bg-blue-50/30 p-3">
           <div className="text-xs font-bold uppercase tracking-wider text-blue-700">
@@ -531,7 +531,7 @@ function PlanForm({
         propuesta.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Mín. comercial (€) — opcional</Label>
           <Input

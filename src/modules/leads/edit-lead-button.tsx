@@ -61,14 +61,14 @@ export function EditLeadButton({ leadId, initial }: Props) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           onClick={close}
         >
           <div
-            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-border"
+            className="flex h-full max-h-dvh w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b p-4">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b p-4">
               <h2 className="text-base font-bold">Editar lead</h2>
               <button
                 type="button"
@@ -82,7 +82,7 @@ export function EditLeadButton({ leadId, initial }: Props) {
 
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               {form.party_kind === "company" ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Razón social</Label>
                     <Input
@@ -133,7 +133,7 @@ export function EditLeadButton({ leadId, initial }: Props) {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Nombre</Label>
                     <Input
@@ -159,7 +159,7 @@ export function EditLeadButton({ leadId, initial }: Props) {
                 </div>
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Email</Label>
                   <Input
@@ -203,7 +203,7 @@ export function EditLeadButton({ leadId, initial }: Props) {
                   rows={4}
                   value={form.notes ?? ""}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="w-full rounded-xl border border-input bg-background p-3 text-sm"
+                  className="w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
                 />
               </div>
             </div>

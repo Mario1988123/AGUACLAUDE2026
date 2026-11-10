@@ -70,7 +70,7 @@ function MultiDateCalendar({
 
   return (
     <div className="rounded-xl border-2 border-border bg-card p-3">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={() =>

@@ -119,7 +119,7 @@ export function LotsTab({ warehouseId, lots, products, canManage }: Props) {
 
       {open && (
         <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold">Registrar entrada de lote</h3>
             <button
               type="button"
@@ -133,13 +133,13 @@ export function LotsTab({ warehouseId, lots, products, canManage }: Props) {
             Úsalo solo si <strong>NO</strong> has registrado la compra en la
             pestaña «Compras» — esa ya crea el lote automáticamente.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">Producto *</Label>
               <select
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Selecciona —</option>
                 {products.map((p) => (

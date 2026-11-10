@@ -36,7 +36,7 @@ export function MyCommissionsCard({ data }: { data: MyCommissionData }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Puntos este ciclo

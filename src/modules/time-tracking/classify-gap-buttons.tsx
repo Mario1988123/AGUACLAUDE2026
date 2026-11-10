@@ -77,11 +77,11 @@ export function ClassifyGapButtons({ gapId }: { gapId: string }) {
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-5">
@@ -93,7 +93,7 @@ export function ClassifyGapButtons({ gapId }: { gapId: string }) {
                   onChange={(e) =>
                     setClassification(e.target.value as Classification)
                   }
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   {OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -108,7 +108,7 @@ export function ClassifyGapButtons({ gapId }: { gapId: string }) {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                 />
               </div>
             </div>

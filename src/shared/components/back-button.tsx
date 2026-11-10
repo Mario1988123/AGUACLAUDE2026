@@ -15,9 +15,9 @@ export function BackButton({
   return (
     <Link
       href={href as never}
-      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground hover:bg-muted hover:border-primary/40 transition-colors"
+      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors duration-100 hover:bg-muted hover:border-primary/40 active:bg-muted"
     >
-      <ArrowLeft className="h-4 w-4" />
+      <ArrowLeft className="h-4 w-4" aria-hidden="true" />
       {label}
     </Link>
   );

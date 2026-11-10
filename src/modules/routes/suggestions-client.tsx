@@ -130,7 +130,7 @@ export function SuggestionsClient() {
       )}
 
       {!pending && suggestions.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {suggestions.map((s) => {
             const Icon = s.kind === "lead" ? User : Building2;
             return (
@@ -141,8 +141,8 @@ export function SuggestionsClient() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <span className="truncate text-sm font-bold">
                         {s.title}
                       </span>
@@ -158,7 +158,7 @@ export function SuggestionsClient() {
                     {s.distance_km.toFixed(1)} km
                   </Badge>
                 </div>
-                <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
                   <span>{s.kind === "lead" ? "Lead" : "Cliente"}</span>
                   <span>
                     {s.last_activity

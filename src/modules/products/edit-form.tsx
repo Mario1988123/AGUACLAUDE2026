@@ -102,11 +102,11 @@ export function ProductEditButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 overflow-y-auto pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl my-8 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-5 space-y-4">
@@ -122,7 +122,7 @@ export function ProductEditButton({
                 <select
                   value={form.category_id}
                   onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="">Sin categoría</option>
                   {categories.map((c) => (
@@ -133,7 +133,7 @@ export function ProductEditButton({
                 </select>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label>Ref. interna</Label>
                   <Input
@@ -164,11 +164,11 @@ export function ProductEditButton({
                   value={form.long_description}
                   onChange={(e) => setForm({ ...form, long_description: e.target.value })}
                   rows={3}
-                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
                 />
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                 <div className="space-y-1">
                   <Label>Ancho (mm)</Label>
                   <Input
@@ -225,7 +225,7 @@ export function ProductEditButton({
                 facturas de compra registradas. Ya no se introduce a mano.
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <label className="flex items-center gap-2 rounded-xl border border-border p-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -280,7 +280,7 @@ export function ProductEditButton({
                   formas (por ejemplo, una grifería que se vende suelta y además se ofrece
                   como extra de una ósmosis).
                 </p>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {PRODUCT_ROLES.map((r) => (
                     <label
                       key={r}
@@ -331,7 +331,7 @@ export function ProductEditButton({
                       setForm({ ...form, installation_notes: e.target.value })
                     }
                     rows={3}
-                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
                     placeholder="Ej: Cerrar llave general antes de purgar. Comprobar enchufe a tierra antes de conectar la bomba."
                   />
                   <p className="text-[11px] text-muted-foreground">

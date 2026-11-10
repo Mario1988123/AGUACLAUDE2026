@@ -168,7 +168,7 @@ export function PaymentHistoryDialog({
               </div>
             ) : (
               <div className="overflow-x-auto rounded-lg border bg-card">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2 text-left">Fecha</th>

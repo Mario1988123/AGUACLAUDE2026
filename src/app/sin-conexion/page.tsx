@@ -2,7 +2,7 @@
 
 export default function OfflinePage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+    <div className="marco-px marco-pt marco-pb [--marco-pad:1.5rem] flex min-h-dvh flex-col items-center justify-center gap-3 bg-background text-center">
       <div className="text-6xl">📡</div>
       <h1 className="text-2xl font-extrabold">Sin conexión</h1>
       <p className="max-w-md text-sm text-muted-foreground">

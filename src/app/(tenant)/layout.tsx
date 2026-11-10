@@ -14,6 +14,7 @@ import { getMyModuleOverrides } from "@/modules/tenant/users/permissions-actions
 import { getStepsForRoles } from "@/modules/onboarding/steps";
 import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
+import { RegistroPushNativo } from "@/modules/notifications/registro-push-nativo";
 import { redirect } from "next/navigation";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -136,7 +137,7 @@ export default async function TenantLayout({ children }: { children: React.React
   }).map((m) => ({ key: m.key, label: m.label, icon: m.icon, href: m.href }));
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-dvh overflow-hidden">
       <Sidebar
         userRoles={session.roles}
         isSuperadmin={session.is_superadmin}
@@ -145,7 +146,9 @@ export default async function TenantLayout({ children }: { children: React.React
         badges={{ chat: chatUnread, notifications: unread }}
         moduleOverrides={moduleOverrides}
       />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Desde md el carril lateral ya absorbe el margen seguro izquierdo
+          (iPhone apaisado): aquí dentro se pone a cero para no sumarlo dos veces. */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:[--safe-left:0px]">
         <Header
           unreadCount={unread}
           fullName={session.full_name}
@@ -153,7 +156,7 @@ export default async function TenantLayout({ children }: { children: React.React
           roleLabel={roleLabel}
           showTimeClock={activeModuleKeys.includes("time_tracking")}
         />
-        <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-4 lg:p-8">
+        <main className="marco-px flex-1 overflow-y-auto overscroll-contain bg-background py-3 [--marco-pad:0.75rem] sm:py-4 sm:[--marco-pad:1rem] lg:py-8 lg:[--marco-pad:2rem]">
           {children}
           <BottomNavSpacer />
         </main>
@@ -165,6 +168,8 @@ export default async function TenantLayout({ children }: { children: React.React
       />
       <OnboardingTour steps={onboardingSteps} enabled={!seenOnboarding} />
       <ShiftReminders enabled={activeModuleKeys.includes("time_tracking")} />
+      {/* Push nativo: solo actua dentro de la app con la marca HMPush/1 */}
+      <RegistroPushNativo userId={session.user_id} />
     </div>
   );
 }

@@ -100,11 +100,11 @@ export function UninstallEquipmentButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 overflow-y-auto pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl my-8 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-4 p-5">
@@ -167,7 +167,7 @@ export function UninstallEquipmentButton({
                   <select
                     value={destinationId}
                     onChange={(e) => setDestinationId(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   >
                     {warehouses.map((w) => (
                       <option key={w.id} value={w.id}>
@@ -179,7 +179,7 @@ export function UninstallEquipmentButton({
                 )}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label>Estado al recoger</Label>
                   <select
@@ -187,7 +187,7 @@ export function UninstallEquipmentButton({
                     onChange={(e) =>
                       setDefaultState(e.target.value as "used" | "damaged")
                     }
-                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   >
                     <option value="used">Usado</option>
                     <option value="damaged">Dañado</option>
@@ -212,7 +212,7 @@ export function UninstallEquipmentButton({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                   placeholder="Motivo de la desinstalación, instrucciones para el técnico…"
                 />
               </div>
@@ -226,7 +226,7 @@ export function UninstallEquipmentButton({
                 </p>
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t bg-muted/20 p-3 sticky bottom-0">
+            <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t bg-card p-3">
               <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
                 Cancelar
               </Button>

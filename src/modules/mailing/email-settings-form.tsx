@@ -75,7 +75,7 @@ export function EmailSettingsForm({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="flex items-center gap-1.5">
             <Mail className="h-3.5 w-3.5" /> Tu email empresa *
@@ -120,7 +120,7 @@ export function EmailSettingsForm({
           value={signature}
           onChange={(e) => setSignature(e.target.value)}
           rows={8}
-          className="w-full rounded-xl border border-border bg-card p-3 text-xs font-mono"
+          className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-xs font-mono"
           placeholder="HTML de tu firma. Pulsa 'Generar firma' para crear una básica."
         />
         {signature && (

@@ -189,11 +189,11 @@ export function VacationCalendarModal({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4 pt-[env(safe-area-inset-top)]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[95vh] w-full max-w-xl flex-col rounded-t-2xl border bg-card shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+            className="flex max-h-[95dvh] w-full max-w-xl flex-col rounded-t-2xl border bg-card shadow-2xl sm:max-h-[90dvh] sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b p-3 sm:p-4">
@@ -333,11 +333,11 @@ export function VacationCalendarModal({
               </div>
 
               {/* Form solicitud */}
-              <div className="space-y-2 border-t bg-muted/20 p-3">
+              <div className="space-y-2 border-t bg-muted/20 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <p className="text-[11px] text-muted-foreground">
                   Pulsa día inicio → fin para seleccionar un rango.
                 </p>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label className="text-xs">Desde</Label>
                     <Input
@@ -363,7 +363,7 @@ export function VacationCalendarModal({
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={2}
-                    className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                    className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                   />
                 </div>
               <div className="flex justify-end gap-2">

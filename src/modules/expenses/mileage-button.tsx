@@ -142,7 +142,7 @@ export function MileageButton() {
               <Calculator className="h-4 w-4" />
               {calculating ? "Calculando..." : "Calcular km en carretera (OSRM)"}
             </Button>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Km</Label>
                 <Input
@@ -179,7 +179,7 @@ export function MileageButton() {
                 rows={2}
                 value={form.notes}
                 onChange={(e) => set("notes", e.target.value)}
-                className="w-full rounded-md border border-input bg-background p-2 text-sm"
+                className="w-full rounded-md border border-input bg-background p-2 text-base md:text-sm"
                 placeholder="Cliente visitado, motivo, etc."
               />
             </div>

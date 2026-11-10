@@ -195,7 +195,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
 
       {step === 1 && (
         <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="name">Nombre *</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -247,7 +247,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Dimensiones (mm) — opcional
             </Label>
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <Input
                 placeholder="Ancho"
                 type="number"
@@ -290,7 +290,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
             aquí solo defines el <strong>precio de venta</strong> (PVP) y
             la gestión de stock.
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Stock mínimo</Label>
               <Input
@@ -315,7 +315,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
             <Label className="text-xs uppercase tracking-wide text-muted-foreground">
               Plan precio inicial (contado) — opcional
             </Label>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label className="text-xs">PVP (€)</Label>
                 <Input
@@ -361,7 +361,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
             <p className="text-[11px] text-emerald-800">
               Marca todo lo que aplique. Se puede cambiar después desde la ficha.
             </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {PRODUCT_ROLES.map((r) => (
                 <label
                   key={r}
@@ -417,7 +417,7 @@ export function ProductCreateForm({ categories }: { categories: CategoryItem[] }
                 se guardarán y podrás añadirlos más tarde desde la ficha.
               </p>
               {categoryAttrs.map((a) => (
-                <div key={a.id} className="grid gap-2 sm:grid-cols-3 sm:items-center">
+                <div key={a.id} className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:items-center">
                   <Label className="sm:col-span-1">
                     {a.name}
                     {a.unit ? ` (${a.unit})` : ""}

@@ -94,7 +94,7 @@ export function CampaignsClient({
               Configuración → Mailing → Plantillas antes de lanzar una campaña.
             </p>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Nombre</Label>
                 <Input
@@ -108,7 +108,7 @@ export function CampaignsClient({
                 <select
                   value={templateId}
                   onChange={(e) => setTemplateId(e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-base md:text-sm"
                 >
                   {templates.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -146,7 +146,7 @@ export function CampaignsClient({
               pre-rellenar el nombre.
             </p>
           </CardHeader>
-          <CardContent className="grid gap-2 sm:grid-cols-2">
+          <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {suggestions.map((s) => (
               <button
                 key={s.slug}

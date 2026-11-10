@@ -205,7 +205,7 @@ function ObjForm({
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label>Año</Label>
               <Input
@@ -272,7 +272,7 @@ function ObjForm({
               solo cuenta esa tipología.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Alcance</Label>
               <select
@@ -322,7 +322,7 @@ function ObjForm({
               </div>
             )}
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Importe (€)</Label>
               <Input

@@ -97,7 +97,7 @@ export function SubjectPickerModal({
         if (!o) onClose();
       }}
     >
-      <DialogContent className="flex max-h-[88vh] w-[96vw] max-w-2xl flex-col gap-3 sm:w-full">
+      <DialogContent className="flex max-h-[88dvh] w-[calc(100%-1rem)] max-w-2xl flex-col gap-3">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

@@ -226,11 +226,11 @@ function BrandModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       onClick={() => !pending && onClose()}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
@@ -258,7 +258,7 @@ function BrandModal({
                 <select
                   value={priceSource}
                   onChange={(e) => setPriceSource(e.target.value as "manual" | "scraper_mercadona" | "scraper_carrefour")}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="manual">Manual (fijo)</option>
                   <option value="scraper_mercadona">Scraper Mercadona</option>

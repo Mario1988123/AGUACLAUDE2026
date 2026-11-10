@@ -43,7 +43,7 @@ export function PointsBreakdownCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="rounded-xl border bg-card p-3">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Star className="h-3.5 w-3.5" /> Puntos del mes

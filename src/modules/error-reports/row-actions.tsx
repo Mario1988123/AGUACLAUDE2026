@@ -78,7 +78,7 @@ export function ErrorReportRowActions({ id, currentStatus, currentNotes }: Props
           onChange={(e) => setNotes(e.target.value)}
           rows={2}
           placeholder="Notas internas (no visibles al cliente)"
-          className="w-full rounded-md border border-input bg-background p-2 text-sm"
+          className="w-full rounded-md border border-input bg-background p-2 text-base md:text-sm"
         />
         <div className="flex justify-end gap-2">
           <Button

@@ -64,7 +64,7 @@ export default async function ConfigDashboardPage() {
   }
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
@@ -80,7 +80,7 @@ export default async function ConfigDashboardPage() {
             <CardTitle className="text-base">{g.role}</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="grid gap-1 text-sm sm:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
               {g.kpis.map((k) => (
                 <li
                   key={k}

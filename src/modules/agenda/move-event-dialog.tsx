@@ -336,14 +336,14 @@ export function MoveEventDialog({
           {/* Reagendar */}
           <div className="space-y-2 rounded-xl border border-border bg-card p-3">
             <h3 className="text-sm font-bold">Reagendar</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Nueva fecha</Label>
                 <input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 />
               </div>
               <div className="space-y-1.5">
@@ -352,7 +352,7 @@ export function MoveEventDialog({
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 />
               </div>
             </div>
@@ -372,7 +372,7 @@ export function MoveEventDialog({
               <select
                 value={newAssigned}
                 onChange={(e) => setNewAssigned(e.target.value)}
-                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Selecciona usuario —</option>
                 {team.map((u) => (
@@ -407,7 +407,7 @@ export function MoveEventDialog({
               <select
                 value={newKind}
                 onChange={(e) => setNewKind(e.target.value)}
-                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 {AGENDA_KIND.map((k) => (
                   <option key={k} value={k}>

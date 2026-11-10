@@ -252,13 +252,13 @@ export function ContractFinancierAssign({
         plazo, para fijar comisión y reserva.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="text-xs">Financiera</Label>
           <select
             value={financierId}
             onChange={(e) => setFinancierId(e.target.value)}
-            className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm"
+            className="h-11 w-full rounded-xl border border-input bg-card px-3 text-base md:text-sm"
           >
             <option value="">— elige una —</option>
             {availableFinanciers.map((f) => (
@@ -283,7 +283,7 @@ export function ContractFinancierAssign({
       {monthlyCents != null && termMonths && (
         <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3 text-xs">
           <div className="font-bold text-blue-900">Datos del contrato</div>
-          <div className="mt-1 grid gap-1 sm:grid-cols-3">
+          <div className="mt-1 grid grid-cols-1 gap-1 sm:grid-cols-3">
             <div>
               <span className="text-muted-foreground">Cuota cliente/mes:</span>{" "}
               <strong className="tabular-nums">{eur(monthlyCents)}</strong>
@@ -314,7 +314,7 @@ export function ContractFinancierAssign({
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
                   Coeficiente {termMonths}m:{" "}
                   <span className="font-mono font-bold text-foreground">
@@ -361,7 +361,7 @@ export function ContractFinancierAssign({
             </>
           )}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">
                 Capital que percibe la empresa (€)

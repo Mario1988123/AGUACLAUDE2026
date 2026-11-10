@@ -63,7 +63,7 @@ export function RegisterPaymentForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="concept">Concepto *</Label>
           <Input
@@ -122,7 +122,7 @@ export function RegisterPaymentForm({
           rows={2}
           value={form.notes}
           onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+          className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
           placeholder="Justificante, observaciones..."
         />
       </div>

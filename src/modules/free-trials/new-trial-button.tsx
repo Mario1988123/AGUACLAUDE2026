@@ -115,11 +115,11 @@ export function NewFreeTrialButton() {
 
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 overflow-y-auto pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && close()}
         >
           <div
-            className="w-full max-w-xl rounded-2xl border bg-card shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-xl rounded-2xl border bg-card shadow-2xl my-8 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="border-b p-4">
@@ -302,7 +302,7 @@ export function NewFreeTrialButton() {
                     autoFocus
                   />
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div className="space-y-1">
                     <Label>Teléfono</Label>
                     <Input

@@ -64,7 +64,7 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Coste anual ósmosis del cliente (€)" hint="Si el cliente ya tiene ósmosis instalada">
           <Input
             type="number"
@@ -102,7 +102,7 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
         <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Impacto ecológico (por botella 1.5 L)
         </h3>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="CO₂ (kg)">
             <Input
               type="number"
@@ -134,7 +134,7 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
         <h3 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Servicio garrafas (Aquaservice, Culligan…)
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Tamaño garrafa (L)">
             <Input
               type="number"
@@ -160,7 +160,7 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
         <p className="text-xs text-muted-foreground">
           Marca qué planes verá el comercial al usar el wizard.
         </p>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {[
             { key: "plan_cash" as const, label: "Compra (contado)" },
             { key: "plan_rental" as const, label: "Alquiler" },
@@ -184,12 +184,12 @@ export function SavingsConfigForm({ initial }: { initial: CalcConfig }) {
             </label>
           ))}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 mt-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mt-3">
           <Field label="Duración renting por defecto (meses)" hint="Sale preseleccionada al elegir Renting">
             <select
               value={form.default_renting_duration}
               onChange={(e) => setForm({ ...form, default_renting_duration: e.target.value })}
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               {[12, 24, 36, 48, 60].map((m) => (
                 <option key={m} value={m}>

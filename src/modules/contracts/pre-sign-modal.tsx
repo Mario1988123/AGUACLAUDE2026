@@ -177,15 +177,15 @@ export function PreSignContractModal({ contractId, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
       onClick={onClose}
     >
       <div
-        className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-border"
+        className="flex h-full max-h-dvh w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90dvh] sm:max-w-2xl sm:rounded-2xl sm:border sm:border-border"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b p-4">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b p-4">
           <div className="min-w-0 flex-1 pr-2">
             <h2 className="text-lg font-bold">Firmar contrato</h2>
             <p className="truncate text-xs text-muted-foreground">
@@ -858,7 +858,7 @@ function CustomerEditForm({
   return (
     <div className="space-y-3">
       {customer.party_kind === "company" && !isAutonomo ? (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs">Razón social</Label>
             <Input
@@ -902,7 +902,7 @@ function CustomerEditForm({
           </div>
         </div>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="space-y-1">
             <Label className="text-xs">Nombre</Label>
             <Input
@@ -927,7 +927,7 @@ function CustomerEditForm({
           </div>
         </div>
       )}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs">Email</Label>
           <Input
@@ -1010,7 +1010,7 @@ function AddressEditForm({
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_140px]">
         <div className="space-y-1">
           <Label className="text-xs">Calle *</Label>
           <Input
@@ -1026,7 +1026,7 @@ function AddressEditForm({
           />
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">Portal</Label>
           <Input
@@ -1049,7 +1049,7 @@ function AddressEditForm({
           />
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">CP *</Label>
           <Input
@@ -1128,7 +1128,7 @@ function IbanAddForm({
         <Label className="text-xs">IBAN *</Label>
         <IbanInput value={iban} onChange={setIban} />
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs">Titular</Label>
           <Input value={holder} onChange={(e) => setHolder(e.target.value)} />

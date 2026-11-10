@@ -105,7 +105,7 @@ export function ObjectivesCascadeReadonly({
                 <div className="text-sm font-bold uppercase tracking-wide text-primary">
                   Objetivo del departamento (informativo)
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3 text-sm">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 text-sm">
                   <div className="rounded-lg bg-card p-2">
                     <div className="text-xs text-muted-foreground">
                       Target €
@@ -171,8 +171,8 @@ export function ObjectivesCascadeReadonly({
                     Sin usuarios en este departamento.
                   </div>
                 ) : (
-                  <div className="overflow-hidden rounded-xl border">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto rounded-xl border">
+                    <table className="w-full min-w-[560px] text-sm">
                       <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                         <tr>
                           <th className="px-3 py-2 text-left">Miembro</th>

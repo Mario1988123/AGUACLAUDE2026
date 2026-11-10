@@ -120,7 +120,7 @@ export function SelectableCustomersTable({ customers, team, canBulkReassign }: P
 
           {/* DESKTOP: tabla */}
           <div className="hidden lg:block overflow-x-auto rounded-lg border bg-card">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[800px] text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   {canBulkReassign && (

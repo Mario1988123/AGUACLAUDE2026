@@ -14,7 +14,7 @@ function norm(s: string): string {
 }
 
 const SELECT_CLS =
-  "h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm sm:w-auto";
+  "h-11 w-[calc(50%-0.25rem)] min-w-0 rounded-md border border-input bg-background px-3 text-base md:text-sm sm:w-auto";
 
 /**
  * Filtro completo de clientes (instantáneo, sin recargar). Opera sobre la
@@ -110,14 +110,14 @@ export function CustomersFilteredView({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2 rounded-lg border bg-card p-3 sm:p-4">
-        <div className="relative flex-1 min-w-0 sm:min-w-[16rem]">
+        <div className="relative w-full min-w-0 sm:w-auto sm:min-w-[16rem] sm:flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre, email, teléfono…"
             aria-label="Buscar clientes"
-            className="h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+            className="h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-base md:text-sm"
           />
         </div>
         <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={SELECT_CLS} aria-label="Tipo">

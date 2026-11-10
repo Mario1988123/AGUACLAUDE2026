@@ -141,14 +141,14 @@ export function ScheduleInstallationButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+            <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5">
               <h2 className="text-lg font-bold">
                 {isReschedule ? "Reagendar instalación" : "Agendar instalación"}
               </h2>
@@ -161,7 +161,7 @@ export function ScheduleInstallationButton({
                 />
               )}
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label>Fecha</Label>
                   <Input
@@ -184,7 +184,7 @@ export function ScheduleInstallationButton({
                 <select
                   value={installerId}
                   onChange={(e) => setInstallerId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="">— Selecciona un instalador —</option>
                   {installers.map((i) => (
@@ -365,7 +365,7 @@ function AvailabilityCalendar({
     <div className="space-y-2 rounded-xl border bg-card p-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="text-sm font-bold">Disponibilidad del instalador</div>
-        <div className="flex gap-3 text-[10px] text-muted-foreground">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <span className="h-3 w-3 rounded bg-red-200 border border-red-300" />
             Ocupado

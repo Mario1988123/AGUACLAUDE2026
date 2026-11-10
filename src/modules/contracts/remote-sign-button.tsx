@@ -65,11 +65,11 @@ export function SendRemoteSignButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border bg-card p-5 shadow-2xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-md rounded-2xl border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-3 text-lg font-bold">

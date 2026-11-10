@@ -42,7 +42,7 @@ export default async function MailingPreviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Mail className="h-6 w-6 text-primary" />
@@ -65,7 +65,7 @@ export default async function MailingPreviewPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {templates.map((t) => {
           const subject = renderTemplate(t.subject, sampleVars);
           const body = renderTemplate(t.body_html, sampleVars);

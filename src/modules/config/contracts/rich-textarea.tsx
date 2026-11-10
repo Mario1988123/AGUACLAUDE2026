@@ -87,7 +87,7 @@ export function RichTextarea({ value, onChange, rows = 8, id, required }: Props)
           rows={rows}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-b-xl border border-t-0 border-border bg-card p-3 text-sm font-mono"
+          className="w-full rounded-b-xl border border-t-0 border-border bg-card p-3 text-base md:text-sm font-mono"
         />
       )}
       <p className="text-xs text-muted-foreground">

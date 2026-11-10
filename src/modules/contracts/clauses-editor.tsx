@@ -130,7 +130,7 @@ export function ContractClausesEditor({
             value={c.body}
             onChange={(e) => update(i, { body: e.target.value })}
             rows={4}
-            className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+            className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
           />
         </div>
       ))}

@@ -17,7 +17,7 @@ export default async function PublicConfirmationPage({
 
   if (!view.ok) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-sky-50 to-white p-6">
+      <div className="marco-px marco-pt marco-pb [--marco-pad:1.5rem] flex min-h-dvh items-center justify-center bg-gradient-to-b from-sky-50 to-white">
         <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-lg">
           <h1 className="text-xl font-bold text-rose-700">
             Enlace no válido
@@ -51,7 +51,7 @@ export default async function PublicConfirmationPage({
     scheduledDate.getTime() - Date.now() > 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-50 to-white p-4">
+    <div className="marco-px marco-pt marco-pb [--marco-pad:1rem] min-h-dvh bg-gradient-to-b from-sky-50 to-white">
       <div className="mx-auto max-w-xl">
         <div className="rounded-2xl border border-border bg-white p-6 shadow-lg sm:p-8">
           <div className="mb-6 flex items-center gap-2 text-sm text-muted-foreground">

@@ -57,7 +57,7 @@ function ColorField({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-32 rounded-xl border border-input bg-background px-3 font-mono text-sm uppercase"
+          className="h-10 w-32 rounded-xl border border-input bg-background px-3 font-mono text-base md:text-sm uppercase"
           maxLength={7}
         />
       </div>
@@ -101,7 +101,7 @@ export function PdfSettingsForm({
         <div className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Plantilla de ficha técnica
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {TEMPLATES.map((t) => {
             const Icon = t.icon;
             const selected = template === t.key;
@@ -179,7 +179,7 @@ export function PdfSettingsForm({
               key={`${template}-${reloadKey}`}
               title="Vista previa de la ficha técnica"
               src={`/api/pdf/product-datasheet/${sampleProductId}?t=${template}&r=${reloadKey}`}
-              className="h-[560px] w-full rounded-xl border border-border bg-muted"
+              className="h-[min(560px,70dvh)] w-full rounded-xl border border-border bg-muted"
             />
           </>
         ) : (

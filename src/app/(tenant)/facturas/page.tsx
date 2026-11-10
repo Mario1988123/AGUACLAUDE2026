@@ -236,7 +236,7 @@ export default async function InvoicesPage({
               ))}
             </ul>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="py-2 text-left">Cobrado</th>
@@ -406,7 +406,7 @@ export default async function InvoicesPage({
               ))}
             </ul>
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[800px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-2 py-2 text-left">Ref</th>

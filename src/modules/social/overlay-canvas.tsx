@@ -505,7 +505,7 @@ export function OverlayCanvas({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            className="block max-h-[58vh] w-full touch-none object-contain"
+            className="block max-h-[58dvh] w-full touch-none object-contain"
             style={{ touchAction: "none", cursor: "move" }}
             aria-label="Previsualización editable"
           />
@@ -711,7 +711,7 @@ function TextLayerEditor({
         />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label className="text-[10px] uppercase text-muted-foreground">
             Fuente
@@ -754,7 +754,7 @@ function TextLayerEditor({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label className="text-[10px] uppercase text-muted-foreground">
             Color
@@ -773,7 +773,7 @@ function TextLayerEditor({
               onChange={(e) =>
                 onChange({ color: e.target.value.toUpperCase() })
               }
-              className="font-mono text-xs"
+              className="font-mono text-base md:text-xs"
               maxLength={7}
             />
           </div>

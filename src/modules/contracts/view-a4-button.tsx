@@ -21,16 +21,16 @@ export function ViewA4Button({ contractId }: { contractId: string }) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex flex-col bg-black/80 p-2 sm:p-6"
+          className="fixed inset-0 z-50 flex flex-col bg-black/80 p-2 sm:p-6 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => setOpen(false)}
         >
           <div
             className="mx-auto flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b p-3">
-              <h2 className="text-base font-bold">Vista previa del contrato</h2>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 border-b p-3">
+              <h2 className="min-w-0 truncate text-base font-bold">Vista previa del contrato</h2>
+              <div className="flex shrink-0 items-center gap-2">
                 <a
                   href={pdfUrl}
                   target="_blank"

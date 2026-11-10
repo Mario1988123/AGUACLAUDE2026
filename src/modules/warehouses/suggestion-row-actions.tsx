@@ -58,7 +58,7 @@ export function SuggestionActions({
         min={1}
         value={qty}
         onChange={(e) => setQty(e.target.value)}
-        className="h-9 w-20 text-sm"
+        className="h-9 w-20 text-base md:text-sm"
       />
       <Button
         size="sm"

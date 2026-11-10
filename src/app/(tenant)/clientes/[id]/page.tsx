@@ -424,7 +424,7 @@ export default async function CustomerDetailPage({
         commercialName={session.full_name}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between gap-2">
@@ -706,7 +706,7 @@ export default async function CustomerDetailPage({
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <CardTitle>Propuestas ({customerProposals.length})</CardTitle>
               <Button asChild size="sm">
                 <Link href={`/propuestas/nueva?customer_id=${id}` as never}>
@@ -785,7 +785,7 @@ function Row({ label, value }: { label: string | null; value: string | null }) {
   return (
     <div className="grid grid-cols-3 gap-2">
       <div className="text-muted-foreground">{label}</div>
-      <div className="col-span-2">{value || "—"}</div>
+      <div className="col-span-2 min-w-0 break-words">{value || "—"}</div>
     </div>
   );
 }

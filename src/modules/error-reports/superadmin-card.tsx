@@ -43,7 +43,7 @@ export async function ErrorReportsSuperadminCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
           <Link
             href={"/superadmin/errores?status=new" as never}
             className="rounded-xl border-2 border-red-200 bg-red-50/50 p-3 hover:bg-red-50"

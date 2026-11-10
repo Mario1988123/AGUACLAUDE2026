@@ -502,14 +502,14 @@ export function SavingsWizard(props: Props) {
       </div>
 
       {/* Contenido del paso */}
-      <div className="rounded-2xl border bg-card p-6 min-h-[320px]">
+      <div className="rounded-2xl border bg-card p-4 min-h-[320px] sm:p-6">
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">¿Para quién es la calculadora?</h2>
             <p className="text-sm text-muted-foreground">
               Selecciona el tipo de cliente para personalizar el cálculo.
             </p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {[
                 { val: "home" as const, label: "Hogar / Particular", icon: Home },
                 { val: "office" as const, label: "Empresa / Oficina", icon: Building2 },
@@ -607,7 +607,7 @@ export function SavingsWizard(props: Props) {
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">¿Qué consume hoy el cliente?</h2>
             <p className="text-sm text-muted-foreground">El servicio o agua que usa actualmente.</p>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(
                 [
                   { val: "bottled" as const, label: "Botellas de supermercado", icon: ShoppingCart },
@@ -644,7 +644,7 @@ export function SavingsWizard(props: Props) {
             <h2 className="text-2xl font-bold">
               {currentService === "service" ? "¿Qué empresa de servicio?" : "¿Qué marca compra?"}
             </h2>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {initialBrands
                 .filter((b) =>
                   currentService === "service" ? b.kind === "service" : b.kind === "supermarket",
@@ -732,7 +732,7 @@ export function SavingsWizard(props: Props) {
         {step === 6 && (
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">¿Qué plan le ofrecemos?</h2>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {(
                 [
                   { val: "cash", label: "Compra (contado)", icon: Banknote },
@@ -796,7 +796,7 @@ export function SavingsWizard(props: Props) {
                 {planType}. Configura al menos un producto en /productos.
               </p>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {productsForPlan.map((p) => {
                   const sel = productId === p.id;
                   const planRow = p.pricing.find((pr) => {
@@ -860,7 +860,7 @@ export function SavingsWizard(props: Props) {
             <>
             <div>
               <h3 className="font-bold mb-2">Grifería</h3>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <ExtraOption
                   selected={extraTapId === null}
                   onClick={() => setExtraTapId(null)}
@@ -894,7 +894,7 @@ export function SavingsWizard(props: Props) {
             {/* Enfriador */}
             <div>
               <h3 className="font-bold mb-2">Enfriador</h3>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <ExtraOption
                   selected={extraCoolerId === null}
                   onClick={() => setExtraCoolerId(null)}
@@ -930,7 +930,7 @@ export function SavingsWizard(props: Props) {
             {addons.length > 0 && (
               <div>
                 <h3 className="font-bold mb-2">Añadir extras</h3>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {addons.map((e) => {
                     const planRow = e.pricing.find((pr) => {
                       if (pr.plan_type !== planType) return false;
@@ -1201,7 +1201,7 @@ function ResultPanel({
                 Empresa
               </button>
             </div>
-            <div className="grid gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               <div className="space-y-1 sm:col-span-3">
                 <label className="text-xs font-bold uppercase text-muted-foreground">
                   {newLeadKind === "company" ? "Nombre comercial" : "Nombre y apellidos"}
@@ -1210,7 +1210,7 @@ function ResultPanel({
                   type="text"
                   value={newLeadName}
                   onChange={(e) => setNewLeadName(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   placeholder={newLeadKind === "company" ? "Hostelería ACME" : "Juan Pérez"}
                 />
               </div>
@@ -1222,7 +1222,7 @@ function ResultPanel({
                   type="tel"
                   value={newLeadPhone}
                   onChange={(e) => setNewLeadPhone(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 />
               </div>
               <div className="space-y-1 sm:col-span-2">
@@ -1233,7 +1233,7 @@ function ResultPanel({
                   type="email"
                   value={newLeadEmail}
                   onChange={(e) => setNewLeadEmail(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 />
               </div>
             </div>
@@ -1266,7 +1266,7 @@ function ResultPanel({
       </div>
 
       {/* Comparativa de costes */}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border-2 border-rose-200 bg-rose-50 p-4">
           <div className="text-xs font-bold uppercase tracking-wider text-rose-700">
             Tu coste actual
@@ -1313,7 +1313,7 @@ function ResultPanel({
       )}
 
       {/* Impacto ecológico */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <EcoCard
           icon={Droplets}
           color="blue"

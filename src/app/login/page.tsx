@@ -84,7 +84,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+    <div className="marco-px marco-pt marco-pb [--marco-pad:1rem] flex min-h-dvh items-center justify-center bg-muted/30">
       <div className="w-full max-w-md space-y-6 rounded-lg border bg-card p-8 shadow-sm">
         <div className="space-y-2 text-center">
           <img src="/brand/logo.svg" alt="Hidromanager" className="mx-auto h-12 w-auto" />

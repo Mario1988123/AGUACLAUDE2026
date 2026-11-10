@@ -89,23 +89,23 @@ export function ChargeWithGoCardlessButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               <h2 className="text-base font-bold">Cobrar por GoCardless</h2>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label>Cuenta a cobrar</Label>
                 <select
                   value={mandateId}
                   onChange={(e) => setMandateId(e.target.value)}
-                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   {mandates.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -114,7 +114,7 @@ export function ChargeWithGoCardlessButton({
                   ))}
                 </select>
               </div>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label>Importe (€)</Label>
                 <Input
                   type="number"

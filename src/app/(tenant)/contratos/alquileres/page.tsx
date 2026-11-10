@@ -179,7 +179,7 @@ export default async function AlquileresPage() {
                     </div>
                     {r.progress_pct != null && (
                       <div className="mt-2">
-                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                           <span>{r.months_elapsed} meses cobrados</span>
                           <span>{r.months_left} restantes</span>
                         </div>
@@ -191,7 +191,7 @@ export default async function AlquileresPage() {
                         </div>
                       </div>
                     )}
-                    <div className="mt-2 flex items-center justify-between text-xs">
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs">
                       <div>
                         <span className="text-muted-foreground">Mant.: </span>
                         <span className="font-bold">{r.maintenance_done}</span>
@@ -223,7 +223,7 @@ export default async function AlquileresPage() {
 
               {/* Desktop: tabla */}
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[800px] text-sm">
                   <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-3 py-2 text-left">Ref.</th>
@@ -280,7 +280,7 @@ export default async function AlquileresPage() {
                         <td className="px-3 py-2">
                           {r.progress_pct != null ? (
                             <div className="min-w-[120px]">
-                              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                              <div className="flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
                                 <span>{r.months_elapsed}m</span>
                                 <span>{r.months_left}m restantes</span>
                               </div>

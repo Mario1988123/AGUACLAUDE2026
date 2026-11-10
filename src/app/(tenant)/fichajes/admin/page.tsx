@@ -137,9 +137,9 @@ export default async function FichajesAdminPage() {
               {attendanceGaps.map((g) => (
                 <li
                   key={g.id}
-                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2 text-sm"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-semibold">
                       {g.user_name ?? "Usuario"} ·{" "}
                       {new Date(g.gap_date).toLocaleDateString("es-ES", {
@@ -215,8 +215,8 @@ export default async function FichajesAdminPage() {
           <CardContent>
             <ul className="divide-y">
               {pending.map((a) => (
-                <li key={a.id} className="flex items-center justify-between py-2 text-sm">
-                  <div>
+                <li key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-2 text-sm">
+                  <div className="min-w-0">
                     <div className="font-semibold">
                       {a.user_name} · {ABSENCE_KIND_LABEL[a.kind] ?? a.kind}
                     </div>
@@ -245,7 +245,7 @@ export default async function FichajesAdminPage() {
             <>
               {/* Tabla en md+ */}
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="py-2">Hora</th>

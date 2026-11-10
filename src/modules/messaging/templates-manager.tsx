@@ -157,7 +157,7 @@ function TemplateForm({
   return (
     <Card>
       <CardContent className="pt-6 space-y-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Key (interna)</Label>
             <Input
@@ -210,7 +210,7 @@ function TemplateForm({
             value={form.body}
             onChange={(e) => setForm({ ...form, body: e.target.value })}
             rows={8}
-            className="w-full rounded-xl border border-input bg-background p-3 text-sm"
+            className="w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
           />
           <p className="text-xs text-muted-foreground">
             Variables: <code>{"{nombre}"}</code> <code>{"{empresa}"}</code>{" "}

@@ -90,7 +90,7 @@ export function MaintenanceSmartAlerts({ alerts }: { alerts: MaintenanceAlerts }
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {items.map((it) => {
             const Icon = it.icon;
             return (

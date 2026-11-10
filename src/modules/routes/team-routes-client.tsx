@@ -123,7 +123,7 @@ export function TeamRoutesClient({ initialDate, routes }: Props) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-border bg-card p-4">
-        <div className="space-y-1">
+        <div className="w-full space-y-1 sm:w-auto">
           <Label className="text-xs">Fecha</Label>
           <Input
             type="date"
@@ -132,10 +132,10 @@ export function TeamRoutesClient({ initialDate, routes }: Props) {
               setDate(e.target.value);
               reloadDate(e.target.value);
             }}
-            className="w-44"
+            className="w-full sm:w-44"
           />
         </div>
-        <div className="flex items-center gap-3 text-sm">
+        <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 text-sm sm:w-auto">
           <div>
             <div className="text-xs text-muted-foreground">Actual total</div>
             <div className="font-bold tabular-nums">
@@ -174,7 +174,7 @@ export function TeamRoutesClient({ initialDate, routes }: Props) {
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {routes.map((r) => {
           const saving = Math.max(
             0,
@@ -186,7 +186,7 @@ export function TeamRoutesClient({ initialDate, routes }: Props) {
           return (
             <Card key={r.member.user_id}>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between gap-2 text-base">
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
                   <div className="flex items-center gap-2 min-w-0">
                     <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
                     <span className="truncate">
@@ -230,13 +230,13 @@ export function TeamRoutesClient({ initialDate, routes }: Props) {
                       return (
                         <li
                           key={it.id}
-                          className="flex items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1.5 text-xs"
+                          className="flex min-w-0 items-center gap-2 rounded-lg border bg-muted/30 px-2 py-1.5 text-xs"
                         >
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 font-bold text-primary">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 font-bold text-primary">
                             {idx + 1}
                           </span>
-                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="flex-1 truncate font-medium">
+                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate font-medium">
                             {it.title}
                           </span>
                           <Link

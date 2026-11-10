@@ -251,7 +251,7 @@ export function AgendaWeekView({
                 setCursor(monday);
                 navigateToWeek(monday);
               }}
-              className="h-9 rounded-lg border border-input bg-background px-2 text-sm"
+              className="h-9 rounded-lg border border-input bg-background px-2 text-base md:text-sm"
             />
           </label>
           <Button variant="outline" size="sm" onClick={today}>
@@ -307,7 +307,7 @@ export function AgendaWeekView({
       </p>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-        <div className="grid grid-cols-[60px_repeat(7,1fr)] min-w-[700px]">
+        <div className="grid grid-cols-[52px_repeat(7,minmax(0,1fr))] min-w-[700px]">
           {/* Header */}
           <div className="border-b border-r bg-muted/30 px-2 py-2 text-[10px] uppercase font-bold text-muted-foreground">
             Hora

@@ -62,7 +62,7 @@ export function IncidentActionsPanel({
         <select
           value={assignTo}
           onChange={(e) => setAssignTo(e.target.value)}
-          className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+          className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
         >
           <option value="">— Sin asignar —</option>
           {team.map((u) => (
@@ -82,7 +82,7 @@ export function IncidentActionsPanel({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
           placeholder="¿Cómo se resolvió la incidencia?"
         />
         <Button onClick={doResolve} disabled={pending} className="w-full" size="lg">

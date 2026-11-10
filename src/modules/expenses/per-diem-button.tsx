@@ -198,7 +198,7 @@ export function PerDiemButton({ amounts }: { amounts: SettingsAmounts }) {
                 rows={2}
                 value={form.notes}
                 onChange={(e) => set("notes", e.target.value)}
-                className="w-full rounded-md border border-input bg-background p-2 text-sm"
+                className="w-full rounded-md border border-input bg-background p-2 text-base md:text-sm"
               />
             </div>
           </div>

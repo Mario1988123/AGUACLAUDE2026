@@ -85,11 +85,11 @@ export function RelocateEquipmentButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
@@ -117,7 +117,7 @@ export function RelocateEquipmentButton({
                   <select
                     value={addressId}
                     onChange={(e) => setAddressId(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   >
                     {targets.map((a) => (
                       <option key={a.id} value={a.id}>
@@ -145,7 +145,7 @@ export function RelocateEquipmentButton({
                 <Label className="text-xs font-bold text-amber-900">
                   💶 Cobro de reubicación (opcional)
                 </Label>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Input
                     type="number"
                     step="0.01"
@@ -165,7 +165,7 @@ export function RelocateEquipmentButton({
                           | "domiciliation",
                       )
                     }
-                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                    className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   >
                     <option value="cash">Efectivo</option>
                     <option value="card">Tarjeta</option>
@@ -185,7 +185,7 @@ export function RelocateEquipmentButton({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                   placeholder="Razón de la reubicación, instrucciones para el técnico…"
                 />
               </div>

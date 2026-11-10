@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LogOut, User, ChevronDown, PlayCircle, Plus } from "lucide-react";
+import { LogOut, User, ChevronDown, PlayCircle, Plus, Menu } from "lucide-react";
+import { ID_MENU_LATERAL, alternarMenuLateral, useMenuLateral } from "@/shared/lib/menu-lateral";
 import { NotificationsBell } from "./notifications-poller";
 import { GlobalSearchTrigger } from "@/modules/search/global-search";
 import { replayOnboardingAction } from "@/modules/onboarding/actions";
@@ -34,6 +35,7 @@ export function Header({
   showTimeClock = true,
 }: HeaderProps) {
   const [open, setOpen] = useState(false);
+  const menuAbierto = useMenuLateral();
   const ref = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -59,19 +61,54 @@ export function Header({
     function onClick(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    // pointerdown y no mousedown: en táctil cierra al tocar fuera sin esperar
+    // al clic sintetizado.
+    document.addEventListener("pointerdown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   return (
-    <header className="flex h-20 items-center justify-between gap-3 border-b bg-card px-3 sm:px-4 md:px-6 lg:px-8">
-      {/* En móvil (<md) hay hamburguesa flotante en left-4 → reservamos ml-16 solo ahí.
-          En tablet (md-lg) y desktop el sidebar es permanente, no hace falta margen. */}
-      <div className="ml-16 flex flex-1 items-center gap-4 md:ml-0">
-        <GlobalSearchTrigger />
-      </div>
+    // La Regla de la Tinta hasta el Borde: el fondo de la cabecera sube por
+    // detrás de la barra de estado (pt = muesca) y la fila de controles empieza
+    // debajo. 56 px en móvil, 64 en tablet, 80 en escritorio (como antes).
+    <header className="marco-cabecera relative z-20 shrink-0 border-b bg-card pt-[var(--safe-top)]">
+      <div className="marco-px flex h-14 items-center justify-between gap-2 [--marco-pad:0.5rem] sm:gap-3 sm:[--marco-pad:1rem] md:h-16 md:[--marco-pad:1.5rem] lg:h-20 lg:[--marco-pad:2rem]">
+        <div className="flex min-w-0 flex-1 items-center gap-1 md:gap-3">
+          {/* La Regla del Parabrisas: la hamburguesa vive en la cabecera, no
+              flotando encima del contenido. Abre el cajón de sidebar.tsx. */}
+          <button
+            type="button"
+            onClick={alternarMenuLateral}
+            aria-label="Menú de navegación"
+            aria-expanded={menuAbierto}
+            aria-controls={ID_MENU_LATERAL}
+            aria-haspopup="dialog"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors duration-100 hover:bg-muted active:bg-muted lg:hidden"
+          >
+            <Menu className="h-6 w-6" aria-hidden="true" />
+          </button>
+          {/* En móvil no hay carril con el logo: la marca va aquí. */}
+          <Link
+            href="/"
+            prefetch={false}
+            aria-label="Hidromanager, ir al inicio"
+            className="flex shrink-0 items-center md:hidden"
+          >
+            <img src="/brand/logo.svg" alt="" className="h-7 w-auto" />
+          </Link>
+          <div className="ml-auto flex items-center md:ml-0">
+            <GlobalSearchTrigger />
+          </div>
+        </div>
 
-      <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-3">
         {showTimeClock && <TimeClockWidget />}
         <Link
           href={"/leads/nuevo" as never}
@@ -82,11 +119,14 @@ export function Header({
           Lead
         </Link>
         <NotificationsBell initialCount={unreadCount} />
-        <form action="/logout" method="post" className="hidden sm:block">
+        {/* El botón suelto de salir solo cabe en escritorio; en móvil y tablet
+            está en el menú de usuario y en el pie del cajón. */}
+        <form action="/logout" method="post" className="hidden lg:block">
           <button
             type="submit"
             className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-card px-3 text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive"
             title="Cerrar sesión"
+            aria-label="Cerrar sesión"
           >
             <LogOut className="h-4 w-4" />
           </button>
@@ -95,24 +135,26 @@ export function Header({
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="flex items-center gap-2 rounded-2xl px-2 py-1.5 hover:bg-muted"
-            aria-label="Menú usuario"
+            className="flex h-11 min-w-11 items-center justify-center gap-2 rounded-2xl transition-colors duration-100 hover:bg-muted active:bg-muted sm:h-auto sm:px-2 sm:py-1.5"
+            aria-label="Menú de usuario"
+            aria-expanded={open}
+            aria-haspopup="menu"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground sm:h-10 sm:w-10">
               {initials(fullName, email)}
             </div>
-            <div className="hidden text-left sm:block">
-              <div className="text-sm font-bold leading-tight">
+            <div className="hidden max-w-40 text-left xl:block">
+              <div className="truncate text-sm font-bold leading-tight">
                 {fullName ?? email ?? "Usuario"}
               </div>
               {roleLabel && (
-                <div className="text-xs text-muted-foreground leading-tight">{roleLabel}</div>
+                <div className="truncate text-xs text-muted-foreground leading-tight">{roleLabel}</div>
               )}
             </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" aria-hidden="true" />
           </button>
           {open && (
-            <div className="absolute right-0 top-14 z-50 w-64 rounded-2xl border border-border bg-card shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card shadow-lg">
               <div className="border-b p-4">
                 <div className="font-semibold">{fullName ?? "Usuario"}</div>
                 <div className="text-xs text-muted-foreground">{email ?? ""}</div>
@@ -120,7 +162,7 @@ export function Header({
               <div className="p-2">
                 <a
                   href="/configuracion"
-                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted"
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted active:bg-muted"
                   onClick={() => setOpen(false)}
                 >
                   <User className="h-4 w-4" /> Configuración
@@ -128,14 +170,14 @@ export function Header({
                 <button
                   type="button"
                   onClick={replayTour}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted"
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted active:bg-muted"
                 >
                   <PlayCircle className="h-4 w-4" /> Volver a ver el tour
                 </button>
                 <form action="/logout" method="post">
                   <button
                     type="submit"
-                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-destructive hover:bg-destructive/10 active:bg-destructive/10"
                   >
                     <LogOut className="h-4 w-4" /> Salir
                   </button>
@@ -143,6 +185,7 @@ export function Header({
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
     </header>

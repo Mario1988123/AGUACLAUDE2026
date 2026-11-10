@@ -49,7 +49,7 @@ export function ContractBulkToolbar({ selectedIds, onClear }: Props) {
   }
 
   return (
-    <div className="sticky top-2 z-40 flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-primary bg-primary/5 p-3 shadow-md">
+    <div className="sticky top-2 z-40 flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-primary bg-[color-mix(in_oklab,var(--primary)_6%,var(--card))] p-3 shadow-md">
       <div className="flex items-center gap-2">
         <span className="rounded bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground">
           {selectedIds.length} seleccionados

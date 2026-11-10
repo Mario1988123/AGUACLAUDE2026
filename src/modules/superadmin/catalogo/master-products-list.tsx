@@ -40,13 +40,13 @@ export function MasterProductsList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nombre o referencia…"
-            className="h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm"
+            className="h-11 w-full rounded-md border border-input bg-background pl-9 pr-3 text-base md:text-sm"
           />
         </div>
         <select
           value={man}
           onChange={(e) => setMan(e.target.value)}
-          className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+          className="h-11 rounded-md border border-input bg-background px-3 text-base md:text-sm"
         >
           <option value="">Todos los fabricantes</option>
           {manufacturers.map((m) => (
@@ -68,7 +68,7 @@ export function MasterProductsList({
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[560px] text-sm">
             <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 text-left">Producto</th>

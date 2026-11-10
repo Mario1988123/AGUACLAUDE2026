@@ -114,7 +114,7 @@ export function CompanySmtpForm({ scope, initial }: Props) {
             Elegir mi proveedor
           </Button>
         </DialogTrigger>
-        <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
+        <DialogContent className="max-h-[85dvh] max-w-4xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Elige tu proveedor de email</DialogTitle>
           </DialogHeader>
@@ -122,7 +122,7 @@ export function CompanySmtpForm({ scope, initial }: Props) {
         </DialogContent>
       </Dialog>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Servidor SMTP</Label>
           <Input
@@ -137,7 +137,7 @@ export function CompanySmtpForm({ scope, initial }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Usuario SMTP</Label>
           <Input
@@ -161,7 +161,7 @@ export function CompanySmtpForm({ scope, initial }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Email remitente</Label>
           <Input

@@ -114,7 +114,7 @@ export function LostSaleRowActions({
         value={assignTo}
         onChange={(e) => setAssignTo(e.target.value)}
         disabled={pending}
-        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+        className="h-8 rounded-md border border-input bg-background px-2 text-base md:text-xs"
       >
         <option value="">— Sin asignar —</option>
         {team.map((u) => (
@@ -151,11 +151,11 @@ export function LostSaleRowActions({
 
       {purgeOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setPurgeOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold">Borrar definitivamente</h2>

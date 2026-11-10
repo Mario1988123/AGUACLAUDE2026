@@ -112,7 +112,7 @@ export function TagsCatalogManager({ initial, canEdit }: Props) {
           <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Crear tag nuevo
           </h4>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1 sm:col-span-2">
               <Label>Nombre</Label>
               <Input
@@ -143,7 +143,7 @@ export function TagsCatalogManager({ initial, canEdit }: Props) {
               <Input
                 value={newColor}
                 onChange={(e) => setNewColor(e.target.value)}
-                className="h-8 text-xs"
+                className="h-8 text-base md:text-xs"
               />
             </div>
           </div>
@@ -184,7 +184,7 @@ export function TagsCatalogManager({ initial, canEdit }: Props) {
                   <>
                     <Input
                       defaultValue={t.color_hex}
-                      className="h-8 w-28 font-mono text-xs"
+                      className="h-8 w-28 font-mono text-base md:text-xs"
                       onBlur={(e) => {
                         const v = e.target.value.trim();
                         if (v !== t.color_hex && isValidHex(v))

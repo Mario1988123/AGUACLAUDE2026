@@ -211,7 +211,7 @@ function SignatureBlock({
       {editing && (
         <div className="space-y-3">
           {showTaxId ? (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label>Nombre</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -273,7 +273,7 @@ export function SignaturesCard({
   const custSig = signatures.find((s) => s.signer_role === "customer");
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <SignatureBlock
         role="representative"
         title="La Empresa"

@@ -63,7 +63,7 @@ export function InstallationPrioritySelector({
         value={current}
         onChange={(e) => change(e.target.value as Priority)}
         disabled={pending}
-        className={`h-8 cursor-pointer appearance-none rounded-xl border-2 pl-3 pr-7 text-xs font-bold ${CLASSES[current]} disabled:opacity-50`}
+        className={`h-8 cursor-pointer appearance-none rounded-xl border-2 pl-3 pr-7 text-base md:text-xs font-bold ${CLASSES[current]} disabled:opacity-50`}
       >
         {(Object.keys(LABEL) as Priority[]).map((p) => (
           <option key={p} value={p}>

@@ -67,7 +67,7 @@ export function CreateIncidentButton({ customerId, installationId, maintenanceJo
               placeholder="Avería filtro, equipo no enciende..."
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Origen</Label>
               <select
@@ -108,7 +108,7 @@ export function CreateIncidentButton({ customerId, installationId, maintenanceJo
               rows={3}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+              className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
             />
           </div>
           <div className="flex justify-end gap-2">

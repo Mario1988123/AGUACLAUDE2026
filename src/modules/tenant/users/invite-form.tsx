@@ -104,7 +104,7 @@ export function InviteUserForm({ roleOptions }: Props) {
         <Label htmlFor="full_name">Nombre completo *</Label>
         <Input id="full_name" name="full_name" required />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="phone">Teléfono</Label>
           <Input id="phone" name="phone" type="tel" placeholder="+34 600 000 000" />

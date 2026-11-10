@@ -68,11 +68,11 @@ export function OfferMaintenanceContractButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card shadow-2xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-md rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2 border-b p-4">
@@ -96,7 +96,7 @@ export function OfferMaintenanceContractButton({
 
             <div className="space-y-3 p-4">
               <Label>Plan</Label>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 {plans.map((p) => (
                   <label
                     key={p.id}

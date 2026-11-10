@@ -8,14 +8,51 @@ import {
   registerPushSubscriptionAction,
   unregisterPushSubscriptionAction,
 } from "./push-actions";
+import { BotonPushNativo, esAppNativa } from "./registro-push-nativo";
 
 /**
  * Botón para activar/desactivar notificaciones push en este dispositivo.
- * Requiere:
- *  · SW registrado (lo hace Serwist automáticamente).
- *  · NEXT_PUBLIC_VAPID_PUBLIC_KEY en env.
- *  · Backend con web-push enviando con la clave privada VAPID.
+ *
+ *  · Dentro de la app (iOS / Android) delega en <BotonPushNativo />: allí el
+ *    push es nativo (APNs / FCM), no web.
+ *  · En el navegador usa push web. Requiere:
+ *      - el Service Worker de solo-push, public/push-sw.js, que registra este
+ *        mismo botón al activar (el SW de Serwist sigue apagado);
+ *      - NEXT_PUBLIC_VAPID_PUBLIC_KEY en env;
+ *      - backend con web-push enviando con la clave privada VAPID.
+ *
+ * Por qué estaba muerto (hasta 2026-11-10): esperaba a
+ * `navigator.serviceWorker.ready`, que no se resuelve nunca si no hay ningún
+ * Service Worker registrado, y sw-register.tsx desinstalaba todos en cada carga.
  */
+const SW_DE_PUSH = "/push-sw.js";
+
+/** Registro del SW de push si ya existe; null si no (NUNCA se queda colgado). */
+async function registroExistente(): Promise<ServiceWorkerRegistration | null> {
+  const reg = await navigator.serviceWorker.getRegistration("/");
+  if (!reg) return null;
+  const sw = reg.active ?? reg.waiting ?? reg.installing;
+  if (!sw) return null;
+  try {
+    return new URL(sw.scriptURL).pathname === SW_DE_PUSH ? reg : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Registra el SW de push (si no lo está) y espera a que esté activo. */
+async function registrarSw(): Promise<ServiceWorkerRegistration> {
+  const reg = await navigator.serviceWorker.register(SW_DE_PUSH, {
+    scope: "/",
+    updateViaCache: "none",
+  });
+  if (reg.active) return reg;
+  const listo = navigator.serviceWorker.ready;
+  const tope = new Promise<never>((_, rechazar) =>
+    setTimeout(() => rechazar(new Error("El navegador no activó el servicio de avisos")), 10_000),
+  );
+  return Promise.race([listo, tope]);
+}
 function urlBase64ToUint8Array(base64: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const base = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -29,27 +66,38 @@ function urlBase64ToUint8Array(base64: string): ArrayBuffer {
 export function PushSubscribeButton() {
   const [supported, setSupported] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const [enApp, setEnApp] = useState(false);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    if (esAppNativa()) {
+      setEnApp(true);
+      return;
+    }
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window) ||
+      !("Notification" in window)
+    ) {
       setSupported(false);
       return;
     }
     setSupported(true);
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      setSubscribed(Boolean(sub));
-    });
+    registroExistente()
+      .then(async (reg) => {
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
+        setSubscribed(Boolean(sub));
+      })
+      .catch(() => setSubscribed(false));
   }, []);
 
   function subscribe() {
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     if (!vapidKey) {
       notify.warning(
-        "Push notifications no configuradas",
-        "Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY. Avisa al admin.",
+        "Avisos sin configurar",
+        "Falta NEXT_PUBLIC_VAPID_PUBLIC_KEY. Avisa al administrador.",
       );
       return;
     }
@@ -63,7 +111,7 @@ export function PushSubscribeButton() {
           );
           return;
         }
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await registrarSw();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToUint8Array(vapidKey),
@@ -93,8 +141,8 @@ export function PushSubscribeButton() {
   function unsubscribe() {
     startTransition(async () => {
       try {
-        const reg = await navigator.serviceWorker.ready;
-        const sub = await reg.pushManager.getSubscription();
+        const reg = await registroExistente();
+        const sub = reg ? await reg.pushManager.getSubscription() : null;
         if (sub) {
           const r = await unregisterPushSubscriptionAction(sub.endpoint);
           if (!r.ok) {
@@ -114,12 +162,20 @@ export function PushSubscribeButton() {
     });
   }
 
+  if (enApp) return <BotonPushNativo />;
+
   if (!supported) {
     return (
-      <Button variant="outline" size="sm" disabled className="gap-1.5">
-        <BellOff className="h-4 w-4" />
-        Push no soportado
-      </Button>
+      <div className="space-y-2">
+        <Button variant="outline" size="sm" disabled className="gap-1.5">
+          <BellOff className="h-4 w-4" />
+          Avisos no disponibles en este navegador
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          En iPhone y iPad solo funcionan si añades Hidromanager a la pantalla de inicio
+          (Compartir → Añadir a pantalla de inicio) o usas la app.
+        </p>
+      </div>
     );
   }
 

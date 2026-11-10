@@ -103,7 +103,7 @@ export default async function PublicCatalogPage({
 
   if (!resolved.ok) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center p-6 text-center">
+      <main className="marco-px marco-pt marco-pb [--marco-pad:1.5rem] mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center text-center">
         <h1 className="mb-2 text-2xl font-bold">Catálogo no disponible</h1>
         <p className="text-sm text-gray-600">{resolved.error}</p>
         <p className="mt-4 text-xs text-gray-400">
@@ -120,7 +120,7 @@ export default async function PublicCatalogPage({
     data.product_ids.length === 0
   ) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center p-6 text-center">
+      <main className="marco-px marco-pt marco-pb [--marco-pad:1.5rem] mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center text-center">
         <h1 className="mb-2 text-2xl font-bold">Catálogo vacío</h1>
         <p className="text-sm text-gray-600">
           Este enlace no apunta a un catálogo con productos.
@@ -263,7 +263,7 @@ export default async function PublicCatalogPage({
   const showContact = data.show_company_contact;
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-dvh bg-gray-50 pt-[var(--safe-top)] pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)]">
       {/* Cabecera */}
       <header className="px-6 py-8 text-white" style={{ backgroundColor: brandColor }}>
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
@@ -310,7 +310,7 @@ export default async function PublicCatalogPage({
         </div>
 
         {/* Grid de productos */}
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {cards.map((p) => (
             <article
               key={p.id}

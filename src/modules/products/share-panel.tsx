@@ -202,11 +202,11 @@ export function ShareDatasheetPanel({
       {/* Modal envío email */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => setModalOpen(false)}
         >
           <div
-            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-lg rounded-2xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="mb-4 text-lg font-bold">Enviar ficha técnica</h3>
@@ -236,7 +236,7 @@ export function ShareDatasheetPanel({
                   id="r_msg"
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  className="min-h-[80px] w-full rounded-xl border border-input bg-background p-3 text-sm"
+                  className="min-h-[80px] w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
                   placeholder="Si lo dejas en blanco se usa la plantilla por defecto."
                 />
               </div>

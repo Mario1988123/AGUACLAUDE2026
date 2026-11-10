@@ -156,7 +156,7 @@ export function SubmitAbsenceButton() {
                 ) : null}
               </div>
             )}
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Desde</Label>
                 <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -172,7 +172,7 @@ export function SubmitAbsenceButton() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+                className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
               />
             </div>
             <div className="flex justify-end gap-2 border-t pt-3">

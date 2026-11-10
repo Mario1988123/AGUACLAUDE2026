@@ -299,7 +299,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="kind">Tipo</Label>
           <select
@@ -326,7 +326,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[180px_1fr_120px]">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[180px_1fr_120px]">
         <div className="space-y-1.5">
           <Label>Vía</Label>
           <select
@@ -385,7 +385,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label>Portal</Label>
           <Input value={form.portal} onChange={(e) => update("portal", e.target.value)} />
@@ -400,7 +400,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1.5">
           <Label htmlFor="postal_code">CP *</Label>
           <Input
@@ -467,7 +467,7 @@ export function AddressForm({ customerId, leadId, initial, onDone }: Props) {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Persona de contacto</Label>
           <Input

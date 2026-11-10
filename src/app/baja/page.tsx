@@ -39,7 +39,7 @@ export default async function BajaPage({
   const { token, estado } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
+    <main className="marco-px marco-pt marco-pb [--marco-pad:1.5rem] flex min-h-dvh items-center justify-center bg-gray-50">
       <div className="w-full max-w-md rounded-2xl border bg-white p-8 text-center shadow-sm">
         {estado === "hecho" ? (
           <>

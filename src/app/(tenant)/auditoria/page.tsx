@@ -99,13 +99,13 @@ export default async function AuditoriaPage({
           <CardTitle>Filtros</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <form className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="space-y-1">
               <label className="text-xs uppercase text-muted-foreground">Tipo entidad</label>
               <select
                 name="subject_type"
                 defaultValue={sp.subject_type ?? ""}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">Todas</option>
                 {Object.entries(SUBJECT_TYPE_LABEL).map(([k, v]) => (
@@ -120,7 +120,7 @@ export default async function AuditoriaPage({
               <select
                 name="kind"
                 defaultValue={sp.kind ?? ""}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">Todos</option>
                 {Object.entries(EVENT_LABEL).map(([k, v]) => (
@@ -135,7 +135,7 @@ export default async function AuditoriaPage({
               <select
                 name="actor"
                 defaultValue={sp.actor ?? ""}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">Cualquiera</option>
                 {team.map((u) => (
@@ -151,7 +151,7 @@ export default async function AuditoriaPage({
                 type="date"
                 name="from"
                 defaultValue={sp.from ?? ""}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               />
             </div>
             <div className="space-y-1">
@@ -160,7 +160,7 @@ export default async function AuditoriaPage({
                 type="date"
                 name="to"
                 defaultValue={sp.to ?? ""}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-5">
@@ -192,7 +192,7 @@ export default async function AuditoriaPage({
             <p className="text-sm text-muted-foreground">Sin eventos con esos filtros.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
                     <th className="py-2">Fecha</th>

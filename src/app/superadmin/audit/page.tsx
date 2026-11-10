@@ -49,13 +49,13 @@ export default async function SuperadminAuditPage({
         <BackButton href="/superadmin" />
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Días</label>
           <select
             name="days"
             defaultValue={String(days)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="7">7 días</option>
             <option value="30">30 días</option>
@@ -68,7 +68,7 @@ export default async function SuperadminAuditPage({
           <select
             name="action"
             defaultValue={sp.action ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todas</option>
             {Object.entries(ACTION_LABEL).map(([k, v]) => (

@@ -74,7 +74,7 @@ export function ExtraTargetsPanel({
           {categories.length === 0 ? (
             <p className="text-xs text-muted-foreground">No hay categorías.</p>
           ) : (
-            <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {categories.map((c) => (
                 <label
                   key={c.id}
@@ -98,7 +98,7 @@ export function ExtraTargetsPanel({
           {equipmentProducts.length === 0 ? (
             <p className="text-xs text-muted-foreground">No hay equipos.</p>
           ) : (
-            <div className="grid max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
+            <div className="grid grid-cols-1 max-h-64 gap-1.5 overflow-y-auto sm:grid-cols-2">
               {equipmentProducts.map((p) => (
                 <label
                   key={p.id}

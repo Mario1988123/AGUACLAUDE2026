@@ -94,7 +94,7 @@ export function AddressList({
         addresses.map((a) => (
           <div
             key={a.id}
-            className="flex items-start gap-3 rounded-xl border border-border bg-card p-4"
+            className="flex flex-wrap items-start gap-3 rounded-xl border border-border bg-card p-3 sm:flex-nowrap sm:p-4"
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <MapPin className="h-5 w-5" />
@@ -121,7 +121,7 @@ export function AddressList({
                   );
                 })()}
               </div>
-              <div className="mt-1.5 text-sm">
+              <div className="mt-1.5 break-words text-sm">
                 {STREET_TYPE_LABEL[a.street_type]} {a.street}
                 {a.street_number && `, ${a.street_number}`}
                 {a.portal && ` portal ${a.portal}`}
@@ -139,7 +139,7 @@ export function AddressList({
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 gap-1.5">
+            <div className="flex w-full shrink-0 justify-end gap-1.5 sm:w-auto">
               {(() => {
                 // Botón "Cómo llegar": abre Google Maps con la ruta hasta la
                 // dirección. Faltaba en la ficha de cliente/lead — el equipo

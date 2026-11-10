@@ -186,11 +186,11 @@ export function DeleteCustomerButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="my-8 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl"
+            className="my-8 max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="space-y-4 p-5">
@@ -236,7 +236,7 @@ export function DeleteCustomerButton({
                                 S/N: {e.serial_number}
                               </div>
                             )}
-                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                               <label
                                 className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2 text-xs ${
                                   dec.action === "keep"
@@ -290,7 +290,7 @@ export function DeleteCustomerButton({
                                       ev.target.value as Disposition,
                                     )
                                   }
-                                  className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                                  className="mt-1 h-9 w-full rounded-lg border border-input bg-background px-2 text-base md:text-sm"
                                 >
                                   {(e.is_ours
                                     ? (Object.keys(DISPOSITION_LABEL) as Disposition[])
@@ -317,7 +317,7 @@ export function DeleteCustomerButton({
                   {anyRemove && (
                     <>
                       {needWarehouse && (
-                        <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                           <div className="space-y-1">
                             <Label>Almacén destino</Label>
                             {warehouses.length === 0 ? (
@@ -330,7 +330,7 @@ export function DeleteCustomerButton({
                                 onChange={(e) =>
                                   setDestinationId(e.target.value)
                                 }
-                                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                               >
                                 {warehouses.map((w) => (
                                   <option key={w.id} value={w.id}>
@@ -352,7 +352,7 @@ export function DeleteCustomerButton({
                                   e.target.value as "used" | "damaged",
                                 )
                               }
-                              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                             >
                               <option value="used">Usado</option>
                               <option value="damaged">Dañado</option>
@@ -364,7 +364,7 @@ export function DeleteCustomerButton({
                       {/* Momento de la retirada */}
                       <div className="space-y-2">
                         <Label>¿Cuándo se retira?</Label>
-                        <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                           <label
                             className={`flex cursor-pointer items-center gap-2 rounded-lg border p-2 text-sm ${
                               timing === "already"
@@ -406,7 +406,7 @@ export function DeleteCustomerButton({
                             />
                           </div>
                         ) : (
-                          <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             <div className="space-y-1">
                               <Label className="text-xs">Técnico</Label>
                               <select
@@ -414,7 +414,7 @@ export function DeleteCustomerButton({
                                 onChange={(e) =>
                                   setTechnicianId(e.target.value)
                                 }
-                                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                               >
                                 <option value="">— Sin asignar —</option>
                                 {technicians.map((t) => (
@@ -444,7 +444,7 @@ export function DeleteCustomerButton({
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
                       rows={2}
-                      className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                      className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                       placeholder="Fin de contrato, se muda, no quiere seguir…"
                     />
                   </div>
@@ -473,7 +473,7 @@ export function DeleteCustomerButton({
               </div>
             </div>
 
-            <div className="sticky bottom-0 flex justify-end gap-2 border-t bg-muted/20 p-3">
+            <div className="sticky bottom-0 flex flex-wrap justify-end gap-2 border-t bg-card p-3">
               <Button
                 variant="outline"
                 onClick={() => setOpen(false)}

@@ -226,7 +226,7 @@ function FinancierForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Nombre *</Label>
               <Input
@@ -288,7 +288,7 @@ function FinancierForm({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>% residual (renting estricto)</Label>
               <Input
@@ -385,7 +385,7 @@ function FinancierForm({
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={2}
-              className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+              className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
               placeholder="Condiciones, contacto comercial, etc."
             />
           </div>
@@ -477,7 +477,7 @@ function CoefficientsTable({
         </p>
       )}
       {initial.length > 0 && (
-        <div className="overflow-hidden rounded-lg border bg-card">
+        <div className="overflow-x-auto rounded-lg border bg-card">
           <table className="w-full text-sm">
             <thead className="bg-muted/40 text-xs uppercase text-muted-foreground">
               <tr>
@@ -537,7 +537,7 @@ function CoefForm({
   const [coef, setCoef] = useState("");
   return (
     <div className="rounded-lg border-2 border-primary/40 bg-card p-3 space-y-2">
-      <div className="grid gap-2 sm:grid-cols-[120px_1fr_auto] items-end">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[120px_1fr_auto] items-end">
         <div className="space-y-1">
           <Label className="text-xs">Plazo</Label>
           <Input

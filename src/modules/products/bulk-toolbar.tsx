@@ -122,7 +122,7 @@ export function ProductBulkToolbar({ selectedIds, onClear, categories }: Props) 
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+            className="h-9 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
           >
             <option value="">— Sin categoría —</option>
             {categories.map((c) => (
@@ -147,7 +147,7 @@ export function ProductBulkToolbar({ selectedIds, onClear, categories }: Props) 
       )}
       {open === "price" && (
         <div className="rounded-xl border bg-card p-3 space-y-2">
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <Label className="text-xs">Porcentaje (-90 a +1000)</Label>
               <Input

@@ -20,11 +20,11 @@ const texto = (y, tam, esp) =>
 
 // Cuadrado completo sin transparencia (iOS redondea por su cuenta y no
 // admite alfa). Mismo dibujo que icon.svg pero sin esquinas redondeadas.
-const svgCuadrado = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${degradado}<rect width="512" height="512" fill="url(#bg)"/>${texto(346, 260, -14)}</svg>`;
+const svgCuadradoHM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${degradado}<rect width="512" height="512" fill="url(#bg)"/>${texto(346, 260, -14)}</svg>`;
 // Icono adaptativo de Android: primer plano transparente con las letras
 // dentro del circulo de recorte (capacitor-assets ya aplica un inset del 16,7 %)
 // y fondo con el degradado.
-const svgPrimerPlano = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${texto(330, 210, -10)}</svg>`;
+const svgPrimerPlanoHM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${texto(330, 210, -10)}</svg>`;
 const svgFondo = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">${degradado}<rect width="512" height="512" fill="url(#bg)"/></svg>`;
 
 // sinAlfa: aplana sobre azul y quita el canal alfa (App Store lo rechaza).
@@ -52,6 +52,11 @@ async function splash(destino) {
 }
 
 await mkdir(dirAssets, { recursive: true });
+// Icono «gota y ondas» (2026-11-10). Los dibujos HM de arriba quedan solo de
+// referencia (svgCuadradoHM, svgPrimerPlanoHM); los SVG viejos estan en
+// public/icons/*-hm-old.svg.
+const svgCuadrado = await readFile(join(dirIconos, "icon-app.svg"), "utf8");
+const svgPrimerPlano = await readFile(join(dirIconos, "icon-app-primer-plano.svg"), "utf8");
 const svgIcono = await readFile(join(dirIconos, "icon.svg"), "utf8");
 const svgMaskable = await readFile(join(dirIconos, "maskable.svg"), "utf8");
 

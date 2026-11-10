@@ -165,7 +165,7 @@ export function CreateAgendaButton({
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="kind">Tipo</Label>
               <select
@@ -315,7 +315,7 @@ export function CreateAgendaButton({
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="starts_at">Inicio *</Label>
               <Input
@@ -344,14 +344,14 @@ export function CreateAgendaButton({
               rows={2}
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+              className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
             />
           </div>
 
           {/* La repetición no aplica a "Mantenimiento": ese alta crea una sola
               visita real (maintenance_job), no una serie de eventos de agenda. */}
           {!isMaint && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="recurrence_freq">Repetir</Label>
                 <select

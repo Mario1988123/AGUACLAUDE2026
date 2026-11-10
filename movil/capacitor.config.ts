@@ -1,17 +1,32 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 // Envoltorio de Hidromanager: la app carga la web en produccion
 // (server.url). No hay bundle local salvo la pantalla de respaldo de www/.
 // Ver docs/PLAN_APP_MOVIL.md (Fase 2) y movil/LEEME.md.
 
-const VERSION_APP = "1.0.0";
+const VERSION_APP = "1.1.0";
+
+// Marca "HMPush/1" en el User-Agent: le dice a la web que ESTA compilacion
+// lleva push nativo y que puede llamar a PushNotifications.register().
+//  - iOS: siempre (APNs va con el entitlement de App.entitlements).
+//  - Android: solo si existe android/app/google-services.json al hacer
+//    `npx cap sync`. Sin Firebase, register() CIERRA la app de golpe; sin la
+//    marca, la web ni lo intenta. Tras anadir el fichero: `npx cap sync android`.
+const AGENTE = `HidromanagerApp/${VERSION_APP}`;
+const MARCA_PUSH = "HMPush/1";
+const HAY_FIREBASE_ANDROID = existsSync(
+  join(process.cwd(), "android", "app", "google-services.json"),
+);
 
 const config: CapacitorConfig = {
   appId: "es.hidromanager.crm",
   appName: "Hidromanager",
   webDir: "www",
   // La web detectara la app por este sufijo del User-Agent (Fase 3).
-  appendUserAgent: `HidromanagerApp/${VERSION_APP}`,
+  // (android e ios lo pisan mas abajo para anadir la marca de push.)
+  appendUserAgent: AGENTE,
   backgroundColor: "#0B4F8A",
   server: {
     url: "https://crm.hidromanager.es",
@@ -24,12 +39,14 @@ const config: CapacitorConfig = {
     cleartext: false,
   },
   android: {
+    appendUserAgent: HAY_FIREBASE_ANDROID ? `${AGENTE} ${MARCA_PUSH}` : AGENTE,
     allowMixedContent: false,
     captureInput: false,
     // Depuracion (chrome://inspect, Safari): por defecto activa en debug y
     // apagada en release; no la forzamos.
   },
   ios: {
+    appendUserAgent: `${AGENTE} ${MARCA_PUSH}`,
     contentInset: "never",
     limitsNavigationsToAppBoundDomains: false,
     scrollEnabled: true,
@@ -55,8 +72,11 @@ const config: CapacitorConfig = {
     StatusBar: {
       style: "LIGHT",
     },
+    // Con la app ABIERTA no se ensena la notificacion del sistema: la web la
+    // pinta como aviso dentro de la app (registro-push-nativo.tsx). Suena y
+    // actualiza el globo. Con la app cerrada o en segundo plano sale la normal.
     PushNotifications: {
-      presentationOptions: ["badge", "sound", "alert"],
+      presentationOptions: ["badge", "sound"],
     },
   },
 };

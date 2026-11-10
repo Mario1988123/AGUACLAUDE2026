@@ -100,7 +100,7 @@ export function SignaturePad({ onConfirm, height = 240, pending = false }: Props
           </div>
         )}
       </div>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" onClick={clear} disabled={pending || empty}>
           <Eraser className="h-4 w-4" /> Borrar
         </Button>

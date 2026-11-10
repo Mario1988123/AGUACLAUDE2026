@@ -59,11 +59,11 @@ export function LegalNoticeButtons({ noticeId }: { noticeId: string }) {
       </Button>
       {dismissOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setDismissOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -73,7 +73,7 @@ export function LegalNoticeButtons({ noticeId }: { noticeId: string }) {
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Motivo (opcional)"
-                className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
               />
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">

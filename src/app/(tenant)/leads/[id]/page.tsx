@@ -279,7 +279,7 @@ export default async function LeadDetailPage({
       {/* Propuestas */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <CardTitle>Propuestas ({proposals.length})</CardTitle>
             {!isConverted && (
               <Button asChild size="sm">

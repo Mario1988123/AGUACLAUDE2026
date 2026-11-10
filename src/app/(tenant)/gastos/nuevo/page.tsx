@@ -42,7 +42,7 @@ export default async function NewExpensePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Nuevo gasto</h1>
           <p className="mt-1 text-sm text-muted-foreground">

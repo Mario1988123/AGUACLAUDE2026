@@ -169,7 +169,7 @@ function DeptCard({
               </Badge>
             )}
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <label className="text-xs font-bold uppercase text-muted-foreground">
                 Importe €
@@ -207,7 +207,7 @@ function DeptCard({
               </div>
             )}
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 text-xs">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 text-xs">
             <div className="rounded-lg bg-card p-2">
               <div className="text-muted-foreground">Realizado del mes</div>
               <div className="font-bold tabular-nums">
@@ -271,8 +271,8 @@ function DeptCard({
               Sin usuarios en este departamento.
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left">Miembro</th>

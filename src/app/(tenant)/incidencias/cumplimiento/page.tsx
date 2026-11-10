@@ -50,13 +50,13 @@ export default async function SlaDashboardPage({
         </p>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap sm:p-4">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Mes</label>
           <select
             name="month"
             defaultValue={String(m)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {MONTH_NAMES.map((name, idx) => (
               <option key={idx} value={String(idx + 1)}>
@@ -70,7 +70,7 @@ export default async function SlaDashboardPage({
           <select
             name="year"
             defaultValue={String(y)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {years.map((yr) => (
               <option key={yr} value={String(yr)}>
@@ -81,7 +81,7 @@ export default async function SlaDashboardPage({
         </div>
         <button
           type="submit"
-          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Ver
         </button>
@@ -95,7 +95,7 @@ export default async function SlaDashboardPage({
         </Card>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <KpiCard label="Total" value={String(stats.total)} />
             <KpiCard
               label="A tiempo"
@@ -115,7 +115,7 @@ export default async function SlaDashboardPage({
               <CardTitle>Por prioridad</CardTitle>
             </CardHeader>
             <CardContent>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="py-2 text-left">Prioridad</th>
@@ -148,7 +148,7 @@ export default async function SlaDashboardPage({
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </CardContent>
           </Card>
 
@@ -160,7 +160,7 @@ export default async function SlaDashboardPage({
               {stats.by_technician.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sin incidencias asignadas en el periodo.</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
                   <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="py-2 text-left">Técnico</th>
@@ -181,7 +181,7 @@ export default async function SlaDashboardPage({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </CardContent>
           </Card>

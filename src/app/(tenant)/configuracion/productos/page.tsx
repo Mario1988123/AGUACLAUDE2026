@@ -30,7 +30,7 @@ export default async function ConfiguracionProductosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Configuración · Productos</h1>
           <p className="text-sm text-muted-foreground">
@@ -41,7 +41,7 @@ export default async function ConfiguracionProductosPage() {
         <BackButton href="/configuracion" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Mis categorías ({local.length})</CardTitle>

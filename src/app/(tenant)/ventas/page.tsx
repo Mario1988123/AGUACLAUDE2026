@@ -52,13 +52,13 @@ export default async function VentasPage({
         </p>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Mes</label>
           <select
             name="month"
             defaultValue={String(m)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {MONTH_NAMES.map((name, idx) => (
               <option key={idx} value={String(idx + 1)}>
@@ -72,7 +72,7 @@ export default async function VentasPage({
           <select
             name="year"
             defaultValue={String(y)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {years.map((yr) => (
               <option key={yr} value={String(yr)}>
@@ -89,7 +89,7 @@ export default async function VentasPage({
         </button>
       </form>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard label="Total vendido (mes)" value={formatCents(totalMonth)} />
         <KpiCard label="Cuotas mensuales" value={formatCents(monthlyMonth)} />
         <KpiCard label="Financieras pagan" value={formatCents(financierMonth)} />
@@ -112,7 +112,7 @@ export default async function VentasPage({
           {sales.length === 0 ? (
             <p className="text-sm text-muted-foreground">Sin ventas registradas este mes.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Fecha</th>
@@ -133,7 +133,7 @@ export default async function VentasPage({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>

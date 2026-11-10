@@ -164,7 +164,7 @@ export function TransferEquipmentButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center sm:p-4 pt-[env(safe-area-inset-top)]"
           onClick={() => !pending && reiniciar()}
           role="presentation"
         >

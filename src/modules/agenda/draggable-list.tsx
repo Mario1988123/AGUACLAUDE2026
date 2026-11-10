@@ -189,12 +189,12 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                             ? "Tarea vencida — pasada de fecha sin completar"
                             : undefined
                       }
-                      className={`flex items-start gap-3 py-3 pl-3 -ml-1 cursor-pointer hover:bg-muted/40 rounded-lg pr-2 -mr-2 transition-all ${stateBorder} ${
+                      className={`flex items-start gap-2 sm:gap-3 py-3 pl-2 sm:pl-3 -ml-1 cursor-pointer hover:bg-muted/40 rounded-lg pr-2 -mr-2 transition-all ${stateBorder} ${
                         draggingId === ev.id ? "opacity-40" : ""
                       }`}
                     >
-                      <GripVertical className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
-                      <div className="w-20 shrink-0 text-sm font-bold tabular-nums text-primary">
+                      <GripVertical className="mt-1 hidden h-4 w-4 shrink-0 text-muted-foreground sm:block" />
+                      <div className="w-12 shrink-0 text-sm font-bold tabular-nums text-primary sm:w-20">
                         {new Date(ev.starts_at).toLocaleTimeString("es-ES", {
                           hour: "2-digit",
                           minute: "2-digit",
@@ -202,7 +202,7 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold">{ev.title}</span>
+                          <span className="min-w-0 break-words text-sm font-semibold">{ev.title}</span>
                           <Badge variant="outline">{KIND_LABEL[ev.kind] ?? ev.kind}</Badge>
                           <Badge variant={STATUS_VARIANT[ev.status]}>
                             {STATUS_LABEL[ev.status] ?? ev.status}
@@ -212,7 +212,7 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                           )}
                         </div>
                         {ev.description && (
-                          <p className="mt-1 text-xs text-muted-foreground">
+                          <p className="mt-1 break-words text-xs text-muted-foreground">
                             {ev.description}
                           </p>
                         )}
@@ -225,7 +225,7 @@ export function DraggableAgendaList({ events: initial, team = [], canReassign = 
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="gap-1 text-xs text-emerald-700 hover:bg-emerald-50"
+                            className="shrink-0 gap-1 px-2 text-xs text-emerald-700 hover:bg-emerald-50"
                             onClick={(e) => {
                               e.stopPropagation();
                               startTransition(async () => {

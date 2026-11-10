@@ -432,7 +432,9 @@ export function ChatShell({
 
   return (
     <>
-      <div className="grid h-[calc(100vh-12rem)] grid-cols-1 gap-3 overflow-hidden lg:grid-cols-[300px_1fr]">
+      {/* Alto = pantalla visible menos el marco (cabecera, titulo, barra inferior y
+          margenes seguros). Con dvh el compositor sigue a la vista con el teclado. */}
+      <div className="grid h-[calc(100dvh_-_12.25rem_-_var(--safe-top,0px)_-_var(--safe-bottom,0px))] min-h-[20rem] grid-cols-1 gap-3 overflow-hidden md:h-[calc(100dvh_-_11rem_-_var(--safe-top,0px)_-_var(--safe-bottom,0px))] lg:h-[calc(100dvh_-_14rem)] lg:grid-cols-[300px_1fr]">
         {/* Lista de hilos */}
         <aside
           className={cn(
@@ -448,7 +450,7 @@ export function ChatShell({
               <Plus className="h-4 w-4" /> Nuevo
             </Button>
           </div>
-          <ul className="flex-1 overflow-y-auto">
+          <ul className="flex-1 overflow-y-auto overscroll-contain">
             {threads.length === 0 && (
               <li className="px-4 py-6 text-center text-sm text-muted-foreground">
                 No tienes conversaciones todavía.
@@ -520,10 +522,10 @@ export function ChatShell({
             </div>
           ) : (
             <>
-              <header className="flex items-center gap-3 border-b px-4 py-3">
+              <header className="flex items-center gap-2 border-b px-2 py-2 sm:gap-3 sm:px-4 sm:py-3">
                 <button
                   onClick={() => setActiveId(null)}
-                  className="lg:hidden flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted"
+                  className="lg:hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-md hover:bg-muted active:bg-muted"
                   aria-label="Volver"
                 >
                   <ArrowLeft className="h-4 w-4" />
@@ -540,7 +542,7 @@ export function ChatShell({
                 </div>
               </header>
 
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+              <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 space-y-2 sm:px-4 sm:py-4">
                 {loadingMsgs && (
                   <div className="text-center text-xs text-muted-foreground">Cargando…</div>
                 )}
@@ -564,7 +566,7 @@ export function ChatShell({
                 <div ref={messagesEndRef} />
               </div>
 
-              <footer className="border-t px-3 py-3">
+              <footer className="border-t px-2 py-2 sm:px-3 sm:py-3">
                 {!canSend ? (
                   <div className="text-center text-xs text-muted-foreground">
                     Sólo el admin puede escribir en este aviso.
@@ -667,7 +669,7 @@ export function ChatShell({
                       }}
                       placeholder="Escribe un mensaje…"
                       rows={1}
-                      className="flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="min-w-0 flex-1 resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                     />
                     <Button
                       type="button"
@@ -790,7 +792,7 @@ function ChatMessageItem({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
-            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={pending}>
@@ -809,11 +811,12 @@ function ChatMessageItem({
           )}
         >
           {message.is_mine && (
-            <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="flex shrink-0 gap-0.5 opacity-70 transition-opacity [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100">
               {!message.audio_url && !message.attachment_url && !meta && (
                 <button
                   onClick={() => setEditing(true)}
-                  className="rounded p-1 text-muted-foreground hover:bg-muted"
+                  data-inline
+                  className="rounded p-2 text-muted-foreground hover:bg-muted"
                   title="Editar"
                   aria-label="Editar"
                 >
@@ -822,7 +825,8 @@ function ChatMessageItem({
               )}
               <button
                 onClick={remove}
-                className="rounded p-1 text-muted-foreground hover:bg-muted"
+                data-inline
+                  className="rounded p-2 text-muted-foreground hover:bg-muted"
                 title="Eliminar"
                 aria-label="Eliminar"
                 disabled={pending}
@@ -833,7 +837,7 @@ function ChatMessageItem({
           )}
           <div
             className={cn(
-              "w-fit max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words",
+              "w-fit min-w-0 max-w-[80%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
               message.is_mine ? "bg-primary text-primary-foreground" : "bg-muted",
             )}
           >
@@ -981,7 +985,7 @@ function NewThreadDialog({
           <DialogTitle>Nueva conversación</DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-2 border-b pb-3">
+        <div className="flex flex-wrap gap-2 border-b pb-3">
           <button
             onClick={() => setTab("direct")}
             className={cn(

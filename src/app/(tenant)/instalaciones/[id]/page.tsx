@@ -340,10 +340,10 @@ export default async function InstallationDetailPage({
           cliente). Si no hay nada que avisar, no renderiza nada. */}
       <InstallationAlertsModal installationId={id} alerts={installationAlerts} />
       <SubjectNotificationToast subjectType="installation" subjectId={id} />
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-extrabold tracking-tight">
+            <h1 className="min-w-0 text-2xl font-extrabold tracking-tight break-words sm:text-3xl">
               Instalación {i.reference_code ?? `#${i.id.slice(0, 8)}`}
             </h1>
             <Badge variant={STATUS_VARIANT[i.status] ?? "default"}>
@@ -504,7 +504,7 @@ export default async function InstallationDetailPage({
             Cliente
           </div>
           <div className="flex flex-wrap items-baseline gap-3">
-            <div className="text-2xl font-extrabold text-foreground">
+            <div className="min-w-0 text-xl font-extrabold text-foreground break-words sm:text-2xl">
               {customerName}
             </div>
             {customerTaxId && (
@@ -521,7 +521,7 @@ export default async function InstallationDetailPage({
               </Link>
             )}
           </div>
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
             {installationAddress && (
               <div>
                 <span className="font-semibold text-muted-foreground">
@@ -550,7 +550,7 @@ export default async function InstallationDetailPage({
                 </span>{" "}
                 <a
                   href={`mailto:${customerEmail}`}
-                  className="text-primary hover:underline"
+                  className="break-all text-primary hover:underline"
                 >
                   {customerEmail}
                 </a>
@@ -573,8 +573,8 @@ export default async function InstallationDetailPage({
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>
@@ -589,8 +589,8 @@ export default async function InstallationDetailPage({
               ) : (
                 <ul className="divide-y">
                   {items.map((it) => (
-                    <li key={it.id} className="flex items-center justify-between py-3">
-                      <div>
+                    <li key={it.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
                         <div className="font-medium">{it.product_name}</div>
                         {it.serial_number && (
                           <div className="text-xs text-muted-foreground">
@@ -629,7 +629,7 @@ export default async function InstallationDetailPage({
                   {signatures.map((s) => (
                     <li
                       key={s.id}
-                      className="flex items-center justify-between rounded-xl border bg-card p-2"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-2"
                     >
                       <div>
                         <div className="font-bold">
@@ -685,7 +685,7 @@ export default async function InstallationDetailPage({
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Datos del parte</CardTitle>

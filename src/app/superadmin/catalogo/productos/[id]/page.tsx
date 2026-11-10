@@ -48,7 +48,7 @@ export default async function EditarProductoMaestroPage({
         product={product}
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border bg-card p-6">
           <MasterPhotosManager productId={product.id} photos={product.photos} />
         </div>

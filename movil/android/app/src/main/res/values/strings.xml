@@ -4,4 +4,9 @@
     <string name="title_activity_main">Hidromanager</string>
     <string name="package_name">es.hidromanager.crm</string>
     <string name="custom_url_scheme">es.hidromanager.crm</string>
+    <!-- Canal de notificaciones. El id tiene que coincidir con CANAL_ANDROID de
+         src/modules/notifications/push-tipos.ts (lo envia el servidor). -->
+    <string name="canal_avisos_id" translatable="false">avisos</string>
+    <string name="canal_avisos_nombre">Avisos</string>
+    <string name="canal_avisos_descripcion">Asignaciones, incidencias y cambios de agenda</string>
 </resources>

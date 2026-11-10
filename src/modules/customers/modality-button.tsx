@@ -105,11 +105,11 @@ export function EquipmentModalityButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-sm rounded-2xl border border-border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-base font-bold">Modalidad del equipo</h2>
@@ -123,7 +123,7 @@ export function EquipmentModalityButton({
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value as "" | Plan)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="">— Sin definir —</option>
                   <option value="cash">Venta</option>

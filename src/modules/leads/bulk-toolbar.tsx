@@ -73,17 +73,17 @@ export function LeadBulkToolbar({ selectedIds, team, onClear }: Props) {
   }
 
   return (
-    <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-primary bg-primary/10 p-3 shadow-md">
+    <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-primary bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))] p-3 shadow-md">
       <Users className="h-4 w-4 text-primary" />
       <span className="text-sm font-bold text-primary">
         {selectedIds.length} seleccionados
       </span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
         <select
           value={target}
           onChange={(e) => setTarget(e.target.value)}
           disabled={pending}
-          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-base sm:flex-none md:text-sm"
         >
           <option value="">— Desasignar —</option>
           {team.map((t) => (
@@ -96,12 +96,12 @@ export function LeadBulkToolbar({ selectedIds, team, onClear }: Props) {
           <RefreshCw className="h-3 w-3" /> Reasignar
         </Button>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex w-full min-w-0 items-center gap-1.5 sm:w-auto">
         <select
           value={newStatus}
           onChange={(e) => setNewStatus(e.target.value)}
           disabled={pending}
-          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-base sm:flex-none md:text-sm"
         >
           <option value="">— Cambiar estado —</option>
           {LEAD_STATUS.map((s) => (

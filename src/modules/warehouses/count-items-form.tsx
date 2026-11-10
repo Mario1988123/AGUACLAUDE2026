@@ -108,7 +108,7 @@ export function CountItemsForm({
       </div>
 
       <div className="overflow-x-auto rounded-xl border">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="px-3 py-2 text-left">Producto</th>
@@ -142,7 +142,7 @@ export function CountItemsForm({
                       onChange={(e) =>
                         setLocal((s) => ({ ...s, [i.id]: e.target.value }))
                       }
-                      className="h-8 w-24 text-right text-sm"
+                      className="h-8 w-24 text-right text-base md:text-sm"
                     />
                   ) : (
                     <span className="tabular-nums">

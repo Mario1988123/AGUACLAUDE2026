@@ -65,7 +65,7 @@ export default async function SocialPostsKanbanPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Publicaciones RRSS
@@ -77,7 +77,7 @@ export default async function SocialPostsKanbanPage() {
         <BackButton href="/rrss" />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {COLUMNS.map((col) => {
           const items = byStatus[col.key] ?? [];
           return (

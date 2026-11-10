@@ -115,7 +115,7 @@ export default async function AntiFraudPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-6 w-6 text-rose-600" />

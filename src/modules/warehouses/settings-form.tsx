@@ -57,13 +57,13 @@ export function WarehouseSettingsForm({ initial }: Props) {
     <div className="space-y-6">
       <section className="space-y-3 rounded-2xl border bg-card p-4">
         <h3 className="font-bold">Valoración del inventario</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Método</Label>
             <select
               value={valuation}
               onChange={(e) => setValuation(e.target.value as "PMP" | "FIFO")}
-              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="PMP">PMP (Promedio Móvil Ponderado)</option>
               <option value="FIFO">FIFO (Primera Entrada, Primera Salida)</option>
@@ -87,7 +87,7 @@ export function WarehouseSettingsForm({ initial }: Props) {
 
       <section className="space-y-3 rounded-2xl border bg-card p-4">
         <h3 className="font-bold">Política de alertas</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Días sin rotación para alerta</Label>
             <Input
@@ -118,7 +118,7 @@ export function WarehouseSettingsForm({ initial }: Props) {
         </div>
         <div className="space-y-2">
           <Label className="text-xs">Tipos de alerta activos</Label>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {(
               [
                 ["below_min", "Stock por debajo del mínimo"],

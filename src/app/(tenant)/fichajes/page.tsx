@@ -304,7 +304,7 @@ export default async function FichajesPage({
                       </div>
                     )}
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     {exceededLimit ? (
                       <div className="inline-flex items-center gap-1 rounded-md bg-red-100 px-2 py-0.5 text-xs font-bold tabular-nums text-red-700">
                         <AlertTriangle className="h-3 w-3" />
@@ -355,7 +355,7 @@ export default async function FichajesPage({
       )}
 
       {/* KPIs del mes */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Trabajado (mes a hoy)</CardTitle>
@@ -436,7 +436,7 @@ export default async function FichajesPage({
             <CardTitle>Mi balance de días libres ({now.getFullYear()})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {myBudgets
                 .filter((b) => b.kind === "vacation" || Number(b.taken) > 0)
                 .map((b) => {
@@ -493,8 +493,8 @@ export default async function FichajesPage({
           ) : (
             <ul className="divide-y">
               {absencesAll.map((a) => (
-                <li key={a.id} className="flex items-center justify-between py-2 text-sm">
-                  <div>
+                <li key={a.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div className="min-w-0 break-words">
                     <div className="font-semibold">
                       {KIND_LABEL[a.kind]} · {new Date(a.starts_on).toLocaleDateString("es-ES")}
                       {" → "}
@@ -520,8 +520,8 @@ export default async function FichajesPage({
           <CardContent>
             <ul className="divide-y">
               {myRequests.map((r) => (
-                <li key={r.id} className="flex items-center justify-between py-2 text-sm">
-                  <div>
+                <li key={r.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <div className="min-w-0 break-words">
                     <div className="font-semibold">
                       {r.punch_kind === "clock_in"
                         ? "Entrada"

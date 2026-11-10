@@ -154,7 +154,7 @@ export function CampaignsPanel({ campaigns }: { campaigns: CampaignRow[] }) {
             entran leads que sean <strong>empresas</strong>: los particulares se
             descartan siempre y se te dice cuántos eran.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-1">
               <label
                 htmlFor="seed-province"

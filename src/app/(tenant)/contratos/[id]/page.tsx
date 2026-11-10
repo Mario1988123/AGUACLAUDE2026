@@ -423,7 +423,7 @@ export default async function ContractDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Equipos / Productos</CardTitle>
@@ -792,7 +792,7 @@ export default async function ContractDetailPage({
               instalación se cobran aparte, al contado, con uno de estos
               métodos:
             </p>
-            <div className="grid gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
               <div className="rounded-lg border bg-card p-3 text-center">
                 <div className="text-2xl">💶</div>
                 <div className="mt-1 text-xs font-bold">Contado</div>

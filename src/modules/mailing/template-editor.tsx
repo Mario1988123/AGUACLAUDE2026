@@ -142,7 +142,7 @@ export function TemplateEditor({ template }: { template: TemplateEditData }) {
         </Link>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Editor */}
         <div className="space-y-4">
           <div className="space-y-1.5">
@@ -161,7 +161,7 @@ export function TemplateEditor({ template }: { template: TemplateEditData }) {
               value={bodyHtml}
               onChange={(e) => setBodyHtml(e.target.value)}
               spellCheck={false}
-              className="min-h-[340px] font-mono text-xs leading-relaxed"
+              className="min-h-[340px] font-mono text-base md:text-xs leading-relaxed"
               placeholder="<p>Hola {{customer_first_name}}…</p>"
             />
             <p className="text-xs text-muted-foreground">

@@ -96,13 +96,13 @@ export function MasterDocsManager({
     <div className="space-y-3">
       <h3 className="text-sm font-bold">Documentación</h3>
 
-      <div className="grid gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <div className="grid grid-cols-1 gap-2 rounded-xl border bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <div className="space-y-1">
           <Label className="text-xs">Tipo</Label>
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as ProductDocKind)}
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {KINDS.map((k) => (
               <option key={k} value={k}>

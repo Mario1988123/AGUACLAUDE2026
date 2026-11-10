@@ -144,12 +144,12 @@ export function MaintenanceCompleteForm({
           <ul className="space-y-2">
             {items.map((it, idx) => (
               <li key={idx} className="flex items-end gap-2">
-                <div className="flex-1 space-y-1.5">
+                <div className="min-w-0 flex-1 space-y-1.5">
                   <Label className="text-xs">Producto</Label>
                   <select
                     value={it.product_id}
                     onChange={(e) => updateItem(idx, { product_id: e.target.value })}
-                    className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   >
                     {products.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -158,7 +158,7 @@ export function MaintenanceCompleteForm({
                     ))}
                   </select>
                 </div>
-                <div className="w-24 space-y-1.5">
+                <div className="w-20 shrink-0 space-y-1.5 sm:w-24">
                   <Label className="text-xs">Cant.</Label>
                   <Input
                     type="number"
@@ -188,7 +188,7 @@ export function MaintenanceCompleteForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
-          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
           placeholder="Observaciones, estado del equipo, etc."
         />
       </div>
@@ -204,11 +204,11 @@ export function MaintenanceCompleteForm({
           Si rechaza → llamada programada al TMK en 30 días. */}
       {renewalOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]"
           onClick={() => setRenewalOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-2 border-b p-4">
@@ -235,7 +235,7 @@ export function MaintenanceCompleteForm({
             <div className="flex-1 space-y-4 overflow-y-auto p-4">
               <div className="space-y-2">
                 <Label>Plan a ofrecer</Label>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   {plans.map((p) => (
                     <button
                       key={p.id}

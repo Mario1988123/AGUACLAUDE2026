@@ -150,13 +150,13 @@ export function ProductFiltersPanel({
 
       {canEdit && addOpen && (
         <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
-          <div className="grid gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="space-y-1 sm:col-span-2">
               <Label>Filtro del catálogo</Label>
               <select
                 value={newFilterId}
                 onChange={(e) => setNewFilterId(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
               >
                 <option value="">— Selecciona —</option>
                 {selectable.map((f) => (
@@ -219,7 +219,7 @@ export function ProductFiltersPanel({
       )}
 
       <div className="overflow-x-auto rounded-2xl border bg-card">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[560px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-4 py-3 text-left">Etapa</th>

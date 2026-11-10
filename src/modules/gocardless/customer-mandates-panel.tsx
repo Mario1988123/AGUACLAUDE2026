@@ -127,7 +127,7 @@ export function CustomerMandatesPanel({
         </p>
       )}
       {mandates.map((m) => (
-        <div key={m.id} className="flex items-center justify-between rounded-xl border bg-card p-3">
+        <div key={m.id} className="flex items-center justify-between gap-2 rounded-xl border bg-card p-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Banknote className="h-4 w-4 text-muted-foreground" />
@@ -155,7 +155,7 @@ export function CustomerMandatesPanel({
           )}
         </div>
       ))}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button onClick={startMandateFlow} disabled={pending} className="gap-2" variant="outline">
           <Plus className="h-4 w-4" /> Generar nuevo mandato
         </Button>
@@ -176,11 +176,11 @@ export function CustomerMandatesPanel({
 
       {importOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setImportOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-5">

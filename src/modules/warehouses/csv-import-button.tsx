@@ -54,11 +54,11 @@ export function CsvImportButton({ warehouseId }: { warehouseId: string }) {
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 border-b p-4">
@@ -85,7 +85,7 @@ export function CsvImportButton({ warehouseId }: { warehouseId: string }) {
                   rows={8}
                   value={csvText}
                   onChange={(e) => setCsvText(e.target.value)}
-                  className="w-full rounded-xl border border-input bg-background p-2 font-mono text-xs"
+                  className="w-full rounded-xl border border-input bg-background p-2 font-mono text-base md:text-xs"
                   placeholder={`product_reference,quantity,location_code,notes\nOSM-100,5,22C,Stock inicial\nFIL-200,12,11A,`}
                 />
               </div>

@@ -20,7 +20,7 @@ export default async function EntrarPortalPage({
   const aviso = motivo ? MOTIVOS[motivo] : null;
 
   return (
-    <div className="flex min-h-[100dvh] items-center justify-center bg-gradient-to-b from-sky-50 to-white px-4 py-8">
+    <div className="marco-px flex min-h-dvh items-center justify-center bg-gradient-to-b from-sky-50 to-white pt-[calc(2rem+var(--safe-top))] pb-[calc(2rem+var(--safe-bottom))] [--marco-pad:1rem]">
       <div className="w-full max-w-md space-y-6 rounded-2xl border bg-white p-6 shadow-lg sm:p-8">
         <div className="space-y-2 text-center">
           <img src="/brand/logo.svg" alt="Hidromanager" className="mx-auto h-12 w-auto" />

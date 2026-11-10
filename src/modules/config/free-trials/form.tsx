@@ -62,7 +62,7 @@ export function FreeTrialsConfigForm({ initial }: { initial: FreeTrialsConfig })
 
   return (
     <form onSubmit={save} className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="days">Duración por defecto (días)</Label>
           <Input
@@ -112,7 +112,7 @@ export function FreeTrialsConfigForm({ initial }: { initial: FreeTrialsConfig })
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={16}
-          className="w-full rounded-xl border border-border bg-card p-3 text-sm font-mono"
+          className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm font-mono"
           placeholder={DEFAULT_TEMPLATE_HINT}
         />
         <details className="rounded-xl border border-border bg-muted/30 p-3 text-xs">

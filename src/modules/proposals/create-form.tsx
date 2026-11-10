@@ -369,7 +369,7 @@ export function ProposalCreateForm({
   }
 
   return (
-    <div className="space-y-6 rounded-2xl border bg-card p-6">
+    <div className="space-y-6 rounded-2xl border bg-card p-4 sm:p-6">
       <div className="space-y-2">
         <Label>{defaultLeadId ? "Lead" : "Cliente *"}</Label>
         {defaultLeadId ? (
@@ -459,7 +459,7 @@ export function ProposalCreateForm({
       )}
 
       <fieldset className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <Label>Productos</Label>
           <Button type="button" variant="outline" size="sm" onClick={addItem}>
             <Plus className="h-4 w-4" /> Añadir producto
@@ -512,7 +512,7 @@ export function ProposalCreateForm({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {/* "Validez hasta" sólo tiene sentido en propuesta formal —
             indica hasta cuándo el cliente puede aceptarla. En modo
             contrato directo NO se muestra: la aceptación es inmediata. */}
@@ -536,12 +536,12 @@ export function ProposalCreateForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+            className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
           />
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 border-t pt-4">
+      <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
         <Button onClick={submit} disabled={pending} variant="success" size="lg">
           {pending
             ? isEdit
@@ -599,7 +599,7 @@ function ItemEditor({
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">Va dentro de:</span>
           <select
-            className="h-9 rounded-lg border border-input bg-background px-2"
+            className="h-9 min-w-0 max-w-full rounded-lg border border-input bg-background px-2 text-base md:text-sm"
             value={item.parent_index ?? ""}
             onChange={(e) =>
               onChange({
@@ -620,7 +620,7 @@ function ItemEditor({
         <select
           value={item.product_id}
           onChange={(e) => onChange({ product_id: e.target.value })}
-          className="h-11 flex-1 rounded-md border border-input bg-background px-3 text-base"
+          className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base"
         >
           {availableProducts.map((p) => (
             <option key={p.id} value={p.id}>
@@ -633,7 +633,7 @@ function ItemEditor({
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="space-y-1">
           <Label className="text-xs">Cantidad</Label>
           <Input
@@ -767,7 +767,7 @@ function ItemEditor({
                 onChange={(e) =>
                   onChange({ maintenance_periodicity_months: Number(e.target.value) })
                 }
-                className="h-10 w-full max-w-[180px] rounded-md border border-input bg-background px-2 text-sm"
+                className="h-10 w-full max-w-[180px] rounded-md border border-input bg-background px-2 text-base md:text-sm"
               >
                 {PERIODICITY_OPTIONS.map((m) => (
                   <option key={m} value={m}>
@@ -781,7 +781,7 @@ function ItemEditor({
             </div>
           </div>
         ) : (
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1">
               <Label className="text-xs">Precio mantenimiento (€)</Label>
               <MoneyInput
@@ -796,7 +796,7 @@ function ItemEditor({
                 onChange={(e) =>
                   onChange({ maintenance_periodicity_months: Number(e.target.value) })
                 }
-                className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                className="h-10 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
               >
                 {PERIODICITY_OPTIONS.map((m) => (
                   <option key={m} value={m}>

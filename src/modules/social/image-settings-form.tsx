@@ -425,7 +425,7 @@ export function SocialImageSettingsForm({
           <Switch checked={logoEnabled} onCheckedChange={setLogoEnabled} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Posición del logo</Label>
             <Select
@@ -478,7 +478,7 @@ export function SocialImageSettingsForm({
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs">Posición texto</Label>
             <Select
@@ -511,7 +511,7 @@ export function SocialImageSettingsForm({
                 value={wmColor}
                 onChange={(e) => setWmColor(e.target.value)}
                 placeholder="#FFFFFF"
-                className="font-mono text-xs"
+                className="font-mono text-base md:text-xs"
                 maxLength={7}
               />
             </div>

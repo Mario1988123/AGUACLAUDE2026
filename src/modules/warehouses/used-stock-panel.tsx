@@ -60,8 +60,8 @@ export function UsedStockPanel({ rows }: { rows: NonNewStockRow[] }) {
         Cambia el estado de equipos usados, dañados o reacondicionados. El
         cambio queda como movimiento de ajuste en el histórico.
       </p>
-      <div className="overflow-hidden rounded-xl border">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border">
+        <table className="w-full min-w-[480px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="px-3 py-2 text-left">Producto</th>

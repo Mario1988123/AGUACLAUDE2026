@@ -61,7 +61,7 @@ export default async function IncidentDetailPage({
   return (
     <div className="space-y-6">
       <SubjectNotificationToast subjectType="incident" subjectId={id} />
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold">
@@ -94,7 +94,7 @@ export default async function IncidentDetailPage({
         <BackButton href="/incidencias" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>

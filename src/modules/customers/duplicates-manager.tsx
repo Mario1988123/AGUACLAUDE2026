@@ -67,7 +67,7 @@ function DuplicateGroupCard({ group }: { group: DuplicateCustomerGroup }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+        <CardTitle className="flex items-center justify-between gap-2">
           <span>
             <Badge variant="outline" className="mr-2">
               {FIELD_LABEL[group.field]}
@@ -84,7 +84,7 @@ function DuplicateGroupCard({ group }: { group: DuplicateCustomerGroup }) {
           Marca el cliente <strong>principal</strong> (el que conservará todo). Después pulsa
           &laquo;Fusionar&raquo; en cada secundario para moverle todo y eliminarlo.
         </p>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
           <thead>
             <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
               <th className="py-2 w-10">Princ.</th>
@@ -137,7 +137,7 @@ function DuplicateGroupCard({ group }: { group: DuplicateCustomerGroup }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </CardContent>
     </Card>
   );

@@ -249,7 +249,7 @@ export function ImageGeneratorModal({
   if (generated) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
+        <DialogContent className="max-h-[92dvh] max-w-5xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" aria-hidden="true" />
@@ -275,7 +275,7 @@ export function ImageGeneratorModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[92dvh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" aria-hidden="true" />
@@ -338,7 +338,7 @@ export function ImageGeneratorModal({
               </Select>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <ColorField
                 label="Color primario"
                 isOverridden={overrides.brand_palette_primary !== undefined}
@@ -416,7 +416,7 @@ export function ImageGeneratorModal({
                 onChange={(e) => setPromptOverride(e.target.value)}
                 rows={4}
                 placeholder="Ej.: grifo cromado con cal en cocina luminosa, vista cenital…"
-                className="font-mono text-xs"
+                className="font-mono text-base md:text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
                 Es la <strong>idea de partida</strong>. Se mezcla con el estilo,
@@ -448,7 +448,7 @@ export function ImageGeneratorModal({
               disabled={!hasFiscalLogo}
             />
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <FieldLabel
                   label="Posición del logo"
@@ -531,7 +531,7 @@ export function ImageGeneratorModal({
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <FieldLabel
                   label="Posición texto"
@@ -714,7 +714,7 @@ function ColorField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="#4880FF"
-          className="font-mono text-xs"
+          className="font-mono text-base md:text-xs"
           maxLength={7}
         />
       </div>

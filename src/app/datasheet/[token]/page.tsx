@@ -61,7 +61,7 @@ export default async function PublicDatasheetPage({
 
   if (!resolved.ok) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center p-6 text-center">
+      <main className="marco-px marco-pt marco-pb [--marco-pad:1.5rem] mx-auto flex min-h-dvh max-w-2xl flex-col items-center justify-center text-center">
         <h1 className="mb-2 text-2xl font-bold">Enlace no disponible</h1>
         <p className="text-sm text-gray-600">{resolved.error}</p>
         <p className="mt-4 text-xs text-gray-400">
@@ -216,7 +216,7 @@ export default async function PublicDatasheetPage({
   if (prod.warranty_months_body) warranties.push(["Carcasa", prod.warranty_months_body]);
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-dvh bg-gray-50 pt-[var(--safe-top)] pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)]">
       {/* Cabecera */}
       <header
         className="px-6 py-8 text-white"
@@ -248,7 +248,7 @@ export default async function PublicDatasheetPage({
 
       <div className="mx-auto max-w-4xl px-6 py-8">
         {/* Producto */}
-        <div className="grid gap-6 md:grid-cols-[280px_1fr]">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-[280px_1fr]">
           <div className="overflow-hidden rounded-2xl border bg-white p-4 shadow-sm">
             {prod.main_image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -340,7 +340,7 @@ export default async function PublicDatasheetPage({
             <h2 className="mb-4 text-xs font-bold uppercase tracking-wider text-gray-500">
               Especificaciones técnicas
             </h2>
-            <dl className="grid gap-3 sm:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {attrs.map((a, i) => (
                 <div key={i} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
                   <dt className="text-xs uppercase tracking-wide text-gray-500">

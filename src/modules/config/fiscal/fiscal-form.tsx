@@ -42,7 +42,7 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
         <CardHeader>
           <CardTitle>Identificación</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Razón social *</Label>
             <Input
@@ -75,7 +75,7 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
         <CardHeader>
           <CardTitle>Domicilio fiscal</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Dirección</Label>
             <Input
@@ -119,7 +119,7 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
         <CardHeader>
           <CardTitle>Contacto y bancarios</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Email</Label>
             <Input
@@ -190,7 +190,7 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
               onCleared={() => set("fiscal_logo_url", null)}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-[200px_1fr] items-center">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[200px_1fr] items-center">
             <div className="space-y-1.5">
               <Label htmlFor="pdf_color">Color principal PDF</Label>
               <div className="flex items-center gap-2">
@@ -224,7 +224,7 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
         <CardHeader>
           <CardTitle>Facturación</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>IVA por defecto (%)</Label>
             <Input
@@ -251,7 +251,7 @@ export function FiscalSettingsForm({ initial }: { initial: FiscalSettings }) {
               value={v.invoice_footer_text ?? ""}
               onChange={(e) => set("invoice_footer_text", e.target.value || null)}
               rows={3}
-              className="w-full rounded-xl border border-border bg-card p-3 text-sm"
+              className="w-full rounded-xl border border-border bg-card p-3 text-base md:text-sm"
               placeholder="Forma de pago, condiciones, datos LSSI..."
             />
           </div>

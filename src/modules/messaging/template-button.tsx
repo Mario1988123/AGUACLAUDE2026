@@ -106,7 +106,7 @@ export function MessageTemplateButton({
         <DialogHeader>
           <DialogTitle>Plantillas de mensaje</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-[200px_1fr]">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[200px_1fr]">
           <ul className="space-y-1">
             {list.map((t) => (
               <li key={t.key}>
@@ -141,7 +141,7 @@ export function MessageTemplateButton({
                   readOnly
                   value={rendered.body}
                   rows={10}
-                  className="w-full rounded-xl border border-input bg-background p-3 text-sm font-mono"
+                  className="w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm font-mono"
                 />
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" size="sm" onClick={copyBody}>

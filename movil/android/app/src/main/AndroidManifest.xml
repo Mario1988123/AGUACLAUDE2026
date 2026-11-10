@@ -23,6 +23,22 @@
             </intent-filter>
         </activity>
 
+        <!-- Push (FCM): canal, icono monocromo y color por defecto de las
+             notificaciones que pinta el sistema con la app cerrada o en
+             segundo plano. El canal lo crea MainActivity al arrancar. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/canal_avisos_id"
+        />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_notificacion"
+        />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notificacion"
+        />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -42,6 +58,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Android 13+: permiso de notificaciones en tiempo de ejecucion. Lo pide
+         la web con su propio aviso previo (registro-push-nativo.tsx). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Que la ficha de Play no excluya dispositivos sin GPS o sin camara. -->

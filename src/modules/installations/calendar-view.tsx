@@ -103,7 +103,7 @@ export function InstallationsCalendar({
         >
           ← {MONTH_NAMES[prevMonth]}
         </Link>
-        <h2 className="text-xl font-extrabold capitalize">
+        <h2 className="min-w-0 truncate text-base font-extrabold capitalize sm:text-xl">
           {MONTH_NAMES[month]} {year}
         </h2>
         <Link
@@ -113,7 +113,9 @@ export function InstallationsCalendar({
           {MONTH_NAMES[nextMonth]} →
         </Link>
       </div>
-      <div className="grid grid-cols-7 gap-1 rounded-xl border bg-card p-2">
+      {/* En movil el mes hace scroll horizontal dentro de su caja, no la pagina */}
+      <div className="overflow-x-auto overscroll-x-contain rounded-xl border bg-card">
+      <div className="grid min-w-[640px] grid-cols-7 gap-1 p-2">
         {DAY_NAMES.map((d) => (
           <div
             key={d}
@@ -131,7 +133,7 @@ export function InstallationsCalendar({
           return (
             <div
               key={idx}
-              className={`min-h-[88px] rounded-lg border p-1.5 ${
+              className={`min-h-[88px] min-w-0 rounded-lg border p-1.5 ${
                 c.isCurrentMonth ? "bg-background" : "bg-muted/30 opacity-60"
               } ${isToday ? "border-primary border-2" : "border-border"}`}
             >
@@ -145,6 +147,7 @@ export function InstallationsCalendar({
                   <Link
                     key={it.id}
                     href={`/instalaciones/${it.id}` as never}
+                    data-inline
                     className={`block truncate rounded border px-1 py-0.5 text-[10px] font-semibold hover:opacity-80 ${
                       STATUS_COLOR[it.status] ?? "bg-card text-foreground"
                     }`}
@@ -166,6 +169,7 @@ export function InstallationsCalendar({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

@@ -94,7 +94,7 @@ export default async function AlmacenesPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               Solicitudes de carga
               {(() => {
@@ -123,7 +123,7 @@ export default async function AlmacenesPage() {
               noche según las instalaciones agendadas para mañana.
             </p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[480px] text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Origen → Destino</th>
@@ -153,7 +153,7 @@ export default async function AlmacenesPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>
@@ -173,7 +173,7 @@ export default async function AlmacenesPage() {
               Suma de unidades × coste medio ponderado (CMP) por almacén.
               Refleja el capital inmovilizado.
             </p>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {valuation.map((v) => (
                 <div
                   key={v.warehouse_id}
@@ -182,7 +182,7 @@ export default async function AlmacenesPage() {
                   <div className="text-xs font-bold uppercase text-muted-foreground">
                     {KIND_BADGE[v.warehouse_kind] ?? v.warehouse_kind}
                   </div>
-                  <div className="font-bold">{v.warehouse_name}</div>
+                  <div className="truncate font-bold">{v.warehouse_name}</div>
                   <div className="mt-1 flex items-baseline justify-between">
                     <span className="text-xs text-muted-foreground">
                       {v.total_units} ud

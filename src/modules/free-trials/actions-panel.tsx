@@ -195,7 +195,7 @@ export function FreeTrialActionsPanel({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={2}
-              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
               placeholder="¿Por qué no quiere?"
             />
             <Button

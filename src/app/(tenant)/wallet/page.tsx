@@ -156,14 +156,14 @@ export default async function WalletPage({
       {isUpper && walletAlerts && <WalletSmartAlerts alerts={walletAlerts} />}
 
       <div className="space-y-3">
-        <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3">
+        <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-3 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
           <div className="space-y-1">
             <label className="text-xs uppercase text-muted-foreground">Mes del resumen</label>
             <div className="flex gap-2">
               <select
                 name="period_month"
                 defaultValue={String(periodMonth)}
-                className="h-9 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-9 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 {MONTHS.map((m, i) => (
                   <option key={i} value={i + 1}>
@@ -174,7 +174,7 @@ export default async function WalletPage({
               <select
                 name="period_year"
                 defaultValue={String(periodYear)}
-                className="h-9 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-9 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 {yearsAvailable.map((y) => (
                   <option key={y} value={y}>
@@ -266,7 +266,7 @@ export default async function WalletPage({
               <select
                 name="history_year"
                 defaultValue={String(historyYear)}
-                className="h-8 rounded-xl border border-input bg-background px-3 text-xs"
+                className="h-8 rounded-xl border border-input bg-background px-3 text-base md:text-xs"
               >
                 {yearsAvailable.map((y) => (
                   <option key={y} value={y}>
@@ -289,7 +289,7 @@ export default async function WalletPage({
               </button>
             </form>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr className="border-b">
                     <th className="py-2 text-left">Mes</th>
@@ -350,13 +350,13 @@ export default async function WalletPage({
         </Card>
       )}
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Método</label>
           <select
             name="method"
             defaultValue={method ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {METHOD_OPTIONS.map((m) => (
@@ -371,7 +371,7 @@ export default async function WalletPage({
           <select
             name="status"
             defaultValue={status ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((s) => (
@@ -387,7 +387,7 @@ export default async function WalletPage({
             <select
               name="invoice"
               defaultValue={sp.invoice ?? ""}
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">Todas</option>
               <option value="pending">Sin facturar</option>
@@ -400,7 +400,7 @@ export default async function WalletPage({
             type="date"
             name="from"
             defaultValue={sp.from ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <div className="space-y-1">
@@ -409,7 +409,7 @@ export default async function WalletPage({
             type="date"
             name="to"
             defaultValue={sp.to ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <button
@@ -507,7 +507,7 @@ export default async function WalletPage({
 
               {/* DESKTOP: tabla compacta */}
               <div className="hidden lg:block overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[800px] text-sm">
                   <thead className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                     <tr className="border-b">
                       <th className="py-2 pr-3 text-left">Fecha</th>

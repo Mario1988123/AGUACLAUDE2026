@@ -18,8 +18,9 @@ export default async function ChatPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Chat</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Chat</h1>
+        {/* En movil se oculta: la altura es para la conversacion. */}
+        <p className="mt-1 hidden text-sm text-muted-foreground md:block">
           Avisos generales, hilos de equipo y conversaciones privadas.
         </p>
       </div>

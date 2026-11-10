@@ -94,7 +94,7 @@ export function LeadStatusActions({ leadId, currentStatus }: Props) {
               value={lostReason}
               onChange={(e) => setLostReason(e.target.value)}
               rows={3}
-              className="w-full rounded-md border border-input bg-background p-2 text-sm"
+              className="w-full rounded-md border border-input bg-background p-2 text-base md:text-sm"
               placeholder="Precio, competencia, no interesa..."
             />
           </div>

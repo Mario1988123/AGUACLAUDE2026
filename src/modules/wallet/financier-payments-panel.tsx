@@ -167,7 +167,7 @@ function PaymentRow({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid gap-2 sm:grid-cols-3 text-xs">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 text-xs">
           <div>
             <span className="text-muted-foreground">Firmado:</span>{" "}
             {row.contract_signed_at
@@ -194,7 +194,7 @@ function PaymentRow({
 
         {open && (
           <div className="rounded-xl border-2 border-primary/40 bg-primary/5 p-3 space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Fecha de cobro</Label>
                 <Input

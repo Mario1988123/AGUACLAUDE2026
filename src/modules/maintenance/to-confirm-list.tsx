@@ -108,7 +108,7 @@ export function ToConfirmList({
             key={r.id}
             className="flex flex-wrap items-center gap-3 px-4 py-3"
           >
-            <div className="min-w-0 flex-1">
+            <div className="min-w-[60%] flex-1 sm:min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <Link
                   href={`/clientes/${r.customer_id}` as never}
@@ -195,7 +195,7 @@ export function ToConfirmList({
       </ul>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">
             Página {safePage} de {totalPages}
           </span>
@@ -292,11 +292,11 @@ function ConfirmVisitModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
       onClick={() => !pending && onClose()}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+        className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
@@ -316,7 +316,7 @@ function ConfirmVisitModal({
               Llamar a {row.customer_phone}
             </a>
           )}
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Fecha</Label>
               <Input
@@ -367,7 +367,7 @@ function ConfirmVisitModal({
             <select
               value={technicianId}
               onChange={(e) => setTechnicianId(e.target.value)}
-              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">— Elige técnico —</option>
               {installers.map((t) => (

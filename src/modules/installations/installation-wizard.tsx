@@ -662,17 +662,17 @@ export function InstallationWizard(props: Props) {
       )}
 
       {open && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-background">
-          <div className="flex h-full w-full flex-col bg-card">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-2 border-b p-4">
-              <div className="min-w-0 flex-1">
+        <div className="fixed inset-0 z-50 flex flex-col bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <div className="flex h-full min-h-0 w-full flex-col bg-card">
+            {/* Header: en movil las acciones bajan a una segunda fila */}
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b p-3 sm:p-4">
+              <div className="min-w-[9rem] flex-1">
                 <h2 className="text-base font-bold">
                   {isUninstall ? "Parte de retirada" : "Parte de instalación"}
                 </h2>
                 <p className="truncate text-xs text-muted-foreground">{customerName}</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                 {status === "in_progress" && (
                   <span className="inline-flex items-center gap-1.5 rounded-xl border-2 border-emerald-500 bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">
                     <Play className="h-3.5 w-3.5 fill-current" />
@@ -715,7 +715,7 @@ export function InstallationWizard(props: Props) {
             </div>
 
             {/* Stepper */}
-            <div className="flex items-center justify-between gap-2 overflow-x-auto border-b bg-muted/30 px-3 py-3">
+            <div className="flex items-center justify-between gap-1 overflow-x-auto border-b bg-muted/30 px-2 py-2 sm:gap-2 sm:px-3 sm:py-3">
               {STEPS.map((s, i) => {
                 const Icon = s.icon;
                 const active = step === s.n;
@@ -727,12 +727,12 @@ export function InstallationWizard(props: Props) {
                   (s.n === 5 && step5Done);
                 const reachable = canGoTo(s.n);
                 return (
-                  <div key={s.n} className="flex flex-1 min-w-0 items-center gap-2">
+                  <div key={s.n} className="flex flex-1 min-w-0 items-center gap-1 sm:gap-2">
                     <button
                       type="button"
                       onClick={() => tryGoTo(s.n)}
                       disabled={!reachable}
-                      className={`flex flex-1 items-center justify-center gap-2 rounded-xl border-2 px-3 py-2 text-xs font-bold transition ${
+                      className={`flex flex-1 items-center justify-center gap-1 rounded-xl border-2 px-1 py-2 text-xs font-bold transition sm:gap-2 sm:px-3 ${
                         active
                           ? "border-primary bg-primary text-primary-foreground"
                           : isComplete
@@ -755,7 +755,7 @@ export function InstallationWizard(props: Props) {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
               {/* PASO 1 — Iniciar parte */}
               {step === 1 && (
                 <div className="space-y-4">
@@ -772,7 +772,7 @@ export function InstallationWizard(props: Props) {
                     <div className="text-xs font-bold uppercase tracking-wider text-primary">
                       Cliente
                     </div>
-                    <div className="text-lg font-extrabold text-foreground">
+                    <div className="text-lg font-extrabold text-foreground break-words">
                       {customerName}
                       {customerTaxId && (
                         <span className="ml-2 text-sm font-normal text-muted-foreground">
@@ -1167,7 +1167,7 @@ export function InstallationWizard(props: Props) {
 
                   <div className="space-y-3 rounded-xl border-2 border-border p-4">
                     <h3 className="font-bold">Firma del cliente</h3>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <div className="space-y-1">
                         <Label>Nombre</Label>
                         <Input
@@ -1237,10 +1237,10 @@ export function InstallationWizard(props: Props) {
                             key={f.v}
                             type="button"
                             onClick={() => setSatisfaction(f.v)}
-                            className="flex flex-col items-center gap-1 rounded-xl border-2 border-border bg-card p-2 hover:border-primary/40"
+                            className="flex min-w-0 flex-col items-center gap-1 rounded-xl border-2 border-border bg-card p-1.5 hover:border-primary/40 sm:p-2"
                           >
                             <span className="text-3xl">{f.emoji}</span>
-                            <span className="text-[10px] font-bold">{f.label}</span>
+                            <span className="text-center text-[10px] font-bold leading-tight break-words">{f.label}</span>
                           </button>
                         ))}
                       </div>
@@ -1296,7 +1296,7 @@ export function InstallationWizard(props: Props) {
               {step === 6 && (
                 <div className="space-y-4">
                   <h3 className="font-bold">Resumen y cierre</h3>
-                  <div className="grid gap-2 text-sm">
+                  <div className="grid grid-cols-1 gap-2 text-sm">
                     <div>
                       Tiempo trabajado: <strong>{formatDuration(elapsed)}</strong>
                     </div>
@@ -1318,7 +1318,7 @@ export function InstallationWizard(props: Props) {
                       rows={3}
                       value={finishNotes}
                       onChange={(e) => setFinishNotes(e.target.value)}
-                      className="mt-1 w-full rounded-xl border border-input bg-background p-2 text-sm"
+                      className="mt-1 w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                       placeholder="Observaciones generales del trabajo realizado…"
                     />
                   </div>
@@ -1407,11 +1407,11 @@ export function InstallationWizard(props: Props) {
           {/* Modal pausa */}
           {pauseOpen && (
             <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
               onClick={() => setPauseOpen(false)}
             >
               <div
-                className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
+                className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="shrink-0 border-b p-3 font-bold">Pausa</div>
@@ -1459,11 +1459,11 @@ export function InstallationWizard(props: Props) {
           {/* Modal incidencia */}
           {incidentOpen && (
             <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
               onClick={() => setIncidentOpen(false)}
             >
               <div
-                className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
+                className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="shrink-0 border-b p-3 font-bold">Notificar incidencia</div>
@@ -1485,7 +1485,7 @@ export function InstallationWizard(props: Props) {
                     rows={3}
                     value={incidentDesc}
                     onChange={(e) => setIncidentDesc(e.target.value)}
-                    className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                    className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                     placeholder="Detalla qué ha pasado…"
                   />
                   <label className="flex items-start gap-2 rounded-xl border-2 border-amber-300 bg-amber-50 p-3 cursor-pointer">
@@ -1520,11 +1520,11 @@ export function InstallationWizard(props: Props) {
           {/* Modal confirmar periodicidad de mantenimientos */}
           {mantPeriodicityOpen && (
             <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
               onClick={() => setMantPeriodicityOpen(false)}
             >
               <div
-                className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
+                className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="shrink-0 border-b p-3 font-bold">
@@ -1607,7 +1607,7 @@ export function InstallationWizard(props: Props) {
           {/* === Lightbox foto ampliada === */}
           {lightboxPhoto && lightboxPhoto.signed_url && (
             <div
-              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
               onClick={() => setLightboxPhoto(null)}
               role="dialog"
               aria-label="Foto ampliada"
@@ -1618,12 +1618,12 @@ export function InstallationWizard(props: Props) {
                   e.stopPropagation();
                   setLightboxPhoto(null);
                 }}
-                className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-black hover:bg-white"
+                className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] rounded-full bg-white/90 p-2 text-black hover:bg-white"
                 aria-label="Cerrar"
               >
                 <X className="h-5 w-5" />
               </button>
-              <div className="absolute left-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-sm font-bold text-black">
+              <div className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] rounded-lg bg-white/90 px-3 py-1.5 text-sm font-bold text-black">
                 {lightboxPhoto.category === "equipment"
                   ? "Equipo"
                   : lightboxPhoto.category === "connection"
@@ -1700,7 +1700,7 @@ function SignaturePad({ onChange }: { onChange: (v: string | null) => void }) {
     <div className="space-y-1.5">
       <canvas
         ref={ref}
-        className="h-32 w-full touch-none rounded-xl border-2 border-dashed border-border bg-white"
+        className="h-44 w-full touch-none rounded-xl border-2 border-dashed border-border bg-white sm:h-48"
         onPointerDown={start}
         onPointerMove={move}
         onPointerUp={end}

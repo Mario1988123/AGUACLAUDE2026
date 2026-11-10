@@ -261,7 +261,7 @@ export function UserRowActions({
             Marca los roles que tendrá este usuario. Puede haber varios administradores
             por empresa; eso sí, no puedes dejar la empresa sin ningún admin.
           </p>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {ROLE_KEYS.map((r) => (
               <label
                 key={r}

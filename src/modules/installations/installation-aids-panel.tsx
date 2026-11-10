@@ -81,11 +81,11 @@ export function InstallationAidsPanel({ installationId, showOnMount }: Props) {
       {/* Modal de notas */}
       {modalOpen && withNotes.length > 0 && (
         <div
-          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-2"
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 p-2 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => setModalOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border-2 border-amber-300 bg-amber-50 shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border-2 border-amber-300 bg-amber-50 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b border-amber-300 bg-amber-100 px-4 py-3">

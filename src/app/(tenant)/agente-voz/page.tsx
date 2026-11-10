@@ -125,7 +125,7 @@ export default async function AgenteVozPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="En cola" value={String(pendingService)} />
         <StatCard label="Contestadas" value={String(answered)} />
         <StatCard
@@ -182,7 +182,7 @@ export default async function AgenteVozPage() {
             </p>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[480px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-bold">Cuándo</th>

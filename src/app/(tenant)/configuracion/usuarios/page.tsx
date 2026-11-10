@@ -45,7 +45,7 @@ export default async function UsuariosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Usuarios</h1>
           <p className="text-sm text-muted-foreground">
@@ -55,7 +55,7 @@ export default async function UsuariosPage() {
         <BackButton href="/configuracion" />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>Equipo</CardTitle>
@@ -66,7 +66,7 @@ export default async function UsuariosPage() {
                 Aún no hay usuarios. Invita al primero desde el panel de la derecha.
               </p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm">
                 <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="w-12 py-2"></th>
@@ -114,7 +114,7 @@ export default async function UsuariosPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </CardContent>
         </Card>

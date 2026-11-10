@@ -15,8 +15,8 @@ código nativo propio (adaptador de enlaces, push nativo, deep links, biometría
 | Plugins | `app` 8.1.2, `status-bar` 8.0.4, `splash-screen` 8.0.2, `browser` 8.0.5, `geolocation` 8.2.4, `camera` 8.2.6, `push-notifications` 8.1.3 |
 | `appId` | `es.hidromanager.crm` |
 | Nombre | Hidromanager |
-| Versión | 1.0.0 (Android `versionCode 1`, iOS `CURRENT_PROJECT_VERSION 1`) |
-| User-Agent | sufijo `HidromanagerApp/1.0.0` (la web lo usará en la Fase 3 para detectar la app) |
+| Versión | 1.1.0 (Android `versionCode 2`; en iOS el número de compilación lo pone el flujo de GitHub) |
+| User-Agent | sufijo `HidromanagerApp/1.1.0`, más ` HMPush/1` si la compilación lleva push (iOS siempre; Android solo con `google-services.json`) |
 | Navegación interna | solo `crm.hidromanager.es` y `*.supabase.co`; el resto sale al sistema |
 | Android | minSdk 24 (Android 7), targetSdk/compileSdk 36 (lo que exige Play desde el 31-08-2026) |
 | iOS | mínimo iOS 15, **solo iPhone**, Swift Package Manager (sin CocoaPods). Capacitor 8 pide **Xcode 26** |
@@ -109,7 +109,7 @@ En Xcode, target **App**:
 
 1. *Signing & Capabilities*: marca «Automatically manage signing» y elige el **Team** (el de la
    empresa cuando exista la cuenta de organización). Bundle ID `es.hidromanager.crm`.
-2. Para push (cuando toque): *+ Capability* → **Push Notifications** (crea `App.entitlements`).
+2. Push: `App/App.entitlements` (`aps-environment = production`) ya está en el proyecto y enlazado con `CODE_SIGN_ENTITLEMENTS`.
    No hace falta «Background Modes» para notificaciones normales.
 3. Primera apertura: Xcode resuelve los paquetes SPM (*File > Packages > Resolve Package Versions*
    si no lo hace solo). Si falla, comprueba que `npm install` se hizo en `movil/`.
@@ -129,24 +129,61 @@ token de APNs al plugin de push.
 Lo que **no se ha podido hacer en Windows**: compilar, resolver los paquetes SPM, firmar y
 comprobar que el proyecto abre sin avisos en Xcode. Es lo primero que hay que hacer en el Mac.
 
-## Push: qué falta (no funciona todavía)
+## Push nativo (código hecho el 2026-11-10; faltan las cuentas)
 
-`@capacitor/push-notifications` está instalado, pero **sin Firebase no hace nada** y la web aún
-no lo llama (la Fase 3 añade `registerDeviceTokenAction`, la tabla `push_device_tokens` y el envío
-por FCM; ver el plan, apartado 8). Hasta entonces **no llamar a `PushNotifications.register()`**:
-en Android, sin Firebase inicializado, falla.
+Arquitectura: **iOS por APNs directo** (HTTP/2 + JWT con la clave `.p8`, sin Firebase en el iPhone)
+y **Android por FCM HTTP v1** (Firebase solo como pasarela). El push web (navegador) sigue aparte.
 
-1. Crear proyecto en Firebase (consola) y dentro dos apps: Android `es.hidromanager.crm` e iOS
-   `es.hidromanager.crm`.
-2. Android: descargar `google-services.json` → `movil/android/app/google-services.json`.
-   `android/app/build.gradle` ya aplica el plugin de Google Services si el fichero existe. Está en
-   `.gitignore`: decide si se versiona (no es secreto, pero así queda fuera hasta decidirlo).
-3. iOS: en Apple Developer, *Keys* → nueva clave con **Apple Push Notifications service (APNs)** →
-   descargar el `.p8` (solo se descarga una vez) y anotar Key ID y Team ID. Subirlo en Firebase →
-   *Configuración del proyecto > Cloud Messaging > APNs*. Guardar `.p8`, Key ID y Team ID en
-   Accesos del Cerebro. Para usar FCM también en iOS hace falta añadir el SDK de Firebase
-   Messaging al proyecto de Xcode (Fase 3), o usar APNs directo desde el servidor.
-4. Servidor (Vercel): cuenta de servicio de Firebase en `FIREBASE_SERVICE_ACCOUNT_JSON` (Fase 3).
+| Pieza | Dónde |
+|---|---|
+| Tabla `push_device_tokens` | `supabase/migrations/20261112090000_push_device_tokens.sql` |
+| Alta y baja del token | `src/modules/notifications/push-actions.ts` (`registrarTokenDispositivoAction`, `darDeBajaTokenDispositivoAction`); `/logout` lo da de baja con la cookie `hm_push_token` |
+| Cliente en la web | `src/modules/notifications/registro-push-nativo.tsx` (`<RegistroPushNativo userId />` en el layout privado, `<BotonPushNativo />` en /perfil) |
+| Envío | `push-send.ts` (reparto) → `push-apns.ts` (iPhone) y `push-fcm.ts` (Android) |
+| iOS | `ios/App/App/App.entitlements`, `CODE_SIGN_ENTITLEMENTS` en `project.pbxproj`, `AppDelegate.swift` reenvía el token |
+| Android | canal `avisos` (lo crea `MainActivity`), icono `ic_stat_notificacion`, `POST_NOTIFICATIONS`, plugin de Google Services condicionado |
+
+**La marca `HMPush/1` del User-Agent** es el seguro: la web solo llama a
+`PushNotifications.register()` si la ve. La 1.0.0 no la lleva, y en Android solo se pone si existe
+`android/app/google-services.json` **al hacer `npx cap sync android`** (sin Firebase, `register()`
+cierra la app de golpe). Tras añadir el fichero: `npx cap sync android` y compilar.
+
+Con la app abierta no sale la notificación del sistema (`presentationOptions: ["badge","sound"]`):
+la web la enseña como aviso dentro de la app. Cerrada o en segundo plano sale la normal y, al
+tocarla, la web navega a la `url` que trae.
+
+Variables de entorno del servidor (Vercel, producción):
+
+| Variable | Valor |
+|---|---|
+| `APNS_KEY_P8` | contenido del `AuthKey_XXXXXXXXXX.p8` de APNs (tal cual, o en base64) |
+| `APNS_KEY_ID` | Key ID de esa clave |
+| `APNS_TEAM_ID` | `3VG77F97BM` (Vercomi) |
+| `APNS_BUNDLE_ID` | opcional; por defecto `es.hidromanager.crm` |
+| `APNS_ENTORNO` | opcional; `production` por defecto (TestFlight y App Store) |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | JSON de la cuenta de servicio de Firebase (tal cual, o en base64) |
+
+Sin ellas no se rompe nada: ese canal no envía y deja un aviso `[push]` en el log.
+
+Pasos que faltan (en orden):
+
+1. Aplicar la migración `20261112090000_push_device_tokens.sql`.
+2. Apple: activar la capacidad en el Bundle ID
+   (`node scripts/asc.mjs POST /v1/bundleIdCapabilities scripts/activar-push.json` en
+   `D:\IOS_HIDROMANAGER`), crear la clave de APNs en *Certificates, Identifiers & Profiles → Keys* y
+   guardar `.p8`, Key ID y Team ID en Accesos del Cerebro.
+3. Firebase: proyecto en la cuenta `hidromanager1980@gmail.com`, app Android `es.hidromanager.crm`,
+   descargar `google-services.json` → `movil/android/app/` (está en `.gitignore`), y generar la
+   clave de la cuenta de servicio. **No hace falta dar de alta la app de iOS en Firebase.**
+4. Variables en Vercel y redeploy.
+5. Montar `<RegistroPushNativo />` en el layout privado.
+6. Compilar y subir la 1.1.0: Android (`npx cap sync android` + `bundleRelease`, `versionCode 2`)
+   e iOS (copiar a `D:\IOS_HIDROMANAGER`, flujo con firma «certificado»).
+
+Si el flujo de iOS falla en «Comprobar el entitlement de push» o al archivar con *«provisioning
+profile doesn't include the aps-environment entitlement»*, el perfil de App Store es anterior a
+activar la capacidad: bórralo (`node scripts/asc.mjs GET "/v1/profiles?filter[profileType]=IOS_APP_STORE"`
+para ver su id y `node scripts/asc.mjs DELETE /v1/profiles/<id>`) y vuelve a lanzar; el flujo crea otro.
 
 ## Comprobaciones de la Fase 2 en dispositivo real
 

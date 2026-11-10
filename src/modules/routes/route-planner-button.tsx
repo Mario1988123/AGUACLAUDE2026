@@ -96,36 +96,36 @@ export function RoutePlannerButton() {
 
           {!loading && plan && plan.optimized.length > 0 && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="rounded-xl bg-muted/30 p-3">
-                  <div className="text-xs uppercase font-bold text-muted-foreground">
+              <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
+                <div className="min-w-0 rounded-xl bg-muted/30 p-2 sm:p-3">
+                  <div className="truncate text-[10px] uppercase font-bold text-muted-foreground sm:text-xs">
                     Orden actual
                   </div>
-                  <div className="mt-1 text-xl font-extrabold">
+                  <div className="mt-1 text-lg font-extrabold tabular-nums sm:text-xl">
                     {formatKm(plan.currentKm)}
                   </div>
                 </div>
-                <div className="rounded-xl bg-emerald-50 p-3">
-                  <div className="text-xs uppercase font-bold text-muted-foreground">
+                <div className="min-w-0 rounded-xl bg-emerald-50 p-2 sm:p-3">
+                  <div className="truncate text-[10px] uppercase font-bold text-muted-foreground sm:text-xs">
                     Optimizado
                   </div>
-                  <div className="mt-1 text-xl font-extrabold text-emerald-700">
+                  <div className="mt-1 text-lg font-extrabold tabular-nums sm:text-xl text-emerald-700">
                     {formatKm(plan.optimizedKm)}
                   </div>
                 </div>
-                <div className="rounded-xl bg-primary/5 p-3">
-                  <div className="text-xs uppercase font-bold text-muted-foreground">
+                <div className="min-w-0 rounded-xl bg-primary/5 p-2 sm:p-3">
+                  <div className="truncate text-[10px] uppercase font-bold text-muted-foreground sm:text-xs">
                     Ahorro
                   </div>
-                  <div className="mt-1 text-xl font-extrabold text-primary">
+                  <div className="mt-1 text-lg font-extrabold tabular-nums sm:text-xl text-primary">
                     {savings > 0 ? `${formatKm(savings)} (${savingsPct.toFixed(0)}%)` : "—"}
                   </div>
                 </div>
               </div>
 
               <div>
-                <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5" /> Partida: {plan.start.label}
+                <div className="mb-1 flex items-start gap-2 break-words text-xs text-muted-foreground">
+                  <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Partida: {plan.start.label}
                 </div>
                 <ol className="divide-y rounded-xl border">
                   {plan.optimized.map((p, idx) => (
@@ -167,7 +167,7 @@ export function RoutePlannerButton() {
                 Al aplicar, las paradas se espacian cada 60 min desde la primera hora del día.
               </p>
 
-              <div className="flex justify-end gap-2 border-t pt-3">
+              <div className="flex flex-col-reverse gap-2 border-t pt-3 sm:flex-row sm:justify-end">
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
                   Cancelar
                 </Button>

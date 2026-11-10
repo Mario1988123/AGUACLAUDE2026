@@ -35,7 +35,7 @@ export function DashboardFilters({
           <select
             value={dept}
             onChange={(e) => update("dept", e.target.value)}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {Object.entries(DEPT_LABEL).map(([k, v]) => (
@@ -51,7 +51,7 @@ export function DashboardFilters({
         <select
           value={userId}
           onChange={(e) => update("user", e.target.value)}
-          className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
         >
           <option value="">Todos</option>
           {users.map((u) => (

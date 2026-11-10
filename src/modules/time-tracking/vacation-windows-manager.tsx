@@ -84,7 +84,7 @@ export function VacationWindowsManager({ windows, year }: Props) {
       </p>
 
       {/* Form alta */}
-      <div className="grid gap-3 sm:grid-cols-5 rounded-xl border bg-background p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5 rounded-xl border bg-background p-4">
         <div className="space-y-1.5">
           <Label className="text-xs">Desde</Label>
           <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />

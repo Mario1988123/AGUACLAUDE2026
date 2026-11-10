@@ -61,7 +61,7 @@ export function UnitsManager({ units }: { units: UnitRow[] }) {
         precargadas; añade las propias si necesitas alguna específica.
       </p>
 
-      <div className="grid gap-3 sm:grid-cols-3 rounded-xl border bg-background p-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 rounded-xl border bg-background p-3">
         <div className="space-y-1.5">
           <Label className="text-xs">Código</Label>
           <Input

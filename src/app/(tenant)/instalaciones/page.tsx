@@ -241,12 +241,12 @@ export default async function InstalacionesPage({
       )}
 
       <form className={`flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 ${view === "cal" ? "hidden" : ""}`}>
-        <div className="space-y-1">
+        <div className="w-full space-y-1 sm:w-auto">
           <label className="text-xs uppercase text-muted-foreground">Instalador</label>
           <select
             name="installer"
             defaultValue={installerFilter ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {team.map((t) => (
@@ -256,12 +256,12 @@ export default async function InstalacionesPage({
             ))}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className="w-full space-y-1 sm:w-auto">
           <label className="text-xs uppercase text-muted-foreground">Estado</label>
           <select
             name="status"
             defaultValue={statusFilter ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((s) => (
@@ -273,7 +273,7 @@ export default async function InstalacionesPage({
         </div>
         <button
           type="submit"
-          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Aplicar
         </button>
@@ -361,7 +361,7 @@ export default async function InstalacionesPage({
                     className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-red-200 bg-white p-3"
                   >
                     <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[60%] flex-1 sm:min-w-0">
                       <Link
                         href={`/instalaciones/${i.id}` as never}
                         className="font-medium text-red-900 hover:underline"
@@ -406,7 +406,7 @@ export default async function InstalacionesPage({
             <div className="space-y-5">
               {sortedDays.map((day) => (
                 <div key={day} className="space-y-2">
-                  <div className="flex items-center justify-between border-b pb-2">
+                  <div className="flex items-center justify-between gap-2 border-b pb-2">
                     <h3 className="text-sm font-bold uppercase tracking-wide text-primary">
                       {fmtDayHeader(day)}
                     </h3>
@@ -429,10 +429,10 @@ export default async function InstalacionesPage({
                             key={i.id}
                             className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3"
                           >
-                            <div className="font-mono text-xs font-bold text-primary tabular-nums w-12">
+                            <div className="font-mono text-xs font-bold text-primary tabular-nums w-12 shrink-0">
                               {time}
                             </div>
-                            <div className="min-w-0 flex-1">
+                            <div className="min-w-[60%] flex-1 sm:min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <Link
                                   href={`/instalaciones/${i.id}` as never}
@@ -506,7 +506,7 @@ export default async function InstalacionesPage({
                   key={i.id}
                   className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-border p-3"
                 >
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-[60%] flex-1 sm:min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
                         href={`/instalaciones/${i.id}` as never}
@@ -595,11 +595,11 @@ function InstallationRowActions({
     ? `https://wa.me/${(phone.startsWith("+") ? phone.slice(1) : `34${phone.replace(/\D/g, "")}`).replace(/\D/g, "")}`
     : null;
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="ml-auto flex items-center gap-0.5">
       <Link
         href={`/instalaciones/${inst.id}` as never}
         title="Ver instalación"
-        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+        className="flex h-8 w-10 items-center sm:w-8 justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
       >
         <Eye className="h-4 w-4" />
       </Link>
@@ -607,7 +607,7 @@ function InstallationRowActions({
         <a
           href={`tel:${phone}`}
           title={`Llamar ${phone}`}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
+          className="flex h-8 w-10 items-center sm:w-8 justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-700"
         >
           <Phone className="h-4 w-4" />
         </a>
@@ -618,7 +618,7 @@ function InstallationRowActions({
           target="_blank"
           rel="noopener"
           title="WhatsApp"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-600"
+          className="flex h-8 w-10 items-center sm:w-8 justify-center rounded-md text-muted-foreground hover:bg-emerald-100 hover:text-emerald-600"
         >
           <MessageSquare className="h-4 w-4" />
         </a>
@@ -629,7 +629,7 @@ function InstallationRowActions({
           target="_blank"
           rel="noopener"
           title="Ver en Maps"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
+          className="flex h-8 w-10 items-center sm:w-8 justify-center rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary"
         >
           <MapPin className="h-4 w-4" />
         </a>

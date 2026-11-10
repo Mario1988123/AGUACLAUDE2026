@@ -81,11 +81,11 @@ export function MaintenancePlanPicker({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-6"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-0 sm:items-center sm:p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           onClick={() => setOpen(false)}
         >
           <div
-            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border"
+            className="flex h-full max-h-dvh w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-2xl sm:border sm:border-border"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex shrink-0 items-center justify-between border-b p-4">
@@ -103,7 +103,7 @@ export function MaintenancePlanPicker({
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 {plans.map((p) => {
                   const Icon = TIER_ICON[p.tier];
                   const color = TIER_COLOR[p.tier];

@@ -210,7 +210,7 @@ export default async function AgendaPage({
           className="block rounded-2xl border-2 border-blue-300 bg-blue-50 p-4 transition-colors hover:bg-blue-100"
         >
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-blue-700" />
+            <AlertCircle className="h-5 w-5 shrink-0 text-blue-700" />
             <h2 className="text-base font-bold text-blue-900">
               {pendingMaintenanceCount} mantenimiento
               {pendingMaintenanceCount === 1 ? "" : "s"} sin agendar en los
@@ -227,7 +227,7 @@ export default async function AgendaPage({
       {unscheduled.length > 0 && (
         <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
           <div className="flex items-center gap-2 mb-3">
-            <AlertCircle className="h-5 w-5 text-amber-700" />
+            <AlertCircle className="h-5 w-5 shrink-0 text-amber-700" />
             <h2 className="text-base font-bold text-amber-900">
               Instalaciones sin agendar ({unscheduled.length})
             </h2>
@@ -235,7 +235,7 @@ export default async function AgendaPage({
           <p className="mb-3 text-xs text-amber-800">
             Pendientes de programar fecha + instalador. Pulsa cada una para abrirla y agendarla.
           </p>
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {unscheduled.map((it) => (
               <li key={it.id}>
                 <Link
@@ -295,14 +295,14 @@ export default async function AgendaPage({
           );
         })()}
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap sm:p-4">
         {view !== "calendar" && <input type="hidden" name="view" value={view} />}
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Asignado a</label>
           <select
             name="user"
             defaultValue={userFilter ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base sm:w-auto md:text-sm"
           >
             <option value="">Todos</option>
             {team.map((t) => (
@@ -312,12 +312,12 @@ export default async function AgendaPage({
             ))}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Tipo</label>
           <select
             name="kind"
             defaultValue={kindFilter ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base sm:w-auto md:text-sm"
           >
             <option value="">Todos</option>
             {KIND_FILTER_OPTIONS.map((k) => (
@@ -330,7 +330,7 @@ export default async function AgendaPage({
         {/* Filtros adicionales solo en vista listado — no aplican al mes/semana. */}
         {view === "list" && (
           <>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <label className="text-xs uppercase text-muted-foreground">Desde</label>
               <input
                 type="date"
@@ -340,10 +340,10 @@ export default async function AgendaPage({
                     ? sp.from
                     : `${listFrom.getFullYear()}-${String(listFrom.getMonth() + 1).padStart(2, "0")}-${String(listFrom.getDate()).padStart(2, "0")}`
                 }
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base sm:w-auto md:text-sm"
               />
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <label className="text-xs uppercase text-muted-foreground">Hasta</label>
               <input
                 type="date"
@@ -353,15 +353,15 @@ export default async function AgendaPage({
                     ? sp.to
                     : `${listTo.getFullYear()}-${String(listTo.getMonth() + 1).padStart(2, "0")}-${String(listTo.getDate()).padStart(2, "0")}`
                 }
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base sm:w-auto md:text-sm"
               />
             </div>
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <label className="text-xs uppercase text-muted-foreground">Estado</label>
               <select
                 name="status"
                 defaultValue={statusFilter ?? ""}
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base sm:w-auto md:text-sm"
               >
                 <option value="">Todos</option>
                 <option value="scheduled">Programado</option>
@@ -372,14 +372,14 @@ export default async function AgendaPage({
                 <option value="rescheduled">Reprogramado</option>
               </select>
             </div>
-            <div className="space-y-1 flex-1 min-w-[180px]">
+            <div className="col-span-2 space-y-1 sm:min-w-[180px] sm:flex-1">
               <label className="text-xs uppercase text-muted-foreground">Buscar</label>
               <input
                 type="search"
                 name="q"
                 defaultValue={searchText}
                 placeholder="Cliente, referencia…"
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               />
             </div>
             {/* No duplicamos el hidden view: ya lo emite el bloque común
@@ -391,7 +391,7 @@ export default async function AgendaPage({
         )}
         <button
           type="submit"
-          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Aplicar
         </button>
@@ -400,7 +400,7 @@ export default async function AgendaPage({
           (view === "list" && (sp.from || sp.to || statusFilter || searchText))) && (
           <Link
             href={view === "list" ? "/agenda?view=list" : "/agenda"}
-            className="text-sm text-muted-foreground hover:underline"
+            className="inline-flex items-center justify-center text-sm text-muted-foreground hover:underline"
           >
             Limpiar
           </Link>
@@ -410,7 +410,7 @@ export default async function AgendaPage({
       {/* Autoscroll al contenido útil (vistas + calendario), saltándose
           cabecera, banners y filtros. Sobre todo para tablet/móvil. */}
       <ScrollToOnMount targetId="agenda-content" />
-      <div id="agenda-content" className="flex gap-2 scroll-mt-20">
+      <div id="agenda-content" className="flex gap-2 scroll-mt-20 [&>a]:flex-1 [&>a]:justify-center [&>a]:px-2 sm:[&>a]:flex-none sm:[&>a]:px-4">
         <Link
           href={buildHref({ view: undefined }) as never}
           className={`inline-flex h-10 items-center gap-2 rounded-xl border-2 px-4 text-sm font-semibold ${

@@ -287,7 +287,7 @@ export default async function SocialPostDetailPage({
           <CardHeader>
             <CardTitle className="text-base">Targeting</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 text-sm">
+          <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 text-sm">
             {post.target_segment && (
               <div>
                 <span className="text-xs text-muted-foreground">Segmento:</span>{" "}

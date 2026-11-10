@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import * as Icons from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { MODULES, SIDEBAR_GROUPS, type ModuleEntry } from "@/shared/lib/modules";
+import { ID_MENU_LATERAL, ponerMenuLateral, useMenuLateral } from "@/shared/lib/menu-lateral";
+import { CajonLateral } from "./cajon-lateral";
 
 interface SidebarProps {
   userRoles: string[];
@@ -23,10 +25,12 @@ const LG_BREAKPOINT_PX = 1024;
 /**
  * Sidebar estilo DashStack — fondo blanco, item activo azul.
  *
- * Comportamiento responsive:
- *  - Móvil (<md, <768px): overlay con hamburguesa flotante.
- *  - Tablet (md-lg, 768-1023px): sidebar permanente en modo icono (w-20),
- *    no se puede expandir (los técnicos/comerciales tocan iconos, ahorran espacio).
+ * Comportamiento responsive (la Regla de la Escalera, ver
+ * docs/DISENO_NAVEGACION_MOVIL.md):
+ *  - Móvil (<md, <768px): sin barra; el menú completo es el cajón lateral,
+ *    que abre la hamburguesa de la cabecera.
+ *  - Tablet (md-lg, 768-1023px): carril permanente de iconos (w-20) para el
+ *    acceso de un toque, y el mismo cajón para ver los módulos con su nombre.
  *  - Desktop (>=lg, 1024+): sidebar permanente, el usuario puede expandir/colapsar
  *    y la preferencia se persiste en localStorage.
  */
@@ -39,7 +43,9 @@ export function Sidebar({
   moduleOverrides,
 }: SidebarProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  // El estado del cajón vive en un almacén compartido con la cabecera, que es
+  // donde está la hamburguesa.
+  const mobileOpen = useMenuLateral();
   const [collapsed, setCollapsed] = useState(false);
 
   // Cargar preferencia inicial de localStorage + forzar collapsed en tablet.
@@ -109,49 +115,42 @@ export function Sidebar({
     items: visibleModules.filter((m) => m.group === g.key),
   })).filter((g) => g.items.length > 0);
 
-  function renderSidebar(opts: { collapsed: boolean; onMobileClose?: () => void }) {
+  function renderSidebar(opts: { collapsed: boolean }) {
     const isCollapsed = opts.collapsed;
     return (
       <aside
         className={cn(
-          "sidebar-scrollbar flex h-screen flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-[width] duration-200 ease-out",
+          // box-content: el ancho es el del contenido y el margen seguro
+          // izquierdo (iPhone apaisado) se suma por fuera, con el fondo debajo.
+          "sidebar-scrollbar box-content flex h-dvh flex-col bg-sidebar pl-[var(--safe-left)] text-sidebar-foreground border-r border-sidebar-border transition-[width] duration-200 ease-out",
           isCollapsed ? "w-20" : "w-64",
         )}
       >
-        <div
-          className={cn(
-            "relative flex h-20 items-center border-b border-sidebar-border",
-            isCollapsed ? "justify-center px-2" : "justify-between px-6",
-          )}
-        >
-          <Link
-            href="/"
-            className="flex items-center"
-            prefetch={false}
-            aria-label="Hidromanager"
-          >
-            {isCollapsed ? (
-              <img src="/brand/favicon.svg" alt="Hidromanager" className="h-9 w-9" />
-            ) : (
-              <img src="/brand/logo.svg" alt="Hidromanager" className="h-9 w-auto" />
+        <div className="border-b border-sidebar-border pt-[var(--safe-top)]">
+          <div
+            className={cn(
+              "relative flex h-16 items-center lg:h-20",
+              isCollapsed ? "justify-center px-2" : "justify-between px-6",
             )}
-          </Link>
-          {opts.onMobileClose && !isCollapsed && (
-            <button
-              onClick={opts.onMobileClose}
-              className="flex h-11 w-11 items-center justify-center rounded-md hover:bg-sidebar-accent lg:hidden"
-              aria-label="Cerrar menú"
+          >
+            <Link
+              href="/"
+              className="flex items-center"
+              prefetch={false}
+              aria-label="Hidromanager"
             >
-              <Icons.X className="h-5 w-5" />
-            </button>
-          )}
-          {/* Toggle colapsar (sólo desktop, no mobile overlay) */}
-          {!opts.onMobileClose && (
+              {isCollapsed ? (
+                <img src="/brand/favicon.svg" alt="Hidromanager" className="h-9 w-9" />
+              ) : (
+                <img src="/brand/logo.svg" alt="Hidromanager" className="h-9 w-auto" />
+              )}
+            </Link>
+            {/* Plegar/expandir: solo en escritorio */}
             <button
               type="button"
               onClick={toggleCollapsed}
               aria-label={isCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-              className="absolute -right-3 top-7 hidden h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-card text-muted-foreground shadow-sm hover:text-primary hover:border-primary lg:flex"
+              className="absolute -right-3 top-7 hidden h-6 min-h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-card text-muted-foreground shadow-sm hover:text-primary hover:border-primary lg:flex"
             >
               {isCollapsed ? (
                 <Icons.ChevronRight className="h-3.5 w-3.5" />
@@ -159,10 +158,13 @@ export function Sidebar({
                 <Icons.ChevronLeft className="h-3.5 w-3.5" />
               )}
             </button>
-          )}
+          </div>
         </div>
 
-        <nav className="flex-1 space-y-3 overflow-y-auto px-3 py-4">
+        <nav
+          aria-label="Módulos"
+          className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pt-4 pb-[calc(1rem+var(--safe-bottom))]"
+        >
           {groupedModules.map((g) => (
             <SidebarGroup
               key={g.key}
@@ -172,65 +174,95 @@ export function Sidebar({
               pathname={pathname}
               collapsed={isCollapsed}
               badges={badges}
-              onItemClick={opts.onMobileClose}
             />
           ))}
         </nav>
-
       </aside>
     );
   }
 
-  // Si la ruta cambia, cerramos el overlay automáticamente. Cubre el
+  // Si la ruta cambia, cerramos el cajón automáticamente. Cubre el
   // caso de Link prefetch + navegación en background donde el onClick
   // del item podría llegar después.
   useEffect(() => {
-    if (mobileOpen) setMobileOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ponerMenuLateral(false);
   }, [pathname]);
 
-  // Bloqueamos scroll del body cuando el overlay móvil está abierto
-  // para que el contenido detrás no se mueva.
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    if (mobileOpen) {
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = prev;
-      };
-    }
-  }, [mobileOpen]);
+  // Al desmontar (cambio de layout) el almacén no debe quedarse en «abierto».
+  useEffect(() => () => ponerMenuLateral(false), []);
+
+  const cerrarCajon = () => ponerMenuLateral(false);
 
   return (
     <>
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg md:hidden"
-        aria-label="Abrir menú"
-      >
-        <Icons.Menu className="h-6 w-6" />
-      </button>
-
       <div className="hidden md:block">{renderSidebar({ collapsed })}</div>
 
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          {/* Backdrop con animación de fade-in */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
-            onClick={() => setMobileOpen(false)}
-            aria-hidden="true"
-          />
-          {/* Panel deslizante desde la izquierda */}
-          <div className="absolute left-0 top-0 h-full max-h-screen animate-in slide-in-from-left duration-200 shadow-2xl">
-            {renderSidebar({
-              collapsed: false,
-              onMobileClose: () => setMobileOpen(false),
-            })}
+      {/* Cajón: menú completo en móvil y tablet. La hamburguesa está en la
+          cabecera (header.tsx). El foco, Escape, el bloqueo del fondo y el
+          arrastre los lleva CajonLateral. */}
+      <CajonLateral
+        id={ID_MENU_LATERAL}
+        abierto={mobileOpen}
+        alCerrar={cerrarCajon}
+        etiqueta="Menú de navegación"
+        hastaPx={LG_BREAKPOINT_PX}
+        className="lg:hidden"
+        classNamePanel="bg-sidebar text-sidebar-foreground"
+      >
+        <div className="border-b border-sidebar-border pt-[var(--safe-top)]">
+          <div className="flex h-14 items-center justify-between pl-5 pr-2 md:h-16">
+            <Link
+              href="/"
+              className="flex min-h-11 items-center"
+              prefetch={false}
+              aria-label="Hidromanager, ir al inicio"
+              onClick={cerrarCajon}
+            >
+              <img src="/brand/logo.svg" alt="" className="h-8 w-auto" />
+            </Link>
+            <button
+              type="button"
+              onClick={cerrarCajon}
+              className="flex h-11 min-h-11 w-11 items-center justify-center rounded-xl text-muted-foreground transition-colors duration-100 hover:bg-sidebar-accent hover:text-foreground active:bg-sidebar-accent"
+              aria-label="Cerrar menú"
+            >
+              <Icons.X className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
         </div>
-      )}
+
+        <nav aria-label="Módulos" className="cajon-lista flex-1 space-y-3 px-3 py-3">
+          {groupedModules.map((g) => (
+            <SidebarGroup
+              key={g.key}
+              groupKey={g.key}
+              label={g.label}
+              items={g.items}
+              pathname={pathname}
+              collapsed={false}
+              badges={badges}
+              onItemClick={cerrarCajon}
+            />
+          ))}
+        </nav>
+
+        {/* Pie del cajón: quién soy y salir. En móvil la cabecera no enseña
+            ni el nombre ni el botón de cerrar sesión. */}
+        <div className="flex items-center gap-2 border-t border-sidebar-border px-3 pt-2 pb-[calc(0.5rem+var(--safe-bottom))]">
+          <div className="min-w-0 flex-1 truncate px-2 text-sm font-semibold">
+            {fullName ?? "Mi cuenta"}
+          </div>
+          <form action="/logout" method="post">
+            <button
+              type="submit"
+              className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted-foreground transition-colors duration-100 hover:bg-destructive/10 hover:text-destructive active:bg-destructive/10 active:text-destructive"
+            >
+              <Icons.LogOut className="h-4 w-4" aria-hidden="true" />
+              Salir
+            </button>
+          </form>
+        </div>
+      </CajonLateral>
     </>
   );
 }
@@ -292,6 +324,7 @@ function SidebarGroup({
           type="button"
           onClick={toggleOpen}
           aria-expanded={open}
+          data-compact
           className="group/hdr flex w-full items-center gap-1 rounded-md px-3 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground/50 transition-colors hover:text-muted-foreground"
         >
           <Icons.ChevronDown
@@ -322,13 +355,15 @@ function SidebarGroup({
             key={m.key}
             href={m.href as never}
             title={collapsed ? m.label : undefined}
+            aria-label={collapsed ? m.label : undefined}
+            aria-current={active ? "page" : undefined}
             onClick={onItemClick}
             className={cn(
-              "relative flex min-h-11 items-center rounded-lg text-sm font-semibold transition-colors",
+              "relative flex min-h-11 items-center rounded-lg text-sm font-semibold transition-colors duration-100",
               collapsed ? "justify-center px-2 py-2.5" : "gap-3 px-3 py-2.5",
               active
                 ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                : "text-foreground/80 hover:bg-sidebar-accent hover:text-foreground",
+                : "text-foreground/80 hover:bg-sidebar-accent hover:text-foreground active:bg-sidebar-accent active:text-foreground",
             )}
             prefetch={false}
           >

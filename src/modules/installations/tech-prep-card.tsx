@@ -156,7 +156,7 @@ export function TechPrepCard({
             readOnly={!canEdit}
             rows={4}
             placeholder="Ej: cocina con encimera de granito, necesita taladro especial; toma de agua bajo el fregadero a la izquierda; añadir codo extra…"
-            className="w-full rounded-xl border border-input bg-background p-3 text-sm disabled:opacity-60"
+            className="w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm disabled:opacity-60"
           />
           {canEdit && (
             <div className="flex justify-end">

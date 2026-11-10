@@ -52,7 +52,7 @@ export function ObjectivesAchievementList({ data }: { data: ObjectiveAchievement
 
             {showAmount && (
               <div className="mt-3 space-y-1">
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between gap-2 text-xs">
                   <span className="text-muted-foreground">Importe</span>
                   <span className="font-semibold tabular-nums">
                     {formatCents(o.actual_amount_cents)} / {formatCents(o.target_amount_cents)}
@@ -72,7 +72,7 @@ export function ObjectivesAchievementList({ data }: { data: ObjectiveAchievement
 
             {showUnits && (
               <div className="mt-3 space-y-1">
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between gap-2 text-xs">
                   <span className="text-muted-foreground">Unidades</span>
                   <span className="font-semibold tabular-nums">
                     {o.actual_units} / {o.target_units}

@@ -62,7 +62,7 @@ export function ReassignLeadButton({
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               disabled={pending}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">— Sin asignar —</option>
               {team.map((u) => (

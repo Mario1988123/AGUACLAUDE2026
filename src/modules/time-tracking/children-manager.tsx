@@ -120,7 +120,7 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
       )}
       {open ? (
         <div className="space-y-2 rounded-xl border bg-card p-3">
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <div className="space-y-1">
               <Label className="text-xs">Nombre (opcional)</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -138,7 +138,7 @@ export function ChildrenManager({ items }: { items: ChildRow[] }) {
               <select
                 value={sex}
                 onChange={(e) => setSex(e.target.value as "" | "M" | "F" | "X")}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Sin especificar —</option>
                 <option value="F">Niña</option>

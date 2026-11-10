@@ -83,14 +83,14 @@ export function CustomerBulkToolbar({
   }
 
   return (
-    <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-primary bg-primary/10 p-3 shadow-md">
+    <div className="sticky top-2 z-10 flex flex-wrap items-center gap-3 rounded-2xl border-2 border-primary bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))] p-3 shadow-md">
       <Users className="h-4 w-4 text-primary" />
       <span className="text-sm font-bold text-primary">{selectedIds.length} seleccionados</span>
       <select
         value={target}
         onChange={(e) => setTarget(e.target.value)}
         disabled={pending}
-        className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+        className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-base sm:flex-none md:text-sm"
       >
         <option value="">— Desasignar —</option>
         {team.map((t) => (
@@ -121,11 +121,11 @@ export function CustomerBulkToolbar({
 
       {delOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setDelOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
+            className="max-h-[90dvh] w-full overflow-y-auto overscroll-contain max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-lg font-bold">Borrar {selectedIds.length} clientes</h2>

@@ -156,7 +156,7 @@ export function CategoriesManager({
         </Button>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="border-b text-xs uppercase tracking-wider text-muted-foreground">
             <tr>
               <th className="py-2 px-3 text-left">Código</th>
@@ -233,7 +233,7 @@ export function CategoriesManager({
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Código (sin espacios)</Label>
                 <Input
@@ -257,13 +257,13 @@ export function CategoriesManager({
                 />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Grupo</Label>
                 <select
                   value={form.group_code}
                   onChange={(e) => set("group_code", e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   {GROUPS.map((g) => (
                     <option key={g.code} value={g.code}>
@@ -277,7 +277,7 @@ export function CategoriesManager({
                 <select
                   value={form.irpf_exempt_logic}
                   onChange={(e) => set("irpf_exempt_logic", e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-10 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   {IRPF_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
@@ -287,7 +287,7 @@ export function CategoriesManager({
                 </select>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Tope alerta (€/ticket)</Label>
                 <Input

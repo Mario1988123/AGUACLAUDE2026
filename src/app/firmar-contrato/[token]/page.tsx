@@ -21,7 +21,7 @@ const ESTADOS_FIRMABLES = new Set(["draft", "pending_data", "pending_signature"]
 
 function EnlaceNoDisponible({ motivo }: { motivo: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+    <div className="marco-px marco-pt marco-pb [--marco-pad:1rem] flex min-h-dvh items-center justify-center bg-slate-50">
       <div className="w-full max-w-md rounded-2xl border-2 border-red-200 bg-white p-8 text-center shadow-lg">
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-3xl">
           ⚠

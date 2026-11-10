@@ -188,7 +188,7 @@ function WarehouseForm({
     <Card>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="name">Nombre *</Label>
               <Input
@@ -220,7 +220,7 @@ function WarehouseForm({
             </div>
           </div>
           {form.kind === "vehicle" && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="plate">Matrícula</Label>
                 <Input
@@ -266,7 +266,7 @@ function WarehouseForm({
                   placeholder="Ej. Calle Mayor 12"
                 />
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="address_postal_code">CP</Label>
                   <Input

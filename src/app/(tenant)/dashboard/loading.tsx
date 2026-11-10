@@ -7,7 +7,7 @@ export default function Loading() {
           <div key={i} className="h-28 animate-pulse rounded-2xl bg-muted" />
         ))}
       </div>
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="h-64 animate-pulse rounded-2xl bg-muted" />
         <div className="h-64 animate-pulse rounded-2xl bg-muted" />
       </div>

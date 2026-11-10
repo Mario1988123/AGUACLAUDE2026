@@ -109,7 +109,7 @@ export function InstallationIncidentRow({
               <select
                 value={draftKind}
                 onChange={(e) => setDraftKind(e.target.value)}
-                className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                className="h-8 rounded-md border border-input bg-background px-2 text-base md:text-xs"
               >
                 {KIND_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>

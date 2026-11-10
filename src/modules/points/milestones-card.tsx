@@ -60,7 +60,7 @@ export function MilestonesCard({ data }: { data: MyMilestones }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="rounded-xl border bg-card p-3">
             <div className="text-xs text-muted-foreground">Puntos del mes</div>
             <div className="text-2xl font-extrabold tabular-nums">

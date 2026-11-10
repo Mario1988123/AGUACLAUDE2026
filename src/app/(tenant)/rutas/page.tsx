@@ -60,8 +60,8 @@ export default async function RutasHubPage() {
     <div className="space-y-6">
       <div>
         <div className="flex items-center gap-2">
-          <Map className="h-6 w-6 text-primary" />
-          <h1 className="text-3xl font-extrabold tracking-tight">Rutas con IA</h1>
+          <Map className="h-6 w-6 shrink-0 text-primary" />
+          <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Rutas con IA</h1>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Optimización de rutas diarias. La calidad depende de si tienes

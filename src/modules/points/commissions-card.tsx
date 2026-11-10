@@ -47,7 +47,7 @@ export async function CommissionsCard() {
         <CardTitle>Comisiones (€) · cálculo informativo</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-3 text-center">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 text-center">
           <div className="rounded-xl bg-primary/5 p-3">
             <div className="text-xs font-bold uppercase text-muted-foreground">€/punto</div>
             <div className="text-xl font-extrabold text-primary">
@@ -72,7 +72,7 @@ export async function CommissionsCard() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="py-2">Usuario</th>

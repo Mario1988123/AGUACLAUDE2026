@@ -179,7 +179,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{safeCompany.name}</h1>
@@ -191,7 +191,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Datos y límites</CardTitle>
@@ -268,7 +268,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
               panel tenant.
             </p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Nombre</th>
@@ -285,7 +285,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </CardContent>
       </Card>

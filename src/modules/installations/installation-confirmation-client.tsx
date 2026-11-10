@@ -126,7 +126,7 @@ export function InstallationConfirmationClient({
       )}
 
       {view === "menu" && (
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 gap-2">
           <button
             type="button"
             onClick={confirm}
@@ -260,7 +260,7 @@ export function InstallationConfirmationClient({
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             placeholder="Ej. estaré de viaje, prefiero retrasarlo unas semanas, etc."
-            className="w-full rounded-lg border border-input bg-white p-2 text-sm"
+            className="w-full rounded-lg border border-input bg-white p-2 text-base md:text-sm"
             maxLength={500}
           />
           <p className="text-[11px] text-muted-foreground">

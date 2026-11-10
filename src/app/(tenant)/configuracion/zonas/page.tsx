@@ -28,7 +28,7 @@ export default async function ZonasPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Zonas y rutas</h1>
           <p className="text-sm text-muted-foreground">

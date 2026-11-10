@@ -198,14 +198,14 @@ export function AddEquipmentButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/50 p-0 sm:items-center sm:p-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           onClick={close}
         >
           <div
-            className="flex h-full max-h-screen w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90vh] sm:max-w-xl sm:rounded-2xl sm:border sm:border-border"
+            className="flex h-full max-h-dvh w-full flex-col overflow-hidden bg-card shadow-2xl sm:my-6 sm:h-auto sm:max-h-[90dvh] sm:max-w-xl sm:rounded-2xl sm:border sm:border-border"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b p-4">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b p-4">
               <h2 className="text-base font-bold">Añadir equipo</h2>
               <button
                 type="button"
@@ -259,7 +259,7 @@ export function AddEquipmentButton({
                 </div>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <Label>Dirección</Label>
                     <button
                       type="button"
@@ -272,7 +272,7 @@ export function AddEquipmentButton({
                   <select
                     value={addressId}
                     onChange={(e) => setAddressId(e.target.value)}
-                    className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                    className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                   >
                     <option value="">— Sin asignar —</option>
                     {addresses.map((a) => (
@@ -290,7 +290,7 @@ export function AddEquipmentButton({
                     <select
                       value={productId}
                       onChange={(e) => setProductId(e.target.value)}
-                      className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                      className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                     >
                       <option value="">— Selecciona —</option>
                       {ownProducts.map((p) => (
@@ -301,7 +301,7 @@ export function AddEquipmentButton({
                     </select>
                   </div>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label>Marca *</Label>
                       <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
@@ -315,7 +315,7 @@ export function AddEquipmentButton({
 
                 {source === "own" && productId && (
                   <div className="space-y-2 rounded-xl border-2 border-sky-200 bg-sky-50/40 p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <div>
                         <div className="text-sm font-bold text-sky-900">
                           🧩 Extras del pack
@@ -354,7 +354,7 @@ export function AddEquipmentButton({
                           <select
                             value={ex.product_id}
                             onChange={(e) => updateExtra(idx, { product_id: e.target.value })}
-                            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-sm"
+                            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-base md:text-sm"
                           >
                             {compatibleExtras.map((c) => (
                               <option key={c.id} value={c.id}>
@@ -394,7 +394,7 @@ export function AddEquipmentButton({
                   </div>
                 )}
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Nº serie</Label>
                     <Input value={serial} onChange={(e) => setSerial(e.target.value)} />
@@ -409,7 +409,7 @@ export function AddEquipmentButton({
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Último mantenimiento</Label>
                     <Input
@@ -449,13 +449,13 @@ export function AddEquipmentButton({
 
                 <div className="space-y-1.5">
                   <Label>Modalidad (cómo lo tiene el cliente)</Label>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <select
                       value={plan}
                       onChange={(e) =>
                         setPlan(e.target.value as "" | "cash" | "rental" | "renting")
                       }
-                      className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                      className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                     >
                       <option value="">— Sin definir —</option>
                       <option value="cash">Venta</option>
@@ -487,7 +487,7 @@ export function AddEquipmentButton({
                     rows={2}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                    className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                   />
                 </div>
               </div>

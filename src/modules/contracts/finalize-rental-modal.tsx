@@ -118,7 +118,7 @@ function FinalizeDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div className="rounded-xl border bg-muted/30 p-3 text-sm">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground">Fianza cobrada</span>
               <span className="font-bold tabular-nums">
                 {eur(depositTotalCents)}
@@ -135,7 +135,7 @@ function FinalizeDialog({
           {depositTotalCents > 0 && (
             <div className="space-y-2">
               <Label>¿Qué hacemos con la fianza?</Label>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <ModeOption
                   active={mode === "return_full"}
                   onClick={() => setMode("return_full")}

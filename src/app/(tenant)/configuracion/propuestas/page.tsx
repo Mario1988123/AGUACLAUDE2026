@@ -15,7 +15,7 @@ export default async function ConfigPropuestasPage() {
   const config = await getProposalsConfig();
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Propuestas</h1>
           <p className="text-sm text-muted-foreground">

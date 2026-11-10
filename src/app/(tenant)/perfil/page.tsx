@@ -96,7 +96,9 @@ export default async function PerfilPage() {
         <CardContent>
           <p className="mb-3 text-sm text-muted-foreground">
             Recibe avisos del CRM directamente en este dispositivo (aunque
-            no tengas el CRM abierto). Necesitas dar permiso al navegador.
+            no tengas el CRM abierto). Solo lo que requiere que hagas algo:
+            asignaciones, incidencias y cambios de agenda. Tendrás que dar
+            permiso la primera vez.
           </p>
           <PushSubscribeButton />
         </CardContent>

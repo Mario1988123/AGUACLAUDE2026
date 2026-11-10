@@ -116,6 +116,37 @@ export function BottomNav({ unreadCount = 0, availableItems, defaultKeys }: Prop
     return filtered;
   }, [pinnedKeys, lookup, defaults]);
 
+  // La Regla del Teclado: con un campo de texto enfocado en táctil la barra se
+  // retira. En Android el teclado encoge la ventana y la barra, que es fija
+  // abajo, se quedaría montada encima del teclado tapando el formulario.
+  const [tecleando, setTecleando] = useState(false);
+  useEffect(() => {
+    const tactil = window.matchMedia("(pointer: coarse)");
+    const SIN_TECLADO = new Set([
+      "checkbox", "radio", "button", "submit", "reset", "range", "file", "color", "image",
+    ]);
+    function abreTeclado(el: EventTarget | null): boolean {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.isContentEditable) return true;
+      if (el instanceof HTMLTextAreaElement) return true;
+      if (el instanceof HTMLInputElement) return !SIN_TECLADO.has(el.type) && !el.readOnly;
+      return false;
+    }
+    function alEnfocar(e: FocusEvent) {
+      if (tactil.matches && abreTeclado(e.target)) setTecleando(true);
+    }
+    function alDesenfocar(e: FocusEvent) {
+      // Si el foco salta a otro campo, el teclado sigue abierto.
+      if (!abreTeclado(e.relatedTarget)) setTecleando(false);
+    }
+    document.addEventListener("focusin", alEnfocar);
+    document.addEventListener("focusout", alDesenfocar);
+    return () => {
+      document.removeEventListener("focusin", alEnfocar);
+      document.removeEventListener("focusout", alDesenfocar);
+    };
+  }, []);
+
   // Evitar parpadeo durante hidratación: hasta que sepamos qué pintar,
   // pintamos los defaults. (SSR ve defaults; cliente puede ver custom).
   void hydrated;
@@ -123,10 +154,15 @@ export function BottomNav({ unreadCount = 0, availableItems, defaultKeys }: Prop
   return (
     <nav
       aria-label="Navegación principal móvil"
-      className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-card pb-[max(0.25rem,env(safe-area-inset-bottom))] md:hidden"
+      // El fondo baja hasta el borde físico (indicador de inicio) y se abre a
+      // los lados en apaisado; la fila de iconos mide siempre --nav-inferior.
+      className={cn(
+        "fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-card pb-[var(--safe-bottom)] pl-[var(--safe-left)] pr-[var(--safe-right)] md:hidden",
+        tecleando && "hidden",
+      )}
     >
       <div
-        className="scrollbar-none flex snap-x snap-mandatory items-stretch gap-1 overflow-x-auto px-2 py-1"
+        className="scrollbar-none flex h-[var(--nav-inferior)] snap-x snap-mandatory items-stretch gap-1 overflow-x-auto overscroll-x-contain px-2 py-1"
         style={{ scrollbarWidth: "none" }}
       >
         {items.map((it) => {
@@ -149,7 +185,7 @@ export function BottomNav({ unreadCount = 0, availableItems, defaultKeys }: Prop
               aria-label={ariaLabel}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-w-[4.5rem] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-colors",
+                "relative flex min-h-11 min-w-[4.5rem] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-colors duration-100 active:bg-muted",
                 active ? "text-primary" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -172,7 +208,7 @@ export function BottomNav({ unreadCount = 0, availableItems, defaultKeys }: Prop
           href={"/configuracion/menu-movil" as never}
           prefetch={false}
           aria-label="Editar menú móvil — elegir qué iconos aparecen aquí"
-          className="relative flex min-w-[4.5rem] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border px-2 py-1.5 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          className="relative flex min-h-11 min-w-[4.5rem] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border px-2 py-1.5 text-muted-foreground transition-colors duration-100 hover:border-primary/40 hover:text-foreground active:bg-muted"
         >
           <Icons.SlidersHorizontal className="h-5 w-5 shrink-0" aria-hidden="true" />
           <span className="text-[11px] font-semibold leading-none">Editar</span>
@@ -182,6 +218,16 @@ export function BottomNav({ unreadCount = 0, availableItems, defaultKeys }: Prop
   );
 }
 
+/**
+ * Hueco al final del contenido para que la barra inferior no tape la última
+ * fila. Mide lo mismo que la barra: su fila más el indicador de inicio. Desde
+ * md no hay barra, pero el indicador de inicio sigue ahí (iPad, apaisado).
+ */
 export function BottomNavSpacer() {
-  return <div className="h-16 md:hidden" aria-hidden="true" />;
+  return (
+    <div
+      className="h-[calc(var(--nav-inferior)+var(--safe-bottom))] md:h-[var(--safe-bottom)]"
+      aria-hidden="true"
+    />
+  );
 }

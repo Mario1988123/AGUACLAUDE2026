@@ -42,7 +42,8 @@ export function RemoteSignClient({
     const r = c.getBoundingClientRect();
     const ctx = c.getContext("2d")!;
     ctx.beginPath();
-    ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
+    // El lienzo se pinta mas estrecho que su tamano interno: se escala para que el trazo siga al dedo.
+    ctx.moveTo((e.clientX - r.left) * (c.width / r.width), (e.clientY - r.top) * (c.height / r.height));
     ctx.lineWidth = 2;
     ctx.strokeStyle = "#000";
     ctx.lineCap = "round";
@@ -52,7 +53,7 @@ export function RemoteSignClient({
     const c = canvasRef.current!;
     const r = c.getBoundingClientRect();
     const ctx = c.getContext("2d")!;
-    ctx.lineTo(e.clientX - r.left, e.clientY - r.top);
+    ctx.lineTo((e.clientX - r.left) * (c.width / r.width), (e.clientY - r.top) * (c.height / r.height));
     ctx.stroke();
   }
   function stopDraw() {
@@ -101,7 +102,7 @@ export function RemoteSignClient({
 
   if (done) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+      <div className="marco-px marco-pt marco-pb [--marco-pad:1rem] flex min-h-dvh items-center justify-center bg-slate-50">
         <div className="w-full max-w-md rounded-2xl border-2 border-emerald-200 bg-white p-8 text-center shadow-lg">
           <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
             <CheckCircle2 className="h-10 w-10 text-emerald-600" />
@@ -123,7 +124,7 @@ export function RemoteSignClient({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 py-6">
+    <div className="marco-pt marco-pb min-h-dvh bg-slate-50 pl-[var(--safe-left)] pr-[var(--safe-right)] [--marco-pad:1.5rem]">
       <div className="mx-auto w-full max-w-2xl px-4 space-y-4">
         {/* Cabecera con marca */}
         <div className="flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm">
@@ -139,44 +140,44 @@ export function RemoteSignClient({
               <FileText className="h-6 w-6" />
             </div>
           )}
-          <div>
+          <div className="min-w-0">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">
               Contrato pendiente de firma
             </div>
-            <h1 className="text-lg font-extrabold">{contract.company_name}</h1>
+            <h1 className="break-words text-lg font-extrabold">{contract.company_name}</h1>
           </div>
         </div>
 
         {/* Datos del contrato */}
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-base font-bold">Resumen del contrato</h2>
-          <div className="grid gap-2 text-sm">
+          <div className="grid grid-cols-1 gap-2 text-sm">
             {contract.reference_code && (
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Referencia:</span>
                 <span className="font-mono font-bold">
                   {contract.reference_code}
                 </span>
               </div>
             )}
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">Modalidad:</span>
               <strong>{PLAN_LABEL[contract.plan_type] ?? contract.plan_type}</strong>
             </div>
             {contract.duration_months && (
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Duración:</span>
                 <strong>{contract.duration_months} meses</strong>
               </div>
             )}
             {contract.total_cash_cents != null && (
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Total contado:</span>
                 <strong>{eur(contract.total_cash_cents)}</strong>
               </div>
             )}
             {contract.monthly_cents != null && (
-              <div className="flex justify-between">
+              <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Cuota/mes:</span>
                 <strong>{eur(contract.monthly_cents)}</strong>
               </div>
@@ -208,7 +209,7 @@ export function RemoteSignClient({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="tu@email.com"
-                className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               />
               <p className="mt-1 text-[11px] text-muted-foreground">
                 Debe coincidir con el email al que se envió este enlace.

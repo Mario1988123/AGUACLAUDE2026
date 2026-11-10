@@ -218,7 +218,7 @@ export function MasterProductForm({
 
   return (
     <div className="space-y-5 rounded-2xl border bg-card p-6">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Fabricante</Label>
           <select
@@ -300,7 +300,7 @@ export function MasterProductForm({
         <Label className="text-xs uppercase tracking-wide text-muted-foreground">
           Dimensiones (mm) y peso (g) — opcional
         </Label>
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Input placeholder="Ancho" type="number" min={0} value={width} onChange={(e) => setWidth(e.target.value)} />
           <Input placeholder="Alto" type="number" min={0} value={height} onChange={(e) => setHeight(e.target.value)} />
           <Input placeholder="Fondo" type="number" min={0} value={depth} onChange={(e) => setDepth(e.target.value)} />
@@ -325,7 +325,7 @@ export function MasterProductForm({
           </p>
         )}
         {attrs.map((a) => (
-          <div key={a.key} className="grid gap-2 sm:grid-cols-3 sm:items-center">
+          <div key={a.key} className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:items-center">
             <Label className="sm:col-span-1">
               {a.name_es}
               {a.unit ? ` (${a.unit})` : ""}
@@ -371,7 +371,7 @@ export function MasterProductForm({
           !attrLoading &&
           (showAddAttr ? (
             <div className="space-y-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_10rem]">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_10rem]">
                 <Input
                   placeholder="Nombre del atributo (ej. Caudal)"
                   value={newAttrName}

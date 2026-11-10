@@ -101,13 +101,13 @@ export function CreateLoadingRequestButton({
           <DialogTitle>Solicitud de carga</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Origen</Label>
               <select
                 value={sourceId}
                 onChange={(e) => setSourceId(e.target.value)}
-                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 {sources.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -121,7 +121,7 @@ export function CreateLoadingRequestButton({
               <select
                 value={destId}
                 onChange={(e) => setDestId(e.target.value)}
-                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 {dests.map((w) => (
                   <option key={w.id} value={w.id}>
@@ -131,7 +131,7 @@ export function CreateLoadingRequestButton({
               </select>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Necesario para (fecha)</Label>
               <Input
@@ -147,7 +147,7 @@ export function CreateLoadingRequestButton({
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Label className="text-sm font-bold uppercase tracking-wide">Productos</Label>
               <Button variant="outline" size="sm" onClick={addItem} type="button">
                 <Plus className="h-4 w-4" /> Añadir
@@ -163,7 +163,7 @@ export function CreateLoadingRequestButton({
                       <select
                         value={it.product_id}
                         onChange={(e) => updateItem(idx, { product_id: e.target.value })}
-                        className="h-12 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                        className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                       >
                         {products.map((p) => (
                           <option key={p.id} value={p.id}>

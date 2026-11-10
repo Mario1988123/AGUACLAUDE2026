@@ -439,7 +439,7 @@ async function renderDashboard({
       </div>
 
       {/* Objetivos: individual + departamento */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <DashboardObjectivesCard
           title={isLevel3 ? "Mis objetivos" : "Objetivos individuales"}
           icon="individual"
@@ -479,7 +479,7 @@ async function renderDashboard({
       )}
 
       {/* Pruebas pendientes: scope filtrado. Stock crítico: solo nivel 1/2. */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <PendingTrialsCard items={pendingTrials} />
         {(isLevel1 || isLevel2) && (
           <CriticalStockAlertsCard items={criticalStockAlerts} />
@@ -487,7 +487,7 @@ async function renderDashboard({
       </div>
 
       {/* Próximas instalaciones + mantenimientos: ya filtradas por scope */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <UpcomingInstallationsCard items={upcomingInstallations} />
         <UpcomingMaintenanceCard items={upcomingMaintenance} />
       </div>
@@ -511,7 +511,7 @@ async function renderDashboard({
         breakdownAllowedIds={pointsBreakdownAllowedIds}
       />
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <SalesByMonthChart data={salesData} />
         {/* Funnel de leads: solo si la persona ve leads (nivel 1/2 o comercial). */}
         {(isLevel1 || isLevel2 || session.roles.includes("sales_rep") || session.roles.includes("telemarketer")) && (
@@ -525,7 +525,7 @@ async function renderDashboard({
       )}
 
       {evolution.length > 0 && (isLevel1 || isLevel2) && (
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
           <EvolutionChart data={evolution} metric="sales_cents" title="Ventas (€) últimos 12 meses" />
           <EvolutionChart data={evolution} metric="contracts" title="Contratos firmados últimos 12 meses" />
         </div>

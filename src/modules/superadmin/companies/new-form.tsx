@@ -70,7 +70,7 @@ export function NewCompanyForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6 rounded-lg border bg-card p-6">
-      <fieldset className="grid gap-4 sm:grid-cols-2">
+      <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <legend className="col-span-full text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Datos generales
         </legend>
@@ -131,7 +131,7 @@ export function NewCompanyForm() {
         </div>
       </fieldset>
 
-      <fieldset className="grid gap-4 sm:grid-cols-3">
+      <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <legend className="col-span-full text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Límites y facturación
         </legend>
@@ -171,7 +171,7 @@ export function NewCompanyForm() {
         </div>
       </fieldset>
 
-      <fieldset className="grid gap-4 sm:grid-cols-2">
+      <fieldset className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <legend className="col-span-full text-sm font-semibold uppercase tracking-wide text-muted-foreground">
           Datos fiscales (opcional, completables más tarde)
         </legend>

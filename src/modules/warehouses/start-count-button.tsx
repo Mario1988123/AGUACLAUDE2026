@@ -53,11 +53,11 @@ export function StartCountButton({
       </Button>
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -67,7 +67,7 @@ export function StartCountButton({
                 <select
                   value={wid}
                   onChange={(e) => setWid(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   <option value="">— Selecciona —</option>
                   {warehouses.map((w) => (

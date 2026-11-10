@@ -113,7 +113,7 @@ export function HolidaysManager({
   return (
     <div className="space-y-6">
       <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Comunidad autónoma</Label>
             <select
@@ -202,7 +202,7 @@ export function HolidaysManager({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3 rounded-xl border bg-background p-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 rounded-xl border bg-background p-4">
         <div className="space-y-1.5">
           <Label>Fecha</Label>
           <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />

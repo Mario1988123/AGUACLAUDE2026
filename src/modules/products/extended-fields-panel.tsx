@@ -159,7 +159,7 @@ export function ExtendedFieldsPanel({
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Marketing y comercial
         </h4>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1 sm:col-span-2">
             <Label>Frase comercial destacada (máx. 120 caracteres)</Label>
             <Input
@@ -179,7 +179,7 @@ export function ExtendedFieldsPanel({
             <textarea
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
-              className="min-h-[60px] w-full rounded-xl border border-input bg-background p-3 text-sm"
+              className="min-h-[60px] w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
               placeholder="bestseller, horeca, promo-junio"
             />
             {tagSuggestions.length > 0 && (
@@ -258,7 +258,7 @@ export function ExtendedFieldsPanel({
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Fabricante
         </h4>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Marca del fabricante</Label>
             <Input
@@ -287,7 +287,7 @@ export function ExtendedFieldsPanel({
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Garantías (meses)
         </h4>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <Label>General</Label>
             <Input
@@ -341,7 +341,7 @@ export function ExtendedFieldsPanel({
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Ciclo de vida
         </h4>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Fecha de discontinuación</Label>
             <Input
@@ -366,7 +366,7 @@ export function ExtendedFieldsPanel({
                   replaced_by_product_id: e.target.value,
                 }))
               }
-              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+              className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
             >
               <option value="">— Ninguno —</option>
               {otherProducts.map((p) => (
@@ -397,7 +397,7 @@ export function ExtendedFieldsPanel({
         <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Color del PDF (opcional)
         </h4>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Color de cabecera</Label>
             <div className="flex items-center gap-2">

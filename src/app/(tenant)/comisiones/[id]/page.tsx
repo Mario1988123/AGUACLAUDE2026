@@ -99,7 +99,7 @@ export default async function CycleDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <KpiCard
           label="Puntos del ciclo"
           value={detail.total_points.toString()}

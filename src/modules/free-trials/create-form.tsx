@@ -130,7 +130,7 @@ export function FreeTrialCreateForm({
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border bg-card p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-bold">Nueva prueba gratuita</h2>
             <p className="text-xs text-muted-foreground">
@@ -166,7 +166,7 @@ export function FreeTrialCreateForm({
 
         {/* Items */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Label className="text-sm font-bold">Equipos en prueba</Label>
             <Button size="sm" variant="outline" onClick={addItem} type="button">
               <Plus className="h-3.5 w-3.5" /> Equipo
@@ -175,14 +175,14 @@ export function FreeTrialCreateForm({
           {items.map((it, idx) => (
             <div
               key={idx}
-              className="grid gap-2 sm:grid-cols-[1fr_90px_auto] items-end rounded-lg border bg-muted/20 p-2"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_90px_auto] items-end rounded-lg border bg-muted/20 p-2"
             >
               <div className="space-y-1">
                 <Label className="text-xs">Producto</Label>
                 <select
                   value={it.product_id}
                   onChange={(e) => setItem(idx, { product_id: e.target.value })}
-                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-9 w-full rounded-md border border-input bg-background px-2 text-base md:text-sm"
                 >
                   <option value="">— Elegir —</option>
                   {products.map((p) => (
@@ -216,7 +216,7 @@ export function FreeTrialCreateForm({
         </div>
 
         {/* Programación */}
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <Label>Dirección instalación *</Label>
             {addresses.length === 0 ? (
@@ -230,7 +230,7 @@ export function FreeTrialCreateForm({
                 <select
                   value={addressId}
                   onChange={(e) => setAddressId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
                 >
                   {addresses.map((a) => (
                     <option key={a.id} value={a.id}>
@@ -258,7 +258,7 @@ export function FreeTrialCreateForm({
             <select
               value={installerId}
               onChange={(e) => setInstallerId(e.target.value)}
-              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">— Sin asignar —</option>
               {installers.map((u) => (
@@ -291,7 +291,7 @@ export function FreeTrialCreateForm({
             refrescamos para que la nueva dirección aparezca y quede elegida. */}
         {(showAddrForm || addresses.length === 0) && (
           <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm font-bold">
                 <MapPin className="h-4 w-4" /> Dirección de instalación de la prueba
               </div>
@@ -338,7 +338,7 @@ export function FreeTrialCreateForm({
             value={conditions}
             onChange={(e) => setConditions(e.target.value)}
             rows={10}
-            className="w-full rounded-xl border border-input bg-background p-2 text-sm font-mono"
+            className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm font-mono"
           />
         </div>
 
@@ -348,7 +348,7 @@ export function FreeTrialCreateForm({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+            className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
           />
         </div>
 

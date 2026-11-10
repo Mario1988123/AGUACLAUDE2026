@@ -158,9 +158,9 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold capitalize">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold capitalize sm:text-2xl">
             {MONTHS[month]} {year}
           </h2>
         </div>
@@ -180,7 +180,7 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
       <div className="overflow-hidden rounded-2xl border border-border bg-card">
         <div className="grid grid-cols-7 border-b bg-muted/30 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
           {WEEKDAYS.map((d) => (
-            <div key={d} className="py-3">
+            <div key={d} className="py-2 text-[10px] sm:py-3 sm:text-xs">
               {d}
             </div>
           ))}
@@ -203,7 +203,7 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                 onDoubleClick={inMonth && date ? () => goToWeek(date) : undefined}
                 title={inMonth ? "Doble clic para ver esta semana" : undefined}
                 className={cn(
-                  "min-h-24 border-b border-r border-border p-2 last:border-r-0 transition-colors",
+                  "min-h-16 min-w-0 border-b border-r border-border p-1 last:border-r-0 transition-colors sm:min-h-24 sm:p-2",
                   inMonth && "cursor-pointer",
                   !inMonth && "bg-muted/20",
                   isToday && "bg-primary/5",
@@ -232,8 +232,9 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                           onDragEnd={() => setDraggingId(null)}
                           onClick={() => setMoveTarget(ev)}
                           onDoubleClick={(e) => e.stopPropagation()}
+                          data-inline
                           className={cn(
-                            "block w-full truncate rounded-md px-1.5 py-1 text-left text-[10px] font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-grab active:cursor-grabbing",
+                            "block w-full truncate rounded-md px-1 py-1 text-left text-[10px] sm:px-1.5 font-semibold hover:opacity-80 hover:ring-1 hover:ring-current cursor-grab active:cursor-grabbing",
                             KIND_COLOR[ev.kind] ?? KIND_COLOR.manual,
                             draggingId === ev.id && "opacity-40",
                           )}
@@ -242,12 +243,13 @@ export function AgendaCalendar({ events, team = [], canReassign = false }: Props
                           {new Date(ev.starts_at).toLocaleTimeString("es-ES", {
                             hour: "2-digit",
                             minute: "2-digit",
-                          })}{" "}
-                          {ev.title}
+                          })}
+                          {/* En movil la celda mide ~50 px: solo cabe la hora. */}
+                          <span className="hidden sm:inline"> {ev.title}</span>
                         </button>
                       ))}
                       {dayEvents.length > 3 && (
-                        <Badge variant="outline" className="text-[10px]">
+                        <Badge variant="outline" className="px-1 text-[10px]">
                           +{dayEvents.length - 3}
                         </Badge>
                       )}

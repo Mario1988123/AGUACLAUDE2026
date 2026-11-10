@@ -357,7 +357,7 @@ export default async function ProductDetailPage({
         <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />
       </CollapsibleCard>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <CollapsibleCard title="Datos generales">
           <div className="space-y-3 text-sm">
             <Row label="Referencia interna" value={product.internal_reference} />

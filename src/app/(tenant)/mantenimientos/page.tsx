@@ -204,13 +204,13 @@ export default async function MantenimientosPage({
         </CardContent>
       </Card>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap sm:p-4">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Estado</label>
           <select
             name="status"
             defaultValue={status ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((s) => (
@@ -225,7 +225,7 @@ export default async function MantenimientosPage({
           <select
             name="period"
             defaultValue={period}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {Object.entries(PERIOD_OPTIONS).map(([k, v]) => (
               <option key={k} value={k}>
@@ -239,7 +239,7 @@ export default async function MantenimientosPage({
           <select
             name="technician"
             defaultValue={technicianFilter ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             <option value="unassigned">— Sin asignar —</option>
@@ -255,7 +255,7 @@ export default async function MantenimientosPage({
           <select
             name="kind"
             defaultValue={kindFilter ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             <option value="contracted">Contratado</option>
@@ -265,7 +265,7 @@ export default async function MantenimientosPage({
         </div>
         <button
           type="submit"
-          className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
           Aplicar
         </button>
@@ -346,7 +346,7 @@ export default async function MantenimientosPage({
             </ul>
 
             {/* Desktop: tabla */}
-            <table className="hidden w-full text-sm md:table">
+            <div className="overflow-x-auto"><table className="hidden w-full min-w-[640px] text-sm md:table">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Cliente</th>
@@ -408,7 +408,7 @@ export default async function MantenimientosPage({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             </>
           )}
         </CardContent>

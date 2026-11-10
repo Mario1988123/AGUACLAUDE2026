@@ -144,11 +144,11 @@ export function ApprovalButtons({
 
       {rejectOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setRejectOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-5">
@@ -159,7 +159,7 @@ export function ApprovalButtons({
                 rows={4}
                 autoFocus
                 placeholder="Falta el ticket, no es deducible, no corresponde…"
-                className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
               />
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t bg-muted/20 p-3">
@@ -180,11 +180,11 @@ export function ApprovalButtons({
 
       {reimburseOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setReimburseOpen(false)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-5">
@@ -216,7 +216,7 @@ export function ApprovalButtons({
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
-                  className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                  className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
                 />
               </div>
             </div>

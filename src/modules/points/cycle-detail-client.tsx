@@ -369,7 +369,7 @@ export function CycleDetailClient({
             <div className="space-y-1.5">
               <Label>Razón del ajuste</Label>
               <textarea
-                className="min-h-[80px] w-full rounded-md border border-input bg-background p-2 text-sm"
+                className="min-h-[80px] w-full rounded-md border border-input bg-background p-2 text-base md:text-sm"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Ej. Error en cálculo de comisión por venta del 12/05"
@@ -400,7 +400,7 @@ export function CycleDetailClient({
             <div className="space-y-1.5">
               <Label>Razón</Label>
               <textarea
-                className="min-h-[80px] w-full rounded-md border border-input bg-background p-2 text-sm"
+                className="min-h-[80px] w-full rounded-md border border-input bg-background p-2 text-base md:text-sm"
                 value={reopenReason}
                 onChange={(e) => setReopenReason(e.target.value)}
                 placeholder="Ej. Detectado error en línea de instalación del 28/05"

@@ -60,8 +60,8 @@ export function OnboardingTour({ steps, enabled }: Props) {
   const isLast = index === steps.length - 1;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4">
-      <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-card shadow-2xl">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <div className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-card shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b px-5 py-3">
           <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
             Bienvenido · Paso {index + 1} de {steps.length}

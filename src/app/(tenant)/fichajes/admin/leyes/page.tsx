@@ -188,9 +188,9 @@ export default async function LeyesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-extrabold tracking-tight flex items-center gap-2">
-            <Scale className="h-7 w-7" /> Marco legal de permisos
+        <div className="min-w-0">
+          <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2 sm:text-3xl">
+            <Scale className="h-6 w-6 shrink-0 sm:h-7 sm:w-7" /> Marco legal de permisos
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Referencia de los días, semanas y horas que la ley española
@@ -219,7 +219,7 @@ export default async function LeyesPage() {
             <ul className="space-y-3">
               {pendingNotices.map((n) => (
                 <li key={n.id} className="rounded-xl border bg-card p-3">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="secondary" className="text-[10px]">
@@ -284,7 +284,7 @@ export default async function LeyesPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[480px] text-sm">
               <thead className="text-xs uppercase tracking-wider text-muted-foreground">
                 <tr className="border-b">
                   <th className="py-2 text-left">Permiso</th>

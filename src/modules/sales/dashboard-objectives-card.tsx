@@ -91,7 +91,7 @@ export function DashboardObjectivesCard({
               const showUnits = o.target_units != null && o.target_units > 0;
               return (
                 <li key={o.id} className="space-y-1.5 rounded-xl border border-border p-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-semibold">
                       {objectiveLabel(o.metric_kind, o.plan_type)}
                     </span>
@@ -99,7 +99,7 @@ export function DashboardObjectivesCard({
                   </div>
                   {showAmount && (
                     <>
-                      <div className="flex justify-between text-xs">
+                      <div className="flex justify-between gap-2 text-xs">
                         <span className="text-muted-foreground">Importe</span>
                         <span className="font-bold tabular-nums">
                           {fmtEur(o.actual_amount_cents)} / {fmtEur(o.target_amount_cents)}
@@ -118,7 +118,7 @@ export function DashboardObjectivesCard({
                   )}
                   {showUnits && (
                     <>
-                      <div className="flex justify-between text-xs">
+                      <div className="flex justify-between gap-2 text-xs">
                         <span className="text-muted-foreground">Unidades</span>
                         <span className="font-bold tabular-nums">
                           {o.actual_units} / {o.target_units}

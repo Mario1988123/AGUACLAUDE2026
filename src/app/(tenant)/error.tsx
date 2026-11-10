@@ -20,7 +20,7 @@ export default function TenantError({
   }, [error]);
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 p-6 text-center">
+    <div className="flex min-h-[60dvh] flex-col items-center justify-center gap-3 p-6 text-center">
       <div className="text-5xl">⚠️</div>
       <h1 className="text-2xl font-extrabold">Algo ha fallado</h1>
       <p className="max-w-md text-sm text-muted-foreground">

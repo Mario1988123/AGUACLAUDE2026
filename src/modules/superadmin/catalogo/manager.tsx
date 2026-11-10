@@ -174,7 +174,7 @@ function CategoryForm({ initial, onDone }: { initial?: GlobalCategory; onDone: (
 
   return (
     <div className="my-3 space-y-3 rounded-xl border-2 border-primary bg-primary/5 p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs">Key (slug interno)</Label>
           <Input
@@ -197,7 +197,7 @@ function CategoryForm({ initial, onDone }: { initial?: GlobalCategory; onDone: (
           <select
             value={form.default_kind}
             onChange={(e) => setForm({ ...form, default_kind: e.target.value })}
-            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {["equipment", "accessory", "consumable", "service"].map((k) => (
               <option key={k} value={k}>
@@ -403,7 +403,7 @@ function AttributeCategoriesDialog({
           Marca las categorías de producto en las que este atributo debe aparecer al editar
           una ficha.
         </p>
-        <div className="max-h-[60vh] space-y-1.5 overflow-y-auto">
+        <div className="max-h-[60dvh] space-y-1.5 overflow-y-auto">
           {categories.map((c) => {
             const checked = selected.has(c.key);
             return (
@@ -470,7 +470,7 @@ function AttributeForm({ initial, onDone }: { initial?: GlobalAttribute; onDone:
 
   return (
     <div className="my-3 space-y-3 rounded-xl border-2 border-primary bg-primary/5 p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs">Key</Label>
           <Input
@@ -492,7 +492,7 @@ function AttributeForm({ initial, onDone }: { initial?: GlobalAttribute; onDone:
           <select
             value={form.data_type}
             onChange={(e) => setForm({ ...form, data_type: e.target.value })}
-            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             {["text", "number", "boolean", "enum"].map((k) => (
               <option key={k} value={k}>
@@ -629,7 +629,7 @@ function ExternalModelForm({
 
   return (
     <div className="my-3 space-y-3 rounded-xl border-2 border-primary bg-primary/5 p-3">
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-xs">Marca</Label>
           <Input

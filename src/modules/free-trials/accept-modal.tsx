@@ -160,7 +160,7 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
                         key={p}
                         type="button"
                         onClick={() => selectPlan(p)}
-                        className={`flex flex-col items-center gap-1 rounded-xl border-2 p-2 text-xs font-semibold transition-colors ${
+                        className={`flex min-w-0 flex-col items-center gap-1 rounded-xl border-2 p-2 text-center text-xs font-semibold break-words transition-colors ${
                           plan === p
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border hover:bg-muted"

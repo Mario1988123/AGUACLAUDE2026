@@ -142,14 +142,14 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
 
       {lostReasonOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => setLostReasonOpen(null)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 items-center justify-between border-b p-4">
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b p-4">
               <div className="min-w-0 flex-1 pr-2">
                 <h2 className="text-base font-bold">Marcar como venta perdida</h2>
                 <p className="truncate text-xs text-muted-foreground">{lostReasonOpen.name}</p>
@@ -177,7 +177,7 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                   value={lostReason}
                   onChange={(e) => setLostReason(e.target.value)}
                   placeholder="Ej. precio, competencia, no le interesa…"
-                  className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+                  className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
                 />
               </div>
             </div>

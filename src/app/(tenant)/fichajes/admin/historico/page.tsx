@@ -116,7 +116,7 @@ export default async function HistoricoFichajesPage({
           <CardTitle>Filtros</CardTitle>
         </CardHeader>
         <CardContent>
-          <form method="GET" className="grid gap-3 sm:grid-cols-4">
+          <form method="GET" className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div className="space-y-1">
               <Label className="text-xs">Desde</Label>
               <Input type="date" name="from" defaultValue={from} />
@@ -130,7 +130,7 @@ export default async function HistoricoFichajesPage({
               <select
                 name="user_id"
                 defaultValue={userId}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Todos —</option>
                 {users.map((u) => (
@@ -145,7 +145,7 @@ export default async function HistoricoFichajesPage({
               <select
                 name="kind"
                 defaultValue={kind}
-                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">— Todos —</option>
                 <option value="clock_in">Entrada</option>
@@ -215,7 +215,7 @@ export default async function HistoricoFichajesPage({
             <>
               {/* Tabla en pantallas md+ */}
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[720px] text-sm">
                   <thead>
                     <tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground">
                       <th className="py-2">Fecha</th>

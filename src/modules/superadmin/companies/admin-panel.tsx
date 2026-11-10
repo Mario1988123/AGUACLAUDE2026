@@ -185,7 +185,7 @@ function CredField({
     <div className="space-y-1">
       <Label className="text-xs">{label}</Label>
       <div className="flex gap-2">
-        <Input value={value} readOnly className="font-mono text-sm" onFocus={(e) => e.target.select()} />
+        <Input value={value} readOnly className="font-mono text-base md:text-sm" onFocus={(e) => e.target.select()} />
         <Button
           type="button"
           variant="outline"

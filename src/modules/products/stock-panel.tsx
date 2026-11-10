@@ -96,7 +96,7 @@ export function ProductStockPanel({
     <div className="space-y-6">
       {canSeeCost && (
         <>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Proveedor habitual</Label>
               <Input
@@ -155,7 +155,7 @@ export function ProductStockPanel({
         </>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border bg-card p-4">
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">
             Stock por almacén

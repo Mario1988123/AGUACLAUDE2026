@@ -50,7 +50,7 @@ export function GoCardlessSettingsForm({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label>Environment</Label>
         <div className="flex gap-2">
           <button
@@ -78,7 +78,7 @@ export function GoCardlessSettingsForm({
         </div>
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label>Access token {initial.configured && <span className="text-xs text-muted-foreground">(deja en blanco para no cambiar)</span>}</Label>
         <Input
           type="password"
@@ -89,7 +89,7 @@ export function GoCardlessSettingsForm({
         />
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label>Webhook secret {initial.hasWebhookSecret && <span className="text-xs text-muted-foreground">(configurado · sobrescribir solo si cambia)</span>}</Label>
         <Input
           type="password"

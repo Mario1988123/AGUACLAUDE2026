@@ -77,7 +77,7 @@ export function ContractPhotosCard({ contractId }: { contractId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
+        <CardTitle className="flex items-center justify-between gap-2">
           <span>Fotos del contrato ({photos.length})</span>
           <div className="flex flex-wrap gap-1.5">
             {(Object.keys(KIND_LABEL) as ContractPhotoKind[]).map((k) => (

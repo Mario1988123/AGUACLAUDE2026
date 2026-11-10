@@ -194,13 +194,13 @@ export default async function LeadsPage({
           defaultValue={sp.q ?? ""}
           placeholder="Buscar por nombre, email, teléfono..."
           aria-label="Buscar leads"
-          className="flex h-11 w-full flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:min-w-[14rem]"
+          className="flex h-11 w-full flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm sm:min-w-[14rem]"
         />
         <select
           name="status"
           defaultValue={status ?? ""}
           aria-label="Filtrar por estado"
-          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm sm:w-auto"
         >
           <option value="">Todos los estados</option>
           {LEAD_STATUS.map((s) => (
@@ -213,7 +213,7 @@ export default async function LeadsPage({
           name="origin"
           defaultValue={originFilter ?? ""}
           aria-label="Filtrar por origen"
-          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm sm:w-auto"
         >
           <option value="">Cualquier origen</option>
           {LEAD_ORIGIN.map((o) => (
@@ -226,7 +226,7 @@ export default async function LeadsPage({
           name="potential"
           defaultValue={potentialFilter ?? ""}
           aria-label="Filtrar por potencial"
-          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm sm:w-auto"
         >
           <option value="">Cualquier potencial</option>
           {LEAD_POTENTIAL.map((p) => (
@@ -240,7 +240,7 @@ export default async function LeadsPage({
             name="assigned"
             defaultValue={assignedFilter ?? ""}
             aria-label="Filtrar por comercial asignado"
-            className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+            className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm sm:w-auto"
           >
             <option value="">Cualquier comercial</option>
             <option value="unassigned">⚠ Sin asignar</option>
@@ -255,7 +255,7 @@ export default async function LeadsPage({
           name="sort"
           defaultValue={sortBy}
           aria-label="Ordenar leads"
-          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-sm sm:w-auto"
+          className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm sm:w-auto"
         >
           <option value="recent">Más recientes primero</option>
           <option value="oldest">Más antiguos primero (días)</option>

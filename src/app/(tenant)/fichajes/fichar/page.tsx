@@ -23,7 +23,7 @@ export default async function FicharPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Fichar</h1>
         <BackButton href="/fichajes" />
       </div>

@@ -34,7 +34,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
         <h3 className="text-sm font-bold uppercase tracking-wider text-primary">
           Telemarketing
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Puntos por lead captado</Label>
             <Input
@@ -66,7 +66,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-primary">Comercial</h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Puntos por equipo vendido</Label>
             <Input
@@ -100,7 +100,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
         <h3 className="text-sm font-bold uppercase tracking-wider text-primary">
           Comisiones (€)
         </h3>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Conversión: € por punto</Label>
             <Input
@@ -117,7 +117,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
           <div className="space-y-1.5">
             <Label>Cierre del ciclo de comisiones</Label>
             <select
-              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-base md:text-sm"
               value={String(v.cycle_close_day)}
               onChange={(e) => set("cycle_close_day", Number(e.target.value))}
             >
@@ -139,7 +139,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
 
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <h3 className="text-sm font-bold uppercase tracking-wider text-primary">Técnico</h3>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Puntos por instalación completada</Label>
             <Input
@@ -203,7 +203,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
                 key={idx}
                 className="grid grid-cols-12 items-end gap-2 rounded-xl border bg-background p-3"
               >
-                <div className="col-span-5 space-y-1">
+                <div className="col-span-12 space-y-1 sm:col-span-5">
                   <Label className="text-xs">Etiqueta</Label>
                   <Input
                     value={m.label}
@@ -214,7 +214,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
                     }}
                   />
                 </div>
-                <div className="col-span-3 space-y-1">
+                <div className="col-span-5 space-y-1 sm:col-span-3">
                   <Label className="text-xs">Umbral (puntos)</Label>
                   <Input
                     type="number"
@@ -227,7 +227,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
                     }}
                   />
                 </div>
-                <div className="col-span-3 space-y-1">
+                <div className="col-span-5 space-y-1 sm:col-span-3">
                   <Label className="text-xs">Bonus</Label>
                   <Input
                     type="number"
@@ -240,7 +240,7 @@ export function PointsConfigForm({ initial }: { initial: PointsSettings }) {
                     }}
                   />
                 </div>
-                <div className="col-span-1">
+                <div className="col-span-2 sm:col-span-1">
                   <Button
                     variant="ghost"
                     size="icon"

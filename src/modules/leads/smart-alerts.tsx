@@ -87,7 +87,7 @@ export function LeadSmartAlerts({ alerts }: { alerts: LeadAlerts }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((it) => {
             const Icon = it.icon;
             return (

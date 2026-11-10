@@ -228,7 +228,7 @@ export default async function MailingPage({
       </div>
 
       {/* Filtros */}
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <input type="hidden" name="tab" value={tab} />
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Buscar</label>
@@ -236,7 +236,7 @@ export default async function MailingPage({
             name="search"
             defaultValue={sp.search ?? ""}
             placeholder={tab === "email" ? "destinatario o asunto" : "teléfono o texto"}
-            className="h-10 w-64 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 w-full rounded-xl sm:w-64 border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         {tab === "email" && (
@@ -247,7 +247,7 @@ export default async function MailingPage({
                 name="template_key"
                 defaultValue={sp.template_key ?? ""}
                 placeholder="ej. installation_reminder"
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               />
             </div>
             <div className="space-y-1">
@@ -255,7 +255,7 @@ export default async function MailingPage({
               <select
                 name="kind"
                 defaultValue={sp.kind ?? ""}
-                className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+                className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
               >
                 <option value="">Todos</option>
                 <option value="transactional">Transaccional</option>
@@ -270,7 +270,7 @@ export default async function MailingPage({
             <select
               name="user_id"
               defaultValue={sp.user_id ?? ""}
-              className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+              className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
             >
               <option value="">Todos</option>
               {members.map((m) => (
@@ -286,7 +286,7 @@ export default async function MailingPage({
           <select
             name="status"
             defaultValue={sp.status ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
@@ -302,7 +302,7 @@ export default async function MailingPage({
             type="date"
             name="from"
             defaultValue={sp.from ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <div className="space-y-1">
@@ -311,7 +311,7 @@ export default async function MailingPage({
             type="date"
             name="to"
             defaultValue={sp.to ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <button
@@ -336,7 +336,7 @@ export default async function MailingPage({
               <p className="text-sm text-muted-foreground">Sin emails para los filtros seleccionados.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[800px] text-sm">
                   <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="py-2 text-left">Fecha</th>
@@ -415,7 +415,7 @@ export default async function MailingPage({
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="py-2 text-left">Fecha</th>
@@ -463,7 +463,7 @@ export default async function MailingPage({
             <CardTitle>Por flujo / plantilla (últimos 3 meses)</CardTitle>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
               <thead className="text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Plantilla</th>
@@ -492,7 +492,7 @@ export default async function MailingPage({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}
@@ -503,7 +503,7 @@ export default async function MailingPage({
             <CardTitle>Por comercial (último mes)</CardTitle>
           </CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[480px] text-sm">
               <thead className="text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Comercial</th>
@@ -522,7 +522,7 @@ export default async function MailingPage({
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           </CardContent>
         </Card>
       )}

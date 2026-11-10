@@ -190,7 +190,7 @@ export default async function VentasPerdidasPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-destructive bg-card p-4">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Sin recuperar</div>
           <div className="mt-2 text-2xl font-bold tabular-nums">{formatCents(totalLost)}</div>
@@ -265,7 +265,7 @@ export default async function VentasPerdidasPage() {
             </ul>
 
             {/* Desktop: tabla */}
-            <table className="hidden w-full text-sm md:table">
+            <div className="overflow-x-auto"><table className="hidden w-full min-w-[720px] text-sm md:table">
               <thead className="text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
                   <th className="py-2 text-left">Fecha</th>
@@ -325,7 +325,7 @@ export default async function VentasPerdidasPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
             </>
           )}
         </CardContent>

@@ -30,7 +30,7 @@ export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
 
   return (
     <form onSubmit={save} className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label htmlFor="tmk">Leads de TMK (días)</Label>
           <Input

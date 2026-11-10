@@ -98,7 +98,7 @@ export function HomeLocationEditor({
             ? "Tu casa o lugar desde donde sales por las mañanas. Se usa para calcular el orden óptimo de tus instalaciones en /mi-día."
             : "El sistema usa estas coordenadas para calcular rutas óptimas al técnico."}
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <Label>Latitud</Label>
             <Input

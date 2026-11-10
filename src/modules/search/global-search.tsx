@@ -108,7 +108,7 @@ function SearchDialog({ open, onClose }: { open: boolean; onClose: () => void })
             />
           </div>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto p-2">
+        <div className="max-h-[60dvh] overflow-y-auto p-2">
           {q.length < 2 ? (
             <p className="p-4 text-center text-sm text-muted-foreground">
               Escribe al menos 2 caracteres para buscar.

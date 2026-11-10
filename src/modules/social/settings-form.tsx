@@ -54,7 +54,7 @@ export function SocialSettingsForm({ initial }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label>Nombre de marca</Label>
           <Input
@@ -100,7 +100,7 @@ export function SocialSettingsForm({ initial }: Props) {
           value={form.brand_voice}
           onChange={(e) => setForm({ ...form, brand_voice: e.target.value })}
           rows={2}
-          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
           placeholder="Ej: profesional, claro, cercano, sin tecnicismos innecesarios"
         />
       </div>
@@ -111,7 +111,7 @@ export function SocialSettingsForm({ initial }: Props) {
           value={form.visual_style}
           onChange={(e) => setForm({ ...form, visual_style: e.target.value })}
           rows={2}
-          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
           placeholder="Ej: limpio, azul agua, blanco, tonos naturales, sin personas reconocibles"
         />
       </div>

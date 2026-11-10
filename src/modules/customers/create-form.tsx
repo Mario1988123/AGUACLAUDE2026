@@ -114,7 +114,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-card p-6">
+    <div className="space-y-4 rounded-2xl border bg-card p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {[1, 2].map((n) => (
@@ -191,7 +191,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
                 <div className="flex-1 font-bold">Autónomo</div>
               </label>
               {isAutonomo ? (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Nombre *</Label>
                     <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
@@ -206,7 +206,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
                   </div>
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Razón social *</Label>
                     <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} required />
@@ -223,7 +223,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
               )}
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Nombre *</Label>
                 <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
@@ -239,7 +239,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Email</Label>
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -265,7 +265,7 @@ export function CustomerCreateForm({ sourceLeadId }: Props) {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={6}
-            className="w-full rounded-xl border border-input bg-background p-3 text-sm"
+            className="w-full rounded-xl border border-input bg-background p-3 text-base md:text-sm"
           />
           <p className="text-xs text-muted-foreground">
             La dirección y los datos bancarios los añadirás desde la ficha del cliente (con mapa).

@@ -59,7 +59,7 @@ export function CreateCategoryForm() {
   }
 
   return (
-    <form onSubmit={handle} className="grid gap-3 sm:grid-cols-3">
+    <form onSubmit={handle} className="grid grid-cols-1 gap-3 sm:grid-cols-3">
       <div className="space-y-1 sm:col-span-2">
         <Label htmlFor="cat_name">Nombre</Label>
         <Input id="cat_name" name="name" required />
@@ -70,7 +70,7 @@ export function CreateCategoryForm() {
           id="cat_kind"
           name="default_kind"
           defaultValue="equipment"
-          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base md:text-sm"
         >
           {PRODUCT_KIND.map((k) => (
             <option key={k} value={k}>

@@ -53,7 +53,7 @@ export function PhotoGallery({ photos }: { photos: Photo[] }) {
 
       {active && active.signed_url && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => setActive(null)}
           role="dialog"
           aria-label="Foto ampliada"
@@ -64,12 +64,12 @@ export function PhotoGallery({ photos }: { photos: Photo[] }) {
               e.stopPropagation();
               setActive(null);
             }}
-            className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-black hover:bg-white"
+            className="absolute right-4 top-[max(1rem,env(safe-area-inset-top))] rounded-full bg-white/90 p-2 text-black hover:bg-white"
             aria-label="Cerrar"
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="absolute left-4 top-4 rounded-lg bg-white/90 px-3 py-1.5 text-sm font-bold text-black">
+          <div className="absolute left-4 top-[max(1rem,env(safe-area-inset-top))] rounded-lg bg-white/90 px-3 py-1.5 text-sm font-bold text-black">
             {labelFor(active.category)}
           </div>
           {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -240,11 +240,11 @@ export function PortalAccesoCard({ customerId, customerName }: Props) {
             <p className="font-medium text-sky-950">
               Mándasela ahora: por seguridad no se vuelve a mostrar.
             </p>
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <span className="text-muted-foreground">Usuario</span>
               <span className="font-mono text-base">{recien.usuario}</span>
               <span className="mt-2 text-muted-foreground">Contraseña</span>
-              <span className="select-all font-mono text-xl tracking-wide">{recien.clave}</span>
+              <span className="select-all break-all font-mono text-xl tracking-wide">{recien.clave}</span>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={copiar} className="h-11">

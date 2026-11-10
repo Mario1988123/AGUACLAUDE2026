@@ -85,13 +85,13 @@ export default async function EventosPage({
         </p>
       </div>
 
-      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+      <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4 max-sm:[&>div]:w-full max-sm:[&_input:not([type=checkbox])]:w-full max-sm:[&_select]:w-full">
         <div className="space-y-1">
           <label className="text-xs uppercase text-muted-foreground">Entidad</label>
           <select
             name="subject_type"
             defaultValue={sp.subject_type ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todas</option>
             {SUBJECT_OPTIONS.map((s) => (
@@ -107,7 +107,7 @@ export default async function EventosPage({
             name="kind"
             defaultValue={sp.kind ?? ""}
             placeholder="ej. contract.signed"
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <div className="space-y-1">
@@ -115,7 +115,7 @@ export default async function EventosPage({
           <select
             name="actor_user_id"
             defaultValue={sp.actor_user_id ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           >
             <option value="">Todos</option>
             {members.map((m) => (
@@ -131,7 +131,7 @@ export default async function EventosPage({
             type="date"
             name="from"
             defaultValue={sp.from ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <div className="space-y-1">
@@ -140,7 +140,7 @@ export default async function EventosPage({
             type="date"
             name="to"
             defaultValue={sp.to ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-3 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-3 text-base md:text-sm"
           />
         </div>
         <button

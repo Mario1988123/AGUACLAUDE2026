@@ -302,7 +302,7 @@ export function GoogleMapsDashboard({ config, usage, has_key, antiFraud }: Props
           notificamos a admin / director técnico. No bloquea el flujo —
           es solo aviso para revisión manual.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Distancia máxima al iniciar parte (m)</Label>
             <Input

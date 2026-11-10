@@ -113,11 +113,11 @@ export function ProposalRowActions({
 
       {openModal && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-2 sm:p-4 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]"
           onClick={() => !pending && setOpenModal(null)}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
+            className="flex max-h-[90dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -137,7 +137,7 @@ export function ProposalRowActions({
                     rows={3}
                     autoFocus
                     placeholder="No interesa al cliente, precio fuera de presupuesto…"
-                    className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm"
+                    className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
                   />
                 </>
               ) : (

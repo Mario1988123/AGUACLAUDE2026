@@ -91,7 +91,7 @@ export function DatasheetIaguaPanel({
         <div className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Portada (página 1)
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Palabra destacada del título</Label>
             <Input
@@ -119,7 +119,7 @@ export function DatasheetIaguaPanel({
             onChange={(e) => setHeroText(e.target.value)}
             rows={3}
             placeholder="Párrafo descriptivo que va dentro de la caja azul de la portada."
-            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="w-full resize-none rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           />
         </div>
       </div>
@@ -133,7 +133,7 @@ export function DatasheetIaguaPanel({
         onAdd={() => setFeatures((f) => [...f, { title: "", desc: "" }])}
         onRemove={(i) => setFeatures((f) => f.filter((_, idx) => idx !== i))}
         render={(it, i) => (
-          <div className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr]">
             <Input
               value={it.title}
               onChange={(e) =>
@@ -178,7 +178,7 @@ export function DatasheetIaguaPanel({
         onAdd={() => setIdeal((d) => [...d, { title: "", desc: "" }])}
         onRemove={(i) => setIdeal((d) => d.filter((_, idx) => idx !== i))}
         render={(it, i) => (
-          <div className="grid gap-2 sm:grid-cols-[1fr_2fr]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr]">
             <Input
               value={it.title}
               onChange={(e) =>
@@ -202,7 +202,7 @@ export function DatasheetIaguaPanel({
         <div className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
           Recuadro inferior (badge)
         </div>
-        <div className="grid gap-3 sm:grid-cols-[1fr_2fr]">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr]">
           <div className="space-y-1.5">
             <Label>Texto del sello</Label>
             <Input

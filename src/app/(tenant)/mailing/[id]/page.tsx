@@ -81,7 +81,7 @@ export default async function EmailDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Cuerpo del email</CardTitle>
@@ -91,7 +91,7 @@ export default async function EmailDetailPage({
               <iframe
                 title="Cuerpo email"
                 srcDoc={email.body_html}
-                className="h-[600px] w-full rounded-md border bg-white"
+                className="h-[min(600px,70dvh)] w-full rounded-md border bg-white"
                 sandbox="allow-same-origin"
               />
             ) : (

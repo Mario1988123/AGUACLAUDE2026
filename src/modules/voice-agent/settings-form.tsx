@@ -142,7 +142,7 @@ export function VoiceSettingsForm({ initial }: { initial: VoiceSettings }) {
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             id="caller_service"
             label="Número desde el que llama"
@@ -225,7 +225,7 @@ export function VoiceSettingsForm({ initial }: { initial: VoiceSettings }) {
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field
             id="caller_comm"
             label="Número comercial (rango 400)"
@@ -368,7 +368,7 @@ export function VoiceSettingsForm({ initial }: { initial: VoiceSettings }) {
       {/* ---------------- LÍMITES Y RGPD ---------------- */}
       <section className="space-y-4 rounded-xl border border-border p-5">
         <h2 className="text-base font-bold">Límites, escalado y datos</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Field
             id="cap"
             label="Tope de minutos al mes"

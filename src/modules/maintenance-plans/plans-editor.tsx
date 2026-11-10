@@ -146,7 +146,7 @@ function PlanRow({ plan }: { plan: MaintenancePlan }) {
         </label>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-1.5">
           <Label>Nombre comercial</Label>
           <Input
@@ -219,7 +219,7 @@ function PlanRow({ plan }: { plan: MaintenancePlan }) {
           rows={2}
           value={form.description}
           onChange={(e) => setForm({ ...form, description: e.target.value })}
-          className="w-full rounded-xl border border-input bg-background p-2 text-sm"
+          className="w-full rounded-xl border border-input bg-background p-2 text-base md:text-sm"
         />
       </div>
 

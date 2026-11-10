@@ -10,7 +10,7 @@ export default async function ConfiguracionPuntosPage() {
   const settings = await getPointsSettingsAdmin();
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Configuración · Programa de puntos</h1>
           <p className="text-sm text-muted-foreground">
