@@ -48,6 +48,7 @@ import {
 import { CollectInline } from "@/modules/contracts/quick-collect-inline";
 import { MaintenancePlanPicker } from "@/modules/maintenance-plans/plan-picker";
 import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
+import { ajustarLienzoFirma, borrarLienzo } from "@/shared/lib/lienzo-firma";
 
 interface PaymentRow {
   id: string;
@@ -1654,17 +1655,7 @@ function SignaturePad({ onChange }: { onChange: (v: string | null) => void }) {
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = c.getBoundingClientRect();
-    c.width = rect.width * dpr;
-    c.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#0f172a";
+    return ajustarLienzoFirma(c, { lineWidth: 2, strokeStyle: "#0f172a" });
   }, []);
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {
     const c = ref.current!;
@@ -1691,9 +1682,7 @@ function SignaturePad({ onChange }: { onChange: (v: string | null) => void }) {
     onChange(ref.current!.toDataURL("image/png"));
   }
   function clear() {
-    const c = ref.current!;
-    const ctx = c.getContext("2d")!;
-    ctx.clearRect(0, 0, c.width, c.height);
+    borrarLienzo(ref.current!);
     onChange(null);
   }
   return (

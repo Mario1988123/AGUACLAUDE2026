@@ -7,6 +7,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
+import { ajustarLienzoFirma, borrarLienzo } from "@/shared/lib/lienzo-firma";
 import { saveContractSignatureSafeAction, type ContractSignature } from "./signatures-actions";
 
 type Role = "representative" | "customer";
@@ -22,17 +23,7 @@ function SignatureCanvas({
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = c.getBoundingClientRect();
-    c.width = rect.width * dpr;
-    c.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "#0f172a";
+    return ajustarLienzoFirma(c, { lineWidth: 2, strokeStyle: "#0f172a" });
   }, []);
 
   function pos(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -63,9 +54,7 @@ function SignatureCanvas({
     onChange(c.toDataURL("image/png"));
   }
   function clear() {
-    const c = ref.current!;
-    const ctx = c.getContext("2d")!;
-    ctx.clearRect(0, 0, c.width, c.height);
+    borrarLienzo(ref.current!);
     onChange(null);
   }
 
