@@ -170,7 +170,7 @@ function suscribir(aviso: () => void): () => void {
   };
 }
 
-function usarEstado(): EstadoPush {
+function useEstadoPush(): EstadoPush {
   return useSyncExternalStore(
     suscribir,
     () => estado,
@@ -292,7 +292,7 @@ async function desactivarPush(): Promise<void> {
 
 export function RegistroPushNativo({ userId }: { userId: string }) {
   const router = useRouter();
-  const { permiso } = usarEstado();
+  const { permiso } = useEstadoPush();
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [pendiente, startTransition] = useTransition();
 
@@ -422,7 +422,7 @@ export function RegistroPushNativo({ userId }: { userId: string }) {
 // ---------------------------------------------------------------------------
 
 export function BotonPushNativo() {
-  const { permiso, token } = usarEstado();
+  const { permiso, token } = useEstadoPush();
   const [admite, setAdmite] = useState<boolean | null>(null);
   const [pendiente, startTransition] = useTransition();
 
