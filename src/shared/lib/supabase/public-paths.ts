@@ -41,6 +41,8 @@ export const PUBLIC_PATHS: readonly string[] = [
   // El resto de /portal exige sesión de cliente (requireSesionPortal).
   "/portal/entrar",
   "/portal/salir",
+  // Política de privacidad: la exigen App Store y Google Play sin sesión.
+  "/privacidad",
 ];
 
 /** ¿Se puede abrir esta ruta sin sesión? Comparación por prefijo. */
