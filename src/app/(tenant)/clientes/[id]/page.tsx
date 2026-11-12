@@ -20,6 +20,7 @@ import { PortalAccesoCard } from "@/modules/portal-clientes/acceso-card";
 import { getCustomerConsents } from "@/modules/customers/consents-actions";
 import { listProposalsByCustomer } from "@/modules/proposals/actions";
 import { BackButton } from "@/shared/components/back-button";
+import { FichaClienteTecnico } from "@/modules/customers/ficha-tecnico";
 import { ProposalsCard } from "@/modules/proposals/proposals-card";
 import {
   listContractsByCustomer,
@@ -147,6 +148,39 @@ export default async function CustomerDetailPage({
       .is("deleted_at", null)
       .order("is_primary", { ascending: false });
     addresses = (data ?? []) as typeof addresses;
+  }
+  // Solo técnico (2026-11-12): ficha reducida, de solo lectura, con sus
+  // trabajos pendientes. Ya ha pasado el scope (cliente pendiente para él).
+  {
+    const { esSoloTecnico, listarClientesPendientes } = await import(
+      "@/shared/lib/auth/role-scope"
+    );
+    if (esSoloTecnico(session)) {
+      const [pend, equipos] = await Promise.all([
+        listarClientesPendientes(session, id),
+        listCustomerEquipment(id).catch(() => []),
+      ]);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cust = customer as any;
+      return (
+        <FichaClienteTecnico
+          nombre={displayName}
+          telefono={cust.phone_primary ?? null}
+          telefono2={cust.party_kind === "company" ? (cust.phone_company ?? null) : null}
+          direcciones={(addresses as Array<Record<string, unknown>>).map((d) => ({
+            id: String(d.id),
+            texto: [d.street_type, d.street, d.street_number, d.floor, d.door, d.postal_code, d.city]
+              .filter(Boolean)
+              .join(" "),
+            lat: (d.latitude as number | null) ?? null,
+            lng: (d.longitude as number | null) ?? null,
+            principal: !!d.is_primary,
+          }))}
+          equipos={equipos}
+          motivos={pend.get(id) ?? []}
+        />
+      );
+    }
   }
   const referralsActive = await isModuleActive("referrals");
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");

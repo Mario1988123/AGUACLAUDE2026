@@ -17,6 +17,8 @@ interface HeaderProps {
   roleLabel?: string | null;
   /** Si false, oculta el TimeClockWidget — empresa sin módulo fichajes. */
   showTimeClock?: boolean;
+  /** Botón «+ Lead» y enlace a Configuración (el técnico no tiene ninguno). */
+  showNewLead?: boolean;
 }
 
 function initials(name: string | null | undefined, email: string | null | undefined): string {
@@ -33,6 +35,7 @@ export function Header({
   email,
   roleLabel,
   showTimeClock = true,
+  showNewLead = true,
 }: HeaderProps) {
   const [open, setOpen] = useState(false);
   const menuAbierto = useMenuLateral();
@@ -110,6 +113,7 @@ export function Header({
 
         <div className="flex shrink-0 items-center gap-1 sm:gap-3">
         {showTimeClock && <TimeClockWidget />}
+        {showNewLead && (
         <Link
           href={"/leads/nuevo" as never}
           className="hidden sm:inline-flex h-10 items-center gap-1.5 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:bg-primary/90"
@@ -118,6 +122,7 @@ export function Header({
           <Plus className="h-4 w-4" />
           Lead
         </Link>
+        )}
         <NotificationsBell initialCount={unreadCount} />
         {/* El botón suelto de salir solo cabe en escritorio; en móvil y tablet
             está en el menú de usuario y en el pie del cajón. */}
@@ -160,6 +165,7 @@ export function Header({
                 <div className="text-xs text-muted-foreground">{email ?? ""}</div>
               </div>
               <div className="p-2">
+                {showNewLead && (
                 <a
                   href="/configuracion"
                   className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm hover:bg-muted active:bg-muted"
@@ -167,6 +173,7 @@ export function Header({
                 >
                   <User className="h-4 w-4" /> Configuración
                 </a>
+                )}
                 <button
                   type="button"
                   onClick={replayTour}

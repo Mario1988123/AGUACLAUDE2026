@@ -105,6 +105,12 @@ async function renderDashboard({
   searchParams: Promise<{ dept?: string; user?: string }>;
 }) {
   const session = await requireSession();
+  // El técnico no tiene dashboard (es de ventas): va a Mi día (2026-11-12).
+  const { esSoloTecnico } = await import("@/shared/lib/auth/role-scope");
+  if (esSoloTecnico(session)) {
+    const { redirect } = await import("next/navigation");
+    redirect("/mi-dia");
+  }
   const sp = await searchParams;
   const filterDept =
     sp.dept === "tech" || sp.dept === "sales" || sp.dept === "tmk" ? sp.dept : undefined;

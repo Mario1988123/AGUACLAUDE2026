@@ -10,6 +10,9 @@ import {
   getCustomerAlerts,
 } from "@/modules/customers/smart-alerts";
 import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
+import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
+import { listarMisClientesPendientes } from "@/modules/customers/tecnico-actions";
+import { MisClientesTecnico } from "@/modules/customers/mis-clientes-tecnico";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +23,11 @@ export default async function CustomersPage({
 }) {
   const sp = await searchParams;
   const session = await requireSession();
+  // Solo técnico (2026-11-12): ve sus clientes pendientes, nada más.
+  if (esSoloTecnico(session)) {
+    const clientes = await listarMisClientesPendientes();
+    return <MisClientesTecnico clientes={clientes} />;
+  }
   const isUpperLevel =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||

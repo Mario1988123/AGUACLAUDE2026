@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridDayRangeUtc } from "@/shared/lib/format-date";
 
@@ -40,24 +41,34 @@ export async function getMyDayItems(): Promise<DayItem[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { from, to } = startOfToday();
-
+  // Admin + company_id + el propio usuario (2026-11-12): con el cliente RLS el
+  // técnico no veía nombre, teléfono ni dirección de SUS clientes. Solo se
+  // leen datos de trabajos asignados a él, así que no amplía nada.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  // Atrasados sin cerrar (instalaciones y mantenimientos de días anteriores)
+  // también salen en Mi día: si no, un técnico con todo atrasado ve la
+  // pantalla vacía. Se marcan como «Atrasado».
   const [instRes, maintRes, agendaRes] = await Promise.all([
-    supabase
+    admin
       .from("installations")
       .select("id, reference_code, customer_id, status, scheduled_at, address_id, kind")
+      .eq("company_id", session.company_id)
       .eq("installer_user_id", session.user_id)
       .in("status", ["scheduled", "in_progress", "paused"])
       .not("scheduled_at", "is", null)
-      .gte("scheduled_at", from)
       .lte("scheduled_at", to)
-      .is("deleted_at", null),
-    supabase
+      .is("deleted_at", null)
+      .limit(200),
+    admin
       .from("maintenance_jobs")
       .select("id, customer_id, status, scheduled_at")
+      .eq("company_id", session.company_id)
       .eq("technician_user_id", session.user_id)
       .in("status", ["scheduled", "in_progress"])
-      .gte("scheduled_at", from)
-      .lte("scheduled_at", to),
+      .not("scheduled_at", "is", null)
+      .lte("scheduled_at", to)
+      .limit(200),
     supabase
       .from("agenda_events")
       .select(
@@ -108,9 +119,10 @@ export async function getMyDayItems(): Promise<DayItem[]> {
   const nameMap = new Map<string, string>();
   const phoneMap = new Map<string, string>();
   if (cIds.length > 0) {
-    const { data: cs } = await supabase
+    const { data: cs } = await admin
       .from("customers")
       .select("id, party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
+      .eq("company_id", session.company_id)
       .in("id", cIds);
     type CC = {
       id: string;
@@ -133,19 +145,33 @@ export async function getMyDayItems(): Promise<DayItem[]> {
 
   const items: DayItem[] = [];
 
-  // Resolver geo + dirección de instalaciones
+  // Resolver geo + dirección: la de la instalación y, para mantenimientos,
+  // la principal del cliente.
   const addrIds = insts.map((i) => i.address_id).filter((v): v is string => !!v);
+  const maintCustIds = Array.from(new Set(maints.map((m) => m.customer_id).filter(Boolean)));
   const addrGeoMap = new Map<
     string,
     { lat: number | null; lng: number | null; summary: string | null }
   >();
-  if (addrIds.length > 0) {
-    const { data: addrs } = await supabase
+  const custAddrMap = new Map<
+    string,
+    { lat: number | null; lng: number | null; summary: string | null }
+  >();
+  if (addrIds.length > 0 || maintCustIds.length > 0) {
+    const ors: string[] = [];
+    if (addrIds.length > 0) ors.push(`id.in.(${addrIds.join(",")})`);
+    if (maintCustIds.length > 0) ors.push(`customer_id.in.(${maintCustIds.join(",")})`);
+    const { data: addrs } = await admin
       .from("addresses")
-      .select("id, latitude, longitude, street_type, street, street_number, postal_code, city")
-      .in("id", addrIds);
+      .select("id, customer_id, is_primary, latitude, longitude, street_type, street, street_number, postal_code, city")
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .or(ors.join(","))
+      .order("is_primary", { ascending: false });
     for (const a of (addrs ?? []) as Array<{
       id: string;
+      customer_id: string | null;
+      is_primary: boolean | null;
       latitude: number | null;
       longitude: number | null;
       street_type: string | null;
@@ -163,11 +189,10 @@ export async function getMyDayItems(): Promise<DayItem[]> {
       ]
         .filter(Boolean)
         .join(" ");
-      addrGeoMap.set(a.id, {
-        lat: a.latitude,
-        lng: a.longitude,
-        summary: summary || null,
-      });
+      const g = { lat: a.latitude, lng: a.longitude, summary: summary || null };
+      addrGeoMap.set(a.id, g);
+      // Ordenado por is_primary desc: la primera por cliente es la principal.
+      if (a.customer_id && !custAddrMap.has(a.customer_id)) custAddrMap.set(a.customer_id, g);
     }
   }
 
@@ -182,6 +207,7 @@ export async function getMyDayItems(): Promise<DayItem[]> {
         : i.kind === "relocation"
           ? `Reubicación de equipo · ${ref}`
           : ref;
+    const atrasada = i.scheduled_at < from;
     items.push({
       id: i.id,
       kind: "installation",
@@ -189,7 +215,7 @@ export async function getMyDayItems(): Promise<DayItem[]> {
         i.kind === "uninstall"
           ? `🔧 RETIRADA · ${nameMap.get(i.customer_id) ?? "Cliente"}`
           : nameMap.get(i.customer_id) ?? "Cliente",
-      subtitle,
+      subtitle: atrasada ? `Atrasada · ${subtitle}` : subtitle,
       scheduled_at: i.scheduled_at,
       status: i.status,
       href: `/instalaciones/${i.id}`,
@@ -200,15 +226,19 @@ export async function getMyDayItems(): Promise<DayItem[]> {
     });
   }
   for (const m of maints) {
+    const geo = custAddrMap.get(m.customer_id) ?? null;
     items.push({
       id: m.id,
       kind: "maintenance",
       title: nameMap.get(m.customer_id) ?? "Cliente",
-      subtitle: "Mantenimiento",
+      subtitle: m.scheduled_at < from ? "Mantenimiento atrasado" : "Mantenimiento",
       scheduled_at: m.scheduled_at,
       status: m.status,
       href: `/mantenimientos/${m.id}`,
+      geo_latitude: geo?.lat ?? null,
+      geo_longitude: geo?.lng ?? null,
       customer_phone: phoneMap.get(m.customer_id) ?? null,
+      address_summary: geo?.summary ?? null,
     });
   }
   for (const a of agendas) {

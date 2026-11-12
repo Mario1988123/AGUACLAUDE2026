@@ -68,16 +68,22 @@ const LEVEL_1_2 = [
 const SALES_ROLES = [...LEVEL_1_2, "sales_rep"];
 const FIELD_ROLES = [...LEVEL_1_2, "installer"];
 const LEADS_ROLES = [...LEVEL_1_2, "sales_rep", "telemarketer"];
+/** Todos menos el técnico (installer). Un técnico que además sea comercial
+ *  lo ve por su otro rol. Plan de permisos de técnicos, 2026-11-12. */
+const NO_TECNICO = [...LEVEL_1_2, "sales_rep", "telemarketer"];
 
 export const MODULES: ModuleEntry[] = [
   // ===== 1. INICIO — todos =====
-  { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", href: "/dashboard", group: "main" },
+  { key: "dashboard", label: "Dashboard", icon: "LayoutDashboard", href: "/dashboard", group: "main", rolesAllowed: NO_TECNICO },
   { key: "my_day", label: "Mi día", icon: "CalendarCheck", href: "/mi-dia", group: "main" },
   { key: "agenda", label: "Agenda", icon: "Calendar", href: "/agenda", configHref: "/configuracion/agenda", group: "main" },
+  // Mi furgoneta: semáforo de stock de SU furgoneta, sin cifras (técnico).
+  { key: "my_van", label: "Mi furgoneta", icon: "Truck", href: "/mi-furgoneta", group: "main", rolesAllowed: ["installer"] },
 
   // ===== 2. COMERCIAL =====
   { key: "leads", label: "Leads", icon: "Contact", href: "/leads", configHref: "/configuracion/leads", group: "sales", rolesAllowed: LEADS_ROLES },
-  { key: "customers", label: "Clientes", icon: "Users", href: "/clientes", group: "sales", rolesAllowed: SALES_ROLES },
+  // El técnico entra a /clientes y ve solo sus clientes pendientes (2026-11-12).
+  { key: "customers", label: "Clientes", icon: "Users", href: "/clientes", group: "sales", rolesAllowed: [...SALES_ROLES, "installer"] },
   // Referidos — opt-in (default activado). Amigos recomendados por clientes con
   // equipos entran como leads asociados al cliente recomendador.
   { key: "referrals", label: "Referidos", icon: "UsersRound", href: "/referidos", group: "sales", rolesAllowed: SALES_ROLES },
@@ -113,7 +119,7 @@ export const MODULES: ModuleEntry[] = [
 
   // ===== 5. CATÁLOGO Y STOCK (productos + almacenes juntos) =====
   { key: "products", label: "Productos", icon: "Package", href: "/productos", configHref: "/configuracion/productos", group: "catalog", rolesAllowed: LEVEL_1_2 },
-  { key: "warehouses", label: "Almacenes", icon: "Warehouse", href: "/almacenes", configHref: "/configuracion/almacenes", group: "catalog", rolesAllowed: FIELD_ROLES },
+  { key: "warehouses", label: "Almacenes", icon: "Warehouse", href: "/almacenes", configHref: "/configuracion/almacenes", group: "catalog", rolesAllowed: LEVEL_1_2 },
 
   // ===== 6. COBROS Y FACTURACIÓN =====
   { key: "wallet", label: "Wallet", icon: "Wallet", href: "/wallet", group: "billing", rolesAllowed: SALES_ROLES },
@@ -123,7 +129,7 @@ export const MODULES: ModuleEntry[] = [
   { key: "time_tracking", label: "Fichajes", icon: "Clock", href: "/fichajes", configHref: "/configuracion/horarios", group: "personal" },
   { key: "expenses", label: "Mis gastos", icon: "Receipt", href: "/gastos", configHref: "/configuracion/gastos", group: "personal" },
   { key: "chat", label: "Chat", icon: "MessageSquare", href: "/chat", group: "personal" },
-  { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "personal" },
+  { key: "points", label: "Puntos", icon: "Trophy", href: "/puntos", group: "personal", rolesAllowed: NO_TECNICO },
 
   // ===== 8. SISTEMA =====
   // Eventos y Auditoría retirados del sidebar admin (decisión usuario
@@ -139,7 +145,7 @@ export const MODULES: ModuleEntry[] = [
   // Visible para todos los roles que envían/reciben emails de leads y clientes
   // (almacén queda fuera). El scoping fino lo aplica el módulo (admin todo,
   // directores su equipo, nivel 3 lo suyo).
-  { key: "mail", label: "Mail", icon: "Inbox", href: "/mail", group: "system", rolesAllowed: [...LEVEL_1_2, "sales_rep", "telemarketer", "installer"] },
+  { key: "mail", label: "Mail", icon: "Inbox", href: "/mail", group: "system", rolesAllowed: [...LEVEL_1_2, "sales_rep", "telemarketer"] },
   // RRSS: calendario editorial automático para Instagram, Facebook,
   // LinkedIn, TikTok, Google Business, blog y newsletter. Centrado en
   // contenido de tratamiento del agua, sostenibilidad y efemérides.
@@ -162,14 +168,7 @@ export function defaultBottomNavKeysForRoles(roles: string[]): string[] {
   if (!isLeader) {
     // Nivel 3 TÉCNICO (instalador): agenda + instalaciones + mantenimientos.
     if (has("installer")) {
-      return [
-        "agenda",
-        "installations",
-        "maintenance",
-        "my_day",
-        "dashboard",
-        "notifications",
-      ];
+      return ["my_day", "agenda", "customers", "maintenance", "my_van"];
     }
     // Nivel 3 COMERCIAL.
     if (has("sales_rep")) {

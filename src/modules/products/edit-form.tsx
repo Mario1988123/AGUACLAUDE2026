@@ -29,6 +29,7 @@ export function ProductEditButton({
     weight_grams: number | null;
     stock_managed: boolean;
     stock_min: number | null;
+    umbral_furgoneta?: number | null;
     show_in_calculator: boolean;
     installation_manual_url?: string | null;
     installation_notes?: string | null;
@@ -52,11 +53,13 @@ export function ProductEditButton({
     weight: initial.weight_grams?.toString() ?? "",
     stock_managed: initial.stock_managed,
     stock_min: initial.stock_min?.toString() ?? "0",
+    umbral_furgoneta: initial.umbral_furgoneta?.toString() ?? "",
     show_in_calculator: initial.show_in_calculator,
     installation_manual_url: initial.installation_manual_url ?? "",
     installation_notes: initial.installation_notes ?? "",
   });
   const [roles, setRoles] = useState<string[]>(initial.roles ?? []);
+  const hayUmbral = initial.umbral_furgoneta !== undefined;
   function toggleRole(r: ProductRole) {
     setRoles((prev) => (prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]));
   }
@@ -80,6 +83,11 @@ export function ProductEditButton({
         weight_grams: form.weight ? Number(form.weight) : null,
         stock_managed: form.stock_managed,
         stock_min: form.stock_min ? Number(form.stock_min) : 0,
+        // Solo si la columna existe: si no, el reintento de la acción
+        // descartaría también otros campos del guardado.
+        ...(hayUmbral
+          ? { umbral_furgoneta: form.umbral_furgoneta.trim() ? Number(form.umbral_furgoneta) : null }
+          : {}),
         show_in_calculator: form.show_in_calculator,
         installation_manual_url: form.installation_manual_url.trim() || null,
         installation_notes: form.installation_notes.trim() || null,
@@ -248,6 +256,23 @@ export function ProductEditButton({
                     onChange={(e) => setForm({ ...form, stock_min: e.target.value })}
                   />
                 </div>
+                {hayUmbral && (
+                <div className="space-y-1">
+                  <Label>En furgoneta, avisar cuando queden ≤</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="1"
+                    value={form.umbral_furgoneta}
+                    onChange={(e) => setForm({ ...form, umbral_furgoneta: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    El técnico ve el punto en ámbar («queda poco»). Vacío = cuando quede 1.
+                  </p>
+                </div>
+                )}
               </div>
 
               <label className="flex items-center gap-2 rounded-xl border-2 border-blue-200 bg-blue-50 p-3 cursor-pointer">

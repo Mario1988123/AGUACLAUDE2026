@@ -94,7 +94,7 @@ export default async function MantenimientosPage({
   const { fromDate, toDate } = periodToRange(period);
   const [allJobs, contracts, alerts, technicians] = await Promise.all([
     listMaintenance({ status, fromDate, toDate }),
-    listMaintenanceContracts().catch(() => []),
+    isUpper ? listMaintenanceContracts().catch(() => []) : Promise.resolve([]),
     isUpper
       ? getMaintenanceAlerts().catch(() => null)
       : Promise.resolve(null),
@@ -143,7 +143,8 @@ export default async function MantenimientosPage({
         <div>
           <h1 className="text-2xl font-bold">Mantenimientos</h1>
           <p className="text-sm text-muted-foreground">
-            {contracts.length} contratos · {jobs.length} trabajos
+            {isUpper ? `${contracts.length} contratos · ` : ""}
+            {jobs.length} trabajos
           </p>
         </div>
         {isUpper && (
@@ -174,7 +175,9 @@ export default async function MantenimientosPage({
         />
       )}
 
-      {/* KPIs */}
+      {/* KPIs y contratos: solo nivel 1/2 (el técnico ve solo sus trabajos, 2026-11-12) */}
+      {isUpper && (
+      <>
       <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs uppercase text-muted-foreground">Completados este mes</div>
@@ -203,6 +206,8 @@ export default async function MantenimientosPage({
           <MaintenanceContractsTable contracts={contracts} />
         </CardContent>
       </Card>
+      </>
+      )}
 
       <form className="grid grid-cols-2 items-end gap-3 rounded-xl border bg-card p-3 sm:flex sm:flex-wrap sm:p-4">
         <div className="space-y-1">

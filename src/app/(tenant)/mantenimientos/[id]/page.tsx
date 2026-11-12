@@ -15,6 +15,8 @@ import { listInstallers } from "@/modules/agenda/actions";
 import { listMaintenancePlans } from "@/modules/maintenance-plans/actions";
 import { requireSession } from "@/shared/lib/auth/session";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
 import { BackButton } from "@/shared/components/back-button";
 
 export const dynamic = "force-dynamic";
@@ -31,16 +33,27 @@ export default async function MaintenanceDetailPage({
   } catch {
     notFound();
   }
+  const session = await requireSession();
+  // Un técnico NO ve los mantenimientos de otro (D2, 2026-11-12).
+  if (esSoloTecnico(session) && job.technician_user_id !== session.user_id) {
+    notFound();
+  }
 
   // Customer name lookup
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data: c } = await supabase
+  // Cliente y dirección con admin + company_id (2026-11-12): con el cliente
+  // RLS el técnico veía «—». Ya está autorizado a ver este trabajo.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const adm = createAdminClient() as any;
+  const { data: c } = await adm
     .from("customers")
-    .select("party_kind, legal_name, trade_name, first_name, last_name")
+    .select("party_kind, legal_name, trade_name, first_name, last_name, phone_primary")
     .eq("id", job.customer_id)
-    .single();
+    .eq("company_id", session.company_id)
+    .maybeSingle();
   const cu = (c ?? {}) as {
+    phone_primary?: string | null;
     party_kind?: "individual" | "company";
     legal_name?: string | null;
     trade_name?: string | null;
@@ -123,18 +136,20 @@ export default async function MaintenanceDetailPage({
   let addrRow: AddrRow | null = null;
   const targetAddrId = jobAddressId ?? equipmentAddrId ?? null;
   if (targetAddrId) {
-    const { data } = await supabase
+    const { data } = await adm
       .from("addresses")
       .select(addrCols)
+      .eq("company_id", session.company_id)
       .eq("id", targetAddrId)
       .is("deleted_at", null)
       .maybeSingle();
     addrRow = (data as AddrRow | null) ?? null;
   }
   if (!addrRow && job.customer_id) {
-    const { data } = await supabase
+    const { data } = await adm
       .from("addresses")
       .select(addrCols)
+      .eq("company_id", session.company_id)
       .eq("customer_id", job.customer_id)
       .is("deleted_at", null)
       .order("is_primary", { ascending: false })
@@ -169,7 +184,6 @@ export default async function MaintenanceDetailPage({
         : null;
 
   const products = await listProducts().catch(() => []);
-  const session = await requireSession();
   const canReassign =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
@@ -229,6 +243,14 @@ export default async function MaintenanceDetailPage({
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Cliente: <strong>{customerName}</strong>
+            {cu.phone_primary && (
+              <>
+                {" · "}
+                <a href={`tel:${cu.phone_primary.replace(/[^0-9+]/g, "")}`} className="font-semibold text-primary underline">
+                  {cu.phone_primary}
+                </a>
+              </>
+            )}
             {job.scheduled_at &&
               ` · Programado ${new Date(job.scheduled_at).toLocaleString("es-ES")}`}
           </p>

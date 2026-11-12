@@ -225,6 +225,9 @@ export default async function ProductDetailPage({
                 weight_grams: product.weight_grams ?? null,
                 stock_managed: product.stock_managed ?? false,
                 stock_min: product.stock_min ?? 0,
+                // undefined = la columna aún no existe (migración sin aplicar).
+                umbral_furgoneta: (product as { umbral_furgoneta?: number | null })
+                  .umbral_furgoneta,
                 show_in_calculator:
                   (product as { show_in_calculator?: boolean }).show_in_calculator ?? false,
                 roles: (product as { roles?: string[] | null }).roles ?? [],

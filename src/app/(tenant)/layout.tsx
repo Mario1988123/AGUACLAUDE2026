@@ -16,6 +16,7 @@ import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
 import { RegistroPushNativo } from "@/modules/notifications/registro-push-nativo";
 import { redirect } from "next/navigation";
+import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
 
 const ROLE_LABEL: Record<string, string> = {
   company_admin: "Admin",
@@ -54,26 +55,36 @@ export default async function TenantLayout({ children }: { children: React.React
     redirect("/login?error=no_company");
   }
 
+  const soloTecnico = esSoloTecnico(session);
   // Guard de scope por rol: si el usuario intenta acceder por URL directa
   // a un módulo que no tiene asignado en su rol (sales_rep entrando en
   // /instalaciones, telemarketer entrando en /clientes, etc.), lo
   // redirigimos al dashboard. Niveles 1 (company_admin) siempre pasan.
-  if (!session.roles.includes("company_admin")) {
+  //
+  // 2026-11-12: el middleware ya fija `x-pathname`, así que el guard funciona
+  // de verdad. Para no cambiar de golpe lo que ven los demás roles, de momento
+  // SOLO se aplica al técnico (installer sin otro rol), que va a /mi-dia.
+  // Excepciones: /contratos/<id>, porque el asistente de instalación le manda
+  // ahí para que el cliente firme; y /configuracion/menu-movil (botón
+  // «Editar» de la barra inferior).
+  if (soloTecnico) {
     try {
       const h = await headers();
       const pathname =
+        h.get("x-pathname") ||
         h.get("x-invoke-path") ||
         h.get("next-url") ||
-        h.get("x-pathname") ||
         "";
-      if (pathname) {
+      const permitida =
+        pathname.startsWith("/contratos/") || pathname === "/configuracion/menu-movil";
+      if (pathname && !permitida) {
         const matched = MODULES.find(
           (m) => m.href !== "/" && (pathname === m.href || pathname.startsWith(`${m.href}/`)),
         );
         if (matched?.rolesAllowed && matched.rolesAllowed.length > 0) {
           const ok = session.roles.some((r) => matched.rolesAllowed!.includes(r));
           if (!ok) {
-            redirect("/dashboard");
+            redirect("/mi-dia");
           }
         }
       }
@@ -155,6 +166,7 @@ export default async function TenantLayout({ children }: { children: React.React
           email={session.email}
           roleLabel={roleLabel}
           showTimeClock={activeModuleKeys.includes("time_tracking")}
+          showNewLead={!soloTecnico}
         />
         <main className="marco-px flex-1 overflow-y-auto overscroll-contain bg-background py-3 [--marco-pad:0.75rem] sm:py-4 sm:[--marco-pad:1rem] lg:py-8 lg:[--marco-pad:2rem]">
           {children}

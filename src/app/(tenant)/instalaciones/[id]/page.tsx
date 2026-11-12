@@ -258,12 +258,18 @@ export default async function InstallationDetailPage({
   let customerPhone: string | null = null;
   let customerEmail: string | null = null;
   let installationAddress: string | null = null;
+  // Con admin + company_id (2026-11-12): con el cliente RLS el técnico veía
+  // teléfono y dirección vacíos. A esta altura ya está autorizado a ver la
+  // instalación (es suya o es nivel 1/2).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admContacto = (await import("@/shared/lib/supabase/admin")).createAdminClient() as any;
   if (customerId) {
     try {
-      const { data: c } = await sb
+      const { data: c } = await admContacto
         .from("customers")
         .select("email, phone_primary")
         .eq("id", customerId)
+        .eq("company_id", session.company_id)
         .maybeSingle();
       if (c) {
         customerPhone = (c as { phone_primary: string | null }).phone_primary ?? null;
@@ -275,12 +281,13 @@ export default async function InstallationDetailPage({
   }
   if (i.address_id) {
     try {
-      const { data: a } = await sb
+      const { data: a } = await admContacto
         .from("addresses")
         .select(
           "street_type, street, street_number, portal, floor, door, postal_code, city, province",
         )
         .eq("id", i.address_id)
+        .eq("company_id", session.company_id)
         .maybeSingle();
       if (a) {
         installationAddress =

@@ -696,6 +696,8 @@ export async function updateProductAction(
     stock_managed?: boolean;
     stock_min?: number | null;
     stock_max?: number | null;
+    /** Ámbar en "Mi furgoneta" cuando queden ≤ N (2026-11-12). Null = 1. */
+    umbral_furgoneta?: number | null;
     lead_time_days?: number | null;
     default_supplier_name?: string | null;
     show_in_calculator?: boolean;
@@ -780,6 +782,7 @@ export async function updateProductAction(
         "datasheet_color_accent",
         "datasheet_extra",
         "roles",
+        "umbral_furgoneta",
       ];
       const re = new RegExp(`(${newCols.join("|")})`, "i");
       if (re.test(error.message ?? "") || (error as { code?: string }).code === "42703") {

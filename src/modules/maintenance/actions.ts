@@ -5,6 +5,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { assertTrabajoAsignado } from "@/shared/lib/auth/role-scope";
+import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
@@ -371,13 +372,6 @@ export async function listMaintenance(filters?: {
 }): Promise<MaintenanceRow[]> {
   const session = await requireSession();
   const supabase = await createClient();
-  let query = supabase
-    .from("maintenance_jobs")
-    .select(
-      "id, status, kind, customer_id, technician_user_id, scheduled_at, started_at, completed_at, is_charged, charge_cents, customer_called_at, confirmed_at",
-    )
-    .order("scheduled_at", { ascending: true, nullsFirst: false })
-    .limit(200);
   const isLevel1 =
     session.is_superadmin || session.roles.includes("company_admin");
   const isTechDirector = session.roles.includes("technical_director");
@@ -388,15 +382,30 @@ export async function listMaintenance(filters?: {
     return [];
   }
 
-  if (isInstaller && !isLevel1 && !isTechDirector) {
-    query = query.eq("technician_user_id", session.user_id);
-  }
-  if (filters?.status) query = query.eq("status", filters.status);
-  if (filters?.fromDate) query = query.gte("scheduled_at", filters.fromDate);
-  if (filters?.toDate) query = query.lte("scheduled_at", filters.toDate);
-  const { data, error } = await query;
-  if (error) throw error;
-  const rows = (data ?? []) as Array<
+  // Antes: .limit(200) → con más trabajos la lista se cortaba en silencio
+  // (Infinity ya tiene 340). Ahora se lee entera por tramos (2026-11-12).
+  const soloSuyos = isInstaller && !isLevel1 && !isTechDirector;
+  const data = await fetchAllRows<Record<string, unknown>>(
+    (from, to) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query: any = supabase
+        .from("maintenance_jobs")
+        .select(
+          "id, status, kind, customer_id, technician_user_id, scheduled_at, started_at, completed_at, is_charged, charge_cents, customer_called_at, confirmed_at",
+        );
+      // Un técnico NO ve los mantenimientos de otro (D2).
+      if (soloSuyos) query = query.eq("technician_user_id", session.user_id);
+      if (filters?.status) query = query.eq("status", filters.status);
+      if (filters?.fromDate) query = query.gte("scheduled_at", filters.fromDate);
+      if (filters?.toDate) query = query.lte("scheduled_at", filters.toDate);
+      return query
+        .order("scheduled_at", { ascending: true, nullsFirst: false })
+        .order("id")
+        .range(from, to);
+    },
+    { label: "listMaintenance" },
+  );
+  const rows = (data ?? []) as unknown as Array<
     Omit<MaintenanceRow, "customer_name" | "technician_name" | "alerts"> & {
       started_at?: string | null;
       customer_called_at?: string | null;
@@ -412,11 +421,20 @@ export async function listMaintenance(filters?: {
     ),
   );
   let nameMap = new Map<string, string>();
-  if (ids.length > 0) {
-    const { data: cs } = await supabase
-      .from("customers")
-      .select("id, party_kind, legal_name, trade_name, first_name, last_name")
-      .in("id", ids);
+  if (ids.length > 0 && session.company_id) {
+    // Con admin + company_id (2026-11-12): con el cliente RLS el técnico veía
+    // «—» en vez del nombre. Los ids salen de trabajos que ya puede ver.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const cs: unknown[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: tramo } = await admin
+        .from("customers")
+        .select("id, party_kind, legal_name, trade_name, first_name, last_name")
+        .eq("company_id", session.company_id)
+        .in("id", ids.slice(i, i + 200));
+      cs.push(...((tramo ?? []) as unknown[]));
+    }
     type CC = {
       id: string;
       party_kind: "individual" | "company";
