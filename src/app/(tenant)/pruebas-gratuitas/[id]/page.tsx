@@ -62,10 +62,16 @@ export default async function FreeTrialDetailPage({
   // uninstall pendiente (si ya existe) para no permitir duplicarla.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sbAdmin = (await createClient()) as any;
+  // Almacenes con admin + company_id (2026-11-12): con la RLS cerrada al
+  // técnico, el modal de desinstalación se quedaba sin destinos.
+  const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admAlmacenes = createAdminClient() as any;
   const [whRes, installers, uninstallRes] = await Promise.all([
-    sbAdmin
+    admAlmacenes
       .from("warehouses")
       .select("id, name, is_used_equipment_default")
+      .eq("company_id", session.company_id)
       .is("deleted_at", null)
       .order("is_used_equipment_default", { ascending: false }),
     listInstallers().catch(() => []),

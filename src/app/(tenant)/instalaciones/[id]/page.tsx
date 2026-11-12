@@ -316,9 +316,12 @@ export default async function InstallationDetailPage({
   }> = [];
   if (i.kind === "uninstall") {
     try {
-      const { data: wh } = await sb
+      // Admin + company_id (2026-11-12): con la RLS de almacenes cerrada, el
+      // técnico solo vería su furgoneta y no podría cerrar la retirada.
+      const { data: wh } = await admContacto
         .from("warehouses")
         .select("id, name, is_used_equipment_default")
+        .eq("company_id", session.company_id)
         .is("deleted_at", null)
         .order("name");
       type WH = { id: string; name: string; is_used_equipment_default: boolean | null };

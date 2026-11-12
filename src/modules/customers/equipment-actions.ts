@@ -42,7 +42,7 @@ export interface CustomerEquipmentRow {
 }
 
 export async function listCustomerEquipment(customerId: string): Promise<CustomerEquipmentRow[]> {
-  await requireSession();
+  const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   // Bug histórico (2026-05-24): pedíamos `addresses(line1, city)` pero
@@ -141,9 +141,15 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
   }
 
   const ids = rows.map((r) => r.id);
-  const { data: maintenance } = await supabase
+  // Fechas de mantenimiento con admin + company_id (2026-11-12): con la RLS
+  // del técnico (solo sus trabajos) salían vacías o mal. Los ids salen de
+  // equipos que ya puede ver.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admMant = createAdminClient() as any;
+  const { data: maintenance } = await admMant
     .from("maintenance_jobs")
     .select("customer_equipment_id, completed_at")
+    .eq("company_id", session.company_id)
     .in("customer_equipment_id", ids)
     .not("completed_at", "is", null)
     .order("completed_at", { ascending: false });
@@ -157,9 +163,10 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
 
   // Próximo mantenimiento por equipo: primer scheduled/preprogrammed
   // con fecha >= hoy. Útil para mostrar countdown en la ficha cliente.
-  const { data: upcoming } = await supabase
+  const { data: upcoming } = await admMant
     .from("maintenance_jobs")
     .select("customer_equipment_id, scheduled_at")
+    .eq("company_id", session.company_id)
     .in("customer_equipment_id", ids)
     .in("status", ["scheduled", "preprogrammed"])
     .not("scheduled_at", "is", null)
