@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { ensureBucket, pickImageExt } from "@/shared/lib/supabase/storage-buckets";
-import { assertInstallationCompany } from "./ownership";
+import { assertInstallationAssignee } from "./ownership";
 
 const PHOTO_BUCKET = "installation-photos";
 const SIG_BUCKET = "installation-signatures";
@@ -60,7 +60,7 @@ export async function uploadInstallationPhotoAction(
     if (!installationId) return { ok: false, error: "Falta installation_id" };
     if (file.size > 10 * 1024 * 1024) return { ok: false, error: "Máximo 10 MB" };
     // SEGURIDAD: admin salta RLS → verificar que la instalación es de tu empresa.
-    await assertInstallationCompany(installationId, session.company_id);
+    await assertInstallationAssignee(installationId, session);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
@@ -209,7 +209,7 @@ export async function saveInstallationSignatureAction(input: {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // SEGURIDAD: admin salta RLS → verificar que la instalación es de tu empresa.
-    await assertInstallationCompany(input.installation_id, session.company_id);
+    await assertInstallationAssignee(input.installation_id, session);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 

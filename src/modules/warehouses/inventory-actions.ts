@@ -13,9 +13,10 @@ async function ensureCanManage() {
   if (
     !session.is_superadmin &&
     !session.roles.includes("company_admin") &&
-    !session.roles.includes("technical_director") &&
-    !session.roles.includes("installer")
+    !session.roles.includes("technical_director")
   ) {
+    // 2026-11-12: el técnico ya no ajusta stock a mano; carga y devuelve su
+    // furgoneta por la acción propia (sin ver el almacén).
     throw new Error("Sin permiso para mover stock");
   }
   return session;

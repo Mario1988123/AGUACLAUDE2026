@@ -20,8 +20,7 @@ async function ensureAuthorized() {
   const ok =
     session.is_superadmin ||
     session.roles.includes("company_admin") ||
-    session.roles.includes("technical_director") ||
-    session.roles.includes("installer");
+    session.roles.includes("technical_director");
   if (!ok) throw new Error("No autorizado");
   return session;
 }

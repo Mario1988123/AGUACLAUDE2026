@@ -96,8 +96,7 @@ export async function createStockLotAction(
     const allowed =
       session.is_superadmin ||
       session.roles.includes("company_admin") ||
-      session.roles.includes("technical_director") ||
-      session.roles.includes("installer");
+      session.roles.includes("technical_director");
     if (!allowed) return { ok: false, error: "Sin permiso" };
 
     const parsed = parseOrFriendly(createLotSchema, input, "Nuevo lote");

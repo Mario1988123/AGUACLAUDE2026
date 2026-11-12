@@ -21,6 +21,10 @@ interface TransferArgs {
 export async function transferStockAction(args: TransferArgs): Promise<void> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  // Rol (2026-11-12): antes cualquier usuario podía traspasar entre dos
+  // almacenes cualesquiera de su empresa.
+  const { esGestorStock } = await import("@/shared/lib/auth/role-scope");
+  if (!esGestorStock(session)) throw new Error("Sin permiso para traspasar stock");
   if (args.from_warehouse_id === args.to_warehouse_id)
     throw new Error("Origen y destino son el mismo almacén");
   if (args.quantity <= 0) throw new Error("Cantidad debe ser mayor que 0");

@@ -1,5 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import type { SessionClaims } from "@/shared/lib/auth/session";
+import { assertTrabajoAsignado } from "@/shared/lib/auth/role-scope";
 
 /**
  * Comprueba que una instalación pertenece a la empresa indicada y la
@@ -32,6 +34,24 @@ export async function loadOwnedInstallation<T = { id: string }>(
     throw new Error("Instalación no encontrada o no pertenece a tu empresa");
   }
   return data as T;
+}
+
+/**
+ * Empresa + asignación (2026-11-12): nivel 1/2 opera cualquier instalación de
+ * su empresa; el resto, solo las que tiene asignadas (installer_user_id).
+ * Usar en las acciones de campo: firma, fotos, inicio, pausa, cierre.
+ */
+export async function assertInstallationAssignee(
+  installationId: string,
+  session: SessionClaims,
+): Promise<void> {
+  if (!session.company_id) throw new Error("Sin empresa");
+  const inst = await loadOwnedInstallation<{ installer_user_id: string | null }>(
+    installationId,
+    session.company_id,
+    "id, installer_user_id",
+  );
+  assertTrabajoAsignado(session, inst.installer_user_id, "instalación");
 }
 
 /**

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertTrabajoAsignado } from "@/shared/lib/auth/role-scope";
 import { maintenanceCreateSchema, completeMaintenanceSchema } from "./schemas";
 import { decrementStock } from "@/modules/warehouses/stock-decrement";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
@@ -334,6 +335,15 @@ export async function startMaintenanceAction(id: string) {
   // mantenimientos de otra empresa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Solo el técnico asignado (o nivel 1/2) lo inicia (2026-11-12).
+  const { data: job } = await admin
+    .from("maintenance_jobs")
+    .select("technician_user_id")
+    .eq("id", id)
+    .eq("company_id", session.company_id)
+    .maybeSingle();
+  if (!job) throw new Error("Mantenimiento no encontrado o no pertenece a tu empresa");
+  assertTrabajoAsignado(session, (job as { technician_user_id: string | null }).technician_user_id, "mantenimiento");
   const r = await admin
     .from("maintenance_jobs")
     .update({ status: "in_progress", started_at: new Date().toISOString() })
@@ -602,6 +612,12 @@ export async function completeMaintenanceAction(input: unknown) {
   // SEGURIDAD: `supabase` aplica RLS → prev null = de otra empresa o inexistente.
   // Abortamos para que el UPDATE admin de abajo (salta RLS) no cierre jobs ajenos.
   if (!prev) throw new Error("Mantenimiento no encontrado o no pertenece a tu empresa");
+  // Solo el técnico asignado (o nivel 1/2) lo cierra (2026-11-12).
+  assertTrabajoAsignado(
+    session,
+    (prev as { technician_user_id: string | null }).technician_user_id,
+    "mantenimiento",
+  );
   const startTs = (prev as { started_at: string | null } | null)?.started_at;
   const durationSec = startTs
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
@@ -663,12 +679,16 @@ export async function completeMaintenanceAction(input: unknown) {
     const technicianId =
       (prev as { technician_user_id: string | null } | null)?.technician_user_id ?? null;
     let warehouseId: string | null = null;
+    // Con admin + company_id (2026-11-12): con la RLS de almacenes cerrada al
+    // técnico, el cliente RLS no encontraría el almacén principal y el
+    // descuento se perdería sin error.
     if (technicianId) {
-      const { data: wh } = await supabase
+      const { data: wh } = await admin
         .from("warehouses")
         .select("id")
         .eq("company_id", session.company_id)
         .eq("assigned_user_id", technicianId)
+        .eq("kind", "vehicle")
         .is("deleted_at", null)
         .limit(1)
         .maybeSingle();
@@ -676,7 +696,7 @@ export async function completeMaintenanceAction(input: unknown) {
     }
     // Fallback: primer almacén main de la empresa
     if (!warehouseId) {
-      const { data: wh } = await supabase
+      const { data: wh } = await admin
         .from("warehouses")
         .select("id")
         .eq("company_id", session.company_id)

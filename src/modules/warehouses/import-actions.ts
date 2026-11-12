@@ -188,6 +188,9 @@ export interface InventoryValuation {
 export async function getInventoryValuation(): Promise<InventoryValuation[]> {
   const session = await requireSession();
   if (!session.company_id) return [];
+  // Costes solo para nivel 1/2 (D7, 2026-11-12).
+  const { esNivel12 } = await import("@/shared/lib/auth/role-scope");
+  if (!esNivel12(session)) return [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

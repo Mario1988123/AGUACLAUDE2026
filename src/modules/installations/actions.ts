@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { assertTrabajoAsignado } from "@/shared/lib/auth/role-scope";
 import {
   installationCreateFromContractSchema,
   installationUpdateSchema,
@@ -19,7 +20,7 @@ import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
 import { decrementStockForInstallation } from "@/modules/warehouses/stock-decrement";
-import { assertInstallationCompany } from "./ownership";
+import { assertInstallationAssignee } from "./ownership";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { notasAlCerrar } from "@/modules/customers/retirada-logica";
 
@@ -1393,7 +1394,7 @@ export async function pauseInstallation(id: string) {
   if (!session.company_id) throw new Error("Sin empresa");
   // Seguridad multi-empresa: el admin client salta RLS, así que filtramos
   // SIEMPRE por company_id para que no se pueda pausar una instalación ajena.
-  await assertInstallationCompany(id, session.company_id);
+  await assertInstallationAssignee(id, session);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   await admin
@@ -1409,7 +1410,7 @@ export async function pauseInstallation(id: string) {
 export async function resumeInstallation(id: string) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
-  await assertInstallationCompany(id, session.company_id);
+  await assertInstallationAssignee(id, session);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   await admin
@@ -1424,7 +1425,7 @@ export async function reportDamageOrDrilling(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
   const parsed = parseOrFriendly(installationStepSchema, input, "Estado parte");
-  await assertInstallationCompany(parsed.installation_id, session.company_id);
+  await assertInstallationAssignee(parsed.installation_id, session);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
@@ -1523,6 +1524,12 @@ export async function completeInstallation(input: unknown) {
     .eq("company_id", session.company_id)
     .maybeSingle();
   if (!inst) throw new Error("Instalación no encontrada o no pertenece a tu empresa");
+  // Solo el instalador asignado (o nivel 1/2) cierra el parte (2026-11-12).
+  assertTrabajoAsignado(
+    session,
+    (inst as { installer_user_id: string | null }).installer_user_id,
+    "instalación",
+  );
   const startTs = (inst as { started_at: string | null })?.started_at;
   const durationSec = startTs
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)

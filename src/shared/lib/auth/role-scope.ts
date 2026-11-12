@@ -71,6 +71,9 @@ export async function hasActiveTaskForCustomer(
   customerId: string,
 ): Promise<boolean> {
   if (!session.company_id || !customerId) return false;
+  // Solo técnico (2026-11-12, D3+D4): mantenimientos e instalaciones suyos sin
+  // cerrar o cerrados hace < 24 h. La agenda NO cuenta para él.
+  if (esSoloTecnico(session)) return clientePendienteParaTecnico(session, customerId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const NOT_DONE = "(completed,cancelled)";
@@ -251,4 +254,144 @@ export function isLevel2(session: SessionClaims): boolean {
     session.roles.includes("commercial_director") ||
     session.roles.includes("telemarketing_director")
   );
+}
+
+// =====================================================================
+// Permisos de técnicos (plan docs/PLAN_PERMISOS_TECNICOS.md, 2026-11-12)
+// =====================================================================
+
+/** Roles con vista amplia: si el usuario tiene alguno, NO es "solo técnico". */
+const ROLES_NO_TECNICO = [
+  "company_admin",
+  "technical_director",
+  "commercial_director",
+  "telemarketing_director",
+  "sales_rep",
+  "telemarketer",
+];
+
+/**
+ * ¿Es solo técnico? = installer sin ningún rol de nivel 1/2 ni comercial.
+ * Es a quien se le recorta la vista (clientes pendientes, su furgoneta, sin
+ * almacenes). Un técnico que también sea comercial conserva la vista amplia.
+ */
+export function esSoloTecnico(session: SessionClaims): boolean {
+  if (session.is_superadmin) return false;
+  if (!session.roles.includes("installer")) return false;
+  return !session.roles.some((r) => ROLES_NO_TECNICO.includes(r));
+}
+
+/** Nivel 1 o 2 (o superadmin): puede operar trabajos de campo de otros. */
+export function esNivel12(session: SessionClaims): boolean {
+  return isLevel1(session) || isLevel2(session);
+}
+
+/** Quién gestiona stock y almacenes (mover, ajustar, lotes, conteos, cargas). */
+export function esGestorStock(session: SessionClaims): boolean {
+  return (
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director")
+  );
+}
+
+/**
+ * Lanza si la sesión no puede operar un trabajo de campo (instalación o
+ * mantenimiento) asignado a `asignadoA`. Nivel 1/2 opera cualquiera de su
+ * empresa; el resto, solo los suyos.
+ */
+export function assertTrabajoAsignado(
+  session: SessionClaims,
+  asignadoA: string | null | undefined,
+  que: "instalación" | "mantenimiento",
+): void {
+  if (esNivel12(session)) return;
+  if (!asignadoA || asignadoA !== session.user_id) {
+    throw new Error(`Este ${que === "instalación" ? "parte de instalación" : "mantenimiento"} no está asignado a ti`);
+  }
+}
+
+/** Horas que el técnico sigue viendo al cliente tras cerrar el trabajo (D4). */
+export const HORAS_TRAS_CIERRE = 24;
+
+export type MotivoPendiente = {
+  tipo: "instalacion" | "mantenimiento";
+  id: string;
+  fecha: string | null;
+  estado: string;
+};
+
+/**
+ * Clientes "pendientes" del técnico (regla D3 + D4): mantenimientos e
+ * instalaciones asignados a él y no cerrados (sea cual sea la fecha), o
+ * cerrados hace menos de 24 h. La agenda NO cuenta.
+ *
+ * Misma regla que la función SQL `app.cliente_pendiente_para_mi`. Lee con
+ * admin filtrando SIEMPRE por company_id y por el propio usuario.
+ * Devuelve customer_id → motivos (el más próximo primero).
+ */
+export async function listarClientesPendientes(
+  session: SessionClaims,
+  soloCliente?: string,
+): Promise<Map<string, MotivoPendiente[]>> {
+  const res = new Map<string, MotivoPendiente[]>();
+  if (!session.company_id) return res;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+  const limite = new Date(Date.now() - HORAS_TRAS_CIERRE * 3600_000).toISOString();
+  const vigente = `status.not.in.(completed,cancelled),completed_at.gt.${limite}`;
+
+  const add = (cid: string | null, m: MotivoPendiente) => {
+    if (!cid) return;
+    const arr = res.get(cid) ?? [];
+    arr.push(m);
+    res.set(cid, arr);
+  };
+
+  type I = { id: string; customer_id: string | null; scheduled_at: string | null; status: string };
+  type M = { id: string; customer_id: string | null; scheduled_at: string | null; status: string };
+
+  const [inst, mant] = await Promise.all([
+    fetchAllRows<I>((from, to) => {
+      let q = admin
+        .from("installations")
+        .select("id, customer_id, scheduled_at, status")
+        .eq("company_id", session.company_id)
+        .eq("installer_user_id", session.user_id)
+        .is("deleted_at", null)
+        .or(vigente);
+      if (soloCliente) q = q.eq("customer_id", soloCliente);
+      return q.order("id").range(from, to);
+    }).catch(() => [] as I[]),
+    fetchAllRows<M>((from, to) => {
+      let q = admin
+        .from("maintenance_jobs")
+        .select("id, customer_id, scheduled_at, status")
+        .eq("company_id", session.company_id)
+        .eq("technician_user_id", session.user_id)
+        .or(vigente);
+      if (soloCliente) q = q.eq("customer_id", soloCliente);
+      return q.order("id").range(from, to);
+    }).catch(() => [] as M[]),
+  ]);
+  for (const i of inst) {
+    add(i.customer_id, { tipo: "instalacion", id: i.id, fecha: i.scheduled_at, estado: i.status });
+  }
+  for (const m of mant) {
+    add(m.customer_id, { tipo: "mantenimiento", id: m.id, fecha: m.scheduled_at, estado: m.status });
+  }
+  for (const arr of res.values()) {
+    arr.sort((a, b) => (a.fecha ?? "9999").localeCompare(b.fecha ?? "9999"));
+  }
+  return res;
+}
+
+/** ¿Este cliente está pendiente para el técnico? (regla D3 + D4) */
+export async function clientePendienteParaTecnico(
+  session: SessionClaims,
+  customerId: string,
+): Promise<boolean> {
+  if (!customerId) return false;
+  const m = await listarClientesPendientes(session, customerId);
+  return m.has(customerId);
 }

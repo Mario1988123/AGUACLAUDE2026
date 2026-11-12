@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
+import { esGestorStock } from "@/shared/lib/auth/role-scope";
 import { decrementStock } from "./stock-decrement";
 import { adjustStockBatch } from "./adjust-stock";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
@@ -28,12 +28,19 @@ const createSchema = z.object({
 export async function createLoadingRequestAction(input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
+  // 2026-11-12: crear órdenes de carga es de la oficina (el técnico registra
+  // su carga con registrarCargaFurgoneta). Admin + company_id: con la RLS de
+  // almacenes cerrada, el cliente RLS fallaría en silencio.
+  if (!esGestorStock(session)) throw new Error("Sin permiso para crear órdenes de carga");
   const parsed = parseOrFriendly(createSchema, input, "Orden de carga");
   if (parsed.source_warehouse_id === parsed.destination_warehouse_id) {
     throw new Error("Origen y destino deben ser diferentes");
   }
+  const { assertWarehouseCompany } = await import("./ownership");
+  await assertWarehouseCompany(parsed.source_warehouse_id, session.company_id);
+  await assertWarehouseCompany(parsed.destination_warehouse_id, session.company_id);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
+  const supabase = createAdminClient() as any;
   const { data: created, error } = await supabase
     .from("loading_requests")
     .insert({
@@ -50,7 +57,7 @@ export async function createLoadingRequestAction(input: unknown) {
   if (error) throw new Error(error.message);
   const requestId = (created as { id: string }).id;
 
-  await supabase.from("loading_request_items").insert(
+  const { error: errItems } = await supabase.from("loading_request_items").insert(
     parsed.items.map((it) => ({
       loading_request_id: requestId,
       company_id: session.company_id,
@@ -58,6 +65,10 @@ export async function createLoadingRequestAction(input: unknown) {
       quantity_requested: it.quantity_requested,
     })),
   );
+  if (errItems) {
+    await supabase.from("loading_requests").delete().eq("id", requestId);
+    throw new Error(errItems.message);
+  }
 
   revalidatePath("/almacenes");
 }
@@ -69,12 +80,10 @@ export async function deliverLoadingRequestAction(requestId: string) {
   // exige los mismos roles que el resto de movimientos de stock
   // (inventory-actions.ensureCanManage). [decide] admin, director técnico e
   // instalador (el que recibe la carga en su furgoneta).
-  if (
-    !session.is_superadmin &&
-    !session.roles.includes("company_admin") &&
-    !session.roles.includes("technical_director") &&
-    !session.roles.includes("installer")
-  ) {
+  // 2026-11-12: el técnico solo puede dar por entregada una orden cuyo
+  // destino sea SU furgoneta (se comprueba abajo, tras leer la orden).
+  const gestor = esGestorStock(session);
+  if (!gestor && !session.roles.includes("installer")) {
     throw new Error("Sin permiso para entregar órdenes de carga");
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,6 +107,17 @@ export async function deliverLoadingRequestAction(requestId: string) {
   // pero reforzamos para que todo el movimiento de stock use SOLO datos propios.
   if (r.company_id !== session.company_id) {
     throw new Error("Solicitud no pertenece a tu empresa");
+  }
+  if (!gestor) {
+    const { data: miFurgo } = await admin
+      .from("warehouses")
+      .select("id")
+      .eq("id", r.destination_warehouse_id)
+      .eq("company_id", session.company_id)
+      .eq("kind", "vehicle")
+      .eq("assigned_user_id", session.user_id)
+      .maybeSingle();
+    if (!miFurgo) throw new Error("Solo puedes recibir cargas para tu furgoneta");
   }
   if (r.status === "delivered") throw new Error("Ya entregada");
   if (r.status === "cancelled") throw new Error("La orden está cancelada");
@@ -222,14 +242,19 @@ export async function deliverLoadingRequestAction(requestId: string) {
 }
 
 export async function cancelLoadingRequestAction(requestId: string) {
-  await requireSession();
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  if (!esGestorStock(session)) throw new Error("Sin permiso para cancelar órdenes de carga");
+  // Admin + company_id (2026-11-12): antes iba sin filtrar empresa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = (await createClient()) as any;
-  await supabase
+  const supabase = createAdminClient() as any;
+  const { error } = await supabase
     .from("loading_requests")
     .update({ status: "cancelled" })
     .eq("id", requestId)
+    .eq("company_id", session.company_id)
     .neq("status", "delivered");
+  if (error) throw new Error(error.message);
   revalidatePath("/almacenes");
 }
 

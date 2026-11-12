@@ -5,7 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { completeInstallation } from "./actions";
-import { assertInstallationCompany } from "./ownership";
+import { assertInstallationAssignee } from "./ownership";
 
 /** Distancia en metros (Haversine) entre dos coordenadas. */
 function haversineMeters(
@@ -56,7 +56,7 @@ export async function startInstallationAction(input: {
       // que no se pueda iniciar el parte de una instalación de otra empresa.
       const r = await admin
         .from("installations")
-        .select("id, company_id, address_id, customer_id, scheduled_at, status")
+        .select("id, company_id, address_id, customer_id, scheduled_at, status, installer_user_id")
         .eq("id", input.installation_id)
         .eq("company_id", session.company_id)
         .maybeSingle();
@@ -77,6 +77,7 @@ export async function startInstallationAction(input: {
           customer_id: string | null;
           scheduled_at: string | null;
           status: string;
+          installer_user_id: string | null;
         }
       | null;
     if (!i) {
@@ -88,6 +89,11 @@ export async function startInstallationAction(input: {
         ok: false,
         error: `Instalación no encontrada (id: ${input.installation_id.slice(0, 8)}…). Recarga la página e inténtalo de nuevo. Si persiste, contacta con soporte.`,
       };
+    }
+    // Solo el instalador asignado (o nivel 1/2) inicia el parte (2026-11-12).
+    const { esNivel12 } = await import("@/shared/lib/auth/role-scope");
+    if (!esNivel12(session) && i.installer_user_id !== session.user_id) {
+      return { ok: false, error: "Este parte de instalación no está asignado a ti" };
     }
 
     // Bloqueo de fecha (decisión usuario 2026-05-19, actualizada):
@@ -301,7 +307,7 @@ export async function pauseInstallationAction(input: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // SEGURIDAD: admin client salta RLS → verificamos que la instalación es
     // de tu empresa antes de pausarla.
-    await assertInstallationCompany(input.installation_id, session.company_id);
+    await assertInstallationAssignee(input.installation_id, session);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -362,7 +368,7 @@ export async function resumeInstallationAction(installationId: string): Promise<
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // SEGURIDAD: admin client salta RLS → verificamos empresa.
-    await assertInstallationCompany(installationId, session.company_id);
+    await assertInstallationAssignee(installationId, session);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -421,7 +427,7 @@ export async function reportInstallationIncidentAction(input: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // SEGURIDAD: admin client salta RLS → verificamos empresa antes de
     // registrar incidencia / desagendar la instalación.
-    await assertInstallationCompany(input.installation_id, session.company_id);
+    await assertInstallationAssignee(input.installation_id, session);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
@@ -775,7 +781,7 @@ export async function finishInstallationAction(input: {
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
     // SEGURIDAD: admin client salta RLS → verificamos empresa antes de
     // escribir satisfacción (completeInstallation hace su propio guard).
-    await assertInstallationCompany(input.installation_id, session.company_id);
+    await assertInstallationAssignee(input.installation_id, session);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 
