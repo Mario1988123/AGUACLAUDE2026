@@ -4,8 +4,9 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { listAllMaintenancePlansAction } from "@/modules/maintenance-plans/config-actions";
 import { MaintenancePlansEditor } from "@/modules/maintenance-plans/plans-editor";
 import { BackButton } from "@/shared/components/back-button";
-import { cargarConfigMant, mantIncluidoDisponible } from "@/modules/mant-incluido/datos";
+import { cargarConfigMant, cargarPreciosModelos, mantIncluidoDisponible } from "@/modules/mant-incluido/datos";
 import { ConfigMantIncluidoForm } from "@/modules/mant-incluido/config-form";
+import { PreciosModeloPanel } from "@/modules/mant-incluido/precios-modelo-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,14 @@ export default async function ConfigMantenimientosPage() {
   // Mantenimientos incluidos (plan 2026-11-12). Sin migración no se enseña.
   const hayMantIncluido = session.company_id ? await mantIncluidoDisponible() : false;
   const cfgMant = hayMantIncluido && session.company_id ? await cargarConfigMant(session.company_id) : null;
+  // Precio por modelo (20261113120000): null si falta la migración → no se pinta.
+  const preciosModelo =
+    cfgMant && session.company_id
+      ? await cargarPreciosModelos(session.company_id).catch((e) => {
+          console.error("[configuracion/mantenimientos] precios por modelo:", e);
+          return null;
+        })
+      : null;
 
   return (
     <div className="space-y-6">
@@ -57,6 +66,17 @@ export default async function ConfigMantenimientosPage() {
               }}
               iva={cfgMant.iva}
             />
+          </CardContent>
+        </Card>
+      )}
+
+      {cfgMant && preciosModelo && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Precio del mantenimiento por modelo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PreciosModeloPanel gamas={preciosModelo} empresa={cfgMant.precios} iva={cfgMant.iva} />
           </CardContent>
         </Card>
       )}

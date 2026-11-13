@@ -9,10 +9,12 @@ import {
   nDesdeMeses,
   pagoEfectivo,
   precioAplicado,
+  preciosDelModelo,
   proximoAniversario,
   textoEstado,
   totalConIva,
   type EntradaEstado,
+  type PreciosTarifa,
 } from "./logica";
 
 const base: EntradaEstado = {
@@ -126,16 +128,88 @@ describe("proximoAniversario", () => {
 });
 
 describe("precios", () => {
-  const vacio = { solo_filtros: null, filtros_membrana: null };
-  it("equipo > cliente > empresa", () => {
+  const vacio: PreciosTarifa = { solo_filtros: null, filtros_membrana: null };
+  it("equipo > cliente > modelo > empresa", () => {
     const eq = { solo_filtros: 7000, filtros_membrana: null };
     const cl = { solo_filtros: 8000, filtros_membrana: 13000 };
+    const mo = { solo_filtros: 6000, filtros_membrana: 11000 };
     const em = { solo_filtros: 7500, filtros_membrana: 12000 };
-    expect(precioAplicado("solo_filtros", eq, cl, em)).toEqual({ cents: 7000, origen: "equipo" });
-    expect(precioAplicado("filtros_membrana", eq, cl, em)).toEqual({ cents: 13000, origen: "cliente" });
-    expect(precioAplicado("filtros_membrana", vacio, vacio, em)).toEqual({ cents: 12000, origen: "empresa" });
-    expect(precioAplicado("solo_filtros", vacio, vacio, vacio)).toEqual({ cents: null, origen: null });
+    const p = (equipo = vacio, cliente = vacio, modelo = vacio, empresa = vacio) => ({
+      equipo,
+      cliente,
+      modelo,
+      empresa,
+    });
+    expect(precioAplicado("solo_filtros", p(eq, cl, mo, em))).toEqual({ cents: 7000, origen: "equipo" });
+    expect(precioAplicado("filtros_membrana", p(eq, cl, mo, em))).toEqual({ cents: 13000, origen: "cliente" });
+    expect(precioAplicado("solo_filtros", p(vacio, vacio, mo, em))).toEqual({ cents: 6000, origen: "modelo" });
+    expect(precioAplicado("filtros_membrana", p(eq, vacio, mo, em))).toEqual({ cents: 11000, origen: "modelo" });
+    expect(precioAplicado("filtros_membrana", p(vacio, vacio, vacio, em))).toEqual({
+      cents: 12000,
+      origen: "empresa",
+    });
+    expect(precioAplicado("solo_filtros", p())).toEqual({ cents: null, origen: null });
   });
+  it("el cliente manda sobre el modelo aunque el modelo sea más barato", () => {
+    const cl = { solo_filtros: 9000, filtros_membrana: null };
+    const mo = { solo_filtros: 5000, filtros_membrana: 10000 };
+    const niveles = { equipo: vacio, cliente: cl, modelo: mo, empresa: vacio };
+    expect(precioAplicado("solo_filtros", niveles)).toEqual({ cents: 9000, origen: "cliente" });
+    expect(precioAplicado("filtros_membrana", niveles)).toEqual({ cents: 10000, origen: "modelo" });
+  });
+  it("0 € es un precio (no cae al siguiente nivel)", () => {
+    const niveles = {
+      equipo: vacio,
+      cliente: { solo_filtros: 0, filtros_membrana: null },
+      modelo: { solo_filtros: 6000, filtros_membrana: null },
+      empresa: vacio,
+    };
+    expect(precioAplicado("solo_filtros", niveles)).toEqual({ cents: 0, origen: "cliente" });
+  });
+});
+
+describe("precio del modelo (variante → gama)", () => {
+  const productos = new Map([
+    ["gama", { gama_id: null, precios: { solo_filtros: 6000, filtros_membrana: 11000 } }],
+    ["var-propia", { gama_id: "gama", precios: { solo_filtros: 6500, filtros_membrana: 11500 } }],
+    ["var-vacia", { gama_id: "gama", precios: { solo_filtros: null, filtros_membrana: null } }],
+    ["var-mixta", { gama_id: "gama", precios: { solo_filtros: null, filtros_membrana: 12500 } }],
+    ["gama-vacia", { gama_id: null, precios: { solo_filtros: null, filtros_membrana: null } }],
+    ["var-de-vacia", { gama_id: "gama-vacia", precios: { solo_filtros: null, filtros_membrana: 9000 } }],
+    ["var-huerfana", { gama_id: "no-existe", precios: { solo_filtros: null, filtros_membrana: null } }],
+  ]);
+  it("la gama usa su propio precio", () => {
+    expect(preciosDelModelo("gama", productos)).toEqual({ solo_filtros: 6000, filtros_membrana: 11000 });
+  });
+  it("la variante con precio manda sobre la gama", () => {
+    expect(preciosDelModelo("var-propia", productos)).toEqual({ solo_filtros: 6500, filtros_membrana: 11500 });
+  });
+  it("variante vacía = el de la gama", () => {
+    expect(preciosDelModelo("var-vacia", productos)).toEqual({ solo_filtros: 6000, filtros_membrana: 11000 });
+  });
+  it("hereda tarifa a tarifa", () => {
+    expect(preciosDelModelo("var-mixta", productos)).toEqual({ solo_filtros: 6000, filtros_membrana: 12500 });
+  });
+  it("gama sin precio → vacío (cae a la empresa)", () => {
+    expect(preciosDelModelo("var-de-vacia", productos)).toEqual({ solo_filtros: null, filtros_membrana: 9000 });
+    const niveles = {
+      equipo: { solo_filtros: null, filtros_membrana: null },
+      cliente: { solo_filtros: null, filtros_membrana: null },
+      modelo: preciosDelModelo("var-de-vacia", productos),
+      empresa: { solo_filtros: 7500, filtros_membrana: 12000 },
+    };
+    expect(precioAplicado("solo_filtros", niveles)).toEqual({ cents: 7500, origen: "empresa" });
+    expect(precioAplicado("filtros_membrana", niveles)).toEqual({ cents: 9000, origen: "modelo" });
+  });
+  it("sin producto, producto desconocido o gama que no está → vacío", () => {
+    const vacio = { solo_filtros: null, filtros_membrana: null };
+    expect(preciosDelModelo(null, productos)).toEqual(vacio);
+    expect(preciosDelModelo("otro", productos)).toEqual(vacio);
+    expect(preciosDelModelo("var-huerfana", productos)).toEqual(vacio);
+  });
+});
+
+describe("precios (formato)", () => {
   it("IVA redondeado una vez", () => {
     expect(totalConIva(7500, 21)).toBe(9075);
     expect(totalConIva(12000, 21)).toBe(14520);

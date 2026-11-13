@@ -3,18 +3,22 @@ import { cache } from "react";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { claveDiaMadrid } from "@/modules/scheduling/fechas-madrid";
+import { cargarCatalogoModelo } from "@/modules/equipos-modelo/datos";
+import { tipoEfectivoProducto, type TipoEquipo } from "@/modules/equipos-modelo/logica";
 import {
   IVA_DEFECTO,
   PRECIOS_VACIOS,
   estadoMantIncluido,
   pagoEfectivo,
   precioAplicado,
+  preciosDelModelo,
   textoEstado,
   type EstadoMantIncluido,
   type Modalidad,
   type OrigenPrecio,
   type PagoEstado,
   type PreciosTarifa,
+  type ProductoPrecioMant,
   type Tarifa,
 } from "./logica";
 
@@ -48,6 +52,20 @@ export const mantIncluidoDisponible = cache(async (): Promise<boolean> => {
     admin.from("wallet_entries").select("maintenance_job_id").limit(1),
   ]);
   return !a.error && !b.error && !c.error && !d.error && !e.error;
+});
+
+/**
+ * ¿Está aplicada 20261113120000_mant_precio_por_modelo.sql? (una consulta por
+ * petición). Sin ella el precio del modelo no existe: equipo > cliente > empresa.
+ */
+export const precioModeloDisponible = cache(async (): Promise<boolean> => {
+  if (!(await mantIncluidoDisponible())) return false;
+  const admin = createAdminClient() as Admin;
+  const { error } = await admin
+    .from("products")
+    .select("gama_id, mant_precio_filtros_cents, mant_precio_filtros_membrana_cents")
+    .limit(1);
+  return !error;
 });
 
 export interface ConfigMant {
@@ -95,6 +113,8 @@ export interface ResumenMant {
   precios: {
     equipo: PreciosTarifa;
     cliente: PreciosTarifa;
+    /** Del modelo del equipo, ya con la herencia variante → gama. */
+    modelo: PreciosTarifa;
     empresa: PreciosTarifa;
   };
   aplicado: Record<Tarifa, { cents: number | null; origen: OrigenPrecio }>;
@@ -103,6 +123,7 @@ export interface ResumenMant {
 interface FilaEquipo {
   id: string;
   customer_id: string;
+  product_id: string | null;
   installed_at: string | null;
   is_active: boolean;
   acquisition_type: Modalidad;
@@ -113,7 +134,7 @@ interface FilaEquipo {
 }
 
 const COLS_EQUIPO =
-  "id, customer_id, installed_at, is_active, acquisition_type, mant_incluidos_n, mant_incluido_origen, mant_precio_filtros_cents, mant_precio_filtros_membrana_cents";
+  "id, customer_id, product_id, installed_at, is_active, acquisition_type, mant_incluidos_n, mant_incluido_origen, mant_precio_filtros_cents, mant_precio_filtros_membrana_cents";
 
 function precios(r: { mant_precio_filtros_cents: number | null; mant_precio_filtros_membrana_cents: number | null }): PreciosTarifa {
   return {
@@ -125,6 +146,7 @@ function precios(r: { mant_precio_filtros_cents: number | null; mant_precio_filt
 function resumir(
   eq: FilaEquipo,
   cliente: PreciosTarifa,
+  modelo: PreciosTarifa,
   cfg: ConfigMant,
   fechaVisitaIso: string | null,
   hoy: string,
@@ -152,10 +174,10 @@ function resumir(
     installedAt,
     iva: cfg.iva,
     nDefecto: cfg.nDefecto,
-    precios: { equipo: pe, cliente, empresa: cfg.precios },
+    precios: { equipo: pe, cliente, modelo, empresa: cfg.precios },
     aplicado: {
-      solo_filtros: precioAplicado("solo_filtros", pe, cliente, cfg.precios),
-      filtros_membrana: precioAplicado("filtros_membrana", pe, cliente, cfg.precios),
+      solo_filtros: precioAplicado("solo_filtros", { equipo: pe, cliente, modelo, empresa: cfg.precios }),
+      filtros_membrana: precioAplicado("filtros_membrana", { equipo: pe, cliente, modelo, empresa: cfg.precios }),
     },
   };
 }
@@ -184,6 +206,46 @@ async function preciosClientes(
 }
 
 /**
+ * Precios de mantenimiento de los productos indicados y de sus gamas (para
+ * resolver variante → gama). Map vacío si la migración del modelo no está.
+ */
+async function preciosProductos(
+  admin: Admin,
+  companyId: string,
+  productIds: string[],
+): Promise<Map<string, ProductoPrecioMant>> {
+  const out = new Map<string, ProductoPrecioMant>();
+  if (productIds.length === 0 || !(await precioModeloDisponible())) return out;
+  const leer = async (ids: string[]) => {
+    for (const t of trozos(ids)) {
+      const { data, error } = await admin
+        .from("products")
+        .select("id, gama_id, mant_precio_filtros_cents, mant_precio_filtros_membrana_cents")
+        .eq("company_id", companyId)
+        .in("id", t);
+      if (error) {
+        console.error("[mant-incluido] precios de modelo:", error.message);
+        return;
+      }
+      for (const p of (data ?? []) as Array<{
+        id: string;
+        gama_id: string | null;
+        mant_precio_filtros_cents: number | null;
+        mant_precio_filtros_membrana_cents: number | null;
+      }>) {
+        out.set(p.id, { gama_id: p.gama_id ?? null, precios: precios(p) });
+      }
+    }
+  };
+  await leer(productIds);
+  const gamas = Array.from(
+    new Set(Array.from(out.values()).map((p) => p.gama_id).filter((g): g is string => !!g && !out.has(g))),
+  );
+  if (gamas.length > 0) await leer(gamas);
+  return out;
+}
+
+/**
  * Resumen por equipo. `proximaVisita` = fecha ISO de la próxima visita de cada
  * equipo (si no hay, se usa el próximo aniversario de la instalación).
  * Devuelve un Map vacío si la migración no está aplicada.
@@ -206,15 +268,27 @@ export async function cargarMantEquipos(
     return out;
   }
   const filas = (data ?? []) as FilaEquipo[];
-  const [cfg, porCliente] = await Promise.all([
+  const [cfg, porCliente, porProducto] = await Promise.all([
     cargarConfigMant(companyId),
     preciosClientes(admin, companyId, Array.from(new Set(filas.map((f) => f.customer_id)))),
+    preciosProductos(
+      admin,
+      companyId,
+      Array.from(new Set(filas.map((f) => f.product_id).filter((p): p is string => !!p))),
+    ),
   ]);
   const hoy = claveDiaMadrid(new Date());
   for (const f of filas) {
     out.set(
       f.id,
-      resumir(f, porCliente.get(f.customer_id) ?? PRECIOS_VACIOS, cfg, proximaVisita[f.id] ?? null, hoy),
+      resumir(
+        f,
+        porCliente.get(f.customer_id) ?? PRECIOS_VACIOS,
+        preciosDelModelo(f.product_id, porProducto),
+        cfg,
+        proximaVisita[f.id] ?? null,
+        hoy,
+      ),
     );
   }
   return out;
@@ -347,7 +421,7 @@ export async function contarEmpiezanPagar(companyId: string): Promise<ResumenEmp
   };
   const anioActual = Number(hoy.slice(0, 4));
   for (const f of filas) {
-    const r = resumir(f, PRECIOS_VACIOS, cfg, null, hoy);
+    const r = resumir(f, PRECIOS_VACIOS, PRECIOS_VACIOS, cfg, null, hoy);
     if (r.anioPaga === anioActual && r.estado !== "incluido_alquiler") out.empiezanEsteAnio++;
     if (r.estado === "a_pagar") out.aPagar++;
     else if (r.estado === "ultima_incluida") out.ultimaIncluida++;
@@ -394,7 +468,7 @@ export async function listarEmpiezanPagar(companyId: string): Promise<FilaEmpiez
   const hoy = claveDiaMadrid(new Date());
   const out: FilaEmpiezanPagar[] = [];
   for (const f of filas) {
-    const r = resumir(f, PRECIOS_VACIOS, cfg, null, hoy);
+    const r = resumir(f, PRECIOS_VACIOS, PRECIOS_VACIOS, cfg, null, hoy);
     if (r.estado !== "a_pagar" && r.estado !== "ultima_incluida" && r.estado !== "sin_dato") continue;
     if (r.estado === "sin_dato" && f.acquisition_type !== "cash") continue;
     out.push({
@@ -521,4 +595,72 @@ export async function listarVisitasPorCobrar(companyId: string): Promise<VisitaP
     pendienteCents: (r.importe_pendiente_cents as number | null) ?? null,
     motivo: (r.no_cobrado_motivo as string | null) ?? null,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Configuración: precio del mantenimiento por modelo
+// ---------------------------------------------------------------------------
+
+export interface FilaPrecioModelo {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  precios: PreciosTarifa;
+}
+
+export interface GamaPrecioModelo extends FilaPrecioModelo {
+  tipo: TipoEquipo;
+  variantes: FilaPrecioModelo[];
+}
+
+/**
+ * Gamas de equipo de la empresa (productos no borrados, con tipo propio o de su
+ * categoría, que no son variantes) con sus variantes y los dos precios.
+ * Orden: ósmosis y luego fuentes; activas antes que inactivas; por nombre.
+ * Null si falta la migración del precio por modelo (el panel no se pinta).
+ */
+export async function cargarPreciosModelos(companyId: string): Promise<GamaPrecioModelo[] | null> {
+  if (!(await precioModeloDisponible())) return null;
+  const admin = createAdminClient() as Admin;
+  const [cat, filas] = await Promise.all([
+    cargarCatalogoModelo(companyId),
+    fetchAllRows<{
+      id: string;
+      mant_precio_filtros_cents: number | null;
+      mant_precio_filtros_membrana_cents: number | null;
+    }>(
+      (from, to) =>
+        admin
+          .from("products")
+          .select("id, mant_precio_filtros_cents, mant_precio_filtros_membrana_cents")
+          .eq("company_id", companyId)
+          .is("deleted_at", null)
+          .order("id")
+          .range(from, to),
+      { label: "mant-incluido-precios-modelo" },
+    ),
+  ]);
+  const porId = new Map(filas.map((f) => [f.id, precios(f)]));
+  const fila = (p: { id: string; name: string; is_active: boolean }): FilaPrecioModelo => ({
+    id: p.id,
+    nombre: p.name,
+    activo: p.is_active,
+    precios: porId.get(p.id) ?? PRECIOS_VACIOS,
+  });
+  const ordenar = <T extends FilaPrecioModelo>(xs: T[]): T[] =>
+    xs.sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, "es"));
+  const ordenTipo: Record<TipoEquipo, number> = { osmosis: 0, fuente: 1 };
+
+  const gamas: GamaPrecioModelo[] = [];
+  for (const p of cat.productos) {
+    if (p.gama_id) continue;
+    const tipo = tipoEfectivoProducto(p.id, cat);
+    if (!tipo) continue;
+    gamas.push({
+      ...fila(p),
+      tipo,
+      variantes: ordenar(cat.productos.filter((v) => v.gama_id === p.id).map(fila)),
+    });
+  }
+  return ordenar(gamas).sort((a, b) => ordenTipo[a.tipo] - ordenTipo[b.tipo]);
 }

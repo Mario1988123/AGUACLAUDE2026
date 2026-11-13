@@ -21,14 +21,15 @@ import {
 
 const ATAJOS_N = [0, 1, 2, 3, 4, 5];
 
+/** Lo que se aplicaría con la casilla vacía: (cliente >) modelo > empresa. */
 function precioHeredado(
   t: keyof PreciosTarifa,
-  cliente: PreciosTarifa,
-  empresa: PreciosTarifa,
+  precios: ResumenMant["precios"],
   incluirCliente: boolean,
 ): string {
-  if (incluirCliente && cliente[t] != null) return `Cliente: ${eur(cliente[t]!)}`;
-  if (empresa[t] != null) return `Empresa: ${eur(empresa[t]!)}`;
+  if (incluirCliente && precios.cliente[t] != null) return `Cliente: ${eur(precios.cliente[t]!)}`;
+  if (precios.modelo[t] != null) return `Modelo: ${eur(precios.modelo[t]!)}`;
+  if (precios.empresa[t] != null) return `Empresa: ${eur(precios.empresa[t]!)}`;
   return "Sin precio";
 }
 
@@ -256,7 +257,7 @@ export function HojaMantIncluido({
                       inputMode="decimal"
                       value={pf}
                       onChange={(e) => setPf(e.target.value)}
-                      placeholder={precioHeredado("solo_filtros", mant.precios.cliente, mant.precios.empresa, true)}
+                      placeholder={precioHeredado("solo_filtros", mant.precios, true)}
                     />
                   </div>
                   <div className="space-y-1">
@@ -266,11 +267,11 @@ export function HojaMantIncluido({
                       inputMode="decimal"
                       value={pm}
                       onChange={(e) => setPm(e.target.value)}
-                      placeholder={precioHeredado("filtros_membrana", mant.precios.cliente, mant.precios.empresa, true)}
+                      placeholder={precioHeredado("filtros_membrana", mant.precios, true)}
                     />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Vacío = usa el del cliente o, si no, el de la empresa.</p>
+                <p className="text-xs text-muted-foreground">Vacío = usa el del cliente; si no, el del modelo; si no, el de la empresa.</p>
               </div>
 
               <div className="space-y-2">
@@ -283,7 +284,7 @@ export function HojaMantIncluido({
                       inputMode="decimal"
                       value={cf}
                       onChange={(e) => setCf(e.target.value)}
-                      placeholder={precioHeredado("solo_filtros", mant.precios.cliente, mant.precios.empresa, false)}
+                      placeholder={precioHeredado("solo_filtros", mant.precios, false)}
                     />
                   </div>
                   <div className="space-y-1">
@@ -293,11 +294,11 @@ export function HojaMantIncluido({
                       inputMode="decimal"
                       value={cm}
                       onChange={(e) => setCm(e.target.value)}
-                      placeholder={precioHeredado("filtros_membrana", mant.precios.cliente, mant.precios.empresa, false)}
+                      placeholder={precioHeredado("filtros_membrana", mant.precios, false)}
                     />
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Vacío = usa el de la empresa.</p>
+                <p className="text-xs text-muted-foreground">Vacío = usa el del modelo de cada equipo o, si no, el de la empresa.</p>
               </div>
             </div>
 

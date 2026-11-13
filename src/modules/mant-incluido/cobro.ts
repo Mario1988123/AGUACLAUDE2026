@@ -219,7 +219,7 @@ export async function aplicarCobroCierre(
           category: "alert",
           severity: "warning",
           title: "Mantenimiento cobrado sin precio definido",
-          body: `El técnico cobró ${eur(cents)}. Revisa el importe y pon el precio del equipo o de la empresa.`,
+          body: `El técnico cobró ${eur(cents)}. Revisa el importe y pon el precio del equipo, del modelo o de la empresa.`,
           subject_type: "maintenance",
           subject_id: jobId,
           action_url: `/mantenimientos/${jobId}`,

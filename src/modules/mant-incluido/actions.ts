@@ -7,7 +7,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { esNivel12 } from "@/shared/lib/auth/role-scope";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { safeParseFriendly } from "@/shared/lib/zod-friendly";
-import { mantIncluidoDisponible } from "./datos";
+import { mantIncluidoDisponible, precioModeloDisponible } from "./datos";
 import { N_MAXIMO } from "./logica";
 
 /**
@@ -147,6 +147,59 @@ export async function guardarConfigMantAction(input: unknown): Promise<Res> {
       ? await admin.from("company_settings").update(cambios).eq("company_id", session.company_id)
       : await admin.from("company_settings").insert({ company_id: session.company_id, ...cambios });
     if (r.error) return { ok: false, error: r.error.message };
+    revalidatePath("/configuracion/mantenimientos");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Precio del mantenimiento por modelo (gama o variante)
+// ---------------------------------------------------------------------------
+
+const precioModeloSchema = z.object({
+  product_id: z.string().uuid(),
+  precio_filtros_cents: zCents,
+  precio_membrana_cents: zCents,
+});
+
+export async function guardarPrecioModeloAction(input: unknown): Promise<Res> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    if (!esNivel12(session)) return { ok: false, error: "Sin permisos" };
+    if (!(await precioModeloDisponible())) {
+      return { ok: false, error: "Falta aplicar la migración del precio por modelo" };
+    }
+    const [pd, perr] = safeParseFriendly(precioModeloSchema, input);
+    if (perr !== null || !pd) return { ok: false, error: perr ?? "Datos no válidos" };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const upd = await admin
+      .from("products")
+      .update({
+        mant_precio_filtros_cents: pd.precio_filtros_cents,
+        mant_precio_filtros_membrana_cents: pd.precio_membrana_cents,
+      })
+      .eq("id", pd.product_id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .select("id, name");
+    if (upd.error) return { ok: false, error: upd.error.message };
+    const fila = ((upd.data ?? []) as Array<{ id: string; name: string }>)[0];
+    if (!fila) return { ok: false, error: "Modelo no encontrado o no pertenece a tu empresa" };
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "product",
+      subject_id: fila.id,
+      kind: "product.mant_precio_updated",
+      payload: {
+        precio_filtros_cents: pd.precio_filtros_cents,
+        precio_membrana_cents: pd.precio_membrana_cents,
+      },
+      actor_user_id: session.user_id,
+    });
     revalidatePath("/configuracion/mantenimientos");
     return { ok: true };
   } catch (e) {

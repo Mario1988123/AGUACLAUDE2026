@@ -211,19 +211,52 @@ export interface PreciosTarifa {
 
 export const PRECIOS_VACIOS: PreciosTarifa = { solo_filtros: null, filtros_membrana: null };
 
-export type OrigenPrecio = "equipo" | "cliente" | "empresa" | null;
+export type OrigenPrecio = "equipo" | "cliente" | "modelo" | "empresa" | null;
 
-/** Precio aplicado = equipo > cliente > empresa. */
+/** Los cuatro niveles de precio de una visita, del más concreto al más general. */
+export interface NivelesPrecio {
+  equipo: PreciosTarifa;
+  cliente: PreciosTarifa;
+  /** Del modelo del equipo (ya resuelta la herencia variante → gama: `preciosDelModelo`). */
+  modelo: PreciosTarifa;
+  empresa: PreciosTarifa;
+}
+
+/** Precio aplicado = equipo > cliente > modelo > empresa (cada tarifa por separado). */
 export function precioAplicado(
   tarifa: Tarifa,
-  equipo: PreciosTarifa,
-  cliente: PreciosTarifa,
-  empresa: PreciosTarifa,
+  niveles: NivelesPrecio,
 ): { cents: number | null; origen: OrigenPrecio } {
-  if (equipo[tarifa] != null) return { cents: equipo[tarifa], origen: "equipo" };
-  if (cliente[tarifa] != null) return { cents: cliente[tarifa], origen: "cliente" };
-  if (empresa[tarifa] != null) return { cents: empresa[tarifa], origen: "empresa" };
+  const orden = ["equipo", "cliente", "modelo", "empresa"] as const;
+  for (const nivel of orden) {
+    const v = niveles[nivel][tarifa];
+    if (v != null) return { cents: v, origen: nivel };
+  }
   return { cents: null, origen: null };
+}
+
+/** Lo mínimo de un producto para resolver su precio de mantenimiento. */
+export interface ProductoPrecioMant {
+  gama_id: string | null;
+  precios: PreciosTarifa;
+}
+
+/**
+ * Precio del MODELO de un equipo, tarifa a tarifa: el del producto; si está
+ * vacío y el producto es una variante, el de su gama (un solo nivel).
+ */
+export function preciosDelModelo(
+  productId: string | null,
+  productos: ReadonlyMap<string, ProductoPrecioMant>,
+): PreciosTarifa {
+  if (!productId) return PRECIOS_VACIOS;
+  const p = productos.get(productId);
+  if (!p) return PRECIOS_VACIOS;
+  const g = p.gama_id ? productos.get(p.gama_id) : undefined;
+  return {
+    solo_filtros: p.precios.solo_filtros ?? g?.precios.solo_filtros ?? null,
+    filtros_membrana: p.precios.filtros_membrana ?? g?.precios.filtros_membrana ?? null,
+  };
 }
 
 /** Total con IVA, redondeado UNA vez al céntimo. */
