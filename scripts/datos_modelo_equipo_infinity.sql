@@ -94,6 +94,7 @@ begin
     from public.products p
     left join public.product_categories pc on pc.id = p.category_id
    where ce.company_id = v_co and ce.is_active and ce.product_id = p.id
+     and ce.installation_id is null -- solo heredados: los del CRM ya tienen producto (Mario 13-11)
      and p.gama_id is null
      and exists (select 1 from public.products h where h.gama_id = p.id and h.deleted_at is null);
   get diagnostics v_n = row_count;

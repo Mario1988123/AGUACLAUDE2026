@@ -146,8 +146,11 @@ export function estadoIdentificacion(
       falta: null,
     };
   }
+  // Un equipo con producto cuenta como identificado aunque su gama tenga
+  // variantes (Mario 2026-11-13: «los nuevos del CRM ya tienen el producto»).
+  // Solo queda pendiente si se marcó a propósito (heredados de la importación).
+  const pendiente = !!e.pendiente_identificar;
   const tieneVariantes = variantesDe(p.id, cat).length > 0;
-  const pendiente = tieneVariantes || !!e.pendiente_identificar;
   return {
     tipo,
     gama: p,

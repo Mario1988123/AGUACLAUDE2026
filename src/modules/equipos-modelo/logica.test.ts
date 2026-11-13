@@ -68,9 +68,16 @@ describe("estadoIdentificacion", () => {
     expect(e).toMatchObject({ pendiente: true, falta: "modelo", tipo: "fuente" });
     expect(etiquetaModelo(e)).toBe("Fuente · pendiente de identificar");
   });
-  it("gama con variantes → falta la variante aunque la marca diga false", () => {
+  it("gama con variantes del CRM (sin marca) → identificado, sin aviso", () => {
     const e = estadoIdentificacion(
       { product_id: "basic", external_equipment_model_id: null, pendiente_identificar: false },
+      cat,
+    );
+    expect(e).toMatchObject({ pendiente: false, falta: null, tipo: "fuente" });
+  });
+  it("gama con variantes heredada (marcada) → falta la variante", () => {
+    const e = estadoIdentificacion(
+      { product_id: "basic", external_equipment_model_id: null, pendiente_identificar: true },
       cat,
     );
     expect(e).toMatchObject({ pendiente: true, falta: "variante", tipo: "fuente" });

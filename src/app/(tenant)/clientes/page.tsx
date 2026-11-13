@@ -72,7 +72,7 @@ export default async function CustomersPage({
             <Link
               href={"/clientes/equipos-pendientes" as never}
               prefetch={false}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-sm font-medium hover:bg-muted"
             >
               Equipos sin identificar
             </Link>
