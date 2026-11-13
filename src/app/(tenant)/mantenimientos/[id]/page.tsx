@@ -28,7 +28,7 @@ import { cargarMantVisita } from "@/modules/mant-incluido/datos";
 import { BannerCobroVisita } from "@/modules/mant-incluido/banner-visita";
 import { BotonPagoOficina } from "@/modules/mant-incluido/boton-pago-oficina";
 import type { ConfigCobroCierre } from "@/modules/mant-incluido/bloque-cobro";
-import { esNivel12 } from "@/shared/lib/auth/role-scope";
+import { esOficinaMant } from "@/shared/lib/auth/role-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -176,7 +176,7 @@ export default async function MaintenanceDetailPage({
             }
           : null
       : null;
-  const puedeMarcarPagado = esNivel12(session);
+  const puedeMarcarPagado = esOficinaMant(session);
   const modoPagoOficina: "marcar" | "quitar" | null = !mantVisita || !puedeMarcarPagado
     ? null
     : mantVisita.pagoEfectivo === "pendiente" || mantVisita.pagoEfectivo === "no_cobrado"

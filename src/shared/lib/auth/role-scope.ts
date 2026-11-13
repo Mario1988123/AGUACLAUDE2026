@@ -286,6 +286,20 @@ export function esNivel12(session: SessionClaims): boolean {
   return isLevel1(session) || isLevel2(session);
 }
 
+/**
+ * Quién toca precios de mantenimiento, N incluidos y «pagado»: la oficina
+ * (admin, director técnico y comercial). El director de telemarketing NO
+ * (Mario 2026-11-13).
+ */
+export function esOficinaMant(session: SessionClaims): boolean {
+  return (
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director") ||
+    session.roles.includes("commercial_director")
+  );
+}
+
 /** Quién gestiona stock y almacenes (mover, ajustar, lotes, conteos, cargas). */
 export function esGestorStock(session: SessionClaims): boolean {
   return (

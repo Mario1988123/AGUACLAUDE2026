@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
-import { esNivel12 } from "@/shared/lib/auth/role-scope";
+import { esOficinaMant } from "@/shared/lib/auth/role-scope";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { safeParseFriendly } from "@/shared/lib/zod-friendly";
 import { cargarMantVisita, mantIncluidoDisponible, precioModeloDisponible } from "./datos";
@@ -51,7 +51,7 @@ export async function guardarMantEquipoAction(input: unknown): Promise<Res> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
-    if (!esNivel12(session)) return { ok: false, error: "Sin permisos" };
+    if (!esOficinaMant(session)) return { ok: false, error: "Sin permisos" };
     if (!(await mantIncluidoDisponible())) return { ok: false, error: SIN_MIGRACION };
     const [pd, perr] = safeParseFriendly(equipoSchema, input);
     if (perr !== null || !pd) return { ok: false, error: perr ?? "Datos no válidos" };
@@ -174,7 +174,7 @@ export async function guardarPrecioModeloAction(input: unknown): Promise<Res> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
-    if (!esNivel12(session)) return { ok: false, error: "Sin permisos" };
+    if (!esOficinaMant(session)) return { ok: false, error: "Sin permisos" };
     if (!(await precioModeloDisponible())) {
       return { ok: false, error: "Falta aplicar la migración del precio por modelo" };
     }
@@ -229,7 +229,7 @@ export async function marcarVisitaPagadaAction(input: unknown): Promise<Res> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
-    if (!esNivel12(session)) return { ok: false, error: "Solo la oficina puede marcarlo como pagado" };
+    if (!esOficinaMant(session)) return { ok: false, error: "Solo la oficina puede marcarlo como pagado" };
     if (!(await mantIncluidoDisponible())) return { ok: false, error: SIN_MIGRACION };
     const [pd, perr] = safeParseFriendly(pagadoSchema, input);
     if (perr !== null || !pd) return { ok: false, error: perr ?? "Datos no válidos" };
@@ -328,7 +328,7 @@ export async function quitarPagadoVisitaAction(jobId: string): Promise<Res> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
-    if (!esNivel12(session)) return { ok: false, error: "Sin permisos" };
+    if (!esOficinaMant(session)) return { ok: false, error: "Sin permisos" };
     if (!(await mantIncluidoDisponible())) return { ok: false, error: SIN_MIGRACION };
     if (!z.string().uuid().safeParse(jobId).success) return { ok: false, error: "Visita no válida" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

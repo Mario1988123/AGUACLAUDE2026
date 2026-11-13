@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
-import { esNivel12 } from "@/shared/lib/auth/role-scope";
+import { esOficinaMant } from "@/shared/lib/auth/role-scope";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { formatDateES } from "@/shared/lib/format-date";
 import {
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
  */
 export default async function EmpiezanAPagarPage() {
   const session = await requireSession();
-  if (!session.company_id || !esNivel12(session)) redirect("/mantenimientos");
+  if (!session.company_id || !esOficinaMant(session)) redirect("/mantenimientos");
   const companyId = session.company_id;
 
   if (!(await mantIncluidoDisponible())) {
