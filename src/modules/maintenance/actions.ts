@@ -665,8 +665,12 @@ export async function completeMaintenanceAction(input: unknown) {
       equipoIds: [eqId],
       incluirInactivos: true,
     });
-    if (eq?.estado.pendiente) throw new Error("Identifica el equipo para poder cerrar");
-    if (alcanceObligatorio(eq?.estado.tipo ?? null)) {
+    // Si la lectura del equipo falla, cargarEquiposConModelo devuelve [] (se
+    // traga el error): sin esta guarda el cierre se saltaba la identificación
+    // y el alcance (auditoría 2026-11-13, I1).
+    if (!eq) throw new Error("No se pudo leer el equipo; reintenta");
+    if (eq.estado.pendiente) throw new Error("Identifica el equipo para poder cerrar");
+    if (alcanceObligatorio(eq.estado.tipo ?? null)) {
       if (!parsed.alcance) {
         throw new Error("Elige si cambias solo filtros o filtros + membrana");
       }

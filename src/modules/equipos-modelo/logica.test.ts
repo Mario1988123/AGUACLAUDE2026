@@ -9,6 +9,7 @@ import {
   variantesDe,
   type CatalogoModelo,
   type ProductoModelo,
+  trabajoVigenteParaTecnico,
 } from "./logica";
 
 const prod = (p: Partial<ProductoModelo> & { id: string; name: string }): ProductoModelo => ({
@@ -120,5 +121,30 @@ describe("productoDeFiltros", () => {
   });
   it("la gama usa los suyos", () => {
     expect(productoDeFiltros("basic", null, () => false)).toBe("basic");
+  });
+});
+
+describe("trabajoVigenteParaTecnico (M3: misma regla que listarClientesPendientes)", () => {
+  const ahora = Date.parse("2026-11-13T12:00:00Z");
+  it("abierto: siempre vigente, sea cual sea la fecha", () => {
+    expect(trabajoVigenteParaTecnico({ status: "scheduled", completed_at: null }, ahora, 24)).toBe(true);
+    expect(trabajoVigenteParaTecnico({ status: "in_progress", completed_at: null }, ahora, 24)).toBe(true);
+  });
+  it("cerrado hace menos de 24 h: vigente", () => {
+    expect(
+      trabajoVigenteParaTecnico({ status: "completed", completed_at: "2026-11-12T13:00:00Z" }, ahora, 24),
+    ).toBe(true);
+  });
+  it("cerrado hace 24 h o más: no vigente", () => {
+    expect(
+      trabajoVigenteParaTecnico({ status: "completed", completed_at: "2026-11-12T12:00:00Z" }, ahora, 24),
+    ).toBe(false);
+    expect(
+      trabajoVigenteParaTecnico({ status: "completed", completed_at: "2026-11-01T12:00:00Z" }, ahora, 24),
+    ).toBe(false);
+  });
+  it("cerrado sin fecha de cierre o cancelado antiguo: no vigente", () => {
+    expect(trabajoVigenteParaTecnico({ status: "completed", completed_at: null }, ahora, 24)).toBe(false);
+    expect(trabajoVigenteParaTecnico({ status: "cancelled", completed_at: null }, ahora, 24)).toBe(false);
   });
 });

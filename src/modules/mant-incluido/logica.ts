@@ -333,3 +333,63 @@ export function diferenciaMembrana(
   const dif = precioMembrana - pagado;
   return dif > 0 ? dif : null;
 }
+
+// ---------------------------------------------------------------------------
+// «Pagado en oficina»: marcar y quitar (auditoría 2026-11-13, I2 y M4)
+// ---------------------------------------------------------------------------
+
+export interface PagoOficina {
+  tarifa: Tarifa | null;
+  /** Base SIN IVA pagada en oficina. */
+  cents: number | null;
+  metodo: string | null;
+}
+
+/**
+ * Pago en oficina a guardar cuando la visita YA tenía uno anterior (caso
+ * diferencia de membrana: la oficina cobró «solo filtros», el técnico hizo
+ * filtros + membrana sin cobrar y ahora la oficina cobra la diferencia).
+ * La ficha lee `pagado_oficina_cents` como la base TOTAL pagada en oficina,
+ * así que:
+ *  - importe: se SUMA; si alguna de las dos partes es desconocida, el total
+ *    también lo es (null) — las dos partes quedan en el evento;
+ *  - tarifa y forma de pago: manda lo nuevo y, si no se indica, lo anterior.
+ */
+export function combinarPagoOficina(anterior: PagoOficina | null, nuevo: PagoOficina): PagoOficina {
+  if (!anterior) return nuevo;
+  return {
+    tarifa: nuevo.tarifa ?? anterior.tarifa,
+    cents: anterior.cents != null && nuevo.cents != null ? anterior.cents + nuevo.cents : null,
+    metodo: nuevo.metodo ?? anterior.metodo,
+  };
+}
+
+/** Lo que había en la visita antes de «Marcar pagado» (va en el evento). */
+export interface CobroAntesDePagado {
+  is_charged: boolean;
+  importe_pendiente_cents: number | null;
+}
+
+/**
+ * Valores de is_charged / importe_pendiente_cents al QUITAR «pagado en
+ * oficina». Si el evento de «marcar» guardó cómo estaba la visita, se
+ * restaura eso. Si no (marcas antiguas), se deduce: is_charged = tiene
+ * precio (charge_cents) y pendiente = null, que es lo que deja el flujo
+ * normal en una visita abierta (el pendiente solo se escribe al cerrar).
+ */
+export function cobroTrasQuitarPagado(
+  anterior: unknown,
+  chargeCents: number | null,
+): CobroAntesDePagado {
+  if (anterior && typeof anterior === "object") {
+    const a = anterior as Record<string, unknown>;
+    const pend = a.importe_pendiente_cents;
+    if (
+      typeof a.is_charged === "boolean" &&
+      (pend === null || (typeof pend === "number" && Number.isInteger(pend) && pend >= 0))
+    ) {
+      return { is_charged: a.is_charged, importe_pendiente_cents: pend as number | null };
+    }
+  }
+  return { is_charged: chargeCents != null, importe_pendiente_cents: null };
+}

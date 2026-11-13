@@ -141,12 +141,17 @@ export async function aplicarCobroCierre(
   const admin = createAdminClient() as any;
 
   if (plan.tipo === "solo_tarifa") {
-    await admin
+    const updTarifa = await admin
       .from("maintenance_jobs")
       .update({ alcance: plan.tarifa })
       .eq("id", jobId)
       .eq("company_id", companyId)
       .is("alcance", null);
+    // La visita ya está cerrada: un fallo aquí solo deja la tarifa sin anotar.
+    // Se registra, pero no rompe el cierre (auditoría 2026-11-13, M1).
+    if (updTarifa.error) {
+      console.error("[mant-incluido] tarifa de la visita:", jobId, updTarifa.error.message);
+    }
     return null;
   }
 

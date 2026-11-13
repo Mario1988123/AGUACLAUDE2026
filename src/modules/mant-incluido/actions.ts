@@ -7,8 +7,14 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { esNivel12 } from "@/shared/lib/auth/role-scope";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { safeParseFriendly } from "@/shared/lib/zod-friendly";
-import { mantIncluidoDisponible, precioModeloDisponible } from "./datos";
-import { N_MAXIMO } from "./logica";
+import { cargarMantVisita, mantIncluidoDisponible, precioModeloDisponible } from "./datos";
+import {
+  N_MAXIMO,
+  cobroTrasQuitarPagado,
+  combinarPagoOficina,
+  type CobroAntesDePagado,
+  type PagoEstado,
+} from "./logica";
 
 /**
  * Acciones de «mantenimientos incluidos». Todas con admin + company_id a mano
@@ -230,31 +236,82 @@ export async function marcarVisitaPagadaAction(input: unknown): Promise<Res> {
     const p = { data: pd };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const upd = await admin
+    // Pago EFECTIVO (auditoría 2026-11-13, M4): una visita incluida no se
+    // marca pagada; solo las que se cobran (pendiente) o quedaron sin cobrar.
+    const visita = await cargarMantVisita(session.company_id, p.data.job_id);
+    if (!visita) return { ok: false, error: "No se pudo leer la visita; reintenta" };
+    if (visita.pagoEfectivo === "incluido") {
+      return { ok: false, error: "Esta visita está incluida: no hay nada que cobrar" };
+    }
+    if (visita.pagoEfectivo !== "pendiente" && visita.pagoEfectivo !== "no_cobrado") {
+      return { ok: false, error: "Esta visita ya consta como cobrada o pagada" };
+    }
+    // Cómo estaba la visita antes de marcar: se guarda en el evento para que
+    // «Quitar pagado» lo restaure (I2).
+    const prevR = await admin
+      .from("maintenance_jobs")
+      .select("pago_estado, pagado_marcado_at, is_charged, importe_pendiente_cents")
+      .eq("id", p.data.job_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (prevR.error) return { ok: false, error: prevR.error.message };
+    const prev = prevR.data as {
+      pago_estado: PagoEstado | null;
+      pagado_marcado_at: string | null;
+      is_charged: boolean | null;
+      importe_pendiente_cents: number | null;
+    } | null;
+    if (!prev) return { ok: false, error: "Visita no encontrada" };
+    const guardado = prev.pago_estado ?? "incluido";
+    if (!["incluido", "pendiente", "no_cobrado"].includes(guardado)) {
+      return { ok: false, error: "Esta visita ya consta como cobrada o pagada" };
+    }
+    const antes: CobroAntesDePagado = {
+      is_charged: prev.is_charged === true,
+      importe_pendiente_cents: prev.importe_pendiente_cents ?? null,
+    };
+    // Pago en oficina anterior (diferencia de membrana): se suma, no se pisa.
+    const anterior = visita.pagadoOficina
+      ? { tarifa: visita.pagadoOficina.tarifa, cents: visita.pagadoOficina.cents, metodo: visita.pagadoOficina.metodo }
+      : null;
+    const nuevo = { tarifa: p.data.tarifa, cents: p.data.cents, metodo: p.data.metodo };
+    const total = combinarPagoOficina(anterior, nuevo);
+    // Compare-and-set sobre lo leído: si otro lo cambió entre medias, no se pisa.
+    let q = admin
       .from("maintenance_jobs")
       .update({
         pago_estado: "pagado_oficina",
         pagado_marcado_por: session.user_id,
         pagado_marcado_at: new Date().toISOString(),
-        pagado_oficina_tarifa: p.data.tarifa,
-        pagado_oficina_cents: p.data.cents,
-        pagado_oficina_metodo: p.data.metodo,
+        pagado_oficina_tarifa: total.tarifa,
+        pagado_oficina_cents: total.cents,
+        pagado_oficina_metodo: total.metodo,
         importe_pendiente_cents: null,
         is_charged: true,
       })
       .eq("id", p.data.job_id)
-      .eq("company_id", session.company_id)
-      .in("pago_estado", ["incluido", "pendiente", "no_cobrado"])
-      .select("id, customer_id");
+      .eq("company_id", session.company_id);
+    q = prev.pago_estado == null ? q.is("pago_estado", null) : q.eq("pago_estado", prev.pago_estado);
+    q = prev.pagado_marcado_at == null
+      ? q.is("pagado_marcado_at", null)
+      : q.eq("pagado_marcado_at", prev.pagado_marcado_at);
+    const upd = await q.select("id, customer_id");
     if (upd.error) return { ok: false, error: upd.error.message };
     const fila = ((upd.data ?? []) as Array<{ id: string; customer_id: string }>)[0];
-    if (!fila) return { ok: false, error: "Esta visita ya consta como cobrada o pagada" };
+    if (!fila) return { ok: false, error: "La visita ha cambiado mientras tanto; recarga y reintenta" };
     await admin.from("events").insert({
       company_id: session.company_id,
       subject_type: "maintenance",
       subject_id: fila.id,
       kind: "maintenance.pagado_oficina",
-      payload: { tarifa: p.data.tarifa, cents: p.data.cents, metodo: p.data.metodo },
+      payload: {
+        tarifa: p.data.tarifa,
+        cents: p.data.cents,
+        metodo: p.data.metodo,
+        total,
+        pago_oficina_anterior: anterior,
+        anterior: antes,
+      },
       actor_user_id: session.user_id,
     });
     revalidatePath(`/mantenimientos/${fila.id}`);
@@ -276,6 +333,32 @@ export async function quitarPagadoVisitaAction(jobId: string): Promise<Res> {
     if (!z.string().uuid().safeParse(jobId).success) return { ok: false, error: "Visita no válida" };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
+    // is_charged / importe_pendiente_cents como estaban antes de marcar
+    // (auditoría 2026-11-13, I2): del último evento «pagado_oficina»; si no lo
+    // guardó (marcas antiguas), se deduce de charge_cents.
+    const jr = await admin
+      .from("maintenance_jobs")
+      .select("charge_cents")
+      .eq("id", jobId)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    if (jr.error) return { ok: false, error: jr.error.message };
+    if (!jr.data) return { ok: false, error: "Visita no encontrada" };
+    const ev = await admin
+      .from("events")
+      .select("payload")
+      .eq("company_id", session.company_id)
+      .eq("subject_type", "maintenance")
+      .eq("subject_id", jobId)
+      .eq("kind", "maintenance.pagado_oficina")
+      .order("occurred_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (ev.error) return { ok: false, error: ev.error.message };
+    const restaurar = cobroTrasQuitarPagado(
+      (ev.data as { payload: Record<string, unknown> | null } | null)?.payload?.anterior ?? null,
+      (jr.data as { charge_cents: number | null }).charge_cents ?? null,
+    );
     const upd = await admin
       .from("maintenance_jobs")
       .update({
@@ -285,6 +368,8 @@ export async function quitarPagadoVisitaAction(jobId: string): Promise<Res> {
         pagado_oficina_tarifa: null,
         pagado_oficina_cents: null,
         pagado_oficina_metodo: null,
+        is_charged: restaurar.is_charged,
+        importe_pendiente_cents: restaurar.importe_pendiente_cents,
       })
       .eq("id", jobId)
       .eq("company_id", session.company_id)

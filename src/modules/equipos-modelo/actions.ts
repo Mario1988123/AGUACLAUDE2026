@@ -3,14 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession, type SessionClaims } from "@/shared/lib/auth/session";
-import { assertTrabajoAsignado } from "@/shared/lib/auth/role-scope";
+import { HORAS_TRAS_CIERRE, assertTrabajoAsignado, esNivel12 } from "@/shared/lib/auth/role-scope";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import {
   cargarCatalogoModelo,
   cargarEquiposConModelo,
   modeloEquipoDisponible,
 } from "./datos";
-import { esTipoEquipo, tipoEfectivoProducto, validarModeloElegido, type TipoEquipo } from "./logica";
+import {
+  esTipoEquipo,
+  tipoEfectivoProducto,
+  trabajoVigenteParaTecnico,
+  validarModeloElegido,
+  type TipoEquipo,
+} from "./logica";
 
 type Resultado = { ok: true; equipo_id: string } | { ok: false; error: string };
 
@@ -86,7 +92,7 @@ export async function identificarEquipoAction(input: IdentificarEntrada): Promis
       if (!esUuid(input.maintenance_job_id)) return { ok: false, error: "Mantenimiento no válido" };
       const { data } = await admin
         .from("maintenance_jobs")
-        .select("id, customer_id, customer_equipment_id, technician_user_id, status")
+        .select("id, customer_id, customer_equipment_id, technician_user_id, status, completed_at")
         .eq("id", input.maintenance_job_id)
         .eq("company_id", companyId)
         .maybeSingle();
@@ -96,6 +102,19 @@ export async function identificarEquipoAction(input: IdentificarEntrada): Promis
         (data as { technician_user_id: string | null }).technician_user_id,
         "mantenimiento",
       );
+      // Técnico: solo trabajos abiertos o cerrados hace < 24 h (misma regla
+      // que listarClientesPendientes). La oficina, sin límite (auditoría
+      // 2026-11-13, M3).
+      if (
+        !esNivel12(session) &&
+        !trabajoVigenteParaTecnico(
+          data as { status: string | null; completed_at: string | null },
+          Date.now(),
+          HORAS_TRAS_CIERRE,
+        )
+      ) {
+        return { ok: false, error: "Este mantenimiento ya está cerrado: pide a la oficina que identifique el equipo" };
+      }
       if ((data as { customer_id: string }).customer_id !== input.customer_id) {
         return { ok: false, error: "El mantenimiento no es de este cliente" };
       }

@@ -163,13 +163,18 @@ export async function avisarLeadsInactivos(
 
       // Resumen semanal al admin (reparte la bolsa).
       if (inactivos.length > 0 || enBolsa > 0) {
-        const { count: resumenReciente } = await admin
+        const { count: resumenReciente, error: errResumen } = await admin
           .from("notifications")
           .select("id", { count: "exact", head: true })
           .eq("company_id", companyId)
           .eq("kind", "lead.stale_summary")
           .gte("created_at", haceAvisos);
-        if ((resumenReciente ?? 0) === 0) {
+        // Si no se puede saber si ya se mandó, NO se manda (auditoría
+        // 2026-11-13, M2): count null contaba como 0 → resumen cada día.
+        if (errResumen) {
+          console.error("[cron/daily] conteo de resúmenes de leads falló en", companyId, errResumen.message);
+          stats.errores += 1;
+        } else if ((resumenReciente ?? 0) === 0) {
           const partes: string[] = [];
           if (enBolsa > 0) partes.push(`${enBolsa} lead${enBolsa === 1 ? "" : "s"} en la bolsa sin repartir`);
           if (inactivos.length > 0)

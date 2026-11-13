@@ -213,3 +213,21 @@ export function productoDeFiltros(
 export function alcanceObligatorio(tipo: TipoEquipo | null): boolean {
   return tipo === "osmosis";
 }
+
+/**
+ * ¿El técnico aún puede operar este trabajo? Abierto (ni completado ni
+ * cancelado) o cerrado hace menos de `horas`. Misma regla que
+ * `listarClientesPendientes` (role-scope, D3 + D4): `status not in
+ * (completed,cancelled) OR completed_at > ahora - horas`. La oficina (nivel
+ * 1/2) no pasa por aquí.
+ */
+export function trabajoVigenteParaTecnico(
+  trabajo: { status: string | null; completed_at: string | null },
+  ahoraMs: number,
+  horas: number,
+): boolean {
+  if (trabajo.status !== "completed" && trabajo.status !== "cancelled") return true;
+  if (!trabajo.completed_at) return false;
+  const t = Date.parse(trabajo.completed_at);
+  return Number.isFinite(t) && t > ahoraMs - horas * 3600_000;
+}

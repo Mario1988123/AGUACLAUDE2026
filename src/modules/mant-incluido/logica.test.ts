@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   centimosAEuros,
+  cobroTrasQuitarPagado,
+  combinarPagoOficina,
   diferenciaMembrana,
   estadoMantIncluido,
   eurosACentimos,
@@ -243,5 +245,61 @@ describe("cobro de la visita", () => {
     expect(diferenciaMembrana("solo_filtros", "solo_filtros", 9000, 12000, null)).toBeNull();
     expect(diferenciaMembrana("filtros_membrana", "filtros_membrana", 9000, 12000, null)).toBeNull();
     expect(diferenciaMembrana(null, "filtros_membrana", 9000, 12000, null)).toBeNull();
+  });
+});
+
+describe("combinarPagoOficina (M4)", () => {
+  const nuevo = { tarifa: "filtros_membrana" as const, cents: 3000, metodo: "card" };
+  it("sin pago anterior: lo nuevo tal cual", () => {
+    expect(combinarPagoOficina(null, nuevo)).toEqual(nuevo);
+  });
+  it("con pago anterior: suma importes y manda lo nuevo", () => {
+    expect(
+      combinarPagoOficina({ tarifa: "solo_filtros", cents: 6000, metodo: "cash" }, nuevo),
+    ).toEqual({ tarifa: "filtros_membrana", cents: 9000, metodo: "card" });
+  });
+  it("si falta tarifa o método nuevos, conserva los anteriores", () => {
+    expect(
+      combinarPagoOficina(
+        { tarifa: "solo_filtros", cents: 6000, metodo: "cash" },
+        { tarifa: null, cents: 3000, metodo: null },
+      ),
+    ).toEqual({ tarifa: "solo_filtros", cents: 9000, metodo: "cash" });
+  });
+  it("si una parte del importe es desconocida, el total es desconocido", () => {
+    expect(
+      combinarPagoOficina({ tarifa: "solo_filtros", cents: null, metodo: null }, nuevo).cents,
+    ).toBeNull();
+    expect(
+      combinarPagoOficina(
+        { tarifa: "solo_filtros", cents: 6000, metodo: null },
+        { tarifa: null, cents: null, metodo: null },
+      ).cents,
+    ).toBeNull();
+  });
+});
+
+describe("cobroTrasQuitarPagado (I2)", () => {
+  it("restaura lo guardado en el evento", () => {
+    expect(cobroTrasQuitarPagado({ is_charged: false, importe_pendiente_cents: null }, 5000)).toEqual({
+      is_charged: false,
+      importe_pendiente_cents: null,
+    });
+    expect(cobroTrasQuitarPagado({ is_charged: true, importe_pendiente_cents: 1200 }, null)).toEqual({
+      is_charged: true,
+      importe_pendiente_cents: 1200,
+    });
+  });
+  it("sin evento (o mal formado): is_charged = tiene precio y sin pendiente", () => {
+    expect(cobroTrasQuitarPagado(null, 5000)).toEqual({ is_charged: true, importe_pendiente_cents: null });
+    expect(cobroTrasQuitarPagado(undefined, null)).toEqual({ is_charged: false, importe_pendiente_cents: null });
+    expect(cobroTrasQuitarPagado({ is_charged: "si" }, null)).toEqual({
+      is_charged: false,
+      importe_pendiente_cents: null,
+    });
+    expect(cobroTrasQuitarPagado({ is_charged: true, importe_pendiente_cents: -5 }, 100)).toEqual({
+      is_charged: true,
+      importe_pendiente_cents: null,
+    });
   });
 });
