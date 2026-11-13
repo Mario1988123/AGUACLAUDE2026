@@ -47,6 +47,16 @@ export default async function CustomersPage({
       : Promise.resolve(null),
   ]);
 
+  // Enlace a «Equipos sin identificar» (plan modelo de equipo): oficina y
+  // solo si la migración está aplicada.
+  const puedeVerPendientesModelo =
+    (session.is_superadmin ||
+      session.roles.includes("company_admin") ||
+      session.roles.includes("technical_director")) &&
+    (await import("@/modules/equipos-modelo/datos")
+      .then((m) => m.modeloEquipoDisponible())
+      .catch(() => false));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -58,6 +68,15 @@ export default async function CustomersPage({
           {isUpperLevel && <ImportCustomersButton />}
           {/* Generador de contratos heredados RETIRADO (Mario 2026-11-09): lo
               heredado no son contratos, son equipos ya instalados. */}
+          {puedeVerPendientesModelo && (
+            <Link
+              href={"/clientes/equipos-pendientes" as never}
+              prefetch={false}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Equipos sin identificar
+            </Link>
+          )}
           {isUpperLevel && (
             <Link
               href={"/clientes/duplicados" as never}

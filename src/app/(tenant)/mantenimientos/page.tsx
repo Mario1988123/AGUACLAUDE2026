@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ScrollToOnMount } from "@/shared/components/scroll-to-on-mount";
 import { Eye } from "lucide-react";
 import { listMaintenance } from "@/modules/maintenance/actions";
+import { EtiquetaPagoVisita } from "@/modules/mant-incluido/etiqueta-pago";
+import { mantIncluidoDisponible } from "@/modules/mant-incluido/datos";
 import { STATUS_LABEL } from "@/modules/maintenance/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { StatusPill } from "@/shared/components/status-pill";
@@ -82,6 +84,7 @@ export default async function MantenimientosPage({
     session.roles.includes("commercial_director") ||
     session.roles.includes("technical_director") ||
     session.roles.includes("telemarketing_director");
+  const hayMantIncluido = isUpper ? await mantIncluidoDisponible().catch(() => false) : false;
 
   const sp = await searchParams;
   const status = STATUS_OPTIONS.includes(sp.status as never) ? sp.status : undefined;
@@ -148,12 +151,22 @@ export default async function MantenimientosPage({
           </p>
         </div>
         {isUpper && (
-          <Link
-            href="/mantenimientos/por-confirmar"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-primary bg-primary/5 px-4 text-sm font-semibold text-primary hover:bg-primary/10"
-          >
-            Por confirmar →
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {hayMantIncluido && (
+              <Link
+                href={"/mantenimientos/empiezan-a-pagar" as never}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-red-300 bg-red-50 px-4 text-sm font-semibold text-red-800 hover:bg-red-100"
+              >
+                Empiezan a pagar →
+              </Link>
+            )}
+            <Link
+              href="/mantenimientos/por-confirmar"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-primary bg-primary/5 px-4 text-sm font-semibold text-primary hover:bg-primary/10"
+            >
+              Por confirmar →
+            </Link>
+          </div>
         )}
       </div>
 
@@ -332,11 +345,11 @@ export default async function MantenimientosPage({
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
                     <span className="text-xs tabular-nums">
-                      {j.is_charged ? (
-                        <strong>{formatCents(j.charge_cents)}</strong>
-                      ) : (
-                        <span className="text-muted-foreground">Incluido</span>
-                      )}
+                      <EtiquetaPagoVisita
+                        pago={j.pago_estado}
+                        isCharged={j.is_charged}
+                        importe={j.charge_cents != null ? formatCents(j.charge_cents) : null}
+                      />
                     </span>
                     <Link
                       href={`/mantenimientos/${j.id}` as never}
@@ -399,7 +412,11 @@ export default async function MantenimientosPage({
                       />
                     </td>
                     <td className="py-2 text-right tabular-nums">
-                      {j.is_charged ? formatCents(j.charge_cents) : <span className="text-xs text-muted-foreground">Incluido</span>}
+                      <EtiquetaPagoVisita
+                        pago={j.pago_estado}
+                        isCharged={j.is_charged}
+                        importe={j.charge_cents != null ? formatCents(j.charge_cents) : null}
+                      />
                     </td>
                     <td className="py-2 text-right">
                       <Link

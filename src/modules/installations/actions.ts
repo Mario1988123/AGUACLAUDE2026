@@ -1756,7 +1756,7 @@ export async function completeInstallation(input: unknown) {
         .select("payload")
         .eq("kind", "equipment.relocation_requested")
         .filter("payload->>installation_id", "eq", parsed.id)
-        .order("created_at", { ascending: false })
+        .order("occurred_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       const pl = (evt as { payload: { customer_equipment_id?: string } | null } | null)?.payload;

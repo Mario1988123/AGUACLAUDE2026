@@ -96,7 +96,7 @@ export function UninstallFromAgendaButton({ teamMembers = [] }: Props) {
   }
 
   const eqLabel = (e: CustomerEquipmentRow) => {
-    const base = e.product_name || e.external_model_name || "Equipo";
+    const base = e.product_name || e.external_model_name || e.modelo?.etiqueta || "Equipo";
     return e.serial_number ? `${base} · S/N ${e.serial_number}` : base;
   };
 

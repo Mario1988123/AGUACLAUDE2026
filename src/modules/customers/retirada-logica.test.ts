@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   destinoEfectivo,
+  equiposSinModeloAlAlmacen,
   anadirNota,
   decidirContrato,
   estadoStockDeEquipo,
@@ -250,5 +251,28 @@ describe("anadirNota", () => {
   it("añade debajo o crea la nota", () => {
     expect(anadirNota(null, "x")).toBe("x");
     expect(anadirNota("a", "x")).toBe(["a", "x"].join(String.fromCharCode(10)));
+  });
+});
+
+describe("equiposSinModeloAlAlmacen (equipo pendiente sin modelo)", () => {
+  it("bloquea el equipo sin producto ni modelo externo que vuelve al almacén", () => {
+    const r = equiposSinModeloAlAlmacen(
+      [
+        { id: EQ1, product_id: null, external_equipment_model_id: null },
+        { id: EQ2, product_id: "p", external_equipment_model_id: null },
+      ],
+      new Map(),
+    );
+    expect(r).toEqual([EQ1]);
+  });
+  it("deja pasar el externo y el marcado como perdido", () => {
+    const r = equiposSinModeloAlAlmacen(
+      [
+        { id: EQ1, product_id: null, external_equipment_model_id: null },
+        { id: EQ2, product_id: null, external_equipment_model_id: "x" },
+      ],
+      new Map([[EQ1, "lost" as const]]),
+    );
+    expect(r).toEqual([]);
   });
 });

@@ -12,6 +12,8 @@ import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { computeMaintenanceJobAlerts } from "./alerts";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { cargarEquiposConModelo, modeloEquipoDisponible } from "@/modules/equipos-modelo/datos";
+import { alcanceObligatorio } from "@/modules/equipos-modelo/logica";
 
 export interface MaintenanceRow {
   id: string;
@@ -25,6 +27,10 @@ export interface MaintenanceRow {
   completed_at: string | null;
   is_charged: boolean;
   charge_cents: number | null;
+  customer_equipment_id: string | null;
+  /** Pago efectivo de la visita (mantenimientos incluidos). Null = migración
+   *  sin aplicar: la lista pinta lo de siempre (is_charged). */
+  pago_estado: import("@/modules/mant-incluido/logica").PagoEstado | null;
   /** Avisos operativos por fila (mismo patrón que instalaciones / clientes).
    *  Frases cortas listas para pintar en el badge ⚠ N o el modal de ficha. */
   alerts: string[];
@@ -391,7 +397,7 @@ export async function listMaintenance(filters?: {
       let query: any = supabase
         .from("maintenance_jobs")
         .select(
-          "id, status, kind, customer_id, technician_user_id, scheduled_at, started_at, completed_at, is_charged, charge_cents, customer_called_at, confirmed_at",
+          "id, status, kind, customer_id, customer_equipment_id, technician_user_id, scheduled_at, started_at, completed_at, is_charged, charge_cents, customer_called_at, confirmed_at",
         );
       // Un técnico NO ve los mantenimientos de otro (D2).
       if (soloSuyos) query = query.eq("technician_user_id", session.user_id);
@@ -406,7 +412,7 @@ export async function listMaintenance(filters?: {
     { label: "listMaintenance" },
   );
   const rows = (data ?? []) as unknown as Array<
-    Omit<MaintenanceRow, "customer_name" | "technician_name" | "alerts"> & {
+    Omit<MaintenanceRow, "customer_name" | "technician_name" | "alerts" | "pago_estado"> & {
       started_at?: string | null;
       customer_called_at?: string | null;
       confirmed_at?: string | null;
@@ -465,6 +471,16 @@ export async function listMaintenance(filters?: {
       if (t.full_name) techMap.set(t.user_id, t.full_name);
     }
   }
+  // Estado de pago real (k > N o lo marcado por oficina/técnico). Tolerante.
+  let pagos = new Map<string, import("@/modules/mant-incluido/logica").PagoEstado>();
+  if (session.company_id) {
+    try {
+      const { estadosPagoVisitas } = await import("@/modules/mant-incluido/datos");
+      pagos = await estadosPagoVisitas(session.company_id, rows);
+    } catch (e) {
+      console.error("[listMaintenance] pago:", e);
+    }
+  }
   return rows.map((r) => {
     const alerts = computeMaintenanceJobAlerts({
       status: r.status,
@@ -484,6 +500,8 @@ export async function listMaintenance(filters?: {
       completed_at: r.completed_at,
       is_charged: r.is_charged,
       charge_cents: r.charge_cents,
+      customer_equipment_id: r.customer_equipment_id ?? null,
+      pago_estado: pagos.get(r.id) ?? null,
       customer_name: nameMap.get(r.customer_id) ?? null,
       technician_name: r.technician_user_id
         ? techMap.get(r.technician_user_id) ?? null
@@ -636,6 +654,36 @@ export async function completeMaintenanceAction(input: unknown) {
     (prev as { technician_user_id: string | null }).technician_user_id,
     "mantenimiento",
   );
+  // Modelo de equipo (plan 2026-11-13, decisión 4): no se cierra sin el
+  // equipo identificado y, en ósmosis, sin el alcance. Solo si la migración
+  // está aplicada; si no, el cierre sigue como siempre.
+  const extraCierre: Record<string, unknown> = {};
+  if (await modeloEquipoDisponible()) {
+    const eqId = (prev as { customer_equipment_id: string | null }).customer_equipment_id;
+    if (!eqId) throw new Error("Identifica el equipo para poder cerrar");
+    const [eq] = await cargarEquiposConModelo(session.company_id, {
+      equipoIds: [eqId],
+      incluirInactivos: true,
+    });
+    if (eq?.estado.pendiente) throw new Error("Identifica el equipo para poder cerrar");
+    if (alcanceObligatorio(eq?.estado.tipo ?? null)) {
+      if (!parsed.alcance) {
+        throw new Error("Elige si cambias solo filtros o filtros + membrana");
+      }
+      extraCierre.alcance = parsed.alcance;
+      extraCierre.alcance_motivo = parsed.alcance_motivo?.trim() || null;
+    }
+  }
+  // Mantenimientos incluidos (plan 2026-11-12, §2.1): si la visita se cobra,
+  // validar tarifa y cobro ANTES de cerrarla. Sin migración no hace nada.
+  const { prepararCobroCierre, aplicarCobroCierre } = await import("@/modules/mant-incluido/cobro");
+  const prepCobro = await prepararCobroCierre(
+    session.company_id,
+    parsed.id,
+    (prev as { customer_id: string }).customer_id,
+    parsed.alcance ?? null,
+    parsed.cobro ?? null,
+  );
   const startTs = (prev as { started_at: string | null } | null)?.started_at;
   const durationSec = startTs
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
@@ -655,6 +703,7 @@ export async function completeMaintenanceAction(input: unknown) {
       completed_at: nowIso,
       duration_seconds: durationSec,
       notes: parsed.notes ?? null,
+      ...extraCierre,
     })
     .eq("id", parsed.id)
     .eq("company_id", session.company_id)
@@ -664,7 +713,16 @@ export async function completeMaintenanceAction(input: unknown) {
   if (!updR.data || (updR.data as unknown[]).length === 0) {
     revalidatePath("/mantenimientos");
     revalidatePath(`/mantenimientos/${parsed.id}`);
-    return;
+    return { avisoCobro: null };
+  }
+
+  // Cobro de la visita (compare-and-set sobre pago_estado + línea de wallet).
+  let avisoCobro: string | null = null;
+  try {
+    avisoCobro = await aplicarCobroCierre(session, parsed.id, prepCobro);
+  } catch (e) {
+    console.error("[completeMaintenance] cobro:", e);
+    avisoCobro = "La visita está cerrada, pero no se pudo guardar el cobro. Avisa a la oficina.";
   }
 
   // Auto-resolver notificaciones del mantenimiento (ya completado).
@@ -754,7 +812,11 @@ export async function completeMaintenanceAction(input: unknown) {
     subject_type: "maintenance",
     subject_id: parsed.id,
     kind: "maintenance.completed",
-    payload: { items_replaced: parsed.replaced_items.length, duration_seconds: durationSec },
+    payload: {
+      items_replaced: parsed.replaced_items.length,
+      duration_seconds: durationSec,
+      alcance: extraCierre.alcance ?? null,
+    },
     actor_user_id: session.user_id,
   });
 
@@ -782,6 +844,7 @@ export async function completeMaintenanceAction(input: unknown) {
 
   revalidatePath(`/mantenimientos/${parsed.id}`);
   revalidatePath("/mantenimientos");
+  return { avisoCobro };
 }
 
 /**
@@ -1031,10 +1094,10 @@ export async function acceptRenewalAction(input: {
 
 export async function completeMaintenanceSafeAction(
   input: unknown,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; aviso?: string | null } | { ok: false; error: string }> {
   try {
-    await completeMaintenanceAction(input);
-    return { ok: true };
+    const r = await completeMaintenanceAction(input);
+    return { ok: true, aviso: r.avisoCobro };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

@@ -144,7 +144,7 @@ export interface ProductForProposal {
  * de creación de propuesta para saber qué planes ofrecer y precargar cuotas.
  */
 export async function listProductsForProposal(): Promise<ProductForProposal[]> {
-  await requireSession();
+  const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data: products } = await supabase
@@ -154,7 +154,14 @@ export async function listProductsForProposal(): Promise<ProductForProposal[]> {
     .eq("is_active", true)
     .order("name");
   type P = { id: string; name: string; main_image_url: string | null };
-  const list = (products ?? []) as P[];
+  let list = (products ?? []) as P[];
+  // Se vende la GAMA (decisión de Mario 12-11): las variantes no se ofrecen
+  // en propuestas; se fijan al instalar o identificar.
+  if (session.company_id && list.length > 0) {
+    const { idsDeVariantes } = await import("@/modules/equipos-modelo/datos");
+    const variantes = await idsDeVariantes(session.company_id).catch(() => new Set<string>());
+    if (variantes.size > 0) list = list.filter((p) => !variantes.has(p.id));
+  }
   if (list.length === 0) return [];
   const ids = list.map((p) => p.id);
   // SELECT defensivo: si las columnas duales no están en el cache,

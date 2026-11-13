@@ -56,6 +56,9 @@ export function categoryOfKind(kind: string): "alert" | "event" {
     // Leads — caducados (hay que reasignar)
     "lead.expired",
     "lead.unassigned_by_expiry",
+    // Leads sin actividad (aviso al comercial) y resumen semanal al admin
+    "lead.stale",
+    "lead.stale_summary",
     // Stock — bajo (hay que reponer) / faltó al cargar furgoneta
     "stock.low",
     "loading_request.partial_delivery",

@@ -78,6 +78,12 @@ export async function getFilterStockPredictions(): Promise<FilterStockPrediction
     quantity_per_change: number;
   };
   const assignList = (assignments ?? []) as Assign[];
+  // filtros_efectivos (plan modelo de equipo): una variante sin filtros
+  // propios usa los de su gama → su equipo cuenta para la gama.
+  const conFiltrosPropios = new Set(assignList.map((a) => a.product_id));
+  const { mapaVarianteGama } = await import("@/modules/equipos-modelo/datos");
+  const { productoDeFiltros } = await import("@/modules/equipos-modelo/logica");
+  const gamaDe = await mapaVarianteGama(session.company_id).catch(() => new Map<string, string>());
 
   // 3) Equipos instalados por producto
   const installedByProduct = new Map<string, number>();
@@ -90,10 +96,10 @@ export async function getFilterStockPredictions(): Promise<FilterStockPrediction
     type Equip = { product_id: string | null };
     for (const e of ((equipments ?? []) as Equip[])) {
       if (e.product_id) {
-        installedByProduct.set(
-          e.product_id,
-          (installedByProduct.get(e.product_id) ?? 0) + 1,
+        const pid = productoDeFiltros(e.product_id, gamaDe.get(e.product_id), (id) =>
+          conFiltrosPropios.has(id),
         );
+        installedByProduct.set(pid, (installedByProduct.get(pid) ?? 0) + 1);
       }
     }
   } catch (err) {

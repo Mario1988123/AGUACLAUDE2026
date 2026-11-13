@@ -14,6 +14,8 @@ import {
   diaLlamada,
   tituloLlamada,
 } from "./alta-equipo-logica";
+import { cargarEquiposConModelo, modeloEquipoDisponible } from "@/modules/equipos-modelo/datos";
+import { cargarMantEquipos, type ResumenMant } from "@/modules/mant-incluido/datos";
 
 export interface CustomerEquipmentRow {
   id: string;
@@ -39,6 +41,15 @@ export interface CustomerEquipmentRow {
   acquisition_started_at: string | null;
   /** Pack: id del equipo principal si este equipo es un extra. NULL = principal/suelto. */
   parent_equipment_id: string | null;
+  /** Modelo de equipo (plan 2026-11-13). Null si la migración no está aplicada. */
+  modelo: {
+    etiqueta: string;
+    pendiente: boolean;
+    tipo: "fuente" | "osmosis" | null;
+  } | null;
+  /** Mantenimientos incluidos / «EMPEZAR A PAGAR» (plan 2026-11-12). Null si
+   *  la migración no está aplicada. */
+  mant: ResumenMant | null;
 }
 
 export async function listCustomerEquipment(customerId: string): Promise<CustomerEquipmentRow[]> {
@@ -224,6 +235,36 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     }
   }
 
+  // Modelo de equipo: tipo, gama, variante y si está pendiente (tolerante).
+  const modeloPorEq = new Map<string, NonNullable<CustomerEquipmentRow["modelo"]>>();
+  if (session.company_id && (await modeloEquipoDisponible())) {
+    try {
+      const conModelo = await cargarEquiposConModelo(session.company_id, {
+        equipoIds: ids,
+        incluirInactivos: true,
+      });
+      for (const m of conModelo) {
+        modeloPorEq.set(m.id, {
+          etiqueta: m.etiqueta,
+          pendiente: m.estado.pendiente,
+          tipo: m.estado.tipo,
+        });
+      }
+    } catch (e) {
+      console.error("[listCustomerEquipment] modelo:", e);
+    }
+  }
+
+  // Mantenimientos incluidos (tolerante): estado según la próxima visita.
+  let mantPorEq = new Map<string, ResumenMant>();
+  if (session.company_id) {
+    try {
+      mantPorEq = await cargarMantEquipos(session.company_id, ids, nextMaintenance);
+    } catch (e) {
+      console.error("[listCustomerEquipment] mant incluido:", e);
+    }
+  }
+
   return rows.map((r) => ({
     id: r.id,
     customer_id: r.customer_id,
@@ -246,6 +287,8 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     acquisition_amount_cents: acq[r.id]?.cents ?? null,
     acquisition_started_at: acq[r.id]?.started ?? null,
     parent_equipment_id: parentByEq[r.id] ?? null,
+    modelo: modeloPorEq.get(r.id) ?? null,
+    mant: mantPorEq.get(r.id) ?? null,
   }));
 }
 

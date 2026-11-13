@@ -718,11 +718,38 @@ export async function createCustomerAction(formData: FormData) {
     // un usuario podría convertir un lead ajeno y ROBARSE sus direcciones (PII).
     const { data: ownLead } = await admin
       .from("leads")
-      .select("id")
+      .select("id, assigned_user_id, created_by")
       .eq("id", parsed.source_lead_id)
       .eq("company_id", session.company_id)
       .maybeSingle();
     if (ownLead) {
+      // REGLA (Mario 12-11): el cliente es de quien trabajó el lead (su
+      // comercial, el último que lo tuvo o quien lo creó), no del que da
+      // el alta. Fail-soft: si no se puede resolver, se queda como estaba.
+      try {
+        const lead = ownLead as {
+          id: string;
+          assigned_user_id: string | null;
+          created_by: string | null;
+        };
+        const { resolverDuenoCliente } = await import("@/modules/leads/dueno-cliente");
+        const dueno = await resolverDuenoCliente(admin, {
+          leadId: lead.id,
+          companyId: session.company_id,
+          asignado: lead.assigned_user_id,
+          creador: lead.created_by,
+          convierte: session.user_id,
+        });
+        if (dueno !== session.user_id) {
+          await admin
+            .from("customers")
+            .update({ assigned_user_id: dueno })
+            .eq("id", newId)
+            .eq("company_id", session.company_id);
+        }
+      } catch (e) {
+        console.error("[createCustomer] dueño desde el lead:", e);
+      }
       await admin
         .from("leads")
         .update({

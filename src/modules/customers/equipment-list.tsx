@@ -15,6 +15,11 @@ import { RemoveEquipmentButton } from "./remove-equipment-button";
 import { TransferEquipmentButton } from "./transfer-equipment-button";
 import type { CustomerEquipmentRow } from "./equipment-actions";
 import type { MaintenancePlan } from "@/modules/maintenance-plans/actions";
+import { ChipModeloEquipo } from "@/modules/equipos-modelo/chip-modelo";
+import { BotonModeloEquipoFicha } from "@/modules/equipos-modelo/boton-identificar";
+import type { DatosHojaIdentificar } from "@/modules/equipos-modelo/datos";
+import { ChipMantIncluido } from "@/modules/mant-incluido/chip-mant";
+import { HojaMantIncluido } from "@/modules/mant-incluido/hoja-mant-incluido";
 
 function fmtDate(d: string | null) {
   if (!d) return "—";
@@ -41,6 +46,9 @@ export function CustomerEquipmentList({
   canRemove = false,
   equipmentsWithActiveContract,
   maintenancePlans = [],
+  hojaModelo = null,
+  puedeIdentificar = false,
+  puedeCorregir = false,
 }: {
   equipment: CustomerEquipmentRow[];
   customerId?: string;
@@ -57,12 +65,28 @@ export function CustomerEquipmentList({
   equipmentsWithActiveContract?: Set<string>;
   /** Planes de mantenimiento disponibles para ofrecer. */
   maintenancePlans?: MaintenancePlan[];
+  /** Datos de la hoja «Identificar» (null = migración sin aplicar). */
+  hojaModelo?: DatosHojaIdentificar | null;
+  /** Oficina: identificar equipos pendientes (admin / dir. técnico). */
+  puedeIdentificar?: boolean;
+  /** Admin: corregir un modelo ya identificado, con motivo. */
+  puedeCorregir?: boolean;
 }) {
   if (equipment.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Sin equipos registrados. Aparecerán automáticamente al completar instalaciones.
-      </p>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          Sin equipos registrados. Aparecerán automáticamente al completar instalaciones.
+        </p>
+        {hojaModelo && puedeIdentificar && customerId && (
+          <BotonModeloEquipoFicha
+            modo="oficina"
+            datos={hojaModelo}
+            customerId={customerId}
+            equipoId={null}
+          />
+        )}
+      </div>
     );
   }
   // Orden de pack: cada equipo PRINCIPAL seguido de sus EXTRAS (indentados). Los
@@ -88,7 +112,9 @@ export function CustomerEquipmentList({
   return (
     <ul className="space-y-2">
       {ordered.map(({ e, isExtra }) => {
-        const name = e.product_name ?? e.external_model_name ?? "Equipo";
+        const sinModelo = !e.product_id && !e.external_model_name && !!e.modelo?.pendiente;
+        const name =
+          e.product_name ?? e.external_model_name ?? (sinModelo ? "Equipo sin identificar" : "Equipo");
         const isOurs = !!e.product_name;
         const warrantyActive = isWarrantyActive(e.warranty_until);
         return (
@@ -105,12 +131,30 @@ export function CustomerEquipmentList({
                   <span className="min-w-0 break-words font-semibold">{name}</span>
                   {isOurs ? (
                     <Badge variant="success">Propio</Badge>
-                  ) : (
+                  ) : sinModelo ? null : (
                     <Badge variant="secondary">Externo</Badge>
                   )}
                   {isExtra && <Badge variant="outline">Extra del pack</Badge>}
                   {!e.is_active && <Badge variant="destructive">Baja</Badge>}
                 </div>
+                {e.modelo && (
+                  <ChipModeloEquipo
+                    etiqueta={e.modelo.etiqueta}
+                    pendiente={e.modelo.pendiente}
+                    tipo={e.modelo.tipo}
+                  />
+                )}
+                {e.mant && (e.mant.texto || (canEditModality && e.is_active)) && (
+                  <div
+                    id={`mant-${e.id}`}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <ChipMantIncluido mant={e.mant} />
+                    {canEditModality && e.is_active && (
+                      <HojaMantIncluido equipoId={e.id} equipoNombre={name} mant={e.mant} />
+                    )}
+                  </div>
+                )}
                 {e.serial_number && (
                   <div className="text-xs text-muted-foreground">S/N: {e.serial_number}</div>
                 )}
@@ -194,6 +238,24 @@ export function CustomerEquipmentList({
                 </div>
               </div>
               <div className="flex flex-row flex-wrap items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end">
+                {hojaModelo && customerId && e.is_active && e.modelo?.pendiente && puedeIdentificar && (
+                  <BotonModeloEquipoFicha
+                    modo="oficina"
+                    datos={hojaModelo}
+                    customerId={customerId}
+                    equipoId={e.id}
+                    tipoInicial={e.modelo.tipo}
+                  />
+                )}
+                {hojaModelo && customerId && e.modelo && !e.modelo.pendiente && puedeCorregir && (
+                  <BotonModeloEquipoFicha
+                    modo="corregir"
+                    datos={hojaModelo}
+                    customerId={customerId}
+                    equipoId={e.id}
+                    tipoInicial={e.modelo.tipo}
+                  />
+                )}
                 {e.installation_id && (
                   <Link
                     href={`/instalaciones/${e.installation_id}`}

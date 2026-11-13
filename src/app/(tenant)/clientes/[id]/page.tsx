@@ -186,6 +186,22 @@ export default async function CustomerDetailPage({
   const canSeeBank = session.is_superadmin || session.roles.includes("company_admin");
   const bankAccounts = canSeeBank ? await listBankAccounts(id).catch(() => []) : [];
   const equipment = await listCustomerEquipment(id).catch(() => []);
+  // Modelo de equipo (plan 2026-11-13): hoja «Identificar» para la oficina.
+  // Null si la migración no está aplicada → la ficha queda como siempre.
+  const puedeIdentificarModelo =
+    session.is_superadmin ||
+    session.roles.includes("company_admin") ||
+    session.roles.includes("technical_director");
+  const puedeCorregirModelo = session.is_superadmin || session.roles.includes("company_admin");
+  let hojaModelo: import("@/modules/equipos-modelo/datos").DatosHojaIdentificar | null = null;
+  if (puedeIdentificarModelo && session.company_id) {
+    const { modeloEquipoDisponible, cargarDatosHojaIdentificar } = await import(
+      "@/modules/equipos-modelo/datos"
+    );
+    if (await modeloEquipoDisponible()) {
+      hojaModelo = await cargarDatosHojaIdentificar(session.company_id, id).catch(() => null);
+    }
+  }
   // Planes de mantenimiento + equipos con contrato activo para que la
   // lista de equipos pueda mostrar el botón "Ofrecer contrato" solo
   // donde tiene sentido (equipos sin cobertura).
@@ -369,6 +385,29 @@ export default async function CustomerDetailPage({
           </div>
         </div>
       )}
+      {(() => {
+        // Mantenimientos incluidos (plan 2026-11-12): aviso arriba si algún
+        // equipo ya paga. Sin migración, e.mant es null y no sale nada.
+        const aPagar = equipment.filter((e) => e.is_active && e.mant?.estado === "a_pagar");
+        if (aPagar.length === 0) return null;
+        return (
+          <a
+            href={`#mant-${aPagar[0]!.id}`}
+            className="flex items-start gap-3 rounded-2xl border-2 border-red-400 bg-red-50 p-4 text-red-900 hover:bg-red-100"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-600 text-lg font-bold text-white">
+              €
+            </span>
+            <span>
+              <span className="block font-extrabold uppercase tracking-wide">Empezar a pagar</span>
+              <span className="block text-sm">
+                Este cliente ya paga los mantenimientos ({aPagar.length} equipo
+                {aPagar.length === 1 ? "" : "s"}). Ver equipo →
+              </span>
+            </span>
+          </a>
+        );
+      })()}
       {kpis && <CustomerKPIHeader kpis={kpis} />}
 
       {/* Cabecera reorganizada: BackButton arriba, título+badges, después acciones.
@@ -700,6 +739,9 @@ export default async function CustomerDetailPage({
             <CustomerEquipmentList
               equipment={equipment}
               customerId={id}
+              hojaModelo={hojaModelo}
+              puedeIdentificar={puedeIdentificarModelo}
+              puedeCorregir={puedeCorregirModelo}
               addresses={addresses.map((a) => ({
                 id: a.id,
                 label: [

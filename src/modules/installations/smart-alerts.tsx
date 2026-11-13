@@ -216,7 +216,7 @@ export async function getInstallationAlerts(): Promise<InstallationAlerts> {
       .select("id", { count: "exact", head: true })
       .eq("company_id", session.company_id)
       .eq("kind", "installation.geo_off_road")
-      .gte("created_at", thirtyDaysAgo);
+      .gte("occurred_at", thirtyDaysAgo);
     out.geo_off_road_30d = count ?? 0;
   } catch {
     /* */
@@ -227,7 +227,7 @@ export async function getInstallationAlerts(): Promise<InstallationAlerts> {
       .select("id", { count: "exact", head: true })
       .eq("company_id", session.company_id)
       .eq("kind", "installation.start_far_from_address")
-      .gte("created_at", thirtyDaysAgo);
+      .gte("occurred_at", thirtyDaysAgo);
     out.start_far_30d = count ?? 0;
   } catch {
     /* */

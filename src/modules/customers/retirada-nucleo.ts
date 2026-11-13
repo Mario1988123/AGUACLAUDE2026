@@ -3,7 +3,13 @@ import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/adjust-stock";
 import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { errorMessage } from "@/shared/lib/actions/safe-error";
-import { ERROR_RENTING, leerParametrosRetirada, type DestinoEquipo } from "./retirada-logica";
+import {
+  ERROR_RENTING,
+  ERROR_SIN_MODELO,
+  equiposSinModeloAlAlmacen,
+  leerParametrosRetirada,
+  type DestinoEquipo,
+} from "./retirada-logica";
 import {
   COBRO_VACIO,
   dejarDeCobrarEquipos,
@@ -63,7 +69,9 @@ export async function crearOrdenRetirada(
   //    tumbar la query con equipos externos importados, product_id null).
   const { data: rawEq, error: eqErr } = await admin
     .from("customer_equipment")
-    .select("id, company_id, customer_id, product_id, address_id, serial_number, is_active")
+    .select(
+      "id, company_id, customer_id, product_id, external_equipment_model_id, address_id, serial_number, is_active",
+    )
     .in("id", e.equipment_ids)
     .eq("company_id", e.company_id);
   if (eqErr) throw new Error(`No se pudieron leer los equipos: ${eqErr.message}`);
@@ -72,6 +80,7 @@ export async function crearOrdenRetirada(
     company_id: string;
     customer_id: string;
     product_id: string | null;
+    external_equipment_model_id: string | null;
     address_id: string | null;
     serial_number: string | null;
     is_active: boolean;
@@ -90,6 +99,12 @@ export async function crearOrdenRetirada(
   // órdenes: retirada agendada, agenda, baja de cliente y retirada manual.
   const enRenting = await equiposEnRenting(admin, e.company_id, valid.map((x) => x.id));
   if (enRenting.length > 0) throw new Error(ERROR_RENTING);
+
+  // Equipo pendiente sin modelo que «vuelve al almacén»: sin producto no hay
+  // dónde sumarlo al stock → se bloquea en vez de perderlo en silencio.
+  if (equiposSinModeloAlAlmacen(valid, e.destinos).length > 0) {
+    throw new Error(ERROR_SIN_MODELO);
+  }
 
   const dispOf = (id: string): DestinoEquipo =>
     e.destinos?.get(id.toLowerCase()) ?? "warehouse";

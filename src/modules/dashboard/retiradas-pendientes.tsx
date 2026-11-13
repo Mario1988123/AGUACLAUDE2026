@@ -91,7 +91,7 @@ export async function getRetiradasPendientes(): Promise<RetiradaPendienteFila[]>
     const eventos = await leerPorIds<Ev>(clienteIds, "retiradas-pendientes:eventos", (chunk, from, to) =>
       admin
         .from("events")
-        .select("subject_id, kind, created_at, payload")
+        .select("subject_id, kind, created_at:occurred_at, payload")
         .eq("company_id", companyId)
         .eq("subject_type", "customer")
         .in("kind", ["equipment.uninstall_requested", "equipment.manual_uninstall"])

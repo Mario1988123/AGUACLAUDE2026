@@ -46,6 +46,8 @@ import { getPdfSettings } from "@/modules/config/pdf/actions";
 import { listTagsCatalog } from "@/modules/products/tags-actions";
 import { getProductCatalogStatus } from "@/modules/products/catalog-update-actions";
 import { CatalogUpdateBanner } from "@/modules/products/catalog-update-banner";
+import { cargarPanelModeloProducto } from "@/modules/equipos-modelo/datos";
+import { PanelModeloProductoCard } from "@/modules/equipos-modelo/panel-modelo-producto";
 
 export const dynamic = "force-dynamic";
 
@@ -132,6 +134,10 @@ export default async function ProductDetailPage({
     session.roles.includes("company_admin") ||
     session.roles.includes("commercial_director");
   const canEdit = isProductEditor(session);
+  // Modelo de equipo (plan 2026-11-13): null si la migración no está aplicada.
+  const panelModelo = session.company_id
+    ? await cargarPanelModeloProducto(session.company_id, product.id).catch(() => null)
+    : null;
   // Borrar producto: solo admin de empresa (nivel 1) o superadmin.
   const canDelete = session.is_superadmin || session.roles.includes("company_admin");
   const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
@@ -321,6 +327,17 @@ export default async function ProductDetailPage({
                 .datasheet_extra ?? null
             }
           />
+        </CollapsibleCard>
+      )}
+
+      {panelModelo && (
+        <CollapsibleCard
+          title={`Modelo de equipo${
+            panelModelo.variantes.length > 0 ? ` · ${panelModelo.variantes.length} variantes` : ""
+          }`}
+          defaultOpen={panelModelo.variantes.length > 0 || !!panelModelo.producto.gama_id}
+        >
+          <PanelModeloProductoCard datos={panelModelo} canEdit={canEdit} />
         </CollapsibleCard>
       )}
 

@@ -458,6 +458,33 @@ export function calcularReduccionCuota(a: {
   return { ok: true, nueva, reduccion };
 }
 
+/**
+ * Equipo pendiente de identificar SIN modelo (solo tipo o nada; plan modelo
+ * de equipo 2026-11-13). Antes se trataba como «no es nuestro» y no volvía al
+ * almacén sin avisar. Ahora se bloquea si se pide que vuelva al almacén; si se
+ * marca perdida/rota/robada/no es nuestro, sigue adelante.
+ */
+export const ERROR_SIN_MODELO =
+  "Hay un equipo sin modelo identificado: identifícalo en la ficha del cliente antes de retirarlo al almacén";
+
+export function equiposSinModeloAlAlmacen(
+  equipos: Array<{
+    id: string;
+    product_id: string | null;
+    external_equipment_model_id?: string | null;
+  }>,
+  destinos: Map<string, DestinoEquipo> | undefined,
+): string[] {
+  return equipos
+    .filter(
+      (e) =>
+        !e.product_id &&
+        !e.external_equipment_model_id &&
+        (destinos?.get(e.id.toLowerCase()) ?? "warehouse") === "warehouse",
+    )
+    .map((e) => e.id);
+}
+
 /** Mensaje único para el bloqueo de renting (decisión Mario 2026-11-09). */
 export const ERROR_RENTING = "Este equipo está en renting: no se puede retirar";
 

@@ -8,18 +8,13 @@ import { notify } from "@/shared/hooks/use-toast";
 import { updateLeadsConfigSafeAction, type LeadsConfig } from "./actions";
 
 export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
-  const [tmkDays, setTmkDays] = useState(initial.expiry_days_tmk);
-  const [commercialDays, setCommercialDays] = useState(initial.expiry_days_commercial);
+  const [staleDays, setStaleDays] = useState(initial.stale_days);
   const [pending, startTransition] = useTransition();
 
   function save(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
-      const r = await updateLeadsConfigSafeAction({
-        expiry_days_tmk: tmkDays,
-        expiry_days_commercial: commercialDays,
-        expiry_days: commercialDays, // legacy fallback
-      });
+      const r = await updateLeadsConfigSafeAction({ stale_days: staleDays });
       if (!r.ok) {
         notify.error("No se pudo guardar", r.error);
         return;
@@ -30,46 +25,39 @@ export function LeadsConfigForm({ initial }: { initial: LeadsConfig }) {
 
   return (
     <form onSubmit={save} className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="tmk">Leads de TMK (días)</Label>
-          <Input
-            id="tmk"
-            type="number"
-            min={1}
-            max={365}
-            value={tmkDays}
-            onChange={(e) => setTmkDays(Number(e.target.value))}
-          />
-          <p className="text-xs text-muted-foreground">
-            Default: 15 días. Pasados estos días sin acción, el lead se
-            desasigna y queda visible para nivel 1/2.
+      <div className="space-y-1.5">
+        <Label htmlFor="stale">Días sin actividad antes de avisar</Label>
+        <Input
+          id="stale"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={365}
+          value={staleDays}
+          disabled={!initial.editable || pending}
+          onChange={(e) => setStaleDays(Number(e.target.value))}
+          className="h-11 sm:max-w-[10rem]"
+        />
+        <p className="text-xs text-muted-foreground">
+          Por defecto, 40 días. Cuenta como actividad cualquier movimiento del
+          lead: contacto registrado, cambios, citas en agenda o una prueba
+          gratuita abierta.
+        </p>
+        {!initial.editable && (
+          <p className="text-xs font-medium text-amber-800">
+            Este ajuste se podrá cambiar en cuanto se aplique una actualización
+            pendiente de la base de datos. Mientras tanto se avisa a los 40 días.
           </p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="comm">Leads creados por comercial (días)</Label>
-          <Input
-            id="comm"
-            type="number"
-            min={1}
-            max={365}
-            value={commercialDays}
-            onChange={(e) => setCommercialDays(Number(e.target.value))}
-          />
-          <p className="text-xs text-muted-foreground">
-            Default: 30 días. Aplica a leads con cualquier origen distinto
-            de TMK.
-          </p>
-        </div>
+        )}
       </div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-        ⚠ Al caducar: el lead se marca como <strong>caducado</strong>, se
-        <strong> desasigna del comercial</strong>, queda en el evento del
-        timeline el comercial anterior y se notifica a admin / dirección
-        comercial / dirección TMK / dirección técnica para que reasignen.
+      <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+        El lead <strong>no se le quita a nadie</strong>: pasado ese plazo se avisa
+        al comercial (como mucho una vez por semana y lead) y el admin recibe
+        un resumen semanal con los leads parados y los que están en la bolsa
+        sin repartir. Repartir la bolsa es cosa del admin.
       </div>
       <div className="flex justify-end">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || !initial.editable} className="min-h-11">
           {pending ? "Guardando..." : "Guardar cambios"}
         </Button>
       </div>

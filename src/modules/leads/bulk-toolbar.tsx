@@ -104,7 +104,8 @@ export function LeadBulkToolbar({ selectedIds, team, onClear }: Props) {
           className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-background px-3 text-base sm:flex-none md:text-sm"
         >
           <option value="">— Cambiar estado —</option>
-          {LEAD_STATUS.map((s) => (
+          {/* «Convertido» no se pone en lote: solo al crear el cliente. */}
+          {LEAD_STATUS.filter((s) => s !== "converted").map((s) => (
             <option key={s} value={s}>
               {STATUS_LABEL[s]}
             </option>

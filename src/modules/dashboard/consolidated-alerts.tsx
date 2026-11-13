@@ -73,6 +73,7 @@ export async function getConsolidatedAlerts(): Promise<ConsolidatedAlerts> {
     wallet,
     incidents,
     trials,
+    mantPagar,
   ] = await Promise.all([
     import("@/modules/leads/smart-alerts").then((m) => m.getLeadAlerts(null)).catch(() => null),
     import("@/modules/customers/smart-alerts").then((m) => m.getCustomerAlerts()).catch(() => null),
@@ -85,12 +86,24 @@ export async function getConsolidatedAlerts(): Promise<ConsolidatedAlerts> {
     import("@/modules/wallet/smart-alerts").then((m) => m.getWalletAlerts()).catch(() => null),
     import("@/modules/incidents/smart-alerts").then((m) => m.getIncidentAlerts()).catch(() => null),
     import("@/modules/free-trials/smart-alerts").then((m) => m.getFreeTrialAlerts()).catch(() => null),
+    // Mantenimientos incluidos (plan 2026-11-12): equipos que empiezan a
+    // pagar este año + visitas cerradas sin cobrar. Solo nivel 1/2; null sin migración.
+    (async () => {
+      const { requireSession } = await import("@/shared/lib/auth/session");
+      const { esNivel12 } = await import("@/shared/lib/auth/role-scope");
+      const session = await requireSession();
+      if (!session.company_id || !esNivel12(session)) return null;
+      const m = await import("@/modules/mant-incluido/datos");
+      return m.contarEmpiezanPagar(session.company_id);
+    })().catch(() => null),
   ]);
 
   const sum = (obj: Record<string, unknown> | null): number => {
     if (!obj) return 0;
     let s = 0;
-    for (const v of Object.values(obj)) {
+    for (const [k, v] of Object.entries(obj)) {
+      // Los importes (…_cents) no son casos: no se suman al recuento.
+      if (k.endsWith("_cents")) continue;
       if (typeof v === "number") s += v;
       else if (typeof v === "boolean" && v) s += 1;
     }
@@ -167,6 +180,13 @@ export async function getConsolidatedAlerts(): Promise<ConsolidatedAlerts> {
       emoji: "🚨",
       count: sum(incidents as unknown as Record<string, unknown>),
       href: "/incidencias",
+    },
+    {
+      module: "mant_pagar",
+      label: "Empiezan a pagar mant.",
+      emoji: "€",
+      count: mantPagar ? mantPagar.empiezanEsteAnio + mantPagar.visitasPorCobrar : 0,
+      href: "/mantenimientos/empiezan-a-pagar",
     },
     {
       module: "trials",

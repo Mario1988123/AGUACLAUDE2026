@@ -12,6 +12,17 @@ import {
   acceptRenewalAction,
   declineRenewalAction,
 } from "./actions";
+import {
+  BloqueCobro,
+  COBRO_INICIAL,
+  baseACobrar,
+  cobroParaEnviar,
+  errorCobro,
+  hayQueCobrar,
+  type ConfigCobroCierre,
+  type EstadoCobro,
+} from "@/modules/mant-incluido/bloque-cobro";
+import { centimosAEuros, totalConIva } from "@/modules/mant-incluido/logica";
 
 interface ProductOpt {
   id: string;
@@ -34,15 +45,41 @@ export function MaintenanceCompleteForm({
   maintenanceId,
   products,
   maintenancePlans,
+  identificacionPendiente = false,
+  pedirAlcance = false,
+  cobro = null,
 }: {
   maintenanceId: string;
   products: ProductOpt[];
+  /** Equipo sin identificar: no se puede cerrar (decisión 4; el servidor
+   *  también lo bloquea). */
+  identificacionPendiente?: boolean;
+  /** Ósmosis: el técnico elige «Solo filtros» / «Filtros + membrana». */
+  pedirAlcance?: boolean;
+  /** Cobro de la visita (mantenimientos incluidos). Null = no se cobra o
+   *  migración sin aplicar: el formulario queda como siempre. */
+  cobro?: ConfigCobroCierre | null;
   /** Planes de mantenimiento disponibles — usados si la visita actual
    *  es la última del contrato y el técnico quiere ofrecer renovación. */
   maintenancePlans?: MaintenancePlanOpt[];
 }) {
   const [items, setItems] = useState<ReplaceItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [alcance, setAlcance] = useState<"solo_filtros" | "filtros_membrana" | null>(null);
+  const [alcanceMotivo, setAlcanceMotivo] = useState("");
+  const faltaAlcance = pedirAlcance && !alcance;
+  const [estadoCobro, setEstadoCobro] = useState<EstadoCobro>(COBRO_INICIAL);
+  const errCobro = errorCobro(cobro, alcance, estadoCobro);
+  // Cambiar la tarifa recalcula el importe prerrellenado (sigue siendo editable).
+  function elegirAlcance(v: "solo_filtros" | "filtros_membrana") {
+    setAlcance(v);
+    if (cobro) {
+      const b = baseACobrar(cobro, v);
+      if (b != null) {
+        setEstadoCobro((st) => ({ ...st, importe: centimosAEuros(totalConIva(b, cobro.iva)) }));
+      }
+    }
+  }
   const [pending, startTransition] = useTransition();
   // Estado del modal de renovación post-cierre.
   const [renewalOpen, setRenewalOpen] = useState(false);
@@ -70,12 +107,19 @@ export function MaintenanceCompleteForm({
         id: maintenanceId,
         notes: notes || undefined,
         replaced_items: items,
+        ...(pedirAlcance
+          ? { alcance, alcance_motivo: alcanceMotivo.trim() || null }
+          : cobro && alcance
+            ? { alcance }
+            : {}),
+        ...(hayQueCobrar(cobro, alcance) ? { cobro: cobroParaEnviar(estadoCobro) } : {}),
       });
       if (!res.ok) {
         notify.error("No se pudo completar", res.error);
         return;
       }
       notify.success("Mantenimiento completado");
+      if (res.aviso) notify.warning(res.aviso);
       const r = await isLastContractedMaintenance(maintenanceId);
       if (r.isLast && r.contract_id && plans.length > 0) {
         setRenewalContractId(r.contract_id);
@@ -129,6 +173,53 @@ export function MaintenanceCompleteForm({
 
   return (
     <div className="space-y-4">
+      {pedirAlcance && (
+        <div className="space-y-2">
+          <Label className="text-sm font-bold uppercase tracking-wide">
+            ¿Qué cambias en la ósmosis?
+          </Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ["solo_filtros", "Solo filtros"],
+                ["filtros_membrana", "Filtros + membrana"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => elegirAlcance(v)}
+                aria-pressed={alcance === v}
+                className={`min-h-14 rounded-xl border-2 px-2 text-sm font-bold transition ${
+                  alcance === v
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-card hover:bg-muted/40"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Input
+            value={alcanceMotivo}
+            onChange={(e) => setAlcanceMotivo(e.target.value)}
+            maxLength={500}
+            placeholder="Nota corta opcional (lo que has visto)"
+          />
+        </div>
+      )}
+
+      {cobro && (
+        <BloqueCobro
+          cfg={cobro}
+          tarifa={alcance}
+          onTarifa={elegirAlcance}
+          mostrarTarifa={!pedirAlcance}
+          valor={estadoCobro}
+          onChange={setEstadoCobro}
+        />
+      )}
+
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label className="text-sm font-bold uppercase tracking-wide">Recambios</Label>
@@ -182,6 +273,9 @@ export function MaintenanceCompleteForm({
         )}
       </div>
 
+      {/* Hueco reservado para «Fotos» (decisión 18): lo diseña y guarda
+          docs/PLAN_FOTOS_MANTENIMIENTO.md. Va aquí, entre recambios y notas. */}
+
       <div className="space-y-1.5">
         <Label>Notas del técnico</Label>
         <textarea
@@ -193,7 +287,21 @@ export function MaintenanceCompleteForm({
         />
       </div>
 
-      <Button onClick={submit} disabled={pending} size="lg" className="w-full">
+      {(identificacionPendiente || faltaAlcance || errCobro) && (
+        <p className="text-center text-sm font-semibold text-amber-700">
+          {identificacionPendiente
+            ? "Identifica el equipo para poder cerrar"
+            : faltaAlcance
+              ? "Elige si cambias solo filtros o filtros + membrana"
+              : errCobro}
+        </p>
+      )}
+      <Button
+        onClick={submit}
+        disabled={pending || identificacionPendiente || faltaAlcance || !!errCobro}
+        size="lg"
+        className="w-full"
+      >
         <CheckCircle2 className="h-5 w-5" />
         {pending ? "Guardando..." : "Completar mantenimiento"}
       </Button>

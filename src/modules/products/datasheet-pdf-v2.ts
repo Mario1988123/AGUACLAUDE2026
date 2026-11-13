@@ -464,13 +464,22 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
   // Filtros que lleva el equipo (mantenimiento recomendado)
   let filterAssignments: FilterAssignment[] = [];
   try {
-    const { data: rows } = await admin
-      .from("product_filter_assignments")
-      .select(
-        "stage_position, replacement_period_months, product_filters ( name, filter_type, lifespan_months )",
-      )
-      .eq("product_id", productId)
-      .order("stage_position");
+    const leerFiltros = (pid: string) =>
+      admin
+        .from("product_filter_assignments")
+        .select(
+          "stage_position, replacement_period_months, product_filters ( name, filter_type, lifespan_months )",
+        )
+        .eq("product_id", pid)
+        .order("stage_position");
+    let { data: rows } = await leerFiltros(productId);
+    // filtros_efectivos: una variante sin filtros propios usa los de su gama.
+    // Tolerante: si la columna gama_id no existe, el select falla y se ignora.
+    if (!rows || rows.length === 0) {
+      const g = await admin.from("products").select("gama_id").eq("id", productId).maybeSingle();
+      const gamaId = !g.error ? (g.data as { gama_id: string | null } | null)?.gama_id : null;
+      if (gamaId) rows = (await leerFiltros(gamaId)).data;
+    }
     type Row = {
       stage_position: number | null;
       replacement_period_months: number | null;

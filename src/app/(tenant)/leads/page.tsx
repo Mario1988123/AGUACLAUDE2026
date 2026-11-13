@@ -18,6 +18,7 @@ import { ImportLeadsButton } from "@/modules/leads/import-form";
 // mantienen exportados desde el módulo por si se usan en un panel global
 // del dashboard.
 import { LeadsTemperaturePanel } from "@/modules/leads/temperature-panel";
+import { contarLeadsEnBolsa } from "@/modules/leads/bolsa";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,8 @@ export default async function LeadsPage({
     session.roles.includes("technical_director");
   const scope = isUpperLevel ? (sp.scope === "mine" ? "mine" : "all") : "mine";
   const assignedFilter = isUpperLevel && sp.assigned ? sp.assigned : undefined;
-  const [leadsAll, team] = await Promise.all([
+  const isAdmin = session.is_superadmin || session.roles.includes("company_admin");
+  const [leadsAll, team, enBolsa] = await Promise.all([
     listLeads({
       status,
       q: sp.q,
@@ -66,7 +68,10 @@ export default async function LeadsPage({
       assigned_user_id: assignedFilter as string | "unassigned" | undefined,
     }),
     isUpperLevel ? listTeamMembers().catch(() => []) : Promise.resolve([]),
+    // Bolsa = leads abiertos sin comercial. La reparte el admin (Mario 12-11).
+    isAdmin ? contarLeadsEnBolsa().catch(() => 0) : Promise.resolve(0),
   ]);
+  const verBolsa = assignedFilter === "unassigned";
 
   // Filtro temperatura client-side (los datos ya están cargados)
   function classify(l: { status: string; created_at: string }): "hot" | "warm" | "cold" | "lost" | null {
@@ -145,12 +150,12 @@ export default async function LeadsPage({
       </div>
 
       {isUpperLevel && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link
             href={"/leads" as never}
             prefetch={false}
             className={`inline-flex h-10 items-center rounded-xl border-2 px-4 text-sm font-semibold ${
-              scope === "all"
+              scope === "all" && !verBolsa
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-border bg-card hover:bg-muted"
             }`}
@@ -168,6 +173,22 @@ export default async function LeadsPage({
           >
             Mi cartera
           </Link>
+          {isAdmin && (
+            <Link
+              href={"/leads?assigned=unassigned" as never}
+              prefetch={false}
+              aria-label={`Bolsa: ${enBolsa} leads sin comercial`}
+              className={`inline-flex h-10 items-center gap-1.5 rounded-xl border-2 px-4 text-sm font-semibold ${
+                verBolsa
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : enBolsa > 0
+                    ? "border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                    : "border-border bg-card hover:bg-muted"
+              }`}
+            >
+              Bolsa ({enBolsa})
+            </Link>
+          )}
         </div>
       )}
 

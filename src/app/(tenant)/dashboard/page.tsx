@@ -49,6 +49,7 @@ import {
   RetiradasPendientesCard,
   getRetiradasPendientes,
 } from "@/modules/dashboard/retiradas-pendientes";
+import { BolsaLeadsCard, contarLeadsEnBolsa } from "@/modules/leads/bolsa";
 
 export const dynamic = "force-dynamic";
 
@@ -384,6 +385,12 @@ async function renderDashboard({
         <RetiradasPendientesCard
           items={await getRetiradasPendientes().catch(() => [])}
         />
+      )}
+
+      {/* Leads sin comercial (la bolsa). Los reparte el admin (decisión de
+          Mario 12-11). Solo admin; solo si hay alguno. */}
+      {(session.is_superadmin || session.roles.includes("company_admin")) && (
+        <BolsaLeadsCard total={await contarLeadsEnBolsa().catch(() => 0)} />
       )}
 
       {/* Cabecera totales: el destacado es scope (yo / equipo / empresa según rol),

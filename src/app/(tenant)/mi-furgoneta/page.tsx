@@ -2,6 +2,8 @@ import { Truck } from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
 import { listarMiFurgonetaSemaforo } from "@/modules/warehouses/furgoneta-actions";
 import { MiFurgonetaVista } from "@/modules/warehouses/mi-furgoneta-vista";
+import { resumenRutaPorModelo } from "@/modules/equipos-modelo/ruta";
+import { ResumenRutaCard } from "@/modules/equipos-modelo/resumen-ruta-card";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +12,25 @@ export const dynamic = "force-dynamic";
  * cifras. Verde = hay; ámbar = queda poco; gris = no queda.
  */
 export default async function MiFurgonetaPage() {
-  await requireSession();
+  const session = await requireSession();
   const { furgoneta, productos } = await listarMiFurgonetaSemaforo();
+  // Fuentes y ósmosis que le tocan hoy y mañana (plan modelo de equipo).
+  // Null si la migración no está aplicada → no se pinta.
+  const ahora = new Date();
+  const manana = new Date(ahora.getTime() + 24 * 60 * 60 * 1000);
+  const [rutaHoy, rutaManana] = session.company_id
+    ? await Promise.all([
+        resumenRutaPorModelo(session.company_id, session.user_id, ahora).catch(() => null),
+        resumenRutaPorModelo(session.company_id, session.user_id, manana).catch(() => null),
+      ])
+    : [null, null];
+  const resumenRuta =
+    rutaHoy || rutaManana ? (
+      <div className="grid gap-3 sm:grid-cols-2">
+        {rutaHoy && <ResumenRutaCard titulo="Hoy" r={rutaHoy} />}
+        {rutaManana && <ResumenRutaCard titulo="Mañana" r={rutaManana} />}
+      </div>
+    ) : null;
 
   if (!furgoneta) {
     return (
@@ -22,15 +41,19 @@ export default async function MiFurgonetaPage() {
           <p className="mt-2 text-sm font-semibold">No tienes furgoneta asignada</p>
           <p className="text-sm text-muted-foreground">Habla con la oficina para que te asignen una.</p>
         </div>
+        {resumenRuta}
       </div>
     );
   }
 
   return (
-    <MiFurgonetaVista
-      nombre={furgoneta.nombre}
-      matricula={furgoneta.matricula}
-      productos={productos}
-    />
+    <div className="space-y-4">
+      <MiFurgonetaVista
+        nombre={furgoneta.nombre}
+        matricula={furgoneta.matricula}
+        productos={productos}
+      />
+      {resumenRuta}
+    </div>
   );
 }

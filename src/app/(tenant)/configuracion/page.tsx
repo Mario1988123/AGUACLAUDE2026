@@ -9,7 +9,7 @@ const SECTIONS = [
   { href: "/configuracion/fiscal", label: "Datos fiscales", icon: "Building2", desc: "Razón social, CIF, IBAN, logo y color PDF" },
   { href: "/configuracion/facturacion", label: "Facturación", icon: "Receipt", desc: "Series, modo Verifactu, certificado FNMT" },
   { href: "/configuracion/mailing", label: "Mailing", icon: "Mail", desc: "Dominio envío + DNS DKIM/SPF + plantillas" },
-  { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Caducidad y orígenes" },
+  { href: "/configuracion/leads", label: "Leads", icon: "Contact", desc: "Aviso de leads sin actividad" },
   { href: "/configuracion/clientes", label: "Clientes", icon: "Users", desc: "Campos custom y reglas dedupe" },
   { href: "/configuracion/propuestas", label: "Propuestas", icon: "FileText", desc: "Validez, descuentos, aprobaciones" },
   { href: "/configuracion/contratos", label: "Contratos", icon: "FileSignature", desc: "Cláusulas con variables" },

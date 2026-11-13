@@ -18,6 +18,17 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
 import { BackButton } from "@/shared/components/back-button";
+import {
+  cargarDatosHojaIdentificar,
+  cargarEquiposConModelo,
+  modeloEquipoDisponible,
+} from "@/modules/equipos-modelo/datos";
+import { TarjetaIdentificarMantenimiento } from "@/modules/equipos-modelo/boton-identificar";
+import { cargarMantVisita } from "@/modules/mant-incluido/datos";
+import { BannerCobroVisita } from "@/modules/mant-incluido/banner-visita";
+import { BotonPagoOficina } from "@/modules/mant-incluido/boton-pago-oficina";
+import type { ConfigCobroCierre } from "@/modules/mant-incluido/bloque-cobro";
+import { esNivel12 } from "@/shared/lib/auth/role-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +113,77 @@ export default async function MaintenanceDetailPage({
       if (e.serial_number) equipmentName = `${equipmentName ?? "Equipo"} · ${e.serial_number}`;
     }
   }
+
+  // Modelo de equipo (plan 2026-11-13). Solo si la migración está aplicada.
+  const hayModelo = await modeloEquipoDisponible();
+  const abierto = job.status !== "completed" && job.status !== "cancelled";
+  let modeloEtiqueta: string | null = null;
+  let identificacionPendiente = false;
+  let tipoEquipo: "fuente" | "osmosis" | null = null;
+  let hojaDatos: Awaited<ReturnType<typeof cargarDatosHojaIdentificar>> | null = null;
+  if (hayModelo && session.company_id) {
+    if (job.customer_equipment_id) {
+      const [eqm] = await cargarEquiposConModelo(session.company_id, {
+        equipoIds: [job.customer_equipment_id],
+        incluirInactivos: true,
+      });
+      if (eqm) {
+        modeloEtiqueta = eqm.etiqueta;
+        identificacionPendiente = eqm.estado.pendiente;
+        tipoEquipo = eqm.estado.tipo;
+      }
+    } else {
+      identificacionPendiente = true;
+    }
+    if (identificacionPendiente && abierto) {
+      hojaDatos = await cargarDatosHojaIdentificar(session.company_id, job.customer_id);
+    }
+  }
+  // Sin equipo en el trabajo: si el cliente ya tiene equipos, que elija cuál;
+  // si no tiene ninguno, se da de alta al identificar.
+  const equipoParaHoja: string | null | undefined = job.customer_equipment_id
+    ? job.customer_equipment_id
+    : hojaDatos && hojaDatos.equipos.length > 0
+      ? undefined
+      : null;
+
+  // Mantenimientos incluidos (plan 2026-11-12): estado de cobro de la visita.
+  // Null si la migración no está aplicada → la ficha queda como siempre.
+  const mantVisita = session.company_id
+    ? await cargarMantVisita(session.company_id, job.id).catch(() => null)
+    : null;
+  const preciosVisita = {
+    solo_filtros: mantVisita?.resumen?.aplicado.solo_filtros.cents ?? null,
+    filtros_membrana: mantVisita?.resumen?.aplicado.filtros_membrana.cents ?? null,
+  };
+  const cobroCierre: ConfigCobroCierre | null =
+    mantVisita && job.status === "in_progress"
+      ? mantVisita.pagoEfectivo === "pendiente"
+        ? {
+            modo: "cobrar",
+            precios: preciosVisita,
+            iva: mantVisita.resumen?.iva ?? 21,
+            pagadoTarifa: null,
+            pagadoCents: null,
+          }
+        : mantVisita.pagoEfectivo === "pagado_oficina" && preciosVisita.filtros_membrana != null
+          ? {
+              modo: "oficina",
+              precios: preciosVisita,
+              iva: mantVisita.resumen?.iva ?? 21,
+              pagadoTarifa: mantVisita.pagadoOficina?.tarifa ?? null,
+              pagadoCents: mantVisita.pagadoOficina?.cents ?? null,
+            }
+          : null
+      : null;
+  const puedeMarcarPagado = esNivel12(session);
+  const modoPagoOficina: "marcar" | "quitar" | null = !mantVisita || !puedeMarcarPagado
+    ? null
+    : mantVisita.pagoEfectivo === "pendiente" || mantVisita.pagoEfectivo === "no_cobrado"
+      ? "marcar"
+      : mantVisita.pagoEfectivo === "pagado_oficina" && abierto
+        ? "quitar"
+        : null;
 
   // Dirección concreta del job (defensivo: address_id es columna nueva).
   let jobAddressId: string | null = null;
@@ -267,6 +349,32 @@ export default async function MaintenanceDetailPage({
         </div>
       </div>
 
+      {mantVisita &&
+        (mantVisita.pagoEfectivo !== "incluido" ||
+          (abierto && mantVisita.resumen?.estado === "ultima_incluida")) && (
+        <div className="space-y-2">
+          <BannerCobroVisita visita={mantVisita} abierta={abierto} />
+          {modoPagoOficina && (
+            <BotonPagoOficina jobId={job.id} modo={modoPagoOficina} precios={preciosVisita} />
+          )}
+        </div>
+      )}
+
+      {hojaDatos && identificacionPendiente && (
+        <TarjetaIdentificarMantenimiento
+          datos={hojaDatos}
+          customerId={job.customer_id}
+          maintenanceJobId={job.id}
+          equipoId={equipoParaHoja}
+          tipoInicial={tipoEquipo}
+          texto={
+            job.customer_equipment_id
+              ? `${modeloEtiqueta ?? "Equipo"}. Di qué modelo es: queda guardado para siempre.`
+              : "Este mantenimiento no tiene equipo. Di cuál es: queda guardado para siempre."
+          }
+        />
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           <Card>
@@ -277,6 +385,21 @@ export default async function MaintenanceDetailPage({
               {equipmentName && (
                 <div>
                   <strong>Equipo:</strong> {equipmentName}
+                </div>
+              )}
+              {modeloEtiqueta && (
+                <div>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-bold ${
+                      identificacionPendiente
+                        ? "bg-amber-100 text-amber-900"
+                        : tipoEquipo === "osmosis"
+                          ? "bg-teal-100 text-teal-900"
+                          : "bg-sky-100 text-sky-900"
+                    }`}
+                  >
+                    {modeloEtiqueta}
+                  </span>
                 </div>
               )}
               {addressText && (
@@ -314,7 +437,9 @@ export default async function MaintenanceDetailPage({
               )}
               <div>
                 <strong>Cargo:</strong>{" "}
-                {job.is_charged
+                {mantVisita?.pagoEfectivo === "pendiente" && !job.is_charged
+                  ? "A cobrar en la visita"
+                  : job.is_charged
                   ? new Intl.NumberFormat("es-ES", {
                       style: "currency",
                       currency: "EUR",
@@ -360,6 +485,9 @@ export default async function MaintenanceDetailPage({
             {job.status === "in_progress" && (
               <MaintenanceCompleteForm
                 maintenanceId={job.id}
+                identificacionPendiente={hayModelo && identificacionPendiente}
+                pedirAlcance={hayModelo && !identificacionPendiente && tipoEquipo === "osmosis"}
+                cobro={cobroCierre}
                 products={products.map((p) => ({ id: p.id, name: p.name }))}
                 maintenancePlans={maintenancePlans.map((p) => ({
                   id: p.id,

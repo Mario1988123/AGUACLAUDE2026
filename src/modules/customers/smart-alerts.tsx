@@ -155,7 +155,9 @@ export async function getCustomerAlerts(): Promise<CustomerAlerts> {
       .from("customer_equipment")
       .select("customer_id")
       .eq("company_id", session.company_id)
-      .eq("is_active", true); // customer_equipment usa is_active, no status
+      .eq("is_active", true) // customer_equipment usa is_active, no status
+      // Los heredados de la importación no tienen eventos: contarlos sería ruido.
+      .not("installation_id", "is", null);
     const customerIds = Array.from(
       new Set(((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id)),
     );
@@ -165,7 +167,7 @@ export async function getCustomerAlerts(): Promise<CustomerAlerts> {
         .select("subject_id")
         .eq("subject_type", "customer")
         .eq("company_id", session.company_id)
-        .gt("created_at", past180Iso)
+        .gt("occurred_at", past180Iso) // events no tiene created_at
         .in("subject_id", customerIds);
       const recentSet = new Set(
         ((recentEvents ?? []) as Array<{ subject_id: string }>).map((e) => e.subject_id),
@@ -208,13 +210,18 @@ export async function getCustomerAlerts(): Promise<CustomerAlerts> {
     /* */
   }
 
-  // 4) Cliente con equipo pero sin contrato activo
+  // 4) Cliente con equipo pero sin contrato activo.
+  // Solo cuentan los equipos instalados desde el CRM (installation_id) y que no
+  // son compra al contado: los heredados de la importación nunca tuvieron
+  // contrato aquí y el contado no lo necesita (Mario, 2026-11-13: salían 244).
   try {
     const { data: actives } = await admin
       .from("customer_equipment")
       .select("customer_id")
       .eq("company_id", session.company_id)
-      .eq("is_active", true); // customer_equipment usa is_active, no status
+      .eq("is_active", true) // customer_equipment usa is_active, no status
+      .not("installation_id", "is", null)
+      .or("acquisition_type.is.null,acquisition_type.neq.cash");
     const customerIds = Array.from(
       new Set(((actives ?? []) as Array<{ customer_id: string }>).map((r) => r.customer_id)),
     );

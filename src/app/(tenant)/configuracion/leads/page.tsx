@@ -21,7 +21,7 @@ export default async function ConfiguracionLeadsPage() {
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Caducidad y reasignación</CardTitle>
+          <CardTitle>Aviso de leads sin actividad</CardTitle>
         </CardHeader>
         <CardContent>
           <LeadsConfigForm initial={config} />

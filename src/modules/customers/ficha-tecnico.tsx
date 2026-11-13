@@ -5,6 +5,8 @@ import { BackButton } from "@/shared/components/back-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import type { MotivoPendiente } from "@/shared/lib/auth/role-scope";
 import type { CustomerEquipmentRow } from "./equipment-actions";
+import { ChipModeloEquipo } from "@/modules/equipos-modelo/chip-modelo";
+import { ChipMantIncluido } from "@/modules/mant-incluido/chip-mant";
 
 export interface DireccionTecnico {
   id: string;
@@ -146,6 +148,19 @@ export function FichaClienteTecnico({
                 {e.parent_equipment_id ? "↳ " : ""}
                 {e.product_name ?? e.external_model_name ?? "Equipo"}
               </p>
+              {e.modelo && (
+                <ChipModeloEquipo
+                  etiqueta={e.modelo.etiqueta}
+                  pendiente={e.modelo.pendiente}
+                  tipo={e.modelo.tipo}
+                  className="my-1"
+                />
+              )}
+              {e.mant?.texto && e.mant.estado !== "sin_dato" && (
+                <div className="my-1">
+                  <ChipMantIncluido mant={e.mant} />
+                </div>
+              )}
               <p className="text-muted-foreground">
                 {e.serial_number ? `N.º serie ${e.serial_number}` : "Sin n.º de serie"}
                 {e.installed_at ? ` · instalado ${formatDateES(e.installed_at)}` : ""}

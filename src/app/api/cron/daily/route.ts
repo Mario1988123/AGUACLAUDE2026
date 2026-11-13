@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { notifyByRoles } from "@/modules/notifications/notifier";
+import { avisarLeadsInactivos } from "@/modules/leads/aviso-inactividad";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
@@ -25,7 +26,7 @@ export const maxDuration = 300;
 
 /**
  * Cron diario (Vercel Cron). Procesa para todas las empresas activas:
- *  - Leads con assigned_at hace > company_settings.lead_expiry_days → status=expired + notif
+ *  - Leads asignados sin actividad en lead_stale_days (40) → aviso al comercial + resumen al admin (no se quitan)
  *  - Instalaciones programadas para mañana → notif al instalador + admin
  *  - Stock bajo (warehouse_stock.quantity ≤ products.stock_min) → notif a admin
  *  - Mantenimientos programados para mañana → notif al técnico + admin
@@ -58,6 +59,8 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient() as any;
   const stats = {
     leads_expired: 0,
+    leads_aviso_comercial: 0,
+    leads_resumen_admin: 0,
     installations_tomorrow: 0,
     maintenance_tomorrow: 0,
     stock_low: 0,
@@ -320,133 +323,20 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 1) Leads caducados ----------------------------------------------------------
-  // Decisión 2026-05-09: caducidad diferenciada por origen.
-  //   - origin='tmk' → lead_expiry_days_tmk (default 15).
-  //   - resto → lead_expiry_days_commercial (default 30).
-  // Al caducar: status='expired' + DESASIGNAR (assigned_user_id=null) +
-  // evento con previous user para el timeline + alerta a nivel 1/2.
-  const { data: companies } = await admin
-    .from("company_settings")
-    .select(
-      "company_id, lead_expiry_days, lead_expiry_days_tmk, lead_expiry_days_commercial",
-    );
-  for (const cs of (companies ?? []) as Array<{
-    company_id: string;
-    lead_expiry_days: number;
-    lead_expiry_days_tmk: number | null;
-    lead_expiry_days_commercial: number | null;
-  }>) {
-    if (fueraDeTiempo("leads-expired")) break;
-    const tmkDays = cs.lead_expiry_days_tmk ?? cs.lead_expiry_days ?? 15;
-    const commercialDays = cs.lead_expiry_days_commercial ?? cs.lead_expiry_days ?? 30;
-    const maxDays = Math.max(tmkDays, commercialDays);
-    const upperCutoff = new Date();
-    upperCutoff.setDate(upperCutoff.getDate() - Math.min(tmkDays, commercialDays));
-
-    // Cargamos un buffer amplio (todos los que pueden caducar por TMK) y
-    // filtramos por origen + sus días específicos en memoria.
-    const bufferCutoff = new Date();
-    bufferCutoff.setDate(bufferCutoff.getDate() - Math.min(tmkDays, commercialDays));
-    // OJO: lead_status NO tiene 'qualified' (enum real: new, contacted,
-    // proposal_created, proposal_sent, free_trial_proposed, converted, lost,
-    // expired). Incluirlo hacía fallar TODA la query → ningún lead caducaba.
-    const { data: stale, error: staleErr } = await admin
-      .from("leads")
-      .select(
-        "id, legal_name, trade_name, first_name, last_name, party_kind, origin, assigned_user_id, assigned_at",
-      )
-      .eq("company_id", cs.company_id)
-      .in("status", ["new", "contacted"])
-      .lt("assigned_at", bufferCutoff.toISOString())
-      .is("expired_at", null)
-      .is("deleted_at", null)
-      .limit(500);
-    if (staleErr) {
-      console.error("[cron/daily] caducidad leads SELECT falló:", staleErr.message);
+  // 1) Leads sin actividad ---------------------------------------------------
+  // Decisión de Mario 12-11 (docs/PLAN_REVISION_LEADS.md §6): SOLO AVISAR.
+  // Antes: caducidad 15/30 días (status=expired + desasignar) y «lead parado»
+  // 14 días (desasignar). Desasignaban y nadie repartía después (60 leads de
+  // comerciales en la bolsa, 27 clientes acabaron a nombre del admin). Ahora
+  // el lead se queda con su comercial; se avisa a él y un resumen al admin.
+  try {
+    if (!fueraDeTiempo("leads-inactivos")) {
+      const r = await avisarLeadsInactivos(admin, fueraDeTiempo);
+      stats.leads_aviso_comercial = r.avisos_comercial;
+      stats.leads_resumen_admin = r.resumenes_admin;
     }
-    type StaleLead = {
-      id: string;
-      legal_name: string | null;
-      trade_name: string | null;
-      first_name: string | null;
-      last_name: string | null;
-      party_kind: "company" | "individual";
-      origin: string;
-      assigned_user_id: string | null;
-      assigned_at: string | null;
-    };
-    const staleList = (stale ?? []) as StaleLead[];
-    const toExpire = staleList.filter((l) => {
-      if (!l.assigned_at) return false;
-      const days = l.origin === "tmk" ? tmkDays : commercialDays;
-      const cut = new Date();
-      cut.setDate(cut.getDate() - days);
-      return new Date(l.assigned_at) < cut;
-    });
-    if (toExpire.length === 0) continue;
-
-    for (const l of toExpire) {
-      // Update individual para guardar previous_assigned_user_id en payload
-      await admin
-        .from("leads")
-        .update({
-          status: "expired",
-          expired_at: new Date().toISOString(),
-          assigned_user_id: null,
-          assigned_at: null,
-        })
-        .eq("id", l.id);
-
-      // Evento timeline con el comercial anterior
-      try {
-        await admin.from("events").insert({
-          company_id: cs.company_id,
-          subject_type: "lead",
-          subject_id: l.id,
-          kind: "lead.unassigned_by_expiry",
-          payload: {
-            previous_assigned_user_id: l.assigned_user_id,
-            origin: l.origin,
-            days_threshold: l.origin === "tmk" ? tmkDays : commercialDays,
-          },
-          actor_user_id: null,
-        });
-      } catch {
-        /* no-op */
-      }
-
-      const name =
-        l.party_kind === "company"
-          ? l.trade_name || l.legal_name || "Sin nombre"
-          : `${l.first_name ?? ""} ${l.last_name ?? ""}`.trim() || "Sin nombre";
-      try {
-        await notifyByRoles(
-          cs.company_id,
-          [
-            "company_admin",
-            "commercial_director",
-            "telemarketing_director",
-            "technical_director",
-          ],
-          {
-            kind: "lead.expired",
-            severity: "warning",
-            title: "Lead caducado y desasignado",
-            body: `${name} (${l.origin === "tmk" ? "TMK" : "comercial"}). Reasignar desde /leads.`,
-            subject_type: "lead",
-            subject_id: l.id,
-            action_url: `/leads/${l.id}`,
-          },
-        );
-      } catch {
-        /* no-op */
-      }
-      stats.leads_expired += 1;
-    }
-    // silenciar variables no usadas
-    void maxDays;
-    void upperCutoff;
+  } catch (e) {
+    tracker.error("leads-inactivos", e);
   }
 
   // 2) Instalaciones para mañana -----------------------------------------------
@@ -1688,61 +1578,10 @@ export async function GET(req: NextRequest) {
   // cron moría a los 300 s en este bucle: nunca llegaba a los recordatorios
   // de impago ni registraba su fin en cron_runs.
 
-  // ===== Auto-cron leads stale (decisión 2026-05-20) =====
-  // Leads status=new asignados hace > 14 días sin events lead.contacted
-  // → desasignar + volver al pool.
+  // ===== Leads parados: antes se desasignaban a los 14 días; desde el
+  // 2026-11-13 lo cubre el aviso de inactividad de arriba (sección 1), que
+  // solo avisa. Se mantiene la clave stale_leads en el resumen por compatibilidad.
   const staleStats = { unassigned: 0, errors: 0 };
-  try {
-    const fortnight = new Date(Date.now() - 14 * 86400000).toISOString();
-    const { data: candidates } = await admin
-      .from("leads")
-      .select("id, company_id, assigned_user_id, assigned_at")
-      .eq("status", "new")
-      .not("assigned_user_id", "is", null)
-      .lt("assigned_at", fortnight)
-      .is("deleted_at", null)
-      .limit(500);
-    type L = {
-      id: string;
-      company_id: string;
-      assigned_user_id: string | null;
-      assigned_at: string | null;
-    };
-    for (const l of ((candidates ?? []) as L[])) {
-      if (fueraDeTiempo("stale-leads")) break;
-      try {
-        // Verificar que NO haya contacto reciente
-        const { count: contacts } = await admin
-          .from("events")
-          .select("id", { count: "exact", head: true })
-          .eq("subject_type", "lead")
-          .eq("subject_id", l.id)
-          .eq("kind", "lead.contacted")
-          .gte("occurred_at", fortnight);
-        if ((contacts ?? 0) > 0) continue;
-        // Desasignar
-        await admin
-          .from("leads")
-          .update({ assigned_user_id: null, assigned_at: null })
-          .eq("id", l.id);
-        await admin.from("events").insert({
-          company_id: l.company_id,
-          subject_type: "lead",
-          subject_id: l.id,
-          kind: "lead.unassigned_by_expiry",
-          payload: {
-            previous_assigned_user_id: l.assigned_user_id,
-            reason: "stale_14d_no_contact",
-          },
-        });
-        staleStats.unassigned += 1;
-      } catch {
-        staleStats.errors += 1;
-      }
-    }
-  } catch (e) {
-    tracker.error("stale-leads-outer", e);
-  }
 
   // ===== Recordatorios de impago: movidos a /api/cron/invoice-reminders
   // (auditoría 2026-10-01, C2). Corren por la mañana, en horario de oficina,

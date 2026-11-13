@@ -8,10 +8,12 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
 import { equiposEnRenting } from "./retirada-cobro";
 import {
   ERROR_RENTING,
+  ERROR_SIN_MODELO,
   ESTADO_EQUIPO_LABEL,
   MARCA_RETIRADA_MANUAL,
   clasificarOrdenesAbiertas,
   destinoEfectivo,
+  equiposSinModeloAlAlmacen,
   instanteRetirada,
   necesitaAlmacen,
   puedeRetirar,
@@ -89,12 +91,17 @@ export async function retirarEquipoManualAction(
 
     const { data: eqRows, error: eErr } = await admin
       .from("customer_equipment")
-      .select("id, product_id, is_active")
+      .select("id, product_id, external_equipment_model_id, is_active")
       .in("id", d.equipment_ids)
       .eq("company_id", companyId)
       .eq("customer_id", d.customer_id);
     if (eErr) return { ok: false, error: eErr.message };
-    const equipos = (eqRows ?? []) as Array<{ id: string; product_id: string | null; is_active: boolean }>;
+    const equipos = (eqRows ?? []) as Array<{
+      id: string;
+      product_id: string | null;
+      external_equipment_model_id: string | null;
+      is_active: boolean;
+    }>;
     if (equipos.length !== d.equipment_ids.length) {
       return { ok: false, error: "Algún equipo no es de este cliente" };
     }
@@ -105,6 +112,12 @@ export async function retirarEquipoManualAction(
     // lo vuelven a comprobar; aquí se para antes de tocar nada.
     if ((await equiposEnRenting(admin, companyId, d.equipment_ids)).length > 0) {
       return { ok: false, error: ERROR_RENTING };
+    }
+
+    // Equipo pendiente sin modelo: antes destinoEfectivo lo pasaba en
+    // silencio a «no es nuestro» y no volvía al almacén (2026-11-13).
+    if (equiposSinModeloAlAlmacen(equipos, d.destinos).length > 0) {
+      return { ok: false, error: ERROR_SIN_MODELO };
     }
 
     // 2) Almacén: mismo criterio que la orden normal (solo si algún equipo

@@ -22,6 +22,8 @@ import {
   AddressesClusterMap,
   type MapPoint,
 } from "@/shared/components/addresses-cluster-map";
+import { modeloDeTrabajos } from "@/modules/equipos-modelo/ruta";
+import { ChipModeloEquipo } from "@/modules/equipos-modelo/chip-modelo";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,14 @@ export default async function MiDiaPage({
   const items =
     optimized?.items ?? (await getMyDayItems().catch(() => []));
   const totalKm = optimized?.total_km ?? null;
+  // Tipo y modelo del equipo en cada mantenimiento (plan modelo de equipo).
+  // Null si la migración no está aplicada → no se pinta.
+  const modelos = session.company_id
+    ? await modeloDeTrabajos(
+        session.company_id,
+        items.filter((it) => it.kind === "maintenance").map((it) => it.id),
+      ).catch(() => null)
+    : null;
   const isOptimized = optimized?.ordered ?? false;
 
   const today = new Date();
@@ -329,6 +339,14 @@ export default async function MiDiaPage({
                         </Link>
                         {it.subtitle && (
                           <div className="break-words text-xs text-muted-foreground">{it.subtitle}</div>
+                        )}
+                        {it.kind === "maintenance" && modelos?.get(it.id) && (
+                          <ChipModeloEquipo
+                            etiqueta={modelos.get(it.id)!.etiqueta}
+                            pendiente={modelos.get(it.id)!.pendiente}
+                            tipo={modelos.get(it.id)!.tipo}
+                            className="mt-1"
+                          />
                         )}
                         {it.address_summary && (
                           <div className="mt-1 flex items-start gap-1 break-words text-xs text-muted-foreground">

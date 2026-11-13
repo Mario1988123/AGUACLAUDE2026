@@ -490,7 +490,7 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
   const { data: lead, error: e1 } = await supabase
     .from("leads")
     .select(
-      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, status, converted_to_customer_id, assigned_user_id",
+      "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, status, converted_to_customer_id, assigned_user_id, created_by",
     )
     .eq("id", leadId)
     .is("deleted_at", null)
@@ -511,6 +511,7 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     status: string;
     converted_to_customer_id: string | null;
     assigned_user_id: string | null;
+    created_by: string | null;
   };
   // Admin client para todo el flow. La policy customers_insert_by_scope
   // limita el INSERT a roles concretos y un nivel 3 (sales_rep) no
@@ -529,6 +530,15 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
     return l.converted_to_customer_id;
   }
 
+  const { resolverDuenoCliente } = await import("./dueno-cliente");
+  const duenoCliente = await resolverDuenoCliente(admin, {
+    leadId: l.id,
+    companyId: session.company_id,
+    asignado: l.assigned_user_id,
+    creador: l.created_by,
+    convierte: session.user_id,
+  });
+
   const { data: created, error: e2 } = await admin
     .from("customers")
     .insert({
@@ -544,9 +554,10 @@ export async function convertLeadToCustomerAction(leadId: string): Promise<strin
       tax_id: l.tax_id,
       notes: l.notes,
       is_active: true,
-      // REGLA: el cliente HEREDA el dueño del lead (quien lo trabajaba). Si el
-      // lead no tuviera comercial asignado, cae a quien convierte. Nunca null.
-      assigned_user_id: l.assigned_user_id ?? session.user_id,
+      // REGLA (Mario 12-11): el cliente HEREDA a quien trabajó el lead: su
+      // comercial; si no tiene, el último comercial que lo tuvo o el que lo
+      // creó; solo en último caso quien convierte. Nunca null.
+      assigned_user_id: duenoCliente,
       assigned_at: new Date().toISOString(),
       created_by: session.user_id,
       source_lead_id: l.id,

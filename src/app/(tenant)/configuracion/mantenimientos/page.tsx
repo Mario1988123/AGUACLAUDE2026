@@ -4,6 +4,8 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { listAllMaintenancePlansAction } from "@/modules/maintenance-plans/config-actions";
 import { MaintenancePlansEditor } from "@/modules/maintenance-plans/plans-editor";
 import { BackButton } from "@/shared/components/back-button";
+import { cargarConfigMant, mantIncluidoDisponible } from "@/modules/mant-incluido/datos";
+import { ConfigMantIncluidoForm } from "@/modules/mant-incluido/config-form";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +16,9 @@ export default async function ConfigMantenimientosPage() {
   if (!isAdmin) redirect("/configuracion");
 
   const plans = await listAllMaintenancePlansAction().catch(() => []);
+  // Mantenimientos incluidos (plan 2026-11-12). Sin migración no se enseña.
+  const hayMantIncluido = session.company_id ? await mantIncluidoDisponible() : false;
+  const cfgMant = hayMantIncluido && session.company_id ? await cargarConfigMant(session.company_id) : null;
 
   return (
     <div className="space-y-6">
@@ -37,6 +42,24 @@ export default async function ConfigMantenimientosPage() {
           <MaintenancePlansEditor plans={plans} />
         </CardContent>
       </Card>
+
+      {cfgMant && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Mantenimientos incluidos y precio por visita</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ConfigMantIncluidoForm
+              inicial={{
+                nDefecto: cfgMant.nDefecto,
+                filtros: cfgMant.precios.solo_filtros,
+                membrana: cfgMant.precios.filtros_membrana,
+              }}
+              iva={cfgMant.iva}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

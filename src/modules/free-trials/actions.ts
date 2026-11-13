@@ -180,6 +180,18 @@ export async function createFreeTrialAction(input: unknown) {
     actor_user_id: session.user_id,
   });
 
+  // Plan revisión de leads (I1): la prueba gratuita sube el lead a
+  // «prueba propuesta». Antes se quedaba en «nuevo» y el cron lo daba por
+  // abandonado. Solo sube, nunca baja; fail-soft (la prueba ya está creada).
+  if (parsed.lead_id) {
+    try {
+      const { bumpLeadStatus } = await import("@/modules/leads/actions");
+      await bumpLeadStatus(parsed.lead_id, "free_trial_proposed");
+    } catch (e) {
+      console.error("[createFreeTrial] no se pudo subir el estado del lead:", e);
+    }
+  }
+
   revalidatePath("/pruebas-gratuitas");
   return id;
 }
@@ -760,9 +772,10 @@ export async function acceptFreeTrialAction(input: {
       const { data: lead } = await admin
         .from("leads")
         .select(
-          "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, assigned_user_id",
+          "id, party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary, phone_company, tax_id, notes, assigned_user_id, created_by",
         )
         .eq("id", trial.lead_id)
+        .eq("company_id", session.company_id)
         .maybeSingle();
       if (!lead) return { ok: false, error: "Lead origen no encontrado" };
       const l = lead as {
@@ -778,7 +791,16 @@ export async function acceptFreeTrialAction(input: {
         tax_id: string | null;
         notes: string | null;
         assigned_user_id: string | null;
+        created_by: string | null;
       };
+      const { resolverDuenoCliente } = await import("@/modules/leads/dueno-cliente");
+      const duenoCliente = await resolverDuenoCliente(admin, {
+        leadId: l.id,
+        companyId: session.company_id,
+        asignado: l.assigned_user_id,
+        creador: l.created_by,
+        convierte: session.user_id,
+      });
       const { data: createdCust, error: cErr } = await admin
         .from("customers")
         .insert({
@@ -795,8 +817,9 @@ export async function acceptFreeTrialAction(input: {
           phone_secondary: l.phone_company,
           tax_id: l.tax_id,
           notes: l.notes,
-          // REGLA: hereda el dueño del lead; si no tuviera, quien lo crea. Nunca null.
-          assigned_user_id: l.assigned_user_id ?? session.user_id,
+          // REGLA (Mario 12-11): hereda a quien trabajó el lead (su comercial,
+          // el último que lo tuvo o quien lo creó); si no, quien acepta. Nunca null.
+          assigned_user_id: duenoCliente,
           assigned_at: new Date().toISOString(),
           source_lead_id: l.id,
           is_active: true,
@@ -822,6 +845,10 @@ export async function acceptFreeTrialAction(input: {
         .from("leads")
         .update({
           status: "converted",
+          // Plan revisión de leads (I2): antes no se rellenaban y el lead
+          // quedaba convertido «a medias», sin enlace a su cliente.
+          converted_at: new Date().toISOString(),
+          converted_to_customer_id: customerId,
           deleted_at: new Date().toISOString(),
         })
         .eq("id", l.id);
