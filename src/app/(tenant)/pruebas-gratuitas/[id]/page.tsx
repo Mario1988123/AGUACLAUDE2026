@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFreeTrial } from "@/modules/free-trials/actions";
 import { FreeTrialActionsPanel } from "@/modules/free-trials/actions-panel";
+import { DisponibilidadFicha } from "@/modules/free-trials/disponibilidad-ficha";
+import { leerDisponibilidad } from "@/modules/free-trials/disponibilidad";
 import { RetiradaPruebaButton } from "@/modules/customers/retirada-prueba-button";
 import { puedeRetirar, pruebaRetirable } from "@/modules/customers/retirada-logica";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -67,7 +69,7 @@ export default async function FreeTrialDetailPage({
   const { createAdminClient } = await import("@/shared/lib/supabase/admin");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admAlmacenes = createAdminClient() as any;
-  const [whRes, installers, uninstallRes] = await Promise.all([
+  const [whRes, installers, uninstallRes, dispRes] = await Promise.all([
     admAlmacenes
       .from("warehouses")
       .select("id, name, is_used_equipment_default")
@@ -84,7 +86,12 @@ export default async function FreeTrialDetailPage({
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Aparte de getFreeTrial: si la columna faltara, solo se pierde esto.
+    sbAdmin.from("free_trials").select("disponibilidad").eq("id", id).maybeSingle(),
   ]);
+  const disponibilidad = leerDisponibilidad(
+    (dispRes.data as { disponibilidad?: unknown } | null)?.disponibilidad,
+  );
   const warehouses = ((whRes.data ?? []) as Array<{
     id: string;
     name: string;
@@ -190,6 +197,11 @@ export default async function FreeTrialDetailPage({
               <div>
                 <strong>Caduca:</strong> {fmt(trial.expires_at)}
               </div>
+              <DisponibilidadFicha
+                trialId={trial.id}
+                inicial={disponibilidad}
+                editable={trial.status === "draft" || trial.status === "scheduled"}
+              />
               {trial.notes && (
                 <div>
                   <strong>Notas:</strong> {trial.notes}

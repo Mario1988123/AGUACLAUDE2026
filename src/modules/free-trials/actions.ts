@@ -11,6 +11,7 @@ import { adjustStockBatch, isFunctionMissingError } from "@/modules/warehouses/a
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { disponibilidadSchema } from "./disponibilidad";
 
 const createSchema = z.object({
   customer_id: z.string().uuid().optional(),
@@ -25,6 +26,8 @@ const createSchema = z.object({
   scheduled_at: z.string().optional(),
   assigned_installer_user_id: z.string().uuid().optional(),
   notes: z.string().optional(),
+  // Días y horas en que se le puede instalar (ver ./disponibilidad.ts).
+  disponibilidad: disponibilidadSchema.nullish(),
   items: z
     .array(
       z.object({
@@ -154,6 +157,9 @@ export async function createFreeTrialAction(input: unknown) {
       scheduled_at: scheduledIso,
       assigned_installer_user_id: parsed.assigned_installer_user_id ?? null,
       notes: parsed.notes ?? null,
+      // Solo se manda si hay: así el alta sin disponibilidad no depende de
+      // que la columna exista.
+      ...(parsed.disponibilidad ? { disponibilidad: parsed.disponibilidad } : {}),
       created_by: session.user_id,
     })
     .select("id")
@@ -1400,6 +1406,46 @@ export async function createFreeTrialSafeAction(
   try {
     const id = await createFreeTrialAction(input as never);
     return { ok: true, id: id as unknown as string };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * Cambia la disponibilidad del cliente (o la quita con null). Solo mientras
+ * la prueba está en borrador o programada. Cliente con RLS: la policy
+ * ft_update decide quién puede; si bloquea, el update vuelve vacío (no da
+ * error), por eso se comprueba que haya tocado la fila.
+ */
+export async function guardarDisponibilidadPruebaSafeAction(
+  trialId: string,
+  disponibilidad: unknown,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) throw new Error("Sin empresa");
+    const id = z.string().uuid().parse(trialId);
+    const valor =
+      disponibilidad == null
+        ? null
+        : parseOrFriendly(disponibilidadSchema, disponibilidad, "Disponibilidad");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const supabase = (await createClient()) as any;
+    const r = await supabase
+      .from("free_trials")
+      .update({ disponibilidad: valor })
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .in("status", ["draft", "scheduled"])
+      .select("id");
+    if (r.error) throw new Error(r.error.message);
+    if (!r.data?.length) {
+      throw new Error(
+        "No se pudo guardar: la prueba ya está instalada o no tienes permiso para modificarla",
+      );
+    }
+    revalidatePath(`/pruebas-gratuitas/${id}`);
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

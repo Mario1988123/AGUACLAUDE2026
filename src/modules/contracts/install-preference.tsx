@@ -36,14 +36,17 @@ function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function MultiDateCalendar({
+export function MultiDateCalendar({
   value,
   onChange,
   disabled,
+  bloquearPasados,
 }: {
   value: string[];
   onChange: (v: string[]) => void;
   disabled?: boolean;
+  /** Si es true, los días anteriores a hoy no se pueden marcar. */
+  bloquearPasados?: boolean;
 }) {
   const today = new Date();
   const [cursor, setCursor] = useState<{ y: number; m: number }>({
@@ -64,6 +67,7 @@ function MultiDateCalendar({
   function toggle(d: Date) {
     if (disabled) return;
     const iso = toISO(d);
+    if (bloquearPasados && iso < todayIso && !value.includes(iso)) return;
     if (value.includes(iso)) onChange(value.filter((x) => x !== iso));
     else onChange([...value, iso].sort());
   }
@@ -120,7 +124,7 @@ function MultiDateCalendar({
               key={i}
               type="button"
               onClick={() => toggle(d)}
-              disabled={disabled}
+              disabled={disabled || (bloquearPasados && isPast && !selected)}
               className={`h-9 rounded-lg text-sm transition ${
                 selected
                   ? "bg-primary font-bold text-primary-foreground"

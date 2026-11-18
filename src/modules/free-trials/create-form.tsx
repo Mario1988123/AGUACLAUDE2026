@@ -10,6 +10,12 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { AddressForm } from "@/modules/addresses/address-form";
 import { createFreeTrialSafeAction } from "./actions";
+import { DisponibilidadEditor } from "./disponibilidad-editor";
+import {
+  encajaEnDisponibilidad,
+  validarDisponibilidad,
+  type Disponibilidad,
+} from "./disponibilidad";
 
 interface ProductOption {
   id: string;
@@ -63,6 +69,10 @@ export function FreeTrialCreateForm({
   const [durationDays, setDurationDays] = useState(defaultDurationDays);
   const [conditions, setConditions] = useState(defaultConditionsText);
   const [notes, setNotes] = useState("");
+  const [disponibilidad, setDisponibilidad] = useState<Disponibilidad | null>(null);
+  // Aviso (no bloquea) si la fecha de entrega cae fuera de lo que le viene bien.
+  const fueraDeDisponibilidad =
+    !!scheduledAt && encajaEnDisponibilidad(disponibilidad, scheduledAt) === false;
 
   // Cuando se recarga la lista de direcciones (p. ej. tras añadir una inline),
   // si la seleccionada ya no es válida, elegimos la primera disponible.
@@ -106,6 +116,11 @@ export function FreeTrialCreateForm({
       notify.warning("Duración inválida");
       return;
     }
+    const errorDisponibilidad = validarDisponibilidad(disponibilidad);
+    if (errorDisponibilidad) {
+      notify.warning(errorDisponibilidad);
+      return;
+    }
     startTransition(async () => {
       const r = await createFreeTrialSafeAction({
         customer_id: ownerKind === "customer" ? ownerId : undefined,
@@ -116,6 +131,7 @@ export function FreeTrialCreateForm({
         scheduled_at: scheduledAt || undefined,
         assigned_installer_user_id: installerId || undefined,
         notes: notes || undefined,
+        disponibilidad,
         items: validItems,
       });
       if (!r.ok) {
@@ -283,6 +299,11 @@ export function FreeTrialCreateForm({
             <p className="text-[11px] text-muted-foreground">
               No se puede programar para una fecha pasada.
             </p>
+            {fueraDeDisponibilidad && (
+              <p className="rounded-lg bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+                Esa fecha y hora no están dentro de la disponibilidad del cliente.
+              </p>
+            )}
           </div>
         </div>
 
@@ -316,6 +337,18 @@ export function FreeTrialCreateForm({
             />
           </div>
         )}
+
+        {/* Cuándo se le puede instalar: días fijos de la semana con su
+            franja, o días concretos del calendario. */}
+        <div className="space-y-2 border-t pt-4">
+          <div>
+            <Label className="text-sm font-bold">Disponibilidad del cliente (opcional)</Label>
+            <p className="text-xs text-muted-foreground">
+              Qué días y a qué horas se le puede instalar. Lo verá quien programe la visita.
+            </p>
+          </div>
+          <DisponibilidadEditor inicial={null} onChange={setDisponibilidad} />
+        </div>
 
         <div className="space-y-1 max-w-xs">
           <Label>Duración (días)</Label>
