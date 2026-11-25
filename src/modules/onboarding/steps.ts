@@ -144,7 +144,7 @@ const STEPS_SUPERADMIN: OnboardingStep[] = [
     icon: "Building2",
   },
   {
-    title: "Catálogo global",
+    title: "Catálogo maestro",
     body: "Categorías, atributos y productos de fábrica que cualquier empresa puede activar.",
     href: "/superadmin/catalogo",
     icon: "Package",

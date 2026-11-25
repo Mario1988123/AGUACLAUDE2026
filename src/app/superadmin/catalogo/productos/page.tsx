@@ -54,10 +54,7 @@ export default async function ProductosMaestrosPage({
     return (
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-2">
-            <BackButton href="/superadmin/catalogo" label="Catálogo global" />
-            <h1 className="text-2xl font-bold">Catálogo maestro</h1>
-          </div>
+          <h1 className="min-w-0 text-2xl font-bold">Catálogo maestro</h1>
           <BotonNuevo />
         </div>
         <BuscadorCatalogo />

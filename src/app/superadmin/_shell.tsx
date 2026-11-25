@@ -13,7 +13,7 @@ const ID_CAJON = "menu-superadmin";
 
 const ITEMS = [
   { href: "/superadmin", label: "Empresas", icon: Building2, exact: true },
-  { href: "/superadmin/catalogo", label: "Catálogo global", icon: Package, exact: false },
+  { href: "/superadmin/catalogo", label: "Catálogo maestro", icon: Package, exact: false },
 ] as const;
 
 interface Props {
