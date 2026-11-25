@@ -55,17 +55,19 @@ export function sumarPorArticulo(lineas: CantidadArticulo[]): Map<string, Cantid
 }
 
 /**
- * Reserva efectiva de una furgoneta: la de la empresa, pisada artículo a
- * artículo por la de la furgoneta (una fila de furgoneta con 0 quita ese
- * artículo de su reserva). Si hay filas repetidas, manda la última.
+ * Reserva efectiva de una furgoneta (Mario 2026-11-25: la reserva LA ELIGE EL
+ * TÉCNICO). Si la furgoneta tiene reserva propia, vale SOLO esa; si no tiene
+ * ninguna fila, se usa la de la empresa como plantilla. [decide] No se mezclan:
+ * lo que el técnico quita de su reserva no vuelve por la de la empresa.
+ * Las cantidades 0 no cuentan. Si hay filas repetidas, manda la última.
  */
 export function resolverReserva(
   empresa: CantidadArticulo[],
   furgoneta: CantidadArticulo[],
 ): Map<string, CantidadArticulo> {
+  const base = furgoneta.length > 0 ? furgoneta : empresa;
   const m = new Map<string, CantidadArticulo>();
-  for (const r of empresa) m.set(claveArticulo(r), { tipo: r.tipo, id: r.id, cantidad: entero(r.cantidad) });
-  for (const r of furgoneta) m.set(claveArticulo(r), { tipo: r.tipo, id: r.id, cantidad: entero(r.cantidad) });
+  for (const r of base) m.set(claveArticulo(r), { tipo: r.tipo, id: r.id, cantidad: entero(r.cantidad) });
   for (const [k, v] of m) if (v.cantidad === 0) m.delete(k);
   return m;
 }

@@ -50,6 +50,7 @@ import {
   getRetiradasPendientes,
 } from "@/modules/dashboard/retiradas-pendientes";
 import { BolsaLeadsCard, contarLeadsEnBolsa } from "@/modules/leads/bolsa";
+import { AyudaFiltrosFuentesCard, getAyudaFiltrosFuentes } from "@/modules/dashboard/ayuda-datos-card";
 
 export const dynamic = "force-dynamic";
 
@@ -374,6 +375,12 @@ async function renderDashboard({
           }))}
         />
       )}
+
+      {/* «Necesitamos tu ayuda» (2026-11-25): preguntas de datos a la admin,
+          activadas con un aviso y calculadas en vivo. */}
+      {await getAyudaFiltrosFuentes()
+        .catch(() => null)
+        .then((d) => (d ? <AyudaFiltrosFuentesCard data={d} /> : null))}
 
       {consolidatedAlerts && (
         <ConsolidatedAlertsCard data={consolidatedAlerts} />

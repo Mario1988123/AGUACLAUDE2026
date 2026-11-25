@@ -75,10 +75,10 @@ export function ReservaFurgonetaEditor({ datos }: { datos: DatosReserva }) {
         </select>
       </label>
 
-      {warehouseId && deEmpresa.length > 0 && (
+      {warehouseId && filas.length === 0 && deEmpresa.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          De la empresa ya lleva: {deEmpresa.map((f) => `${f.nombre} × ${f.cantidad}`).join(", ")}. Añade aquí solo lo
-          que cambie en esta furgoneta.
+          Sin reserva propia: usa la de la empresa ({deEmpresa.map((f) => `${f.nombre} × ${f.cantidad}`).join(", ")}).
+          En cuanto añadas una línea aquí, esta furgoneta usará solo la suya.
         </p>
       )}
 

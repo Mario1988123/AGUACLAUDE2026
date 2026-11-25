@@ -24,8 +24,9 @@ export default async function ReservaFurgonetaPage() {
       <div>
         <h1 className="text-2xl font-bold">Carga de reserva</h1>
         <p className="text-sm text-muted-foreground">
-          Lo que una furgoneta lleva siempre, además de lo de sus trabajos. La de la empresa vale para todas; la de una
-          furgoneta la sustituye artículo a artículo (0 = esa furgoneta no lo lleva).
+          Lo que una furgoneta lleva siempre, además de lo de sus trabajos. Cada técnico elige la de su furgoneta en
+          «Mi furgoneta»; aquí la puedes ver y cambiar. La de la empresa es la plantilla: vale para las furgonetas que
+          aún no tienen reserva propia.
         </p>
       </div>
       {!r.ok ? (

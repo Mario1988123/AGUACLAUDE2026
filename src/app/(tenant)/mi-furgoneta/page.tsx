@@ -10,8 +10,9 @@ import { CargaSugeridaPanel } from "@/modules/warehouses/carga-sugerida-panel";
 export const dynamic = "force-dynamic";
 
 /**
- * Mi furgoneta (técnico, 2026-11-12): un punto de color por producto, sin
- * cifras. Verde = hay; ámbar = queda poco; gris = no queda.
+ * Mi furgoneta (técnico, 2026-11-12): un punto de color por producto y,
+ * desde el 2026-11-25, sus unidades. Verde = hay; ámbar = queda poco;
+ * gris = no queda.
  */
 export default async function MiFurgonetaPage() {
   const session = await requireSession();

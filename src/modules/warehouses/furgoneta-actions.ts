@@ -12,8 +12,8 @@ import { adjustStockBatch } from "./adjust-stock";
 /**
  * "Mi furgoneta" del técnico (plan de permisos, 2026-11-12, D5 + D6).
  *
- * El técnico NUNCA recibe cantidades: solo un color por producto
- * (verde / ámbar / gris) y, al cargar, si hay o no hay en el almacén.
+ * Mario 2026-11-25: el técnico SÍ ve cuántas unidades lleva SU furgoneta
+ * (antes solo un color). Del almacén sigue viendo solo si hay o no hay.
  * Todo se lee y se mueve con admin, filtrando SIEMPRE por company_id y por la
  * furgoneta asignada al propio usuario (kind = 'vehicle').
  */
@@ -31,14 +31,18 @@ export interface ProductoFurgoneta {
   nombre: string;
   referencia: string | null;
   estado: ColorStock;
+  /** Unidades nuevas que lleva la furgoneta. */
+  cantidad: number;
 }
 
 export interface ProductoCarga {
   product_id: string;
   nombre: string;
   referencia: string | null;
-  /** Carga: hay en el almacén. Devolución: hay en la furgoneta. Sin cifras. */
+  /** Carga: hay en el almacén. Devolución: hay en la furgoneta. */
   hay: boolean;
+  /** Devolución: unidades que lleva la furgoneta. Carga: null (del almacén no se dan cifras). */
+  enFurgoneta: number | null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,7 +156,7 @@ function colorDe(cantidad: number, umbral: number): ColorStock {
   return "verde";
 }
 
-/** Semáforo de la furgoneta del usuario. Sin cantidades. */
+/** Semáforo de la furgoneta del usuario, con sus unidades. */
 export async function listarMiFurgonetaSemaforo(): Promise<{
   furgoneta: MiFurgoneta | null;
   productos: ProductoFurgoneta[];
@@ -184,6 +188,7 @@ export async function listarMiFurgonetaSemaforo(): Promise<{
     nombre: p.name,
     referencia: p.internal_reference,
     estado: colorDe(cant.get(p.id) ?? 0, umbrales.get(p.id) ?? 1),
+    cantidad: cant.get(p.id) ?? 0,
   }));
   const orden: Record<ColorStock, number> = { ambar: 0, verde: 1, gris: 2 };
   productos.sort((a, b) => orden[a.estado] - orden[b.estado] || a.nombre.localeCompare(b.nombre, "es"));
@@ -192,7 +197,7 @@ export async function listarMiFurgonetaSemaforo(): Promise<{
 
 /**
  * Catálogo para registrar una carga (hay/no hay en el almacén) o una
- * devolución (solo lo que lleva la furgoneta). Nunca cifras.
+ * devolución (solo lo que lleva la furgoneta, con sus unidades).
  */
 export async function listarCatalogoMovimiento(
   sentido: "carga" | "devolucion",
@@ -219,6 +224,7 @@ export async function listarCatalogoMovimiento(
           nombre: p.name,
           referencia: p.internal_reference,
           hay: (enAlmacen.get(p.id) ?? 0) > 0,
+          enFurgoneta: null,
         })),
       };
     }
@@ -233,6 +239,7 @@ export async function listarCatalogoMovimiento(
         nombre: p.name,
         referencia: p.internal_reference,
         hay: true,
+        enFurgoneta: enFurgo.get(p.id) ?? 0,
       })),
     };
   } catch (e) {
@@ -287,7 +294,7 @@ export async function registrarMovimientoFurgoneta(
     const origen = parsed.sentido === "carga" ? almacen.id : furgoneta.id;
     const destino = parsed.sentido === "carga" ? furgoneta.id : almacen.id;
 
-    // Comprobar que hay bastante ANTES de mover nada. Sin cifras en el error.
+    // Comprobar que hay bastante ANTES de mover nada. Del almacén no se dan cifras.
     const disponible = await unidadesNuevas(admin, origen);
     for (const [pid, cant] of porProducto) {
       if ((disponible.get(pid) ?? 0) < cant) {
@@ -296,7 +303,7 @@ export async function registrarMovimientoFurgoneta(
           error:
             parsed.sentido === "carga"
               ? `No hay suficiente «${nombre.get(pid) ?? "producto"}» en el almacén; avisa a la oficina.`
-              : `No llevas tanto «${nombre.get(pid) ?? "producto"}» en la furgoneta.`,
+              : `Solo llevas ${disponible.get(pid) ?? 0} de «${nombre.get(pid) ?? "producto"}» en la furgoneta.`,
         };
       }
     }

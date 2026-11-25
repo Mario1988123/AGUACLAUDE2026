@@ -116,7 +116,10 @@ export function MiFurgonetaVista({
                 <p className="truncate text-sm font-semibold">{p.nombre}</p>
                 {p.referencia && <p className="truncate text-xs text-muted-foreground">{p.referencia}</p>}
               </div>
-              <span className="shrink-0 text-xs font-medium text-muted-foreground">{TEXTO[p.estado]}</span>
+              <span className="shrink-0 text-right">
+                <span className="block text-base font-bold tabular-nums">{p.cantidad}</span>
+                <span className="block text-xs font-medium text-muted-foreground">{TEXTO[p.estado]}</span>
+              </span>
             </li>
           ))}
         </ul>
@@ -233,6 +236,9 @@ function RegistrarMovimiento({ sentido, onCerrar }: { sentido: Sentido; onCerrar
                   <li key={p.product_id} className="flex min-h-16 items-center gap-3 px-4 py-2">
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{p.nombre}</p>
+                      {sentido === "devolucion" && p.enFurgoneta != null && (
+                        <p className="text-xs text-muted-foreground">Llevas {p.enFurgoneta}</p>
+                      )}
                       {sentido === "carga" && (
                         <p
                           className={`text-xs ${p.hay ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}`}
@@ -255,7 +261,10 @@ function RegistrarMovimiento({ sentido, onCerrar }: { sentido: Sentido; onCerrar
                       <button
                         type="button"
                         onClick={() => cambiar(p.product_id, 1)}
-                        disabled={sentido === "carga" && !p.hay}
+                        disabled={
+                          (sentido === "carga" && !p.hay) ||
+                          (sentido === "devolucion" && p.enFurgoneta != null && c >= p.enFurgoneta)
+                        }
                         className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border disabled:opacity-40"
                         aria-label={`Añadir una unidad de ${p.nombre}`}
                       >

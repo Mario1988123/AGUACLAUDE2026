@@ -74,11 +74,17 @@ describe("calcularCargaSugerida", () => {
 });
 
 describe("resolverReserva", () => {
-  it("la furgoneta pisa a la empresa y 0 quita el artículo", () => {
+  it("si la furgoneta tiene reserva propia, vale solo esa", () => {
     const m = resolverReserva([f("combi", 2), p("grifo", 1), f("post", 1)], [f("combi", 4), p("grifo", 0)]);
     expect(m.get("f:combi")!.cantidad).toBe(4);
     expect(m.has("p:grifo")).toBe(false);
-    expect(m.get("f:post")!.cantidad).toBe(1);
+    expect(m.has("f:post")).toBe(false);
+  });
+
+  it("sin reserva propia, la de la empresa es la plantilla", () => {
+    const m = resolverReserva([f("combi", 2), p("grifo", 0)], []);
+    expect(m.get("f:combi")!.cantidad).toBe(2);
+    expect(m.has("p:grifo")).toBe(false);
   });
 });
 

@@ -58,10 +58,14 @@ function formatCents(cents: number | null) {
 
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ abrir?: string }>;
 }) {
   const { id } = await params;
+  // ?abrir=filtros abre la tarjeta de filtros (enlace de «Necesitamos tu ayuda»).
+  const abrir = (await searchParams)?.abrir;
   let product;
   try {
     product = await getProduct(id);
@@ -343,7 +347,7 @@ export default async function ProductDetailPage({
 
       <CollapsibleCard
         title={`🔁 Filtros y recambios (${filterAssignments.length})`}
-        defaultOpen={false}
+        defaultOpen={abrir === "filtros"}
       >
         <ProductFiltersPanel
           productId={product.id}

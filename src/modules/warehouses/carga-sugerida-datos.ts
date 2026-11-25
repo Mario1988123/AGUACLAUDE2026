@@ -10,6 +10,7 @@ import {
   resolverReserva,
   type AsignacionFiltro,
   type CantidadArticulo,
+  type LineaSugerida,
   type MomentoCarga,
   type TipoArticulo,
 } from "./carga-sugerida-logica";
@@ -105,12 +106,16 @@ async function productosNuevosEn(admin: Admin, companyId: string, warehouseId: s
   return m;
 }
 
-/** Reserva de la empresa (warehouse_id null) y la propia de la furgoneta. */
+/**
+ * Reserva efectiva de la furgoneta: la que eligió el técnico (filas con su
+ * warehouse_id) o, si no tiene, la de la empresa como plantilla.
+ * `propia` = la furgoneta tiene reserva propia.
+ */
 export async function leerReserva(
   admin: Admin,
   companyId: string,
   furgonetaId: string,
-): Promise<{ reserva: Map<string, CantidadArticulo>; definida: boolean }> {
+): Promise<{ reserva: Map<string, CantidadArticulo>; definida: boolean; propia: boolean }> {
   const { data, error } = await admin
     .from("reservas_furgoneta")
     .select("warehouse_id, product_id, filter_id, cantidad")
@@ -119,7 +124,7 @@ export async function leerReserva(
     .limit(1000);
   if (error) {
     if (!esTablaQueFalta(error)) console.error("[leerReserva]", error.message);
-    return { reserva: new Map(), definida: false };
+    return { reserva: new Map(), definida: false, propia: false };
   }
   const filas = (data ?? []) as Array<{
     warehouse_id: string | null;
@@ -131,11 +136,9 @@ export async function leerReserva(
     r.product_id
       ? { tipo: "producto", id: r.product_id, cantidad: r.cantidad }
       : { tipo: "filtro", id: r.filter_id as string, cantidad: r.cantidad };
-  const reserva = resolverReserva(
-    filas.filter((r) => !r.warehouse_id).map(aArticulo),
-    filas.filter((r) => r.warehouse_id).map(aArticulo),
-  );
-  return { reserva, definida: filas.length > 0 };
+  const propias = filas.filter((r) => r.warehouse_id);
+  const reserva = resolverReserva(filas.filter((r) => !r.warehouse_id).map(aArticulo), propias.map(aArticulo));
+  return { reserva, definida: reserva.size > 0, propia: propias.length > 0 };
 }
 
 export interface LineaVista {
@@ -143,10 +146,18 @@ export interface LineaVista {
   id: string;
   nombre: string;
   referencia: string | null;
+  /** Lo que piden los trabajos del día. */
+  necesidad: number;
+  /** Reserva fija de este artículo. */
+  reserva: number;
+  /** Lo que ya lleva la furgoneta (Mario 2026-11-25: el técnico SÍ lo ve). */
+  lleva: number;
   aCargar: number;
   paraTrabajos: number;
   paraReserva: number;
-  /** Hay algo en el almacén de origen (sin cifras, como en «Registrar carga»). */
+  /** Le sobra sobre trabajos + reserva. */
+  sobra: number;
+  /** Hay algo en el almacén de origen (del almacén no se dan cifras). */
   hayEnAlmacen: boolean;
 }
 
@@ -155,8 +166,10 @@ export interface SugerenciaCarga {
   furgoneta: Furgoneta;
   origen: Furgoneta;
   lineas: LineaVista[];
-  /** Lo que lleva de más sobre trabajos + reserva (solo si hay reserva). Sin cifras. */
-  sobrantes: Array<{ tipo: TipoArticulo; id: string; nombre: string }>;
+  /** Hacen falta y ya las lleva: no hay que cargar nada. */
+  cubiertas: LineaVista[];
+  /** Lo que lleva de más sobre trabajos + reserva (solo si hay reserva). */
+  sobrantes: LineaVista[];
   trabajos: { instalaciones: number; mantenimientos: number };
   avisos: string[];
   reservaDefinida: boolean;
@@ -320,9 +333,9 @@ export async function calcularSugerencia(
   // Sin reserva definida no se sabe qué «sobra»: lo que lleva puede ser su
   // reserva de hecho. Solo se enseña con reserva.
   const sobrantes = res.definida ? calc.sobrantes : [];
-  const nombres = await nombresDeArticulos(admin, companyId, [...calc.aCargar, ...sobrantes]);
+  const nombres = await nombresDeArticulos(admin, companyId, [...calc.aCargar, ...calc.cubiertas, ...sobrantes]);
 
-  const lineas: LineaVista[] = calc.aCargar.map((l) => {
+  const aVista = (l: LineaSugerida): LineaVista => {
     const n = nombres.get(claveArticulo(l));
     const hay = (l.tipo === "producto" ? prodAlm.get(l.id) : filAlm.get(l.id)) ?? 0;
     return {
@@ -330,12 +343,17 @@ export async function calcularSugerencia(
       id: l.id,
       nombre: n?.nombre ?? (l.tipo === "filtro" ? "Filtro" : "Producto"),
       referencia: n?.referencia ?? null,
+      necesidad: l.necesidad,
+      reserva: l.reserva,
+      lleva: l.lleva,
       aCargar: l.aCargar,
       paraTrabajos: l.paraTrabajos,
       paraReserva: l.paraReserva,
+      sobra: l.sobra,
       hayEnAlmacen: hay > 0,
     };
-  });
+  };
+  const lineas = calc.aCargar.map(aVista);
 
   const avisos: string[] = [];
   if (dem.sinModelo > 0) {
@@ -348,7 +366,7 @@ export async function calcularSugerencia(
       `${dem.conMembrana} ósmosis podría${dem.conMembrana === 1 ? "" : "n"} necesitar membrana: no se cuenta${dem.conMembrana === 1 ? "" : "n"}, se lleva${dem.conMembrana === 1 ? "" : "n"} de la reserva.`,
     );
   }
-  if (!res.definida) avisos.push("La oficina aún no ha definido la carga de reserva: solo se cuentan los trabajos.");
+  if (!res.definida) avisos.push("Aún no tienes carga de reserva: defínela en «Mi reserva». Ahora solo se cuentan los trabajos.");
   if (lineas.some((l) => !l.hayEnAlmacen)) avisos.push("Hay artículos que no quedan en el almacén: avisa a la oficina.");
 
   return {
@@ -356,11 +374,8 @@ export async function calcularSugerencia(
     furgoneta,
     origen,
     lineas,
-    sobrantes: sobrantes.map((s) => ({
-      tipo: s.tipo,
-      id: s.id,
-      nombre: nombres.get(claveArticulo(s))?.nombre ?? (s.tipo === "filtro" ? "Filtro" : "Producto"),
-    })),
+    cubiertas: calc.cubiertas.map(aVista),
+    sobrantes: sobrantes.map(aVista),
     trabajos: { instalaciones: dem.instalaciones, mantenimientos: dem.mantenimientos },
     avisos,
     reservaDefinida: res.definida,

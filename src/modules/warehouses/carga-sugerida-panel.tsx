@@ -13,6 +13,7 @@ import {
 } from "./carga-sugerida-actions";
 import type { OrdenPendiente, PreferenciaCarga, SugerenciaCarga } from "./carga-sugerida-datos";
 import type { MomentoCarga } from "./carga-sugerida-logica";
+import { MiReservaEditor } from "./mi-reserva-editor";
 
 type Dia = "hoy" | "manana";
 
@@ -49,6 +50,7 @@ export function CargaSugeridaPanel({
   const [sugerencia, setSugerencia] = useState<SugerenciaCarga | null>(null);
   const [diaVisto, setDiaVisto] = useState<Dia>(preferencia.momento === "tarde" ? "manana" : "hoy");
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  const [editandoReserva, setEditandoReserva] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const diaPorDefecto: Dia = momento === "tarde" ? "manana" : "hoy";
@@ -227,8 +229,10 @@ export function CargaSugeridaPanel({
         </ul>
       )}
 
+      {editandoReserva && <MiReservaEditor onCerrar={() => setEditandoReserva(false)} />}
+
       {/* Botón principal */}
-      {!sugerencia && (
+      {!sugerencia && !editandoReserva && (
         <div className="space-y-1">
           <button
             type="button"
@@ -247,6 +251,16 @@ export function CargaSugeridaPanel({
           >
             o para {otroDia === "manana" ? "mañana" : "hoy"}
           </button>
+          {preferencia.disponible && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setEditandoReserva(true)}
+              className="inline-flex h-12 w-full items-center justify-center rounded-xl border border-border text-sm font-semibold disabled:opacity-50"
+            >
+              Mi carga de reserva
+            </button>
+          )}
         </div>
       )}
 
@@ -293,8 +307,9 @@ export function CargaSugeridaPanel({
                 const k = claveLinea(l);
                 const c = cantidades[k] ?? 0;
                 const motivo = [
-                  l.paraTrabajos > 0 ? `${l.paraTrabajos} para trabajos` : null,
-                  l.paraReserva > 0 ? `${l.paraReserva} para la reserva` : null,
+                  `Llevas ${l.lleva}`,
+                  l.necesidad > 0 ? `trabajos ${l.necesidad}` : null,
+                  l.reserva > 0 ? `reserva ${l.reserva}` : null,
                 ]
                   .filter(Boolean)
                   .join(" · ");
@@ -334,11 +349,35 @@ export function CargaSugeridaPanel({
             </ul>
           )}
 
+          {sugerencia.cubiertas.length > 0 && (
+            <div className="rounded-xl border border-border p-3 text-sm">
+              <p className="font-semibold">Ya lo llevas</p>
+              <ul className="mt-1 space-y-0.5">
+                {sugerencia.cubiertas.map((l) => (
+                  <li key={claveLinea(l)} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate">{l.nombre}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      llevas {l.lleva} · hacen falta {l.necesidad + l.reserva}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {sugerencia.sobrantes.length > 0 && (
             <div className="rounded-xl border border-border p-3 text-sm">
-              <p className="font-semibold">Puedes dejar en el almacén</p>
-              <p className="text-xs text-muted-foreground">Llevas más de lo que piden tus trabajos y la reserva:</p>
-              <p className="mt-1">{sugerencia.sobrantes.map((s) => s.nombre).join(", ")}</p>
+              <p className="font-semibold">Te sobra (puedes dejarlo en el almacén)</p>
+              <ul className="mt-1 space-y-0.5">
+                {sugerencia.sobrantes.map((l) => (
+                  <li key={claveLinea(l)} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate">{l.nombre}</span>
+                    <span className="shrink-0 font-semibold tabular-nums">
+                      {l.sobra} de {l.lleva}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

@@ -10,9 +10,10 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
 import { esTablaQueFalta } from "./filtros-carga";
 
 /**
- * Carga de reserva de las furgonetas (oficina). Una fila sin furgoneta es la
- * reserva de toda la empresa; la de una furgoneta pisa a la de la empresa para
- * ese artículo. Solo la edita quien gestiona stock (admin y director técnico).
+ * Carga de reserva de las furgonetas, vista de oficina. La elige cada técnico
+ * para su furgoneta (Mi furgoneta, 2026-11-25); aquí la oficina la ve y la
+ * corrige. Una fila sin furgoneta es la plantilla de la empresa: vale para las
+ * furgonetas sin reserva propia. Solo quien gestiona stock (admin y director técnico).
  * Todo con admin + company_id.
  */
 
