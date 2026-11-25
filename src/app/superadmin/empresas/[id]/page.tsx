@@ -16,8 +16,20 @@ import { CompanyModulesPanel } from "@/modules/superadmin/companies/modules-pane
 import { CompanyAdminPanel } from "@/modules/superadmin/companies/admin-panel";
 import { CompanyGmapsPanel } from "@/modules/superadmin/companies/gmaps-panel";
 import { CompanyEmailProviderPanel } from "@/modules/superadmin/companies/email-provider-panel";
+import { usuariosParaEntrar, type UsuarioEntrable } from "@/modules/superadmin/entrar-como";
+import { BotonEntrarComo } from "@/modules/superadmin/entrar-como-ui";
 
 export const dynamic = "force-dynamic";
+
+const ROL_CORTO: Record<string, string> = {
+  company_admin: "Admin",
+  technical_director: "Dir. técnico",
+  commercial_director: "Dir. comercial",
+  telemarketing_director: "Dir. TMK",
+  installer: "Técnico",
+  sales_rep: "Comercial",
+  telemarketer: "Teleoperador",
+};
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -141,6 +153,7 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
   }
 
   const companyAdmin = await getCompanyAdmin(id);
+  const entrables = await usuariosParaEntrar(id).catch(() => [] as UsuarioEntrable[]);
   const metrica = (await getCompaniesMetrics([id]).catch(() => new Map())).get(id);
   const [modulesRes, companyModulesRes, usersRes, ajustesRes] = await Promise.all([
     supabase
@@ -230,6 +243,38 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Usuarios ({users.length}) · entrar como uno de ellos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {entrables.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Esta empresa todavía no tiene usuarios. El admin de la empresa los creará desde el
+              panel tenant.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {entrables.map((u) => (
+                <li key={u.user_id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{u.nombre}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {[u.email, u.roles.map((r) => ROL_CORTO[r] ?? r).join(", "), userStatusLabel[u.status ?? ""] ?? u.status]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  </div>
+                  {u.status === "suspended" || u.status === "inactive" ? null : (
+                    <BotonEntrarComo userId={u.user_id} etiqueta="Entrar" />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Lo que tiene</CardTitle>
         </CardHeader>
         <CardContent>
@@ -316,32 +361,6 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
             initial={emailProvider}
             resendDomainVerified={resendDomainVerified}
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Usuarios ({users.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {users.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Esta empresa todavía no tiene usuarios. El admin de la empresa los creará desde el
-              panel tenant.
-            </p>
-          ) : (
-            <ul className="divide-y">
-              {users.map((u) => (
-                <li key={u.user_id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                  <span className="min-w-0 truncate">{u.full_name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {userStatusLabel[u.status] ?? u.status} ·{" "}
-                    {new Date(u.created_at).toLocaleDateString("es-ES")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
         </CardContent>
       </Card>
 

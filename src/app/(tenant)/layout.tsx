@@ -17,6 +17,8 @@ import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
 import { RegistroPushNativo } from "@/modules/notifications/registro-push-nativo";
 import { redirect } from "next/navigation";
 import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
+import { entradaComoActual } from "@/modules/superadmin/entrar-como";
+import { FranjaEntrarComo } from "@/modules/superadmin/entrar-como-ui";
 
 const ROLE_LABEL: Record<string, string> = {
   company_admin: "Admin",
@@ -113,11 +115,13 @@ export default async function TenantLayout({ children }: { children: React.React
     /* fail-soft: sidebar no podrá filtrar por módulos activos */
   }
 
-  const [unread, chatUnread, seenOnboarding, moduleOverrides] = await Promise.all([
+  const [unread, chatUnread, seenOnboarding, moduleOverrides, entradaComo] = await Promise.all([
     safe(getUnreadCount(), 0),
     safe(getChatTotalUnread(), 0),
     safe(hasSeenOnboarding(), true),
     safe(getMyModuleOverrides(), {} as Record<string, boolean>),
+    // ¿Es el superadmin dentro de esta cuenta («Entrar como»)? Lo decide la base.
+    safe(entradaComoActual(session.user_id), null),
   ]);
 
   let onboardingSteps: ReturnType<typeof getStepsForRoles> = [];
@@ -160,6 +164,9 @@ export default async function TenantLayout({ children }: { children: React.React
       {/* Desde md el carril lateral ya absorbe el margen seguro izquierdo
           (iPhone apaisado): aquí dentro se pone a cero para no sumarlo dos veces. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:[--safe-left:0px]">
+        {entradaComo ? (
+          <FranjaEntrarComo nombre={entradaComo.destinoNombre} empresa={entradaComo.empresaNombre} />
+        ) : null}
         <Header
           unreadCount={unread}
           fullName={session.full_name}
