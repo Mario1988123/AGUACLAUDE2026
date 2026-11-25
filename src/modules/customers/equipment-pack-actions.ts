@@ -5,6 +5,7 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { addCustomerEquipmentAction } from "./equipment-actions";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { parteConMantenimiento } from "@/shared/lib/packs/complemento";
 
 /**
  * Una línea de equipo dentro de un pack (principal o extra). Mismos campos que
@@ -43,21 +44,63 @@ export async function addCustomerEquipmentPackAction(input: {
   address_id?: string | null;
   main: EquipmentLineInput;
   extras: EquipmentLineInput[];
-}): Promise<{ ok: true; mainId: string; extraIds: string[] } | { ok: false; error: string }> {
+  /**
+   * Equipo complementario (plan Horeca, Mario 2026-11-25): la ósmosis/UF de
+   * un Horeca o el Horeca de una ósmosis. Se enlaza con pack_role
+   * 'complemento'. Si el principal es un Horeca, las fechas y la periodicidad
+   * de mantenimiento pasan al complemento (el Horeca no tiene mantenimiento).
+   */
+  complementos?: EquipmentLineInput[];
+}): Promise<
+  | { ok: true; mainId: string; extraIds: string[]; complementoIds: string[] }
+  | { ok: false; error: string }
+> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+
+    const lineaValida = (x: EquipmentLineInput) =>
+      !!x.product_id || !!(x.external_brand?.trim() && x.external_model?.trim());
+    const complementos = (input.complementos ?? []).filter(lineaValida);
+
+    // ¿Quién lleva el mantenimiento? Si el principal es un Horeca, su ósmosis/UF.
+    let mainLine: EquipmentLineInput = input.main;
+    if (complementos.length > 0 && input.main.product_id) {
+      let tipoPrincipal: string | null = null;
+      try {
+        const { cargarCatalogoModelo } = await import("@/modules/equipos-modelo/datos");
+        const { tipoEfectivoProducto } = await import("@/modules/equipos-modelo/logica");
+        tipoPrincipal = tipoEfectivoProducto(
+          input.main.product_id,
+          await cargarCatalogoModelo(session.company_id),
+        );
+      } catch (e) {
+        console.error("[addCustomerEquipmentPack] tipo del principal:", e);
+      }
+      if (parteConMantenimiento(tipoPrincipal, true) === "complemento") {
+        const [primero, ...resto] = complementos;
+        complementos.splice(0, complementos.length, {
+          ...primero!,
+          last_maintenance_at: primero!.last_maintenance_at ?? input.main.last_maintenance_at ?? null,
+          next_maintenance_at: primero!.next_maintenance_at ?? input.main.next_maintenance_at ?? null,
+          maintenance_periodicity_months:
+            primero!.maintenance_periodicity_months ?? input.main.maintenance_periodicity_months ?? null,
+        }, ...resto);
+        // El Horeca conserva la fecha solo para la llamada de «ofrecer
+        // mantenimiento» (una por pack); el histórico y las visitas van a la
+        // ósmosis/UF (addCustomerEquipmentAction no programa visitas a un Horeca).
+        mainLine = { ...input.main, last_maintenance_at: null };
+      }
+    }
 
     // 1) Equipo principal (usa toda la lógica existente).
     const main = await addCustomerEquipmentAction({
       customer_id: input.customer_id,
       address_id: input.address_id ?? null,
-      ...input.main,
+      ...mainLine,
       // La llamada (si hay fecha y no hay contrato) es UNA para todo el pack.
       origen: "pack",
-      extras_en_pack: input.extras.filter(
-        (x) => !!x.product_id || !!(x.external_brand?.trim() && x.external_model?.trim()),
-      ).length,
+      extras_en_pack: input.extras.filter(lineaValida).length + complementos.length,
     });
     const mainId = main.id;
 
@@ -91,8 +134,38 @@ export async function addCustomerEquipmentPackAction(input: {
       }
     }
 
+    // 3) Complementos: igual que un extra, con pack_role = 'complemento'. Si el
+    //    principal era el Horeca, el complemento lleva las fechas de
+    //    mantenimiento; como su alta es «pack_extra», no crea otra llamada.
+    const complementoIds: string[] = [];
+    for (const comp of complementos) {
+      const created = await addCustomerEquipmentAction({
+        customer_id: input.customer_id,
+        address_id: input.address_id ?? null,
+        ...comp,
+        origen: "pack_extra",
+      });
+      complementoIds.push(created.id);
+      let upd = await admin
+        .from("customer_equipment")
+        .update({ parent_equipment_id: mainId, pack_role: "complemento" })
+        .eq("id", created.id)
+        .eq("company_id", session.company_id);
+      // Sin la columna pack_role (migración sin aplicar): queda como extra.
+      if (upd.error && /pack_role/i.test(upd.error.message ?? "")) {
+        upd = await admin
+          .from("customer_equipment")
+          .update({ parent_equipment_id: mainId })
+          .eq("id", created.id)
+          .eq("company_id", session.company_id);
+      }
+      if (upd.error && !/parent_equipment_id|schema cache|Could not find/i.test(upd.error.message ?? "")) {
+        console.error("[addCustomerEquipmentPack] link complemento failed:", upd.error.message);
+      }
+    }
+
     revalidatePath(`/clientes/${input.customer_id}`);
-    return { ok: true, mainId, extraIds };
+    return { ok: true, mainId, extraIds, complementoIds };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

@@ -6,6 +6,7 @@ import { isModuleActiveForCompany } from "@/shared/lib/auth/module-guard";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { mesMadrid } from "@/modules/scheduling/fechas-madrid";
+import { leerOrigenPack, relinkCopiedItems } from "@/shared/lib/packs/link-items";
 
 /**
  * Efectos secundarios que deben ocurrir cuando un contrato pasa a firmado,
@@ -188,9 +189,22 @@ export async function runPostSignSideEffects(opts: {
               display_order: it.display_order,
               notes: it.notes,
             })),
-          );
+          ).select("id, display_order");
           if (insIt.error) {
             console.error("[post-sign] installation_items insert:", insIt.error);
+          } else {
+            // Pack: vínculo padre-hijo y rol (extra | complemento), como en
+            // markContractSigned. Antes este camino perdía el pack.
+            const origen = await leerOrigenPack(admin, "contract_items", "contract_id", contractId);
+            if (origen) {
+              await relinkCopiedItems(
+                admin,
+                "installation_items",
+                companyId,
+                insIt.data as Array<{ id: string; display_order: number | null }>,
+                origen,
+              );
+            }
           }
         } else {
           try {

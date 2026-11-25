@@ -110,3 +110,43 @@ describe("relinkCopiedItems", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("rol del pack (complemento)", () => {
+  it("linkItemsByParentIndex escribe el rol junto al padre", async () => {
+    const { client, calls } = makeFakeClient();
+    const inserted = [
+      { id: "H", display_order: 0 }, // Horeca
+      { id: "O", display_order: 1 }, // ósmosis complemento
+      { id: "G", display_order: 2 }, // grifo extra
+    ];
+    await linkItemsByParentIndex(client, "proposal_items", "co1", inserted, [null, 0, 0], [
+      null,
+      "complemento",
+      "extra",
+    ]);
+    expect(calls.map((c) => c.payload)).toEqual([
+      { parent_item_id: "H", pack_role: "complemento" },
+      { parent_item_id: "H", pack_role: "extra" },
+    ]);
+  });
+
+  it("relinkCopiedItems copia el rol al siguiente nivel", async () => {
+    const { client, calls } = makeFakeClient();
+    const inserted = [
+      { id: "X", display_order: 0 },
+      { id: "Y", display_order: 1 },
+    ];
+    const sourceRows = [
+      { id: "srcH", display_order: 0, parent_item_id: null, pack_role: null },
+      { id: "srcO", display_order: 1, parent_item_id: "srcH", pack_role: "complemento" },
+    ];
+    await relinkCopiedItems(client, "installation_items", "co1", inserted, sourceRows);
+    expect(calls).toEqual([
+      {
+        table: "installation_items",
+        payload: { parent_item_id: "X", pack_role: "complemento" },
+        eqs: { id: "Y", company_id: "co1" },
+      },
+    ]);
+  });
+});

@@ -65,6 +65,12 @@ const proposalItemSchema = z.object({
    * parent_item_id tras insertar (no conocemos los ids en cliente).
    */
   parent_index: zOptionalInt(0),
+  /**
+   * Rol dentro del pack si cuelga de otra línea: "extra" (accesorio) o
+   * "complemento" (Horeca ↔ ósmosis/UF, precio incluido en el principal).
+   * Sin padre se ignora. Plan docs/PLAN_HORECA_COMPLEMENTO.md.
+   */
+  pack_role: z.enum(["extra", "complemento"]).nullable().optional().default(null),
 });
 
 export const proposalCreateSchema = z

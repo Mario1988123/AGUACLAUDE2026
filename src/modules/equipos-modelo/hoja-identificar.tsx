@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Search, Droplets, GlassWater, Package, Check, Puzzle } from "lucide-react";
+import { ChevronLeft, Search, Droplets, GlassWater, Package, Check, Puzzle, Coffee } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import {
@@ -36,6 +36,10 @@ import type { DatosHojaIdentificar } from "./datos";
  *  - corregir: solo admin, pide motivo (decisión 5).
  */
 type Paso = "equipo" | "tipo" | "gama" | "variante" | "externo" | "accesorio" | "motivo";
+
+function nombreTipo(t: TipoEquipo | null): string {
+  return t === "osmosis" ? "ósmosis" : t === "horeca" ? "Horeca" : "fuente";
+}
 
 export function HojaIdentificarEquipo({
   open,
@@ -177,13 +181,22 @@ export function HojaIdentificarEquipo({
     guardar("product_id" in sel ? { product_id: sel.product_id } : { external_id: sel.external_id });
   }
 
+  // El técnico identifica lo que mantiene (fuente u ósmosis). La oficina y la
+  // corrección también pueden elegir un Horeca (no lleva mantenimiento).
+  // Y solo si la empresa tiene algún producto de tipo Horeca.
+  const hayHoreca = useMemo(() => gamasDeTipo("horeca", cat).length > 0, [cat]);
+  const tiposVisibles: TipoEquipo[] =
+    modo !== "tecnico" && hayHoreca ? ["fuente", "osmosis", "horeca"] : ["fuente", "osmosis"];
+
   const titulo =
     paso === "equipo"
       ? "¿Qué equipo es?"
       : paso === "tipo"
-        ? "¿Es fuente u ósmosis?"
+        ? tiposVisibles.length > 2
+          ? "¿Qué tipo de equipo es?"
+          : "¿Es fuente u ósmosis?"
         : paso === "gama"
-          ? `¿Qué ${tipo === "osmosis" ? "ósmosis" : "fuente"} es?`
+          ? `¿Qué ${nombreTipo(tipo)} es?`
           : paso === "variante"
             ? `¿Cuál de ${gama?.name ?? "la gama"}?`
             : paso === "externo"
@@ -267,7 +280,7 @@ export function HojaIdentificarEquipo({
 
           {paso === "tipo" && (
             <>
-              {(["fuente", "osmosis"] as const).map((t) => (
+              {tiposVisibles.map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -280,6 +293,8 @@ export function HojaIdentificarEquipo({
                 >
                   {t === "fuente" ? (
                     <GlassWater className="h-6 w-6 shrink-0 text-sky-600" />
+                  ) : t === "horeca" ? (
+                    <Coffee className="h-6 w-6 shrink-0 text-violet-600" />
                   ) : (
                     <Droplets className="h-6 w-6 shrink-0 text-teal-600" />
                   )}
@@ -344,7 +359,7 @@ export function HojaIdentificarEquipo({
           {paso === "gama" &&
             (gamas.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
-                No hay modelos de {tipo === "osmosis" ? "ósmosis" : "fuente"} en el catálogo
+                No hay modelos de {nombreTipo(tipo)} en el catálogo
                 {busca ? " con ese nombre" : ""}. La oficina debe marcar el tipo en la categoría o el
                 producto.
               </p>

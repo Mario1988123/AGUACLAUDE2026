@@ -62,6 +62,8 @@ export default async function EditarPropuestaPage({
               return i >= 0 ? i : null;
             })()
           : null,
+      // Rol en el pack (extra | complemento); sin padre no se usa.
+      pack_role: it.parent_item_id != null ? (it.pack_role ?? null) : null,
       product_id: it.product_id,
       quantity: it.quantity,
       unit_price_cents: it.unit_price_cash_cents ?? 0,

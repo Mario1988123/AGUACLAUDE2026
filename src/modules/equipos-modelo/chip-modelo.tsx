@@ -11,7 +11,7 @@ export function ChipModeloEquipo({
 }: {
   etiqueta: string;
   pendiente: boolean;
-  tipo: "fuente" | "osmosis" | null;
+  tipo: "fuente" | "osmosis" | "horeca" | null;
   className?: string;
 }) {
   const color = pendiente
@@ -20,6 +20,8 @@ export function ChipModeloEquipo({
       ? "border-teal-200 bg-teal-50 text-teal-900"
       : tipo === "fuente"
         ? "border-sky-200 bg-sky-50 text-sky-900"
+        : tipo === "horeca"
+          ? "border-violet-200 bg-violet-50 text-violet-900"
         : "border-border bg-muted text-foreground";
   return (
     <span

@@ -6,6 +6,7 @@ import { requireSession } from "@/shared/lib/auth/session";
 import { madridDateKey, madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { equiposEnRenting } from "./retirada-cobro";
+import { ampliarConPackCompleto } from "./pack-completo";
 import {
   ERROR_RENTING,
   ERROR_SIN_MODELO,
@@ -89,6 +90,10 @@ export async function retirarEquipoManualAction(
     if (cErr) return { ok: false, error: cErr.message };
     if (!cust) return { ok: false, error: "Cliente no encontrado" };
 
+    // Pack con complemento (Horeca + ósmosis/UF): se retira entero.
+    const elegidos = new Set(d.equipment_ids.map((x) => x.toLowerCase()));
+    d.equipment_ids = await ampliarConPackCompleto(admin, companyId, d.customer_id, d.equipment_ids);
+
     const { data: eqRows, error: eErr } = await admin
       .from("customer_equipment")
       .select("id, product_id, external_equipment_model_id, is_active")
@@ -116,8 +121,17 @@ export async function retirarEquipoManualAction(
 
     // Equipo pendiente sin modelo: antes destinoEfectivo lo pasaba en
     // silencio a «no es nuestro» y no volvía al almacén (2026-11-13).
-    if (equiposSinModeloAlAlmacen(equipos, d.destinos).length > 0) {
-      return { ok: false, error: ERROR_SIN_MODELO };
+    const sinModelo = equiposSinModeloAlAlmacen(equipos, d.destinos);
+    if (sinModelo.length > 0) {
+      // Si el que falla es una parte que se añadió porque el pack va entero,
+      // se dice cuál, porque el usuario no la había marcado.
+      const esParteAnadida = sinModelo.some((id) => !elegidos.has(id.toLowerCase()));
+      return {
+        ok: false,
+        error: esParteAnadida
+          ? `${ERROR_SIN_MODELO} Ojo: es otra parte del mismo pack (equipo principal, complementario o extra), que se retira con el que has marcado. Identifícala en la ficha antes de retirar.`
+          : ERROR_SIN_MODELO,
+      };
     }
 
     // 2) Almacén: mismo criterio que la orden normal (solo si algún equipo

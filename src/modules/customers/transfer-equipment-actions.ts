@@ -121,14 +121,46 @@ async function planificar(
   input: { equipment_id: string; target_customer_id: string; include_children?: boolean },
 ): Promise<{ ok: true; plan: Plan } | { ok: false; error: string }> {
   // --- Equipo y fichas ----------------------------------------------------
-  const { data: eqData, error: eqErr } = await admin
-    .from("customer_equipment")
-    .select("id, company_id, customer_id, address_id, parent_equipment_id, serial_number")
-    .eq("id", input.equipment_id)
-    .eq("company_id", companyId)
-    .maybeSingle();
-  err(eqErr, "Leer el equipo");
-  const equipment = eqData as EquipmentRow | null;
+  const EQ_COLS = "id, company_id, customer_id, address_id, parent_equipment_id, serial_number";
+  const leerEquipo = async (id: string): Promise<EquipmentRow | null> => {
+    const { data, error } = await admin
+      .from("customer_equipment")
+      .select(EQ_COLS)
+      .eq("id", id)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    err(error, "Leer el equipo");
+    return data as EquipmentRow | null;
+  };
+  // Rol en el pack (migración 20261127100000; sin ella, todos null = como hoy).
+  const rolesDe = async (ids: string[]): Promise<Map<string, string | null>> => {
+    const out = new Map<string, string | null>();
+    if (ids.length === 0) return out;
+    const { data, error } = await admin
+      .from("customer_equipment")
+      .select("id, pack_role")
+      .in("id", ids)
+      .eq("company_id", companyId);
+    if (error) return out;
+    for (const r of (data ?? []) as Array<{ id: string; pack_role: string | null }>) {
+      out.set(r.id, r.pack_role);
+    }
+    return out;
+  };
+  let equipment = await leerEquipo(input.equipment_id);
+  let arrancaEnPrincipal = false;
+  // Pack con complemento (Mario 2026-11-25): se traspasa entero. Si se elige el
+  // complemento, el traspaso arranca en su principal.
+  if (equipment?.parent_equipment_id) {
+    const rol = (await rolesDe([equipment.id])).get(equipment.id);
+    if (rol === "complemento") {
+      const principal = await leerEquipo(equipment.parent_equipment_id);
+      if (principal) {
+        equipment = principal;
+        arrancaEnPrincipal = true;
+      }
+    }
+  }
   if (!equipment) return { ok: false, error: "Equipo no encontrado o no pertenece a tu empresa" };
   if (equipment.customer_id === input.target_customer_id) {
     return { ok: false, error: "El equipo ya es de ese cliente" };
@@ -158,9 +190,16 @@ async function planificar(
     return ((data ?? []) as Array<{ id: string }>).map((k) => k.id);
   };
   const ids = [equipment.id];
-  const directChildren = await childrenOf([equipment.id]);
+  const hijosDirectos = await childrenOf([equipment.id]);
+  // El complemento viaja siempre con su principal, aunque se dejen los extras.
+  const rolesHijos = await rolesDe(hijosDirectos);
+  const complementos = hijosDirectos.filter((id) => rolesHijos.get(id) === "complemento");
+  const directChildren = hijosDirectos.filter((id) => !complementos.includes(id));
+  if (!includeChildren) {
+    for (const id of complementos) ids.push(id);
+  }
   if (includeChildren) {
-    let frontier = directChildren;
+    let frontier = hijosDirectos;
     for (let depth = 0; depth < 5 && frontier.length > 0; depth++) {
       for (const id of frontier) if (!ids.includes(id)) ids.push(id);
       frontier = (await childrenOf(frontier)).filter((id) => !ids.includes(id));
@@ -427,6 +466,14 @@ async function planificar(
     seSueltaDelPack: equipment.parent_equipment_id !== null,
     accesoriosQueSeQuedan: includeChildren ? 0 : directChildren.length,
   });
+  if (arrancaEnPrincipal) {
+    extraAvisos.push(
+      "Es el equipo complementario de un pack: se traspasa el pack entero, con su equipo principal.",
+    );
+  }
+  if (!includeChildren && complementos.length > 0) {
+    extraAvisos.push("El equipo complementario del pack viaja con él aunque se queden los extras.");
+  }
   resumen.avisos.push(...extraAvisos);
 
   return {

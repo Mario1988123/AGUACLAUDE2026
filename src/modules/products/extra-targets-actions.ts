@@ -27,10 +27,20 @@ export async function listExtraTargets(productId: string): Promise<ExtraTargets>
   await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
-  const { data, error } = await supabase
+  // Solo reglas de EXTRA: las de complemento (relacion, migración
+  // 20261127100000) no se editan aquí. Sin la columna, todas son de extra.
+  let res = await supabase
     .from("product_extra_targets")
     .select("target_category_id, target_equipment_product_id")
-    .eq("extra_product_id", productId);
+    .eq("extra_product_id", productId)
+    .eq("relacion", "extra");
+  if (res.error) {
+    res = await supabase
+      .from("product_extra_targets")
+      .select("target_category_id, target_equipment_product_id")
+      .eq("extra_product_id", productId);
+  }
+  const { data, error } = res;
   if (error) {
     console.error("[listExtraTargets] select failed:", error.message);
     return { categoryIds: [], equipmentProductIds: [] };
@@ -76,12 +86,22 @@ export async function setExtraTargetsAction(
       .maybeSingle();
     if (!prod) return { ok: false, error: "Producto no encontrado o de otra empresa" };
 
-    // Borrar los objetivos actuales de este extra.
-    const del = await admin
+    // Borrar los objetivos actuales de este extra. Solo los de EXTRA: las
+    // reglas de complemento (relacion='complemento') se conservan. Sin la
+    // columna relacion (migración sin aplicar), todas son de extra.
+    let del = await admin
       .from("product_extra_targets")
       .delete()
       .eq("company_id", session.company_id)
-      .eq("extra_product_id", productId);
+      .eq("extra_product_id", productId)
+      .eq("relacion", "extra");
+    if (del.error && /relacion/i.test(del.error.message ?? "")) {
+      del = await admin
+        .from("product_extra_targets")
+        .delete()
+        .eq("company_id", session.company_id)
+        .eq("extra_product_id", productId);
+    }
     if (del.error) return { ok: false, error: del.error.message };
 
     const rows: Array<Record<string, unknown>> = [];
@@ -187,15 +207,31 @@ export async function listCompatibleExtras(input: {
   const extraIds = filteredExtras.map((e) => e.id);
 
   // 2) Objetivos definidos de esos extras.
-  const { data: targetsRaw } = await supabase
+  //    Con relacion (migración 20261127100000) se separan las de complemento:
+  //    no hacen extra al producto ni lo vuelven «global».
+  let targetsRes = await supabase
     .from("product_extra_targets")
-    .select("extra_product_id, target_category_id, target_equipment_product_id")
+    .select("extra_product_id, target_category_id, target_equipment_product_id, relacion")
     .in("extra_product_id", extraIds);
-  const targets = (targetsRaw ?? []) as Array<{
+  if (targetsRes.error) {
+    targetsRes = await supabase
+      .from("product_extra_targets")
+      .select("extra_product_id, target_category_id, target_equipment_product_id")
+      .in("extra_product_id", extraIds);
+  }
+  const todas = (targetsRes.data ?? []) as Array<{
     extra_product_id: string;
     target_category_id: string | null;
     target_equipment_product_id: string | null;
+    relacion?: string | null;
   }>;
+  const targets = todas.filter((t) => (t.relacion ?? "extra") === "extra");
+  const soloComplemento = new Set(
+    todas
+      .filter((t) => t.relacion === "complemento")
+      .map((t) => t.extra_product_id)
+      .filter((id) => !targets.some((t) => t.extra_product_id === id)),
+  );
 
   const byExtra = new Map<string, { cats: Set<string>; equips: Set<string> }>();
   for (const t of targets) {
@@ -209,6 +245,7 @@ export async function listCompatibleExtras(input: {
   }
 
   return filteredExtras.filter((e) => {
+    if (soloComplemento.has(e.id)) return false;
     const def = byExtra.get(e.id);
     // Sin objetivos => global (ofrecible en cualquier equipo).
     if (!def || (def.cats.size === 0 && def.equips.size === 0)) return true;
@@ -216,4 +253,46 @@ export async function listCompatibleExtras(input: {
     if (categoryId && def.cats.has(categoryId)) return true;
     return false;
   });
+}
+
+
+export interface ComplementoOpcion {
+  id: string;
+  name: string;
+}
+
+/**
+ * Pack con complemento (plan Horeca, Mario 2026-11-25): equipos que pueden ir
+ * de complemento del producto elegido (cualquier Horeca con cualquier
+ * ósmosis/UF, por categoría; en las dos direcciones). Devuelve también el tipo
+ * del elegido para el texto de la oferta. Tolerante: lista vacía si falla.
+ */
+export async function listCompatibleComplements(input: {
+  productId: string;
+}): Promise<{ tipoPrincipal: string | null; opciones: ComplementoOpcion[] }> {
+  const session = await requireSession();
+  const vacio = { tipoPrincipal: null, opciones: [] as ComplementoOpcion[] };
+  if (!session.company_id || !input.productId) return vacio;
+  try {
+    const [{ cargarInfoComplementos }, { sonComplementarios }, { cargarCatalogoModelo }] =
+      await Promise.all([
+        import("./complementos-datos"),
+        import("@/shared/lib/packs/complemento"),
+        import("@/modules/equipos-modelo/datos"),
+      ]);
+    const [info, cat] = await Promise.all([
+      cargarInfoComplementos(session.company_id),
+      cargarCatalogoModelo(session.company_id),
+    ]);
+    const principal = info.get(input.productId) ?? null;
+    if (!principal) return vacio;
+    const opciones = cat.productos
+      .filter((p) => p.is_active && sonComplementarios(principal, info.get(p.id)))
+      .map((p) => ({ id: p.id, name: p.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+    return { tipoPrincipal: principal.tipo, opciones };
+  } catch (e) {
+    console.error("[listCompatibleComplements]", e);
+    return vacio;
+  }
 }

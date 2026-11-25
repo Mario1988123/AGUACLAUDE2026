@@ -9,7 +9,8 @@ import { isModuleActiveForCompany } from "@/shared/lib/auth/module-guard";
 import type { ContractDetail, ContractListItem } from "./types";
 import { notifyContractSigned } from "@/modules/notifications/notifier";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
-import { relinkCopiedItems } from "@/shared/lib/packs/link-items";
+import { leerOrigenPack, relinkCopiedItems } from "@/shared/lib/packs/link-items";
+import { esPackRole, lineaQueLlevaMantenimiento } from "@/shared/lib/packs/complemento";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { siguienteReferencia } from "@/modules/scheduling/referencias";
 import { mesMadrid } from "@/modules/scheduling/fechas-madrid";
@@ -543,34 +544,54 @@ export async function createContractFromProposal(proposalId: string) {
     if (itemsInsErr) {
       await deshacerContrato(`líneas del contrato (${itemsInsErr.message})`);
     }
-    // Pack: propagar el vínculo padre-hijo de proposal_items a contract_items.
-    // Fetch defensivo aparte para NO romper la copia si la columna no existe.
-    {
-      const parentSrc = await supabase
-        .from("proposal_items")
-        .select("id, display_order, parent_item_id")
-        .eq("proposal_id", p.id);
-      if (!parentSrc.error) {
-        await relinkCopiedItems(
-          supabase,
-          "contract_items",
-          session.company_id!,
-          insertedContractItems as Array<{ id: string; display_order: number | null }>,
-          (parentSrc.data ?? []) as Array<{
-            id: string;
-            display_order: number | null;
-            parent_item_id: string | null;
-          }>,
-        );
-      }
+    // Pack: propagar el vínculo padre-hijo (y el rol extra | complemento) de
+    // proposal_items a contract_items. Lectura defensiva aparte para NO romper
+    // la copia si las columnas no existen.
+    const origenPack = await leerOrigenPack(supabase, "proposal_items", "proposal_id", p.id);
+    if (origenPack) {
+      await relinkCopiedItems(
+        supabase,
+        "contract_items",
+        session.company_id!,
+        insertedContractItems as Array<{ id: string; display_order: number | null }>,
+        origenPack,
+      );
     }
 
     // Propagar flags de mantenimiento al CONTRATO (no se hizo en el insert
     // inicial porque ps se carga después). Agregamos: maintenance_included
-    // = true si CUALQUIER item lo lleva; periodicity = del primer item con
-    // mantenimiento; months_included = duración hasta maintenance_until_date
-    // (en meses) si está informada, fallback a duration_months.
-    const itemWithMaint = ps.find((it) => it.maintenance_included);
+    // = true si CUALQUIER item lo lleva; periodicity = la de la LÍNEA que
+    // lleva el mantenimiento (plan Horeca: no el Horeca, que no tiene
+    // mantenimiento propio, sino su ósmosis/UF); months_included = duración
+    // hasta maintenance_until_date (en meses) si está informada, fallback a
+    // duration_months.
+    const packPorOrden = new Map<number, { rol: string | null; padre: string | null }>();
+    for (const o of origenPack ?? []) {
+      if (o.display_order != null) {
+        packPorOrden.set(o.display_order, { rol: o.pack_role ?? null, padre: o.parent_item_id });
+      }
+    }
+    let tipoDe: (productId: string) => string | null = () => null;
+    try {
+      const { cargarCatalogoModelo } = await import("@/modules/equipos-modelo/datos");
+      const { tipoEfectivoProducto } = await import("@/modules/equipos-modelo/logica");
+      const cat = await cargarCatalogoModelo(session.company_id!);
+      tipoDe = (productId) => tipoEfectivoProducto(productId, cat);
+    } catch (e) {
+      console.error("[createContractFromProposal] tipos de equipo:", e);
+    }
+    const itemWithMaint = lineaQueLlevaMantenimiento(
+      ps.map((it) => {
+        const pk = packPorOrden.get(it.display_order);
+        return {
+          ...it,
+          pack_role: esPackRole(pk?.rol) ? pk.rol : null,
+          // Colgada sin rol de complemento = extra (lineaQueLlevaMantenimiento).
+          parent_item_id: pk?.padre ?? null,
+          tipo: tipoDe(it.product_id),
+        };
+      }),
+    );
     if (itemWithMaint) {
       let monthsIncluded: number | null = null;
       if (itemWithMaint.maintenance_until_date) {
@@ -1152,21 +1173,14 @@ export async function markContractSigned(id: string) {
             .select("id, display_order");
           if (!insIt.error) {
             // Pack: propagar vínculo padre-hijo de contract_items a installation_items.
-            const parentSrc = await admin
-              .from("contract_items")
-              .select("id, display_order, parent_item_id")
-              .eq("contract_id", id);
-            if (!parentSrc.error) {
+            const parentSrc = await leerOrigenPack(admin, "contract_items", "contract_id", id);
+            if (parentSrc) {
               await relinkCopiedItems(
                 admin,
                 "installation_items",
                 session.company_id!,
                 insIt.data as Array<{ id: string; display_order: number | null }>,
-                (parentSrc.data ?? []) as Array<{
-                  id: string;
-                  display_order: number | null;
-                  parent_item_id: string | null;
-                }>,
+                parentSrc,
               );
             }
           }

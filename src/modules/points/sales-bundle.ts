@@ -123,15 +123,25 @@ export async function awardSalesBundleOnInstall(
     }
   }
 
-  // Contar items + cantidad total
-  const { data: items } = await admin
+  // Contar items + cantidad total. El complemento de un pack (ósmosis/UF de un
+  // Horeca) SUMA puntos como un equipo más (Mario 2026-11-25). pack_role es de
+  // la migración 20261127100000: si falta, se lee sin él.
+  let itemsRes = await admin
     .from("contract_items")
-    .select("product_id, quantity, unit_price_cents")
+    .select("product_id, quantity, unit_price_cents, pack_role")
     .eq("contract_id", c.id);
+  if (itemsRes.error) {
+    itemsRes = await admin
+      .from("contract_items")
+      .select("product_id, quantity, unit_price_cents")
+      .eq("contract_id", c.id);
+  }
+  const items = itemsRes.data;
   type CI = {
     product_id: string;
     quantity: number;
     unit_price_cents: number | null;
+    pack_role?: string | null;
   };
   const itemList = ((items ?? []) as CI[]);
   const totalEquipments = itemList.reduce((s, it) => s + it.quantity, 0) || 1;
@@ -158,6 +168,8 @@ export async function awardSalesBundleOnInstall(
       }>).map((p) => [p.product_id, p.min_authorized_cents]),
     );
     for (const it of itemList) {
+      // Precio incluido en el del principal: su 0 no es un descuento.
+      if (it.pack_role === "complemento") continue;
       const min = minMap.get(it.product_id);
       if (
         min != null &&

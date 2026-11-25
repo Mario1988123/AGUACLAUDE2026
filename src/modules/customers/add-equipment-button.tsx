@@ -9,7 +9,11 @@ import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { addCustomerEquipmentSafeAction } from "./equipment-actions";
 import { addCustomerEquipmentPackAction } from "./equipment-pack-actions";
-import { listCompatibleExtras } from "@/modules/products/extra-targets-actions";
+import {
+  listCompatibleComplements,
+  listCompatibleExtras,
+} from "@/modules/products/extra-targets-actions";
+import { textoOfertaComplemento } from "@/shared/lib/packs/complemento";
 import { AddressForm } from "@/modules/addresses/address-form";
 
 interface ExtraLine {
@@ -63,6 +67,10 @@ export function AddEquipmentButton({
   // Pack: extras que cuelgan del equipo principal (solo catálogo, sin stock).
   const [extras, setExtras] = useState<ExtraLine[]>([]);
   const [compatibleExtras, setCompatibleExtras] = useState<{ id: string; name: string }[]>([]);
+  // Pack con complemento (Horeca ↔ ósmosis/UF): el otro equipo del pack.
+  const [complementos, setComplementos] = useState<ExtraLine[]>([]);
+  const [opcionesComplemento, setOpcionesComplemento] = useState<{ id: string; name: string }[]>([]);
+  const [tipoPrincipal, setTipoPrincipal] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -84,6 +92,46 @@ export function AddEquipmentButton({
       alive = false;
     };
   }, [source, productId]);
+
+  // Y los equipos que pueden ir de complemento (en las dos direcciones).
+  useEffect(() => {
+    if (source !== "own" || !productId) {
+      setOpcionesComplemento([]);
+      setTipoPrincipal(null);
+      setComplementos([]);
+      return;
+    }
+    let alive = true;
+    listCompatibleComplements({ productId })
+      .then((r) => {
+        if (!alive) return;
+        setOpcionesComplemento(r.opciones);
+        setTipoPrincipal(r.tipoPrincipal);
+        // Si el complemento elegido ya no vale para el nuevo principal, fuera.
+        setComplementos((prev) => prev.filter((c) => r.opciones.some((o) => o.id === c.product_id)));
+      })
+      .catch(() => {
+        if (alive) {
+          setOpcionesComplemento([]);
+          setTipoPrincipal(null);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [source, productId]);
+
+  function addComplemento() {
+    const first = opcionesComplemento[0];
+    if (!first) return;
+    setComplementos((prev) => [...prev, { product_id: first.id, serial: "", periodicity: "" }]);
+  }
+  function updateComplemento(idx: number, patch: Partial<ExtraLine>) {
+    setComplementos((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+  }
+  function removeComplemento(idx: number) {
+    setComplementos((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   function addExtra() {
     const first = compatibleExtras[0];
@@ -118,6 +166,9 @@ export function AddEquipmentButton({
     setFechaInicio("");
     setExtras([]);
     setCompatibleExtras([]);
+    setComplementos([]);
+    setOpcionesComplemento([]);
+    setTipoPrincipal(null);
     setAddressId(defaultAddressId);
   }
 
@@ -131,6 +182,7 @@ export function AddEquipmentButton({
       return;
     }
     const validExtras = source === "own" ? extras.filter((e) => e.product_id) : [];
+    const validComplementos = source === "own" ? complementos.filter((e) => e.product_id) : [];
     const mainLine = {
       product_id: source === "own" ? productId : null,
       external_brand: source === "external" ? brand : undefined,
@@ -151,7 +203,7 @@ export function AddEquipmentButton({
     startTransition(async () => {
       // Con extras => alta como PACK (principal + extras enlazados). Sin extras =>
       // alta de equipo suelto de siempre.
-      if (validExtras.length > 0) {
+      if (validExtras.length > 0 || validComplementos.length > 0) {
         const r = await addCustomerEquipmentPackAction({
           customer_id: customerId,
           address_id: addressId || null,
@@ -165,12 +217,24 @@ export function AddEquipmentButton({
             acquisition_type: mainLine.acquisition_type,
             acquisition_started_at: fechaInicio || null,
           })),
+          // Complemento: va incluido en la modalidad del principal.
+          complementos: validComplementos.map((e) => ({
+            product_id: e.product_id,
+            serial_number: e.serial || null,
+            installed_at: installedAt || null,
+            acquisition_type: mainLine.acquisition_type,
+            acquisition_started_at: fechaInicio || null,
+          })),
         });
         if (!r.ok) {
           notify.error("No se pudo añadir el pack", r.error);
           return;
         }
-        notify.success(`Pack añadido (1 principal + ${r.extraIds.length} extra(s))`);
+        const partes = [
+          r.complementoIds.length > 0 ? "equipo complementario" : null,
+          r.extraIds.length > 0 ? `${r.extraIds.length} extra(s)` : null,
+        ].filter(Boolean);
+        notify.success(`Pack añadido (principal + ${partes.join(" + ")})`);
         close();
         router.refresh();
         return;
@@ -310,6 +374,65 @@ export function AddEquipmentButton({
                       <Label>Modelo *</Label>
                       <Input value={model} onChange={(e) => setModel(e.target.value)} />
                     </div>
+                  </div>
+                )}
+
+                {source === "own" && productId && opcionesComplemento.length > 0 && (
+                  <div className="space-y-2 rounded-xl border-2 border-violet-200 bg-violet-50/40 p-3">
+                    <div className="text-sm font-bold text-violet-900">Equipo complementario</div>
+                    <p className="text-[11px] text-violet-800">
+                      Forman un pack: va incluido en el precio, se retira y se traspasa junto.
+                      {tipoPrincipal === "horeca"
+                        ? " El Horeca no lleva mantenimiento propio: las fechas de mantenimiento pasan al equipo que da el agua."
+                        : ""}
+                    </p>
+                    {complementos.length === 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={addComplemento}
+                        className="h-11 w-full justify-start whitespace-normal text-left"
+                      >
+                        <Plus className="h-4 w-4 shrink-0" />
+                        {textoOfertaComplemento(tipoPrincipal)}
+                      </Button>
+                    )}
+                    {complementos.map((co, idx) => (
+                      <div
+                        key={idx}
+                        className="flex flex-wrap items-end gap-2 rounded-lg border border-violet-200 bg-card p-2"
+                      >
+                        <div className="min-w-[160px] flex-1 space-y-1">
+                          <Label className="text-[11px]">Equipo</Label>
+                          <select
+                            value={co.product_id}
+                            onChange={(e) => updateComplemento(idx, { product_id: e.target.value })}
+                            className="h-10 w-full rounded-lg border border-input bg-background px-2 text-base md:text-sm"
+                          >
+                            {opcionesComplemento.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-32 space-y-1">
+                          <Label className="text-[11px]">Nº serie</Label>
+                          <Input
+                            value={co.serial}
+                            onChange={(e) => updateComplemento(idx, { serial: e.target.value })}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeComplemento(idx)}
+                          className="rounded-lg p-2 text-destructive hover:bg-muted"
+                          aria-label="Quitar equipo complementario"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
 

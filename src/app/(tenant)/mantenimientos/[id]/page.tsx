@@ -119,7 +119,7 @@ export default async function MaintenanceDetailPage({
   const abierto = job.status !== "completed" && job.status !== "cancelled";
   let modeloEtiqueta: string | null = null;
   let identificacionPendiente = false;
-  let tipoEquipo: "fuente" | "osmosis" | null = null;
+  let tipoEquipo: "fuente" | "osmosis" | "horeca" | null = null;
   let hojaDatos: Awaited<ReturnType<typeof cargarDatosHojaIdentificar>> | null = null;
   if (hayModelo && session.company_id) {
     if (job.customer_equipment_id) {

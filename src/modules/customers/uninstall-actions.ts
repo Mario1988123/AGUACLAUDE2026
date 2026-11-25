@@ -16,6 +16,7 @@ import {
   registrarResultadoCierre,
 } from "./retirada-nucleo";
 import { puedeRetirar } from "./retirada-logica";
+import { ampliarConPackCompleto } from "./pack-completo";
 
 /**
  * Destino de cada equipo retirado:
@@ -83,11 +84,18 @@ export async function createUninstallAction(
     for (const d of input.equipment_dispositions ?? []) {
       destinos.set(d.equipment_id.toLowerCase(), d.disposition);
     }
+    // Pack con complemento (Horeca + ósmosis/UF): se retira entero.
+    const equipmentIds = await ampliarConPackCompleto(
+      admin,
+      session.company_id,
+      input.customer_id,
+      input.equipment_ids,
+    );
     const creada = await crearOrdenRetirada(admin, {
       company_id: session.company_id,
       user_id: session.user_id,
       customer_id: input.customer_id,
-      equipment_ids: input.equipment_ids,
+      equipment_ids: equipmentIds,
       destination_warehouse_id: input.destination_warehouse_id,
       scheduled_at: input.scheduled_at ?? null,
       default_state: input.default_state ?? null,

@@ -58,4 +58,6 @@ export interface ProposalItem {
   charge_first_payment_now?: boolean;
   /** Pack: id del equipo principal del que esta línea es un extra (20260703200000). */
   parent_item_id?: string | null;
+  /** Pack: rol de la línea si cuelga de otra (20261127100000). */
+  pack_role?: "extra" | "complemento" | null;
 }

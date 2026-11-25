@@ -13,7 +13,72 @@
  */
 
 function isMissingColumn(msg: string | null | undefined): boolean {
-  return /parent_item_id|schema cache|Could not find|42703/i.test(msg ?? "");
+  return /parent_item_id|pack_role|schema cache|Could not find|42703/i.test(msg ?? "");
+}
+
+function faltaPackRole(msg: string | null | undefined): boolean {
+  return /pack_role/i.test(msg ?? "");
+}
+
+/**
+ * UPDATE del vínculo (y del rol, si lo hay). Si la columna pack_role aún no
+ * existe (migración 20261127100000 sin aplicar), reintenta solo con el padre.
+ */
+async function actualizarVinculo(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  table: string,
+  companyId: string | null,
+  childId: string,
+  parentId: string,
+  rol: string | null,
+  etiqueta: string,
+): Promise<void> {
+  const payload: Record<string, unknown> = { parent_item_id: parentId };
+  if (rol) payload.pack_role = rol;
+  let upd = await client.from(table).update(payload).eq("id", childId).eq("company_id", companyId);
+  if (upd.error && rol && faltaPackRole(upd.error.message)) {
+    upd = await client
+      .from(table)
+      .update({ parent_item_id: parentId })
+      .eq("id", childId)
+      .eq("company_id", companyId);
+  }
+  if (upd.error && !isMissingColumn(upd.error.message)) {
+    console.error(`[${etiqueta} ${table}]`, upd.error.message);
+  }
+}
+
+export interface FilaOrigenPack {
+  id: string;
+  display_order: number | null;
+  parent_item_id: string | null;
+  pack_role?: string | null;
+}
+
+/**
+ * Lee las líneas de origen con su vínculo de pack para copiarlo al siguiente
+ * nivel. Defensivo: sin la columna pack_role, la lee sin ella; sin
+ * parent_item_id, devuelve null (no hay nada que enlazar).
+ */
+export async function leerOrigenPack(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  table: string,
+  fkCol: string,
+  fkVal: string,
+): Promise<FilaOrigenPack[] | null> {
+  const conRol = await client
+    .from(table)
+    .select("id, display_order, parent_item_id, pack_role")
+    .eq(fkCol, fkVal);
+  if (!conRol.error) return (conRol.data ?? []) as FilaOrigenPack[];
+  const sinRol = await client
+    .from(table)
+    .select("id, display_order, parent_item_id")
+    .eq(fkCol, fkVal);
+  if (sinRol.error) return null;
+  return (sinRol.data ?? []) as FilaOrigenPack[];
 }
 
 /**
@@ -27,6 +92,8 @@ export async function linkItemsByParentIndex(
   companyId: string | null,
   inserted: Array<{ id: string; display_order: number | null }> | null | undefined,
   parentIndexByOrder: Array<number | null>,
+  /** Rol de cada línea (mismo índice). Opcional: sin él, como hoy. */
+  roleByOrder?: Array<string | null>,
 ): Promise<void> {
   try {
     const idByOrder = new Map<number, string>();
@@ -39,14 +106,15 @@ export async function linkItemsByParentIndex(
       const childId = idByOrder.get(i);
       const parentId = idByOrder.get(p);
       if (!childId || !parentId || childId === parentId) continue;
-      const upd = await client
-        .from(table)
-        .update({ parent_item_id: parentId })
-        .eq("id", childId)
-        .eq("company_id", companyId);
-      if (upd.error && !isMissingColumn(upd.error.message)) {
-        console.error(`[linkItemsByParentIndex ${table}]`, upd.error.message);
-      }
+      await actualizarVinculo(
+        client,
+        table,
+        companyId,
+        childId,
+        parentId,
+        roleByOrder?.[i] ?? null,
+        "linkItemsByParentIndex",
+      );
     }
   } catch (e) {
     console.error(`[linkItemsByParentIndex ${table}]`, e);
@@ -63,7 +131,7 @@ export async function relinkCopiedItems(
   table: string,
   companyId: string | null,
   inserted: Array<{ id: string; display_order: number | null }> | null | undefined,
-  sourceRows: Array<{ id: string; display_order: number | null; parent_item_id: string | null }>,
+  sourceRows: FilaOrigenPack[],
 ): Promise<void> {
   try {
     const destIdByOrder = new Map<number, string>();
@@ -81,14 +149,16 @@ export async function relinkCopiedItems(
       const childId = destIdByOrder.get(s.display_order);
       const parentId = destIdByOrder.get(parentOrder);
       if (!childId || !parentId || childId === parentId) continue;
-      const upd = await client
-        .from(table)
-        .update({ parent_item_id: parentId })
-        .eq("id", childId)
-        .eq("company_id", companyId);
-      if (upd.error && !isMissingColumn(upd.error.message)) {
-        console.error(`[relinkCopiedItems ${table}]`, upd.error.message);
-      }
+      // El rol (extra | complemento) viaja con el vínculo al siguiente nivel.
+      await actualizarVinculo(
+        client,
+        table,
+        companyId,
+        childId,
+        parentId,
+        s.pack_role ?? null,
+        "relinkCopiedItems",
+      );
     }
   } catch (e) {
     console.error(`[relinkCopiedItems ${table}]`, e);

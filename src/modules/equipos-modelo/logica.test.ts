@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  alcanceObligatorio,
+  esTipoEquipo,
+  tipoConMantenimiento,
   estadoIdentificacion,
   etiquetaModelo,
   gamasDeTipo,
@@ -146,5 +149,34 @@ describe("trabajoVigenteParaTecnico (M3: misma regla que listarClientesPendiente
   it("cerrado sin fecha de cierre o cancelado antiguo: no vigente", () => {
     expect(trabajoVigenteParaTecnico({ status: "completed", completed_at: null }, ahora, 24)).toBe(false);
     expect(trabajoVigenteParaTecnico({ status: "cancelled", completed_at: null }, ahora, 24)).toBe(false);
+  });
+});
+
+describe("tipo horeca (plan Horeca 2026-11-25)", () => {
+  const catH: CatalogoModelo = {
+    tipoCategoria: { CH: "horeca", CO: "osmosis" },
+    productos: [
+      prod({ id: "golden", name: "Golden Eye", category_id: "CH" }),
+      prod({ id: "eco25", name: "ECO25 ÉLITE", category_id: "CO" }),
+    ],
+  };
+  it("es un tipo válido y se hereda de la categoría", () => {
+    expect(esTipoEquipo("horeca")).toBe(true);
+    expect(esTipoEquipo("uf")).toBe(false);
+    expect(tipoEfectivoProducto("golden", catH)).toBe("horeca");
+    expect(validarModeloElegido("golden", catH)).toBeNull();
+  });
+  it("no exige alcance ni lleva mantenimiento", () => {
+    expect(alcanceObligatorio("horeca")).toBe(false);
+    expect(alcanceObligatorio("osmosis")).toBe(true);
+    expect(tipoConMantenimiento("horeca")).toBe(false);
+    expect(tipoConMantenimiento("osmosis")).toBe(true);
+  });
+  it("etiqueta del chip", () => {
+    const est = estadoIdentificacion(
+      { product_id: "golden", external_equipment_model_id: null, pendiente_identificar: false },
+      catH,
+    );
+    expect(etiquetaModelo(est)).toBe("Horeca · Golden Eye");
   });
 });

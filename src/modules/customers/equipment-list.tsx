@@ -20,6 +20,25 @@ import { BotonModeloEquipoFicha } from "@/modules/equipos-modelo/boton-identific
 import type { DatosHojaIdentificar } from "@/modules/equipos-modelo/datos";
 import { ChipMantIncluido } from "@/modules/mant-incluido/chip-mant";
 import { HojaMantIncluido } from "@/modules/mant-incluido/hoja-mant-incluido";
+import { etiquetaParteDelPack } from "@/shared/lib/packs/complemento";
+import { tipoEfectivoProducto } from "@/modules/equipos-modelo/logica";
+import { BotonSustituirParte } from "./boton-sustituir-parte";
+
+/** Modelos del mismo tipo que la parte que se sustituye (y el actual). */
+function opcionesSustitucion(
+  datos: DatosHojaIdentificar,
+  tipo: string | null,
+  actual: string | null,
+): Array<{ id: string; name: string }> {
+  const cat = { productos: datos.productos, tipoCategoria: datos.tipoCategoria };
+  return datos.productos
+    .filter(
+      (p) =>
+        p.id === actual || (p.is_active && (!tipo || tipoEfectivoProducto(p.id, cat) === tipo)),
+    )
+    .map((p) => ({ id: p.id, name: p.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "es"));
+}
 
 function fmtDate(d: string | null) {
   if (!d) return "—";
@@ -49,6 +68,7 @@ export function CustomerEquipmentList({
   hojaModelo = null,
   puedeIdentificar = false,
   puedeCorregir = false,
+  puedeSustituir = false,
 }: {
   equipment: CustomerEquipmentRow[];
   customerId?: string;
@@ -71,6 +91,8 @@ export function CustomerEquipmentList({
   puedeIdentificar?: boolean;
   /** Admin: corregir un modelo ya identificado, con motivo. */
   puedeCorregir?: boolean;
+  /** Admin / dir. técnico: sustituir una parte de un pack con complemento. */
+  puedeSustituir?: boolean;
 }) {
   if (equipment.length === 0) {
     return (
@@ -117,11 +139,22 @@ export function CustomerEquipmentList({
           e.product_name ?? e.external_model_name ?? (sinModelo ? "Equipo sin identificar" : "Equipo");
         const isOurs = !!e.product_name;
         const warrantyActive = isWarrantyActive(e.warranty_until);
+        // Pack con complemento (Horeca + ósmosis/UF): las dos partes se pueden
+        // sustituir por separado; el mantenimiento solo va en la que lo lleva.
+        const esComplemento = isExtra && e.pack_role === "complemento";
+        const enPackComplemento =
+          esComplemento ||
+          (childrenByParent.get(e.id) ?? []).some((h) => h.pack_role === "complemento");
+        const sinMantPropio = e.modelo?.tipo === "horeca";
         return (
           <li
             key={e.id}
             className={`rounded-xl border border-border bg-card p-3 transition-colors hover:bg-muted/50${
-              isExtra ? " ml-4 border-l-4 border-l-sky-300 sm:ml-8" : ""
+              isExtra
+                ? esComplemento
+                  ? " ml-4 border-l-4 border-l-violet-300 sm:ml-8"
+                  : " ml-4 border-l-4 border-l-sky-300 sm:ml-8"
+                : ""
             }`}
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
@@ -134,7 +167,7 @@ export function CustomerEquipmentList({
                   ) : sinModelo ? null : (
                     <Badge variant="secondary">Externo</Badge>
                   )}
-                  {isExtra && <Badge variant="outline">Extra del pack</Badge>}
+                  {isExtra && <Badge variant="outline">{etiquetaParteDelPack(e.pack_role)}</Badge>}
                   {!e.is_active && <Badge variant="destructive">Baja</Badge>}
                 </div>
                 {e.modelo && (
@@ -144,7 +177,12 @@ export function CustomerEquipmentList({
                     tipo={e.modelo.tipo}
                   />
                 )}
-                {e.mant && (e.mant.texto || (canEditModality && e.is_active)) && (
+                {sinMantPropio && enPackComplemento && (
+                  <p className="text-xs text-muted-foreground">
+                    Sin mantenimiento propio: lo lleva el equipo que da el agua.
+                  </p>
+                )}
+                {!sinMantPropio && e.mant && (e.mant.texto || (canEditModality && e.is_active)) && (
                   <div
                     id={`mant-${e.id}`}
                     className="flex flex-wrap items-center gap-2"
@@ -256,6 +294,16 @@ export function CustomerEquipmentList({
                     tipoInicial={e.modelo.tipo}
                   />
                 )}
+                {/* Pack con complemento: una parte averiada se sustituye por un
+                    equipo nuevo sin deshacer el pack (no es «Corregir modelo»). */}
+                {hojaModelo && customerId && enPackComplemento && e.is_active && puedeSustituir && (
+                  <BotonSustituirParte
+                    equipoId={e.id}
+                    nombre={name}
+                    productIdActual={e.product_id}
+                    opciones={opcionesSustitucion(hojaModelo, e.modelo?.tipo ?? null, e.product_id)}
+                  />
+                )}
                 {e.installation_id && (
                   <Link
                     href={`/instalaciones/${e.installation_id}`}
@@ -290,6 +338,7 @@ export function CustomerEquipmentList({
                     contrato es POR EQUIPO, no por cliente. */}
                 {e.is_active &&
                   customerId &&
+                  !sinMantPropio &&
                   maintenancePlans.length > 0 &&
                   !equipmentsWithActiveContract?.has(e.id) && (
                     <OfferMaintenanceContractButton

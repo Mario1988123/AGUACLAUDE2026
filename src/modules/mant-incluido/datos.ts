@@ -277,8 +277,18 @@ export async function cargarMantEquipos(
       Array.from(new Set(filas.map((f) => f.product_id).filter((p): p is string => !!p))),
     ),
   ]);
+  // El Horeca no tiene mantenimiento propio (Mario 2026-11-25): sin resumen,
+  // sin chip y sin precio; lo lleva la ósmosis/UF de su pack.
+  let esHoreca: (productId: string | null) => boolean = () => false;
+  try {
+    const cat = await cargarCatalogoModelo(companyId);
+    esHoreca = (productId) => tipoEfectivoProducto(productId, cat) === "horeca";
+  } catch (e) {
+    console.error("[mant-incluido] tipo de equipo:", e);
+  }
   const hoy = claveDiaMadrid(new Date());
   for (const f of filas) {
+    if (esHoreca(f.product_id)) continue;
     out.set(
       f.id,
       resumir(
@@ -649,13 +659,14 @@ export async function cargarPreciosModelos(companyId: string): Promise<GamaPreci
   });
   const ordenar = <T extends FilaPrecioModelo>(xs: T[]): T[] =>
     xs.sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, "es"));
-  const ordenTipo: Record<TipoEquipo, number> = { osmosis: 0, fuente: 1 };
+  const ordenTipo: Record<TipoEquipo, number> = { osmosis: 0, fuente: 1, horeca: 2 };
 
   const gamas: GamaPrecioModelo[] = [];
   for (const p of cat.productos) {
     if (p.gama_id) continue;
     const tipo = tipoEfectivoProducto(p.id, cat);
-    if (!tipo) continue;
+    // El Horeca no tiene precio de mantenimiento: lo lleva la ósmosis/UF.
+    if (!tipo || tipo === "horeca") continue;
     gamas.push({
       ...fila(p),
       tipo,

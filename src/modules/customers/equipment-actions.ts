@@ -41,11 +41,13 @@ export interface CustomerEquipmentRow {
   acquisition_started_at: string | null;
   /** Pack: id del equipo principal si este equipo es un extra. NULL = principal/suelto. */
   parent_equipment_id: string | null;
+  /** Pack: rol de la parte que cuelga (extra | complemento). Null = como hoy. */
+  pack_role: "extra" | "complemento" | null;
   /** Modelo de equipo (plan 2026-11-13). Null si la migración no está aplicada. */
   modelo: {
     etiqueta: string;
     pendiente: boolean;
-    tipo: "fuente" | "osmosis" | null;
+    tipo: "fuente" | "osmosis" | "horeca" | null;
   } | null;
   /** Mantenimientos incluidos / «EMPEZAR A PAGAR» (plan 2026-11-12). Null si
    *  la migración no está aplicada. */
@@ -222,15 +224,29 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
 
   // Vínculo de pack (defensivo: si la columna parent_equipment_id no existe aún
   // porque la migración no se aplicó, se ignora y todos quedan como principales).
+  // pack_role (migración 20261127100000) igual: sin ella, todo cuelga como extra.
   const parentByEq: Record<string, string | null> = {};
+  const rolByEq: Record<string, "extra" | "complemento" | null> = {};
   {
-    const { data, error } = await supabase
+    let res = await supabase
       .from("customer_equipment")
-      .select("id, parent_equipment_id")
+      .select("id, parent_equipment_id, pack_role")
       .in("id", ids);
-    if (!error) {
-      for (const p of (data ?? []) as Array<{ id: string; parent_equipment_id: string | null }>) {
+    if (res.error) {
+      res = await supabase
+        .from("customer_equipment")
+        .select("id, parent_equipment_id")
+        .in("id", ids);
+    }
+    if (!res.error) {
+      for (const p of (res.data ?? []) as Array<{
+        id: string;
+        parent_equipment_id: string | null;
+        pack_role?: string | null;
+      }>) {
         parentByEq[p.id] = p.parent_equipment_id;
+        rolByEq[p.id] =
+          p.pack_role === "complemento" || p.pack_role === "extra" ? p.pack_role : null;
       }
     }
   }
@@ -287,6 +303,7 @@ export async function listCustomerEquipment(customerId: string): Promise<Custome
     acquisition_amount_cents: acq[r.id]?.cents ?? null,
     acquisition_started_at: acq[r.id]?.started ?? null,
     parent_equipment_id: parentByEq[r.id] ?? null,
+    pack_role: rolByEq[r.id] ?? null,
     modelo: modeloPorEq.get(r.id) ?? null,
     mant: mantPorEq.get(r.id) ?? null,
   }));
@@ -477,10 +494,22 @@ export async function addCustomerEquipmentAction(input: {
 
   const equipmentId = (eqRes.data as { id: string }).id;
 
+  // El Horeca no tiene mantenimiento propio (Mario 2026-11-25): ni histórico
+  // ni visitas; lo lleva la ósmosis/UF de su pack. Fail-soft: false.
+  let sinMantPropio = false;
+  if (productId) {
+    try {
+      const { equipoSinMantenimientoPropio } = await import("@/modules/maintenance/auto-schedule");
+      sinMantPropio = await equipoSinMantenimientoPropio(session.company_id, equipmentId);
+    } catch {
+      sinMantPropio = false;
+    }
+  }
+
   // Histórico: si el usuario sabe cuándo fue el último mantenimiento,
   // creamos un maintenance_jobs completado retroactivo. Así el cron y
   // los plans calculan correctamente cuándo toca el próximo.
-  if (input.last_maintenance_at) {
+  if (input.last_maintenance_at && !sinMantPropio) {
     try {
       await admin.from("maintenance_jobs").insert({
         company_id: session.company_id,
@@ -560,7 +589,9 @@ export async function addCustomerEquipmentAction(input: {
   //    meses (igual que contratos). firstDue = próximo indicado, o si no se
   //    indica, instalación + periodicidad.
   //  - Si NO hay periodicidad pero sí "próximo" → un único job.
-  if (modo === "visitas" && periodicity && periodicity > 0) {
+  if (modo === "visitas" && sinMantPropio) {
+    // Horeca: sin visitas propias.
+  } else if (modo === "visitas" && periodicity && periodicity > 0) {
     try {
       let firstDue: Date | null = null;
       if (input.next_maintenance_at) {
@@ -638,7 +669,7 @@ export async function addCustomerEquipmentAction(input: {
  * Solo admin / director técnico o comercial.
  */
 export async function removeCustomerEquipmentAction(
-  equipmentId: string,
+  equipmentIdElegido: string,
   customerId: string,
 ): Promise<void> {
   const session = await requireSession();
@@ -651,6 +682,22 @@ export async function removeCustomerEquipmentAction(
   if (!isUpper) throw new Error("Solo admin o director puede dar de baja equipos");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Pack con complemento (Mario 2026-11-25): se da de baja entero. Si se elige
+  // el complemento, la baja arranca en su principal y la cascada de abajo se
+  // lleva el resto. Defensivo: sin la columna pack_role, como hoy.
+  let equipmentId = equipmentIdElegido;
+  {
+    const { data: parte, error: parteErr } = await admin
+      .from("customer_equipment")
+      .select("id, parent_equipment_id, pack_role")
+      .eq("id", equipmentIdElegido)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    const p = parte as { parent_equipment_id: string | null; pack_role: string | null } | null;
+    if (!parteErr && p?.pack_role === "complemento" && p.parent_equipment_id) {
+      equipmentId = p.parent_equipment_id;
+    }
+  }
   // SEGURIDAD: admin client salta RLS → filtrar por company_id.
   const r = await admin
     .from("customer_equipment")
@@ -708,7 +755,10 @@ export async function removeCustomerEquipmentAction(
       subject_type: "customer",
       subject_id: customerId,
       kind: "customer.equipment_removed",
-      payload: { equipment_id: equipmentId },
+      payload: {
+        equipment_id: equipmentId,
+        ...(equipmentId !== equipmentIdElegido ? { elegido_complemento_id: equipmentIdElegido } : {}),
+      },
       actor_user_id: session.user_id,
     });
   } catch {

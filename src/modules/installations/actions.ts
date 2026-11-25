@@ -15,7 +15,7 @@ import {
   completeInstallationSchema,
 } from "./schemas";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
-import { relinkCopiedItems } from "@/shared/lib/packs/link-items";
+import { leerOrigenPack, relinkCopiedItems } from "@/shared/lib/packs/link-items";
 import { notifyInstallationCompleted } from "@/modules/notifications/notifier";
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { autoScheduleMaintenanceForContract } from "@/modules/maintenance/auto-schedule";
@@ -744,21 +744,14 @@ export async function createInstallationFromContract(input: unknown) {
       .select("id, display_order");
     // Pack: propagar vínculo padre-hijo de contract_items a installation_items.
     if (!insIt.error) {
-      const parentSrc = await admin
-        .from("contract_items")
-        .select("id, display_order, parent_item_id")
-        .eq("contract_id", c.id);
-      if (!parentSrc.error) {
+      const parentSrc = await leerOrigenPack(admin, "contract_items", "contract_id", c.id);
+      if (parentSrc) {
         await relinkCopiedItems(
           admin,
           "installation_items",
           session.company_id,
           insIt.data as Array<{ id: string; display_order: number | null }>,
-          (parentSrc.data ?? []) as Array<{
-            id: string;
-            display_order: number | null;
-            parent_item_id: string | null;
-          }>,
+          parentSrc,
         );
       }
     }
@@ -1809,14 +1802,23 @@ export async function completeInstallation(input: unknown) {
       quantity: number;
       parent_item_id: string | null;
       display_order: number | null;
+      pack_role?: string | null;
     };
     let list: II[] = [];
     {
-      const rich = await admin
+      // pack_role (migración 20261127100000) primero; sin ella, sin rol.
+      let rich = await admin
         .from("installation_items")
-        .select("id, product_id, serial_number, quantity, parent_item_id, display_order")
+        .select("id, product_id, serial_number, quantity, parent_item_id, display_order, pack_role")
         .eq("installation_id", parsed.id)
         .order("display_order");
+      if (rich.error) {
+        rich = await admin
+          .from("installation_items")
+          .select("id, product_id, serial_number, quantity, parent_item_id, display_order")
+          .eq("installation_id", parsed.id)
+          .order("display_order");
+      }
       if (!rich.error) {
         list = (rich.data ?? []) as II[];
       } else {
@@ -1865,8 +1867,26 @@ export async function completeInstallation(input: unknown) {
         installed_at: now.toISOString().slice(0, 10),
         acquisition_type: acquisitionType,
         parent_equipment_id: parentEqId,
+        // Rol en el pack (extra | complemento): solo si cuelga de un principal.
+        ...(parentEqId && (it.pack_role === "extra" || it.pack_role === "complemento")
+          ? { pack_role: it.pack_role }
+          : {}),
       }));
       let ins = await admin.from("customer_equipment").insert(rows).select("id");
+      // Defensivo: sin la columna pack_role, reintentar sin ella (el pack se
+      // conserva por parent_equipment_id).
+      if (ins.error && /pack_role/i.test(ins.error.message ?? "")) {
+        ins = await admin
+          .from("customer_equipment")
+          .insert(
+            rows.map((r) => {
+              const c = { ...r };
+              delete c.pack_role;
+              return c;
+            }),
+          )
+          .select("id");
+      }
       // Defensivo: si acquisition_type/parent_equipment_id no existen aún, reintentar sin ellos.
       if (
         ins.error &&
@@ -1878,6 +1898,7 @@ export async function completeInstallation(input: unknown) {
           const c = { ...r };
           delete c.acquisition_type;
           delete c.parent_equipment_id;
+          delete c.pack_role;
           return c;
         });
         ins = await admin.from("customer_equipment").insert(rowsBasic).select("id");

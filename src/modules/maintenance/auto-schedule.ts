@@ -10,6 +10,137 @@ import {
   yaExisteVisita,
   type VisitaExistente,
 } from "./calendario-visitas";
+import { cargarCatalogoModelo } from "@/modules/equipos-modelo/datos";
+import { esTipoEquipo, tipoEfectivoProducto } from "@/modules/equipos-modelo/logica";
+import {
+  elegirEquipoMantenimiento,
+  esPackRole,
+  llevaMantenimiento,
+  tipoSinMantenimiento,
+  type EquipoCandidatoMant,
+} from "@/shared/lib/packs/complemento";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Admin = any;
+
+interface FilaEquipoMant {
+  id: string;
+  product_id?: string | null;
+  tipo_equipo?: string | null;
+  parent_equipment_id?: string | null;
+  pack_role?: string | null;
+}
+
+/**
+ * Lee equipos activos con lo necesario para decidir quién lleva el
+ * mantenimiento. Defensivo: pack_role, tipo_equipo y parent_equipment_id son
+ * de migraciones posteriores; si faltan se cae a columnas más básicas.
+ */
+async function leerEquiposMant(
+  a: Admin,
+  filtrar: (q: Admin) => Admin,
+): Promise<FilaEquipoMant[]> {
+  const columnas = [
+    "id, product_id, tipo_equipo, parent_equipment_id, pack_role",
+    "id, product_id, tipo_equipo, parent_equipment_id",
+    "id, product_id, parent_equipment_id",
+    "id, product_id",
+  ];
+  for (const cols of columnas) {
+    const r = await filtrar(a.from("customer_equipment").select(cols).eq("is_active", true));
+    if (!r.error) return (r.data ?? []) as FilaEquipoMant[];
+  }
+  return [];
+}
+
+// El cron diario llama a ensureMaintenanceWindow por cada contrato y fuera de
+// una petición `cache` de React no memoriza: se guarda el catálogo un minuto
+// por empresa para no leer todos los productos en cada contrato.
+const catalogoReciente = new Map<
+  string,
+  { en: number; cat: Awaited<ReturnType<typeof cargarCatalogoModelo>> }
+>();
+async function catalogoTipos(companyId: string) {
+  const hit = catalogoReciente.get(companyId);
+  if (hit && Date.now() - hit.en < 60_000) return hit.cat;
+  const cat = await cargarCatalogoModelo(companyId);
+  catalogoReciente.set(companyId, { en: Date.now(), cat });
+  return cat;
+}
+
+async function aCandidatos(
+  companyId: string,
+  filas: FilaEquipoMant[],
+): Promise<EquipoCandidatoMant[]> {
+  let tipoDe: (productId: string | null) => string | null = () => null;
+  try {
+    const cat = await catalogoTipos(companyId);
+    tipoDe = (productId) => tipoEfectivoProducto(productId, cat);
+  } catch (e) {
+    console.error("[auto-schedule] catálogo de tipos:", e);
+  }
+  return filas.map((f) => ({
+    id: f.id,
+    parent_equipment_id: f.parent_equipment_id ?? null,
+    pack_role: esPackRole(f.pack_role) ? f.pack_role : null,
+    // Manda el tipo identificado en el equipo; si no hay, el del producto.
+    tipo: (esTipoEquipo(f.tipo_equipo) ? f.tipo_equipo : null) ?? tipoDe(f.product_id ?? null),
+  }));
+}
+
+/**
+ * Equipo del que se cuelgan las visitas de un contrato (plan Horeca, F3):
+ * primero los equipos de ESE contrato (sus instalaciones) y, si no hay
+ * (contratos antiguos o importados), los del cliente como antes. Dentro, la
+ * parte del pack que lleva mantenimiento: nunca un Horeca ni un extra.
+ */
+export async function equipoMantenimientoDeContrato(
+  a: Admin,
+  c: { id: string; company_id: string; customer_id: string },
+): Promise<{ id: string | null; sinMantenimiento: boolean }> {
+  const { data: inst, error: instErr } = await a
+    .from("installations")
+    .select("id")
+    .eq("company_id", c.company_id)
+    .eq("contract_id", c.id);
+  const instIds = instErr ? [] : ((inst ?? []) as Array<{ id: string }>).map((i) => i.id);
+  if (instIds.length > 0) {
+    const delContrato = await aCandidatos(
+      c.company_id,
+      await leerEquiposMant(a, (q) =>
+        q.eq("company_id", c.company_id).in("installation_id", instIds),
+      ),
+    );
+    // Solo vale si alguna parte lleva mantenimiento; si no, como antes: la
+    // lista del cliente.
+    if (delContrato.some(llevaMantenimiento)) return elegirEquipoMantenimiento(delContrato);
+  }
+  const delCliente = await aCandidatos(
+    c.company_id,
+    await leerEquiposMant(a, (q) =>
+      q.eq("company_id", c.company_id).eq("customer_id", c.customer_id),
+    ),
+  );
+  return elegirEquipoMantenimiento(delCliente);
+}
+
+/** ¿El equipo es de un tipo sin mantenimiento propio (Horeca)? Fail-soft: false. */
+export async function equipoSinMantenimientoPropio(
+  companyId: string,
+  equipmentId: string,
+): Promise<boolean> {
+  try {
+    const a = createAdminClient() as Admin;
+    const filas = await leerEquiposMant(a, (q) =>
+      q.eq("company_id", companyId).eq("id", equipmentId),
+    );
+    if (filas.length === 0) return false;
+    const [cand] = await aCandidatos(companyId, filas);
+    return tipoSinMantenimiento(cand?.tipo);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Garantiza que un contrato con mantenimiento incluido tiene preprogrammed
@@ -139,32 +270,17 @@ export async function ensureMaintenanceWindow(
     return yaExisteVisita(new Date(t), existentes, tolerance);
   }
 
-  // Equipment (opcional). Packs: preferimos colgar el mantenimiento del equipo
-  // PRINCIPAL del cliente (parent_equipment_id null), no de un extra del pack.
-  // Defensivo: si la columna parent_equipment_id no existe aún, cae al criterio
-  // anterior (primer equipo activo).
-  let eqList: Array<{ id: string; parent_equipment_id?: string | null }> = [];
-  {
-    const withParent = await a
-      .from("customer_equipment")
-      .select("id, parent_equipment_id")
-      .eq("customer_id", c.customer_id)
-      .eq("is_active", true);
-    if (!withParent.error) {
-      eqList = (withParent.data ?? []) as Array<{ id: string; parent_equipment_id: string | null }>;
-    } else {
-      const plain = await a
-        .from("customer_equipment")
-        .select("id")
-        .eq("customer_id", c.customer_id)
-        .eq("is_active", true);
-      eqList = (plain.data ?? []) as Array<{ id: string }>;
-    }
-  }
-  const equipmentId = (eqList.find((e) => !e.parent_equipment_id) ?? eqList[0])?.id ?? null;
-
+  // Equipo (opcional). Antes se cogía el primer principal DEL CLIENTE, aunque
+  // fuera de otro contrato (18 clientes de Infinity tienen 2+ principales).
+  // Ahora: el equipo de ESTE contrato que lleva el mantenimiento (la ósmosis/UF
+  // de un pack Horeca, nunca el Horeca ni un extra). Si todo es Horeca, no hay
+  // visitas (el Horeca no tiene mantenimiento propio).
   const toCreate = candidates.filter((cd) => !alreadyExists(cd.scheduledAt.getTime()));
   if (toCreate.length === 0) return 0;
+
+  const elegido = await equipoMantenimientoDeContrato(a, c);
+  if (elegido.sinMantenimiento) return 0;
+  const equipmentId = elegido.id;
 
   const jobs = toCreate.map((cd) => ({
     company_id: c.company_id,
@@ -216,6 +332,8 @@ export async function generateEquipmentMaintenanceWindow(input: {
   const monthsAhead = input.monthsAhead ?? 12;
   if (!input.periodicity_months || input.periodicity_months <= 0) return 0;
   if (isNaN(input.firstDue.getTime())) return 0;
+  // El Horeca no recibe visitas (Mario 2026-11-25): las lleva su ósmosis/UF.
+  if (await equipoSinMantenimientoPropio(input.company_id, input.customer_equipment_id)) return 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const a = createAdminClient() as any;
 

@@ -14,6 +14,7 @@ import {
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { CategoryItem, ProductDetail, ProductListItem, ProductKind } from "./types";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import type { InfoComplemento } from "@/shared/lib/packs/complemento";
 
 export async function listProducts(filters?: {
   kind?: string;
@@ -137,6 +138,11 @@ export interface ProductForProposal {
     min_authorized_cents: number | null;
     absolute_min_cents: number | null;
   }>;
+  /**
+   * Pack con complemento (plan Horeca): tipo de equipo y claves para saber
+   * qué otro equipo puede ir de complemento. Null si no se pudo cargar.
+   */
+  complemento?: InfoComplemento | null;
 }
 
 /**
@@ -222,11 +228,22 @@ export async function listProductsForProposal(): Promise<ProductForProposal[]> {
     arr.push(pl);
     plansByProduct.set(pl.product_id, arr);
   }
+  // Compatibilidad de complementos (tolerante: sin ella, no se ofrecen).
+  let infoComp = new Map<string, InfoComplemento>();
+  if (session.company_id) {
+    try {
+      const { cargarInfoComplementos } = await import("./complementos-datos");
+      infoComp = await cargarInfoComplementos(session.company_id);
+    } catch (e) {
+      console.error("[listProductsForProposal] complementos:", e);
+    }
+  }
   return list.map((p) => ({
     id: p.id,
     name: p.name,
     main_image_url: p.main_image_url,
     plans: plansByProduct.get(p.id) ?? [],
+    complemento: infoComp.get(p.id) ?? null,
   }));
 }
 

@@ -11,6 +11,12 @@ import { createProposalSafeAction, updateProposalSafeAction } from "./actions";
 import { PERIODICITY_OPTIONS, PLAN_TYPE_LABEL } from "./schemas";
 import type { ProductForProposal } from "@/modules/products/actions";
 import { pickPrice } from "./pick-price";
+import {
+  sonComplementarios,
+  textoOfertaComplemento,
+  tipoSinMantenimiento,
+  type PackRole,
+} from "@/shared/lib/packs/complemento";
 
 type PlanType = "cash" | "rental" | "renting";
 
@@ -71,6 +77,37 @@ interface ItemRow {
    * El backend lo traduce a `parent_item_id` tras insertar (linkItemsByParentIndex).
    */
   parent_index?: number | null;
+  /**
+   * Rol si cuelga de otra línea: extra (accesorio) o complemento (Horeca ↔
+   * ósmosis/UF, precio incluido en el principal). Plan Horeca 2026-11-25.
+   */
+  pack_role?: PackRole | null;
+}
+
+/** Tipo de equipo efectivo del producto (fuente | osmosis | horeca | null). */
+function tipoDe(products: ProductForProposal[], productId: string): string | null {
+  return products.find((p) => p.id === productId)?.complemento?.tipo ?? null;
+}
+
+/** Productos que pueden ir de complemento del producto indicado. */
+function complementosDe(
+  products: ProductForProposal[],
+  productId: string,
+): ProductForProposal[] {
+  const base = products.find((p) => p.id === productId)?.complemento;
+  if (!base) return [];
+  return products.filter((p) => sonComplementarios(base, p.complemento));
+}
+
+/** El Horeca no lleva mantenimiento propio: lo lleva su ósmosis/UF. */
+function sinMantenimiento(item: ItemRow): ItemRow {
+  return {
+    ...item,
+    maintenance_included: false,
+    maintenance_until_date: null,
+    maintenance_price_cents: null,
+    maintenance_periodicity_months: null,
+  };
 }
 
 function eur(cents: number | null | undefined): string {
@@ -234,19 +271,62 @@ export function ProposalCreateForm({
               duration,
               destinatario,
             );
-            // parent_index sobrevive al cambio de producto: cambiar el
-            // artículo de un extra no lo saca del pack.
-            return {
+            // parent_index y el rol sobreviven al cambio de producto: cambiar
+            // el artículo de un extra no lo saca del pack.
+            const merged: ItemRow = {
               ...next,
               ...fresh,
               quantity: next.quantity,
               parent_index: next.parent_index ?? null,
+              pack_role: next.pack_role ?? null,
             };
+            if (merged.pack_role === "complemento") merged.unit_price_cents = 0;
+            return tipoSinMantenimiento(tipoDe(products, patch.product_id))
+              ? sinMantenimiento(merged)
+              : merged;
           }
         }
+        // Pasar a complemento = precio incluido en el principal.
+        if (patch.pack_role === "complemento") next.unit_price_cents = 0;
         return next;
+      }).map((it, _i, arr) => {
+        // Si cambia el producto del principal, sus complementos que ya no son
+        // compatibles pasan a extra con su precio de tarifa.
+        if (!patch.product_id || it.parent_index !== idx || it.pack_role !== "complemento") {
+          return it;
+        }
+        const principal = products.find((p) => p.id === arr[idx]?.product_id);
+        const hijo = products.find((p) => p.id === it.product_id);
+        if (sonComplementarios(principal?.complemento, hijo?.complemento)) return it;
+        const tarifa = hijo
+          ? emptyItem(hijo.id, planType, hijo.plans, duration, destinatario).unit_price_cents
+          : it.unit_price_cents;
+        return { ...it, pack_role: "extra" as const, unit_price_cents: tarifa };
       }),
     );
+  }
+
+  /**
+   * Añade el equipo complementario de la línea `idx` (Horeca → ósmosis/UF u
+   * ósmosis/UF → Horeca). Va incluido en el precio del principal: cuota 0.
+   */
+  function addComplemento(idx: number) {
+    const principal = items[idx];
+    if (!principal) return;
+    const opciones = complementosDe(products, principal.product_id);
+    const first = opciones[0];
+    if (!first) return;
+    const base = emptyItem(first.id, planType, first.plans, duration, destinatario);
+    const linea: ItemRow = {
+      ...base,
+      unit_price_cents: 0,
+      parent_index: idx,
+      pack_role: "complemento",
+    };
+    setItems((prev) => [
+      ...prev,
+      tipoSinMantenimiento(tipoDe(products, first.id)) ? sinMantenimiento(linea) : linea,
+    ]);
   }
 
   function removeItem(idx: number) {
@@ -258,7 +338,7 @@ export function ProposalCreateForm({
         .map((it) => {
           const p = it.parent_index;
           if (p == null) return it;
-          if (p === idx) return { ...it, parent_index: null }; // se fue su principal
+          if (p === idx) return { ...it, parent_index: null, pack_role: null }; // se fue su principal
           return p > idx ? { ...it, parent_index: p - 1 } : it;
         }),
     );
@@ -284,6 +364,8 @@ export function ProposalCreateForm({
     if (planType !== "renting") return;
     setItems((prev) =>
       prev.map((it) => {
+        // El complemento va incluido: no tiene cuota propia.
+        if (it.pack_role === "complemento") return it;
         const prod = products.find((p) => p.id === it.product_id);
         if (!prod) return it;
         const plan = prod.plans.find(
@@ -299,6 +381,7 @@ export function ProposalCreateForm({
   }
 
   const approvalNeeded = items.some((it) => {
+    if (it.pack_role === "complemento") return false;
     const prod = products.find((p) => p.id === it.product_id);
     if (!prod) return false;
     const plan = prod.plans.find((pl) => {
@@ -319,6 +402,7 @@ export function ProposalCreateForm({
       return;
     }
     for (const it of items) {
+      if (tipoSinMantenimiento(tipoDe(products, it.product_id))) continue;
       if (
         !it.maintenance_included &&
         ((it.maintenance_price_cents ?? 0) < 0 || !it.maintenance_periodicity_months)
@@ -336,7 +420,9 @@ export function ProposalCreateForm({
           chosen_duration_months: planType === "cash" ? null : duration,
           validity_until: validityUntil || undefined,
           notes,
-          items,
+          items: items.map((it) =>
+            tipoSinMantenimiento(tipoDe(products, it.product_id)) ? sinMantenimiento(it) : it,
+          ),
           auto_accept: directMode,
           // La financiera (financier_id, payment, coef, residual, reserva)
           // la asigna admin sobre el contrato firmado, NO el comercial.
@@ -458,7 +544,7 @@ export function ProposalCreateForm({
         </div>
       )}
 
-      <fieldset className="space-y-3">
+      <fieldset className="min-w-0 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Label>Productos</Label>
           <Button type="button" variant="outline" size="sm" onClick={addItem}>
@@ -494,8 +580,33 @@ export function ProposalCreateForm({
                       label:
                         products.find((p) => p.id === other.product_id)?.name ??
                         `Línea ${i + 1}`,
+                      // ¿Puede esta línea ser su equipo complementario?
+                      complementable: sonComplementarios(
+                        products.find((p) => p.id === other.product_id)?.complemento,
+                        products.find((p) => p.id === it.product_id)?.complemento,
+                      ),
                     }))
             }
+            parentLabel={
+              it.parent_index != null
+                ? products.find((p) => p.id === items[it.parent_index!]?.product_id)?.name ?? null
+                : null
+            }
+            complementProducts={
+              it.pack_role === "complemento" && it.parent_index != null
+                ? complementosDe(products, items[it.parent_index]?.product_id ?? "")
+                : null
+            }
+            // Ofrecer el complemento en un principal que aún no lo tiene.
+            offerComplement={
+              it.parent_index == null &&
+              !items.some((x) => x.parent_index === idx && x.pack_role === "complemento") &&
+              complementosDe(products, it.product_id).length > 0
+                ? textoOfertaComplemento(tipoDe(products, it.product_id))
+                : null
+            }
+            onAddComplement={() => addComplemento(idx)}
+            noMaintenance={tipoSinMantenimiento(tipoDe(products, it.product_id))}
             onChange={(patch) => updateItem(idx, patch)}
             onRemove={() => removeItem(idx)}
           />
@@ -563,6 +674,11 @@ function ItemEditor({
   planType,
   duration,
   parentOptions,
+  parentLabel,
+  complementProducts,
+  offerComplement,
+  onAddComplement,
+  noMaintenance,
   onChange,
   onRemove,
 }: {
@@ -572,7 +688,16 @@ function ItemEditor({
   planType: PlanType;
   duration: number | null;
   /** Líneas que pueden hacer de equipo principal de esta (packs). */
-  parentOptions: Array<{ index: number; label: string }>;
+  parentOptions: Array<{ index: number; label: string; complementable: boolean }>;
+  /** Nombre del principal del que cuelga (si cuelga). */
+  parentLabel: string | null;
+  /** Complemento: productos compatibles con su principal (null = no es complemento). */
+  complementProducts: ProductForProposal[] | null;
+  /** Texto del botón que ofrece el equipo complementario (null = no se ofrece). */
+  offerComplement: string | null;
+  onAddComplement: () => void;
+  /** Tipo sin mantenimiento propio (Horeca). */
+  noMaintenance: boolean;
   onChange: (patch: Partial<ItemRow>) => void;
   onRemove: () => void;
 }) {
@@ -586,33 +711,65 @@ function ItemEditor({
   const belowMin = minAuth != null && item.unit_price_cents < minAuth;
   const cuotaLabel = planType === "cash" ? "Precio total (€)" : "Cuota mensual (€)";
   const isExtra = item.parent_index != null;
+  const isComplement = isExtra && item.pack_role === "complemento";
+  // Complemento: su lista es la de los compatibles con el principal (tengan o
+  // no plan propio, porque va incluido). Si el actual no está, se conserva.
+  const productOptions = complementProducts
+    ? complementProducts.some((p) => p.id === item.product_id) || !product
+      ? complementProducts
+      : [product, ...complementProducts]
+    : availableProducts;
+  const valorPadre =
+    item.parent_index == null
+      ? ""
+      : `${item.parent_index}:${item.pack_role === "complemento" ? "complemento" : "extra"}`;
 
   return (
     <div
       className={
-        isExtra
-          ? "ml-6 space-y-3 rounded-xl border border-l-4 border-l-primary/40 bg-muted/20 p-4"
-          : "space-y-3 rounded-xl border bg-background p-4"
+        isComplement
+          ? "ml-3 space-y-3 rounded-xl border border-l-4 border-l-violet-400 bg-violet-50/40 p-4 sm:ml-6"
+          : isExtra
+            ? "ml-3 space-y-3 rounded-xl border border-l-4 border-l-primary/40 bg-muted/20 p-4 sm:ml-6"
+            : "space-y-3 rounded-xl border bg-background p-4"
       }
     >
+      {isComplement && (
+        <p className="text-xs font-bold uppercase tracking-wide text-violet-800">
+          Equipo complementario
+        </p>
+      )}
       {parentOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-muted-foreground">Va dentro de:</span>
           <select
-            className="h-9 min-w-0 max-w-full rounded-lg border border-input bg-background px-2 text-base md:text-sm"
-            value={item.parent_index ?? ""}
-            onChange={(e) =>
+            className="h-9 min-w-0 max-w-full flex-1 rounded-lg border border-input bg-background px-2 text-base md:text-sm"
+            value={valorPadre}
+            onChange={(e) => {
+              if (e.target.value === "") {
+                onChange({ parent_index: null, pack_role: null });
+                return;
+              }
+              const [i, rol] = e.target.value.split(":");
               onChange({
-                parent_index: e.target.value === "" ? null : Number(e.target.value),
-              })
-            }
+                parent_index: Number(i),
+                pack_role: rol === "complemento" ? "complemento" : "extra",
+              });
+            }}
           >
             <option value="">— Equipo independiente —</option>
             {parentOptions.map((p) => (
-              <option key={p.index} value={p.index}>
+              <option key={`${p.index}:extra`} value={`${p.index}:extra`}>
                 Extra de: {p.label}
               </option>
             ))}
+            {parentOptions
+              .filter((p) => p.complementable)
+              .map((p) => (
+                <option key={`${p.index}:complemento`} value={`${p.index}:complemento`}>
+                  Complemento de: {p.label}
+                </option>
+              ))}
           </select>
         </div>
       )}
@@ -622,7 +779,7 @@ function ItemEditor({
           onChange={(e) => onChange({ product_id: e.target.value })}
           className="h-11 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-base"
         >
-          {availableProducts.map((p) => (
+          {productOptions.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
             </option>
@@ -643,20 +800,41 @@ function ItemEditor({
             onChange={(e) => onChange({ quantity: Number(e.target.value) || 1 })}
           />
         </div>
-        <div className="space-y-1 sm:col-span-2">
-          <Label className="text-xs">{cuotaLabel}</Label>
-          <MoneyInput
-            valueCents={item.unit_price_cents}
-            onChangeCents={(c) => onChange({ unit_price_cents: c })}
-            className={belowMin ? "border-amber-400 focus-visible:ring-amber-400" : ""}
-          />
-          {belowMin && (
-            <p className="text-[10px] text-amber-700">
-              Por debajo del mínimo autorizado ({eur(minAuth)}). Requerirá aprobación.
-            </p>
-          )}
-        </div>
+        {isComplement ? (
+          <div className="space-y-1 sm:col-span-2">
+            <Label className="text-xs">{cuotaLabel}</Label>
+            <div className="flex min-h-11 items-center rounded-md border border-dashed border-violet-300 bg-card px-3 text-sm text-violet-900">
+              Incluido en el precio{parentLabel ? ` de ${parentLabel}` : ""}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1 sm:col-span-2">
+            <Label className="text-xs">{cuotaLabel}</Label>
+            <MoneyInput
+              valueCents={item.unit_price_cents}
+              onChangeCents={(c) => onChange({ unit_price_cents: c })}
+              className={belowMin ? "border-amber-400 focus-visible:ring-amber-400" : ""}
+            />
+            {belowMin && (
+              <p className="text-[10px] text-amber-700">
+                Por debajo del mínimo autorizado ({eur(minAuth)}). Requerirá aprobación.
+              </p>
+            )}
+          </div>
+        )}
       </div>
+
+      {offerComplement && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onAddComplement}
+          className="h-11 w-full justify-start whitespace-normal border-violet-300 text-left text-violet-900 hover:bg-violet-50"
+        >
+          <Plus className="h-4 w-4 shrink-0" />
+          {offerComplement}
+        </Button>
+      )}
 
       <div className="rounded-lg border bg-muted/20 p-3">
         <label className="flex items-center gap-2">
@@ -680,6 +858,12 @@ function ItemEditor({
         )}
       </div>
 
+      {noMaintenance ? (
+        <div className="rounded-lg border border-dashed bg-muted/20 p-3 text-sm text-muted-foreground">
+          <span className="font-bold text-foreground">Sin mantenimiento propio.</span> El
+          mantenimiento lo lleva el equipo que da el agua (ósmosis / UF).
+        </div>
+      ) : (
       <div className="rounded-lg border bg-muted/20 p-3">
         <label className="flex items-center gap-2">
           <input
@@ -808,6 +992,7 @@ function ItemEditor({
           </div>
         )}
       </div>
+      )}
 
       {planType === "rental" && (
         <div className="rounded-lg border bg-muted/20 p-3 space-y-3">

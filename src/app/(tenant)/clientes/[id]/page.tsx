@@ -742,6 +742,7 @@ export default async function CustomerDetailPage({
               hojaModelo={hojaModelo}
               puedeIdentificar={puedeIdentificarModelo}
               puedeCorregir={puedeCorregirModelo}
+              puedeSustituir={puedeIdentificarModelo}
               addresses={addresses.map((a) => ({
                 id: a.id,
                 label: [

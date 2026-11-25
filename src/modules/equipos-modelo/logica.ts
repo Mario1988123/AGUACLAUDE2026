@@ -2,7 +2,9 @@
  * Modelo de equipo del cliente — lógica pura (sin Supabase), con tests.
  * Plan docs/PLAN_MODELO_EQUIPO_CLIENTE.md (decisiones de Mario 12-11).
  *
- * - Solo hay dos tipos: fuente y ósmosis (los dispensadores son fuentes).
+ * - Tipos: fuente, ósmosis y horeca (los dispensadores son fuentes; la UF
+ *   cuenta como ósmosis). El Horeca es un equipo identificable SIN
+ *   mantenimiento propio: lo lleva la ósmosis/UF de su pack (Mario 2026-11-25).
  * - Tipo efectivo de un producto: el suyo → el de su gama → el de su categoría
  *   (regla 0: el producto manda, no se mueve nada de categoría).
  * - Variante = producto hijo de la gama (`products.gama_id`, un nivel).
@@ -10,12 +12,13 @@
  *   apunta a una gama que tiene variantes (falta saber cuál).
  */
 
-export type TipoEquipo = "fuente" | "osmosis";
+export type TipoEquipo = "fuente" | "osmosis" | "horeca";
 export type AlcanceMantenimiento = "solo_filtros" | "filtros_membrana";
 
 export const TIPO_LABEL: Record<TipoEquipo, string> = {
   fuente: "Fuente",
   osmosis: "Ósmosis",
+  horeca: "Horeca",
 };
 
 export const ALCANCE_LABEL: Record<AlcanceMantenimiento, string> = {
@@ -24,7 +27,12 @@ export const ALCANCE_LABEL: Record<AlcanceMantenimiento, string> = {
 };
 
 export function esTipoEquipo(v: unknown): v is TipoEquipo {
-  return v === "fuente" || v === "osmosis";
+  return v === "fuente" || v === "osmosis" || v === "horeca";
+}
+
+/** El Horeca no recibe visitas ni precio de mantenimiento. */
+export function tipoConMantenimiento(tipo: TipoEquipo | null | undefined): boolean {
+  return tipo !== "horeca";
 }
 
 export interface ProductoModelo {
@@ -190,7 +198,7 @@ export function validarModeloElegido(
     return `Elige cuál de las variantes de ${p.name} es`;
   }
   if (!tipoEfectivoProducto(p.id, cat)) {
-    return `${p.name} no está marcado como fuente ni como ósmosis`;
+    return `${p.name} no está marcado como fuente, ósmosis ni Horeca`;
   }
   return null;
 }
@@ -209,7 +217,7 @@ export function productoDeFiltros(
   return conFiltrosPropios(productId) ? productId : gamaId;
 }
 
-/** El alcance es obligatorio solo en ósmosis. */
+/** El alcance es obligatorio solo en ósmosis (ni en fuente ni en Horeca). */
 export function alcanceObligatorio(tipo: TipoEquipo | null): boolean {
   return tipo === "osmosis";
 }

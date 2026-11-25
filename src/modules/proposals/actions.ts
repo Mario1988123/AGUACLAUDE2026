@@ -7,6 +7,13 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { proposalCreateSchema } from "./schemas";
 import { linkItemsByParentIndex } from "@/shared/lib/packs/link-items";
+import {
+  lineasConPrecio,
+  normalizarLineasPack,
+  sonComplementarios,
+  tipoSinMantenimiento,
+  validarComplementos,
+} from "@/shared/lib/packs/complemento";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import type { ProposalDetail, ProposalItem, ProposalListItem } from "./types";
 import { bumpLeadStatus, convertLeadToCustomerAction } from "@/modules/leads/actions";
@@ -332,11 +339,20 @@ export async function getProposalItems(proposalId: string): Promise<ProposalItem
   // (migración 20260503340000 no aplicada) caemos al select básico.
   const fullSelect =
     "id, proposal_id, product_id, product_name_snapshot, quantity, unit_price_cash_cents, notes, parent_item_id, installation_included, installation_price_cents, maintenance_included, maintenance_until_date, maintenance_price_cents, maintenance_periodicity_months, deposit_cents, charge_first_payment_now";
-  const r = await supabase
+  // pack_role (migración 20261127100000) primero; si no existe, sin él.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let r: any = await supabase
     .from("proposal_items")
-    .select(fullSelect)
+    .select(`${fullSelect}, pack_role`)
     .eq("proposal_id", proposalId)
     .order("display_order");
+  if (r.error && /pack_role/i.test((r.error as { message?: string }).message ?? "")) {
+    r = await supabase
+      .from("proposal_items")
+      .select(fullSelect)
+      .eq("proposal_id", proposalId)
+      .order("display_order");
+  }
   if (r.error) {
     const code = (r.error as { code?: string }).code;
     const msg = (r.error as { message?: string }).message ?? "";
@@ -361,6 +377,63 @@ export async function getProposalItems(proposalId: string): Promise<ProposalItem
  * auto_accept con cliente, donde createContractFromProposal redirige al
  * contrato (lanza NEXT_REDIRECT).
  */
+/**
+ * Pack con complemento (plan Horeca): normaliza padre y rol de cada línea,
+ * deja el complemento a precio incluido (0) y quita el mantenimiento a las
+ * líneas de un tipo sin mantenimiento propio (Horeca). Fail-soft: si no se
+ * puede leer el catálogo, solo normaliza el pack.
+ */
+async function prepararLineasPropuesta<
+  T extends {
+    product_id: string;
+    unit_price_cents: number;
+    parent_index?: number | null;
+    pack_role?: "extra" | "complemento" | null;
+    maintenance_included: boolean;
+    maintenance_until_date: string | null;
+    maintenance_price_cents?: number | null;
+    maintenance_periodicity_months?: number | null;
+  },
+>(companyId: string, items: T[]): Promise<T[]> {
+  // El rol «complemento» que llega del navegador no se da por bueno: solo si
+  // la migración está aplicada y el par es compatible de verdad. Si no, baja a
+  // «extra» con su precio (antes de normalizar, que es quien pone el 0).
+  let validadas: T[];
+  try {
+    const { cargarInfoComplementos, complementoDisponible } = await import(
+      "@/modules/products/complementos-datos"
+    );
+    const disponible = await complementoDisponible();
+    const info = disponible ? await cargarInfoComplementos(companyId) : new Map();
+    validadas = validarComplementos(items, disponible, (padre, hijo) =>
+      sonComplementarios(info.get(padre), info.get(hijo)),
+    );
+  } catch (e) {
+    console.error("[propuesta] validar complementos:", e);
+    validadas = validarComplementos(items, false, () => false);
+  }
+  const norm = normalizarLineasPack(validadas);
+  try {
+    const { cargarCatalogoModelo } = await import("@/modules/equipos-modelo/datos");
+    const { tipoEfectivoProducto } = await import("@/modules/equipos-modelo/logica");
+    const cat = await cargarCatalogoModelo(companyId);
+    return norm.map((it) =>
+      tipoSinMantenimiento(tipoEfectivoProducto(it.product_id, cat))
+        ? {
+            ...it,
+            maintenance_included: false,
+            maintenance_until_date: null,
+            maintenance_price_cents: null,
+            maintenance_periodicity_months: null,
+          }
+        : it,
+    );
+  } catch (e) {
+    console.error("[propuesta] tipos de equipo:", e);
+    return norm;
+  }
+}
+
 async function crearPropuesta(input: unknown): Promise<string> {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
@@ -369,6 +442,7 @@ async function crearPropuesta(input: unknown): Promise<string> {
   rateLimit(`proposal_create:${session.user_id}`, 20, 60_000);
 
   const parsed = parseOrFriendly(proposalCreateSchema, input, "Propuesta");
+  parsed.items = await prepararLineasPropuesta(session.company_id, parsed.items);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -394,7 +468,8 @@ async function crearPropuesta(input: unknown): Promise<string> {
       .eq("plan_type", parsed.chosen_plan_type)
       .eq("is_active", true);
     if (plansErr) throw new Error(toActionError(plansErr, "propuesta: planes de precio"));
-    const floors = evaluatePriceFloors(parsed.items, (plans ?? []) as PricePlanRow[], {
+    // El complemento va a precio incluido (0): no cuenta para los suelos.
+    const floors = evaluatePriceFloors(lineasConPrecio(parsed.items), (plans ?? []) as PricePlanRow[], {
       planType: parsed.chosen_plan_type,
       durationMonths: parsed.chosen_duration_months,
     });
@@ -508,9 +583,10 @@ async function crearPropuesta(input: unknown): Promise<string> {
     maintenance_included: it.maintenance_included,
     maintenance_until_date: it.maintenance_included ? it.maintenance_until_date : null,
     maintenance_price_cents: it.maintenance_included ? null : it.maintenance_price_cents,
-    maintenance_periodicity_months: it.maintenance_included
-      ? null
-      : it.maintenance_periodicity_months,
+    // La periodicidad se guarda también con el mantenimiento incluido: el
+    // formulario la pide y el contrato la necesita (antes se perdía y el
+    // contrato salía siempre a 12 meses).
+    maintenance_periodicity_months: it.maintenance_periodicity_months ?? null,
     deposit_cents: isRental ? it.deposit_cents : null,
     charge_first_payment_now: isRental ? it.charge_first_payment_now : false,
     display_order: i,
@@ -540,6 +616,7 @@ async function crearPropuesta(input: unknown): Promise<string> {
     session.company_id,
     insertedItems,
     parsed.items.map((it) => it.parent_index ?? null),
+    parsed.items.map((it) => it.pack_role ?? null),
   );
 
   await supabase.from("events").insert({
@@ -668,6 +745,7 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Usuario sin empresa");
   const parsed = parseOrFriendly(proposalCreateSchema, input, "Propuesta");
+  parsed.items = await prepararLineasPropuesta(session.company_id, parsed.items);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -707,7 +785,8 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
       .eq("plan_type", parsed.chosen_plan_type)
       .eq("is_active", true);
     if (plansErr) throw new Error(toActionError(plansErr, "propuesta: planes de precio"));
-    const floors = evaluatePriceFloors(parsed.items, (plans ?? []) as PricePlanRow[], {
+    // El complemento va a precio incluido (0): no cuenta para los suelos.
+    const floors = evaluatePriceFloors(lineasConPrecio(parsed.items), (plans ?? []) as PricePlanRow[], {
       planType: parsed.chosen_plan_type,
       durationMonths: parsed.chosen_duration_months,
     });
@@ -780,9 +859,10 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
     maintenance_included: it.maintenance_included,
     maintenance_until_date: it.maintenance_included ? it.maintenance_until_date : null,
     maintenance_price_cents: it.maintenance_included ? null : it.maintenance_price_cents,
-    maintenance_periodicity_months: it.maintenance_included
-      ? null
-      : it.maintenance_periodicity_months,
+    // La periodicidad se guarda también con el mantenimiento incluido: el
+    // formulario la pide y el contrato la necesita (antes se perdía y el
+    // contrato salía siempre a 12 meses).
+    maintenance_periodicity_months: it.maintenance_periodicity_months ?? null,
     deposit_cents: isRental ? it.deposit_cents : null,
     charge_first_payment_now: isRental ? it.charge_first_payment_now : false,
     display_order: i,
@@ -803,6 +883,7 @@ export async function updateProposalAction(proposalId: string, input: unknown) {
       session.company_id,
       insertedItems,
       parsed.items.map((it) => it.parent_index ?? null),
+      parsed.items.map((it) => it.pack_role ?? null),
     );
   }
 
