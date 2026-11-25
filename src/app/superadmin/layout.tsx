@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { requireSession, enforcePasswordChange } from "@/shared/lib/auth/session";
 import { redirect } from "next/navigation";
 import { SuperadminShell } from "./_shell";
+import { empresasParaCambiar, puedeCambiarDeEmpresa } from "@/modules/superadmin/entrar-como";
 
 export default async function SuperadminLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
@@ -12,5 +13,17 @@ export default async function SuperadminLayout({ children }: { children: React.R
   // mandamos a cambiar contraseña.
   enforcePasswordChange(session);
 
-  return <SuperadminShell email={session.email}>{children}</SuperadminShell>;
+  // «Cambiar a:» arriba: entrar en cualquier empresa como su admin.
+  let empresas: Awaited<ReturnType<typeof empresasParaCambiar>> = [];
+  try {
+    if (await puedeCambiarDeEmpresa(session, null)) empresas = await empresasParaCambiar();
+  } catch {
+    /* fail-soft: sin selector */
+  }
+
+  return (
+    <SuperadminShell email={session.email} empresas={empresas}>
+      {children}
+    </SuperadminShell>
+  );
 }

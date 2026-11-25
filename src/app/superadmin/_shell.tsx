@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Menu, X, Building2, Package, LogOut } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CajonLateral } from "@/shared/components/cajon-lateral";
+import { SelectorCambiarA, type EmpresaOpcion } from "@/modules/superadmin/entrar-como-ui";
 
 const LG_PX = 1024;
 const MD_PX = 768;
@@ -18,6 +19,7 @@ const ITEMS = [
 
 interface Props {
   email: string | null;
+  empresas?: EmpresaOpcion[];
   children: React.ReactNode;
 }
 
@@ -28,7 +30,7 @@ interface Props {
  *  - md-lg (tablet): sidebar permanente en modo icono (w-20).
  *  - >=lg (desktop): sidebar permanente expandido (w-60).
  */
-export function SuperadminShell({ email, children }: Props) {
+export function SuperadminShell({ email, empresas = [], children }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -100,6 +102,13 @@ export function SuperadminShell({ email, children }: Props) {
             </span>
           </div>
         </header>
+
+        {/* «Cambiar a:» — entrar en cualquier empresa como su admin. */}
+        {empresas.length > 0 ? (
+          <div className="shrink-0 border-b bg-card px-4 py-2">
+            <SelectorCambiarA empresas={empresas} />
+          </div>
+        ) : null}
 
         {/* En móvil la muesca la cubre la cabecera; desde md no hay cabecera y
             el margen seguro superior lo pone la columna (arriba), para que el

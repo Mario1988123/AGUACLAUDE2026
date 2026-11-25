@@ -17,7 +17,7 @@ import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
 import { RegistroPushNativo } from "@/modules/notifications/registro-push-nativo";
 import { redirect } from "next/navigation";
 import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
-import { entradaComoActual } from "@/modules/superadmin/entrar-como";
+import { empresasParaCambiar, entradaComoActual, puedeCambiarDeEmpresa } from "@/modules/superadmin/entrar-como";
 import { FranjaEntrarComo } from "@/modules/superadmin/entrar-como-ui";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -124,6 +124,13 @@ export default async function TenantLayout({ children }: { children: React.React
     safe(entradaComoActual(session.user_id), null),
   ]);
 
+  // Empresas del «Cambiar a:» de la franja: solo si quien está detrás es un
+  // superadmin de verdad (lo comprueba la base, no la cookie).
+  const empresasCambio =
+    entradaComo && (await safe(puedeCambiarDeEmpresa(session, entradaComo), false))
+      ? await safe(empresasParaCambiar(), [])
+      : [];
+
   let onboardingSteps: ReturnType<typeof getStepsForRoles> = [];
   try {
     onboardingSteps = getStepsForRoles(session.roles, session.is_superadmin);
@@ -165,7 +172,12 @@ export default async function TenantLayout({ children }: { children: React.React
           (iPhone apaisado): aquí dentro se pone a cero para no sumarlo dos veces. */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:[--safe-left:0px]">
         {entradaComo ? (
-          <FranjaEntrarComo nombre={entradaComo.destinoNombre} empresa={entradaComo.empresaNombre} />
+          <FranjaEntrarComo
+            nombre={entradaComo.destinoNombre}
+            empresa={entradaComo.empresaNombre}
+            empresas={empresasCambio}
+            companyId={entradaComo.companyId}
+          />
         ) : null}
         <Header
           unreadCount={unread}

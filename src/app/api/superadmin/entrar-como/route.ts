@@ -36,6 +36,7 @@ export async function POST(req: Request) {
     return responder({ ok: false, error: "Petición no válida." }, 400);
   }
   if (cuerpo.accion === "volver") return responder(await volverASuperadmin());
-  if (cuerpo.accion === "entrar") return responder(await entrarComo(cuerpo.userId));
+  if (cuerpo.accion === "entrar") return responder(await entrarComo({ userId: cuerpo.userId }));
+  if (cuerpo.accion === "entrar_empresa") return responder(await entrarComo({ companyId: cuerpo.companyId }));
   return responder({ ok: false, error: "Petición no válida." }, 400);
 }

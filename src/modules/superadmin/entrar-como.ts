@@ -64,6 +64,7 @@ export interface EntradaActual {
   destinoEmail: string | null;
   empresaNombre: string | null;
   companyId: string | null;
+  superadminUserId: string;
 }
 
 /**
@@ -78,11 +79,12 @@ export async function entradaComoActual(userId: string | null | undefined): Prom
     const db: Admin = createAdminClient();
     const { data } = await db
       .from("superadmin_entradas_como")
-      .select("id, destino_user_id, destino_nombre, destino_email, destino_company_id, cerrada_at")
+      .select("id, superadmin_user_id, destino_user_id, destino_nombre, destino_email, destino_company_id, cerrada_at")
       .eq("id", id)
       .maybeSingle();
     const fila = data as {
       id: string;
+      superadmin_user_id: string;
       destino_user_id: string;
       destino_nombre: string | null;
       destino_email: string | null;
@@ -101,6 +103,7 @@ export async function entradaComoActual(userId: string | null | undefined): Prom
       destinoEmail: fila.destino_email,
       empresaNombre,
       companyId: fila.destino_company_id,
+      superadminUserId: fila.superadmin_user_id,
     };
   } catch {
     return null;
@@ -141,8 +144,81 @@ async function restaurarOrigen(supabase: ClienteSesion): Promise<boolean | null>
   return true;
 }
 
-export async function entrarComo(destinoUserId: unknown): Promise<RespuestaComo> {
-  if (!esUuid(destinoUserId)) return { ok: false, error: "Ese usuario no existe." };
+/**
+ * El admin con el que se entra en una empresa desde «Cambiar a»:
+ *  1. el último con el que entró este superadmin en esa empresa;
+ *  2. si no, el admin que se llama como él (el «Mario» que tiene en cada empresa);
+ *  3. si no, el admin más antiguo (el «oficial», como getCompanyAdmin).
+ * Solo admins activos o invitados, nunca suspendidos ni superadmins.
+ */
+async function elegirAdmin(companyId: string, superadmin: { id: string; email?: string | null }): Promise<string | null> {
+  const db: Admin = createAdminClient();
+  const { data: filas } = await db
+    .from("user_roles")
+    .select("user_id, assigned_at")
+    .eq("company_id", companyId)
+    .eq("role_key", "company_admin")
+    .is("revoked_at", null)
+    .order("assigned_at", { ascending: true });
+  const ids = ((filas ?? []) as Array<{ user_id: string }>).map((f) => f.user_id).filter((id) => id !== superadmin.id);
+  if (ids.length === 0) return null;
+  const { data: perfiles } = await db.from("user_profiles").select("user_id, full_name, status").in("user_id", ids);
+  const validos = new Map(
+    ((perfiles ?? []) as Array<{ user_id: string; full_name: string | null; status: string | null }>)
+      .filter((p) => p.status !== "suspended" && p.status !== "inactive")
+      .map((p) => [p.user_id, p.full_name ?? ""]),
+  );
+  const candidatos = ids.filter((id) => validos.has(id));
+  if (candidatos.length === 0) return null;
+
+  const { data: ultima } = await db
+    .from("superadmin_entradas_como")
+    .select("destino_user_id")
+    .eq("superadmin_user_id", superadmin.id)
+    .eq("destino_company_id", companyId)
+    .order("creada_at", { ascending: false })
+    .limit(1);
+  const ultimo = ((ultima ?? []) as Array<{ destino_user_id: string }>)[0]?.destino_user_id;
+  if (ultimo && candidatos.includes(ultimo)) return ultimo;
+
+  const nombre = (superadmin.email ?? "").split("@")[0]!.split(/[._-]/)[0]!.toLowerCase();
+  if (nombre.length >= 3) {
+    const tocayo = candidatos.find((id) => (validos.get(id) ?? "").toLowerCase().split(/\s+/)[0] === nombre);
+    if (tocayo) return tocayo;
+  }
+  return candidatos[0]!;
+}
+
+export interface EmpresaParaCambiar {
+  id: string;
+  nombre: string;
+  conAdmin: boolean;
+}
+
+/** Empresas del selector «Cambiar a». Solo se llama con un superadmin delante. */
+export async function empresasParaCambiar(): Promise<EmpresaParaCambiar[]> {
+  const db: Admin = createAdminClient();
+  const [{ data: empresas }, { data: admins }] = await Promise.all([
+    db.from("companies").select("id, name, status").order("name").limit(500),
+    db.from("user_roles").select("company_id").eq("role_key", "company_admin").is("revoked_at", null),
+  ]);
+  const conAdmin = new Set(((admins ?? []) as Array<{ company_id: string }>).map((a) => a.company_id));
+  return ((empresas ?? []) as Array<{ id: string; name: string; status: string | null }>)
+    .filter((e) => e.status !== "cancelled")
+    .map((e) => ({ id: e.id, nombre: e.name.trim(), conAdmin: conAdmin.has(e.id) }));
+}
+
+/** ¿Es la sesión actual (o la entrada «como» en curso) de un superadmin de verdad? */
+export async function puedeCambiarDeEmpresa(sesion: { user_id: string; is_superadmin: boolean }, entrada: EntradaActual | null): Promise<boolean> {
+  if (sesion.is_superadmin) return esSuperadminDeVerdad(sesion.user_id);
+  return Boolean(entrada?.superadminUserId && (await esSuperadminDeVerdad(entrada.superadminUserId)));
+}
+
+export async function entrarComo(destino: { userId?: unknown; companyId?: unknown }): Promise<RespuestaComo> {
+  const porEmpresa = destino.companyId !== undefined;
+  if (porEmpresa ? !esUuid(destino.companyId) : !esUuid(destino.userId)) {
+    return { ok: false, error: porEmpresa ? "Esa empresa no existe." : "Ese usuario no existe." };
+  }
   const supabase = await createClient();
   const db: Admin = createAdminClient();
 
@@ -158,6 +234,10 @@ export async function entrarComo(destinoUserId: unknown): Promise<RespuestaComo>
   if (!(await esSuperadminDeVerdad(yo.user.id))) {
     return { ok: false, error: "Solo el superadmin puede entrar como otro usuario." };
   }
+  const destinoUserId = porEmpresa
+    ? await elegirAdmin(destino.companyId as string, { id: yo.user.id, email: yo.user.email })
+    : (destino.userId as string);
+  if (!destinoUserId) return { ok: false, error: "Esa empresa no tiene ningún admin activo." };
   if (yo.user.id === destinoUserId) return { ok: false, error: "Ya eres tú." };
   const origen = actual.session.refresh_token;
 
