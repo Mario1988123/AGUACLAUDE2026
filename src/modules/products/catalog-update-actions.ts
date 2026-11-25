@@ -6,9 +6,10 @@
  * cuando la versión del maestro (catalog_products.version) es mayor que la que la
  * empresa copió (products.catalog_version_synced). Entonces se muestra el aviso
  * "⚠ Actualización disponible". La empresa decide:
- *   - Aplicar: re-sincroniza tipo y medidas, AÑADE los atributos y documentos que
- *     le falten y rellena los textos vacíos. NO toca nombre (lo bautiza la
- *     empresa), precio, stock, referencia interna, fotos ni valores ya puestos.
+ *   - Aplicar: RELLENA lo que la empresa tenga vacío (textos, medidas, peso) y
+ *     AÑADE los atributos y documentos que le falten. NO toca nombre (lo bautiza
+ *     la empresa), tipo, precio, stock, referencia interna, fotos ni valores ya
+ *     puestos.
  *     Pone synced=version.
  *   - Descartar: sube synced=version sin copiar nada (se queda su versión).
  *
@@ -130,7 +131,9 @@ export async function applyCatalogUpdateSafeAction(
 
     const { data: p } = await admin
       .from("products")
-      .select("catalog_product_id, company_id, category_id, short_description, long_description")
+      .select(
+        "catalog_product_id, company_id, category_id, short_description, long_description, dim_width_mm, dim_height_mm, dim_depth_mm, weight_grams",
+      )
       .eq("id", productId)
       .maybeSingle();
     const prod = p as {
@@ -139,6 +142,10 @@ export async function applyCatalogUpdateSafeAction(
       category_id: string | null;
       short_description: string | null;
       long_description: string | null;
+      dim_width_mm: number | null;
+      dim_height_mm: number | null;
+      dim_depth_mm: number | null;
+      weight_grams: number | null;
     } | null;
     if (!prod || prod.company_id !== companyId) return { ok: false, error: "Producto no encontrado" };
     if (!prod.catalog_product_id) return { ok: false, error: "Este producto no viene del catálogo" };
@@ -154,24 +161,24 @@ export async function applyCatalogUpdateSafeAction(
     const ms = master as any;
     if (!ms) return { ok: false, error: "El producto maestro ya no existe" };
 
-    // Re-sincronizar datos del fabricante. NUNCA toca el nombre (cada empresa
-    // bautiza el producto a su manera), ni precio, stock, ref interna o fotos.
-    // Los textos solo se rellenan si la empresa los tiene vacíos.
+    // Solo RELLENA lo que la empresa tiene vacío. NUNCA toca el nombre (cada
+    // empresa bautiza el producto a su manera), el tipo, ni lo que ya tenga
+    // puesto (textos, medidas, peso), ni precio, stock, ref interna o fotos.
     const vacio = (s: string | null) => !s || !s.trim();
+    const num = (propio: number | null, maestro: number | null) => propio ?? maestro;
     await admin
       .from("products")
       .update({
-        kind: ms.kind,
         short_description: vacio(prod.short_description)
           ? ms.short_description
           : prod.short_description,
         long_description: vacio(prod.long_description)
           ? ms.long_description
           : prod.long_description,
-        dim_width_mm: ms.dim_width_mm,
-        dim_height_mm: ms.dim_height_mm,
-        dim_depth_mm: ms.dim_depth_mm,
-        weight_grams: ms.weight_grams,
+        dim_width_mm: num(prod.dim_width_mm, ms.dim_width_mm),
+        dim_height_mm: num(prod.dim_height_mm, ms.dim_height_mm),
+        dim_depth_mm: num(prod.dim_depth_mm, ms.dim_depth_mm),
+        weight_grams: num(prod.weight_grams, ms.weight_grams),
         catalog_version_synced: ms.version,
       })
       .eq("id", productId);

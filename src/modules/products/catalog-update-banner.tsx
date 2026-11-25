@@ -34,7 +34,7 @@ export function CatalogUpdateBanner({
       const ok = await confirm({
         title: "Aplicar actualización del fabricante",
         message:
-          "Se actualizarán el tipo y las medidas, y se añadirán los atributos y documentos nuevos del catálogo. NO se tocará tu nombre, tus textos, los valores que ya tengas, tu precio, tu stock ni tus fotos. ¿Continuar?",
+          "Se rellenará lo que tengas vacío (textos, medidas, peso) y se añadirán los atributos y documentos nuevos del catálogo. NO se tocará tu nombre, tu tipo, lo que ya tengas puesto, tu precio, tu stock ni tus fotos. ¿Continuar?",
         confirmText: "Aplicar",
       });
       if (!ok) return;

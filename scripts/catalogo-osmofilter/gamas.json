@@ -9,8 +9,8 @@
     "descripcion_osmofilter y nombre_osmofilter son solo informativos (sin la marca ni «hasta fin de existencias»)."
   ],
   "total_refs": 174,
-  "total_gamas": 85,
-  "gamas_con_variantes": 42,
+  "total_gamas": 80,
+  "gamas_con_variantes": 37,
   "gamas": [
     {
       "modelo": "BLUE MOUNTAIN",
@@ -217,7 +217,7 @@
       "modelo": "BLUE STORM",
       "cabeza": "FRO1061",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Osmofilter llama «BLUE STROM» (errata) a FRO1062 y FRO1117; la descripción dice BLUE STORM. Se unen en una gama.",
       "variantes": [
         {
@@ -244,13 +244,14 @@
           "descripcion_osmofilter": "Dispensador Ultrafiltración BLUE STORM",
           "nombre_osmofilter": "BLUE STORM"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "COMPACT600 PH",
       "cabeza": "RO1202",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Mezcla dos familias de Osmofilter: RO1202 y RO1203 son «Flujo directo» y RO1214 «Ósmosis doméstica» (compacto). ¿Misma gama?",
       "variantes": [
         {
@@ -271,13 +272,14 @@
           "descripcion_osmofilter": "Equipo Ósmosis Inversa COMPACT600 PH Negro LED",
           "nombre_osmofilter": "COMPACT600 PH Negra LED"
         }
-      ]
+      ],
+      "revisado": "[decide] Claude 25-11, coherente con el criterio de Mario"
     },
     {
       "modelo": "COSMOS",
       "cabeza": "RO1059",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Osmofilter llama «COSMOS Negro» a RO1065 y RO1066: se unen con COSMOS y el color va en el rasgo.",
       "variantes": [
         {
@@ -304,13 +306,14 @@
           "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto COSMOS c/Bomba Negro",
           "nombre_osmofilter": "COSMOS Negro"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "DANNA",
       "cabeza": "DDANA",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Tres nombres de Osmofilter (DANNA 30 TM68C3, DANNA 30 TM68 PILOT, DANNA TM68). DDANAP se describe como «Custom».",
       "variantes": [
         {
@@ -331,13 +334,14 @@
           "descripcion_osmofilter": "Descalcificador DANNA TM68 35L",
           "nombre_osmofilter": "DANNA TM68"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "DOLMA",
       "cabeza": "DOL920",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Válvulas distintas (TM68, TM69 PILOT). Osmofilter llama «DOLMA TM69 LED» a DOL920.",
       "variantes": [
         {
@@ -358,161 +362,116 @@
           "descripcion_osmofilter": "Descalcificador DOLMA 30L 10x30 TM69 PILOT 3/4\"",
           "nombre_osmofilter": "Descalcificador DOLMA 30L 10x30 TM69 PILOT 3 4"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
-      "modelo": "NOVO TM68",
-      "cabeza": "NO6835",
-      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
-      "nota": "NOVO partido por válvula. Alternativa: una sola gama NOVO con la válvula en el rasgo.",
+      "modelo": "NOVO",
+      "cabeza": "NO6922",
+      "motivo_cabeza": "Mario 25-11: una sola gama NOVO; cabeza la de NOVO TM69",
+      "revisar": false,
       "variantes": [
         {
           "ref": "NO6814",
-          "rasgos": "14 L · 1\"",
+          "rasgos": "Válvula TM68 · 14 L · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO TM68 1\" 14L",
-          "nombre_osmofilter": "Descalcificador NOVO TM68 1 14L"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NO6825",
-          "rasgos": "25 L · 1\"",
+          "rasgos": "Válvula TM68 · 25 L · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO TM68 1\" 25L",
-          "nombre_osmofilter": "Descalcificador NOVO TM68 1 25L"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NO6835",
-          "rasgos": "35 L · 1\"",
+          "rasgos": "Válvula TM68 · 35 L · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO TM68 1\" 35L",
-          "nombre_osmofilter": "NOVO TM68"
-        }
-      ]
-    },
-    {
-      "modelo": "NOVO TM69",
-      "cabeza": "NO6922",
-      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
-      "nota": "NOVO partido por válvula.",
-      "variantes": [
+          "nombre_osmofilter": "NOVO"
+        },
         {
           "ref": "NO6914",
-          "rasgos": "14 L · 3/4\"",
+          "rasgos": "Válvula TM69 · 14 L · 3/4\"",
           "descripcion_osmofilter": "Descalcificador NOVO 14L TM69 3/4\"",
-          "nombre_osmofilter": "NOVO TM69"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NO6922",
-          "rasgos": "22 L · 3/4\"",
+          "rasgos": "Válvula TM69 · 22 L · 3/4\"",
           "descripcion_osmofilter": "Descalcificador NOVO 22L TM69 3/4\"",
-          "nombre_osmofilter": "NOVO TM69"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NO6930",
-          "rasgos": "30 L · 3/4\"",
+          "rasgos": "Válvula TM69 · 30 L · 3/4\"",
           "descripcion_osmofilter": "Descalcificador NOVO 30L TM69 3/4\"",
-          "nombre_osmofilter": "NOVO TM69"
-        }
-      ]
-    },
-    {
-      "modelo": "NOVO TM69 LED",
-      "cabeza": "NOL922",
-      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
-      "nota": "Nombre de Osmofilter; la descripción dice «TM69 PILOT». NOL914 se llama «Descalcificador NOVO 14L TM69 PILOT 3/4» en Osmofilter.",
-      "variantes": [
+          "nombre_osmofilter": "NOVO"
+        },
         {
           "ref": "NOL914",
-          "rasgos": "14 L · 3/4\"",
+          "rasgos": "Válvula TM69 LED · 14 L · 3/4\"",
           "descripcion_osmofilter": "Descalcificador NOVO 14L TM69 PILOT 3/4\"",
-          "nombre_osmofilter": "Descalcificador NOVO 14L TM69 PILOT 3 4"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NOL922",
-          "rasgos": "22 L · 3/4\"",
+          "rasgos": "Válvula TM69 LED · 22 L · 3/4\"",
           "descripcion_osmofilter": "Descalcificador NOVO 22L TM69 PILOT 3/4\"",
-          "nombre_osmofilter": "NOVO TM69 LED"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NOL935",
-          "rasgos": "35 L · 3/4\"",
+          "rasgos": "Válvula TM69 LED · 35 L · 3/4\"",
           "descripcion_osmofilter": "Descalcificador NOVO 35L TM69 PILOT 3/4\"",
-          "nombre_osmofilter": "NOVO TM69 LED"
-        }
-      ]
-    },
-    {
-      "modelo": "NOVO CLACK",
-      "cabeza": "NOC135",
-      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
-      "nota": "NOVO partido por válvula.",
-      "variantes": [
+          "nombre_osmofilter": "NOVO"
+        },
         {
           "ref": "NOC114",
-          "rasgos": "14 L · Contracorriente · 1\"",
+          "rasgos": "Válvula CLACK · 14 L · Contracorriente · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO 14L CLACK Contracorriente 1\"v",
-          "nombre_osmofilter": "Descalcificador NOVO 14L CLACK Contracorriente 1 v"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NOC122",
-          "rasgos": "22 L · Contracorriente · 1\"",
+          "rasgos": "Válvula CLACK · 22 L · Contracorriente · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO 22L CLACK Contracorriente 1\"",
-          "nombre_osmofilter": "Descalcificador NOVO 22L CLACK Contracorriente 1"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NOC135",
-          "rasgos": "35 L · Contracorriente · 1\"",
+          "rasgos": "Válvula CLACK · 35 L · Contracorriente · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO 35L CLACK Contracorriente 1\"v",
-          "nombre_osmofilter": "NOVO CLACK"
-        }
-      ]
-    },
-    {
-      "modelo": "NOVO LOGIX",
-      "cabeza": "NO7610",
-      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
-      "nota": "NO7631 es «NOVO ECO» (sin boya ni chimenea). ¿Misma gama?",
-      "variantes": [
+          "nombre_osmofilter": "NOVO"
+        },
         {
           "ref": "NO7610",
-          "rasgos": "10 L · 1\"",
+          "rasgos": "Válvula LOGIX · 10 L · 1\"",
           "descripcion_osmofilter": "Descalcificador NOVO 10L LOGIX 760 1\"",
-          "nombre_osmofilter": "Descalcificador NOVO 10L LOGIX 760 1"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NO7631",
-          "rasgos": "ECO · 30 L · s/Boya · s/Chimenea",
+          "rasgos": "Válvula LOGIX · ECO · 30 L · s/Boya · s/Chimenea",
           "descripcion_osmofilter": "Descalcificador NOVO ECO 30L LOGIX 760 s/Boya s/ Chimenea",
-          "nombre_osmofilter": "Descalcificador NOVO ECO 30L LOGIX 760 s Boya s Chimenea"
-        }
-      ]
-    },
-    {
-      "modelo": "NOVO HYDRO",
-      "cabeza": "NOHD10",
-      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
-      "nota": "NOVO partido por válvula.",
-      "variantes": [
+          "nombre_osmofilter": "NOVO"
+        },
         {
           "ref": "NOHD10",
-          "rasgos": "10 L · 1\" · Digital",
+          "rasgos": "Válvula HYDRO · 10 L · 1\" · Digital",
           "descripcion_osmofilter": "Descalcificador NOVO 10L HYDRO 1\" Digital",
-          "nombre_osmofilter": "NOVO 10L HYDRO"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NOHD20",
-          "rasgos": "20 L · 1\" · Digital",
+          "rasgos": "Válvula HYDRO · 20 L · 1\" · Digital",
           "descripcion_osmofilter": "Descalcificador NOVO 20L HYDRO 1\" Digital",
-          "nombre_osmofilter": "NOVO 20L HYDRO"
+          "nombre_osmofilter": "NOVO"
         },
         {
           "ref": "NOHD30",
-          "rasgos": "30 L · 1\" · Digital",
+          "rasgos": "Válvula HYDRO · 30 L · 1\" · Digital",
           "descripcion_osmofilter": "Descalcificador NOVO 30L HYDRO 1\" Digital",
-          "nombre_osmofilter": "NOVO 30L HYDRO"
+          "nombre_osmofilter": "NOVO"
         }
       ]
     },
@@ -546,7 +505,8 @@
           "descripcion_osmofilter": "Dispensador Ultrafiltración GLACIAL MECÁNICA negro",
           "nombre_osmofilter": "GLACIAL MECÁNICA"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "GLASSGOW",
@@ -598,7 +558,7 @@
       "modelo": "HORIZON ALKA",
       "cabeza": "HO0001",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Osmofilter llama «HORIZON» a HO0001 y «HORIZON ALKA» a HO0002; las dos descripciones dicen «HORIZON Alka».",
       "variantes": [
         {
@@ -613,13 +573,14 @@
           "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto HORIZON Alka c/Bomba",
           "nombre_osmofilter": "HORIZON ALKA"
         }
-      ]
+      ],
+      "revisado": "[decide] Claude 25-11, coherente con el criterio de Mario"
     },
     {
       "modelo": "ICE 40 UP",
       "cabeza": "HO1102",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "La «G» de Osmofilter es «con gas» (comprobado con la característica «Agua con gas»). Se ponen en la misma gama con su nombre propio; alternativa: gama aparte «ICE G 40 UP».",
       "variantes": [
         {
@@ -661,13 +622,14 @@
           "descripcion_osmofilter": "Enfriador HORECA, ICE G 40 UP, LED 2 grifos, Negro",
           "nombre_osmofilter": "ICE G 40 UP LED"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "ICE 80 UP",
       "cabeza": "HO1064",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Igual que ICE 40 UP: la «G» es con gas.",
       "variantes": [
         {
@@ -735,13 +697,14 @@
           "descripcion_osmofilter": "Enfriador HORECA, ICE G 80 UP, LED, 2 grifos, Negro",
           "nombre_osmofilter": "ICE G 80 UP LED"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "ICE 80 UNDER",
       "cabeza": "HO1122",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "La «G» es con gas.",
       "variantes": [
         {
@@ -757,13 +720,14 @@
           "descripcion_osmofilter": "Enfriador HORECA ICE G 80 UNDER, 3 salidas",
           "nombre_osmofilter": "ICE G 80 UNDER"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "ICE 110 UP",
       "cabeza": "HO1084",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "La «G» es con gas.",
       "variantes": [
         {
@@ -779,13 +743,14 @@
           "descripcion_osmofilter": "Enfriador HORECA, ICE G 110 UP. Pantalla, 3 grifos",
           "nombre_osmofilter": "ICE G 110 UP"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "ICE 110 UNDER",
       "cabeza": "HO1086",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "La «G» es con gas.",
       "variantes": [
         {
@@ -801,7 +766,8 @@
           "descripcion_osmofilter": "Enfriador HORECA, ICE G 110 UNDER, 3 salidas",
           "nombre_osmofilter": "ICE G 110 UNDER"
         }
-      ]
+      ],
+      "revisado": "Mario 25-11"
     },
     {
       "modelo": "ICEBERG 2.0",
@@ -895,7 +861,7 @@
       "modelo": "PARÍS",
       "cabeza": "RO5102",
       "motivo_cabeza": "ya existe en el maestro",
-      "revisar": true,
+      "revisar": false,
       "nota": "Cuatro grifos PARÍS: estándar (cromo), mate, extensible y 1300. ¿Misma gama?",
       "variantes": [
         {
@@ -922,13 +888,14 @@
           "descripcion_osmofilter": "Grifo 3 Vías PARÍS",
           "nombre_osmofilter": "PARIS"
         }
-      ]
+      ],
+      "revisado": "[decide] Claude 25-11, coherente con el criterio de Mario"
     },
     {
       "modelo": "GAMA ALTA",
       "cabeza": "RO5028",
       "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
-      "revisar": true,
+      "revisar": false,
       "nota": "Grifos «Gama Alta» de Osmofilter sin nombre de modelo. RO5031 es de 2 vías.",
       "variantes": [
         {
@@ -967,7 +934,8 @@
           "descripcion_osmofilter": "Grifo Gama Alta 2 Vías Agua Fría/Natural",
           "nombre_osmofilter": "Grifo Gama Alta 2 Vías Agua Fría Natural"
         }
-      ]
+      ],
+      "revisado": "[decide] Claude 25-11, coherente con el criterio de Mario"
     },
     {
       "modelo": "SERIE ONE KT001",
