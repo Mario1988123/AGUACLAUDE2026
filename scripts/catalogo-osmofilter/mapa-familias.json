@@ -1,0 +1,37 @@
+{
+  "_leeme": "Familia de Osmofilter -> categoria global y kind (plan §A.6). 'por_ref' manda sobre 'familias'. Los recambios van por su tipo («Consumible» / «Repuesto»). Las refs que ya existen en el maestro NO cambian de categoria ni de kind aunque aqui diga otra cosa (HO1128 sigue en Gas).",
+  "familias": {
+    "Dispensadores - Equipos":              { "categoria": "dispensers",          "kind": "equipment" },
+    "Descalcificación - Equipos compactos": { "categoria": "softeners",           "kind": "equipment" },
+    "Grifos Osmofilter - Equipo":           { "categoria": "Grifos",              "kind": "accessory" },
+    "Horeca - Equipos":                     { "categoria": "horeca",              "kind": "equipment" },
+    "Flujo directo - Equipo":               { "categoria": "osmosis_direct_flow", "kind": "equipment" },
+    "Osmosis doméstica - Equipos":          { "categoria": "osmosis",             "kind": "equipment" },
+    "Ozonos - Equipos":                     { "categoria": "ozone",               "kind": "equipment" },
+    "Desincrustadores - Equipos":           { "categoria": "descalers",           "kind": "equipment" },
+    "Hidrogenador - Equipo":                { "categoria": "hydrogen",            "kind": "equipment" }
+  },
+  "por_ref": {
+    "_nota": "Osmosis domestica segun la descripcion [decide]: «5 Etapas» -> osmosis_5_stages; «Compacto» / COMPACT600 -> osmosis_compact; MAXI 600GPD -> osmosis; Ultrafiltracion -> filters.",
+    "RO1020":  { "categoria": "osmosis_5_stages" },
+    "RO1021":  { "categoria": "osmosis_5_stages" },
+    "RO1044":  { "categoria": "osmosis_5_stages" },
+    "RO1047":  { "categoria": "osmosis_5_stages" },
+    "RO1058":  { "categoria": "osmosis_compact" },
+    "RO1059":  { "categoria": "osmosis_compact" },
+    "RO1065":  { "categoria": "osmosis_compact" },
+    "RO1066":  { "categoria": "osmosis_compact" },
+    "HO0001":  { "categoria": "osmosis_compact" },
+    "HO0002":  { "categoria": "osmosis_compact" },
+    "RO1214":  { "categoria": "osmosis_compact" },
+    "RO1086":  { "categoria": "osmosis" },
+    "RO1087":  { "categoria": "osmosis" },
+    "RO1069":  { "categoria": "filters" },
+    "RO1078":  { "categoria": "filters" },
+    "RO1084":  { "categoria": "filters" }
+  },
+  "recambios": {
+    "Consumible": { "categoria": "spare_parts", "kind": "consumable" },
+    "Repuesto":   { "categoria": "spare_parts", "kind": "spare_part" }
+  }
+}

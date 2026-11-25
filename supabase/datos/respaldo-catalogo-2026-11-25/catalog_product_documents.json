@@ -1,0 +1,74 @@
+[
+ {
+  "id": "272059ee-1a7c-457b-baf4-76744bce3513",
+  "catalog_product_id": "171a4d33-ba66-406d-b63d-7e695cdea551",
+  "kind": "manufacturer_datasheet",
+  "title": "Ficha Tecnica Blue Mountain de Sobremesa",
+  "storage_path": "products/171a4d33-ba66-406d-b63d-7e695cdea551/docs/1782300337876-Ficha_Tecnica_FRO1046_FRO1047_-_ES_EN_-_Blue_Mountain_White.pdf",
+  "file_size_bytes": 278198,
+  "mime_type": "application/pdf",
+  "display_order": 0,
+  "created_at": "2026-06-24T11:25:38.601292+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "599a651d-3909-44ed-a542-5d3ebfd92b3a",
+  "catalog_product_id": "77dc2c34-2d47-45ca-b8d7-d7f4e2f7b355",
+  "kind": "manufacturer_datasheet",
+  "title": "Ficha Técnica Grifo París Extensible",
+  "storage_path": "products/77dc2c34-2d47-45ca-b8d7-d7f4e2f7b355/docs/1781701195435-Ficha_Tecnica_-_Grifo_Paris_extensible_-_ES_EN.pdf",
+  "file_size_bytes": 232105,
+  "mime_type": "application/pdf",
+  "display_order": 0,
+  "created_at": "2026-06-17T12:59:56.043429+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "651bd9a8-a4f6-43b7-bc05-4ebc4049ade6",
+  "catalog_product_id": "6ac988a3-eb83-40f8-9144-6dfa7c89f2d4",
+  "kind": "manufacturer_datasheet",
+  "title": "Ficha Tecnica Indic",
+  "storage_path": "products/6ac988a3-eb83-40f8-9144-6dfa7c89f2d4/docs/1785242186500-Ficha_Tecnica_-_ES_EN_-_Indic.pdf",
+  "file_size_bytes": 3161789,
+  "mime_type": "application/pdf",
+  "display_order": 0,
+  "created_at": "2026-07-28T12:36:27.406575+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "aeceab45-0d76-4d87-bf79-b27f1013e387",
+  "catalog_product_id": "d7a839e5-5536-47c5-90ed-e1e9b53e26cc",
+  "kind": "manufacturer_datasheet",
+  "title": "Ficha Tecnica Berlin",
+  "storage_path": "products/d7a839e5-5536-47c5-90ed-e1e9b53e26cc/docs/1785317552703-Ficha_Tecnica_-_ES_EN_-_Berl_n.pdf",
+  "file_size_bytes": 108294,
+  "mime_type": "application/pdf",
+  "display_order": 0,
+  "created_at": "2026-07-29T09:32:33.065627+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "d9e17dd2-2ef2-491c-b43a-5b30056d6b8c",
+  "catalog_product_id": "5203c01e-89b0-4b27-8fd3-810ac71917aa",
+  "kind": "manufacturer_datasheet",
+  "title": "Ficha Técnica Enfriador",
+  "storage_path": "products/5203c01e-89b0-4b27-8fd3-810ac71917aa/docs/1781768372960-Ficha_Tecnica_-_EN0901_-_ES_EN_-_Enfriadores.pdf",
+  "file_size_bytes": 1538730,
+  "mime_type": "application/pdf",
+  "display_order": 0,
+  "created_at": "2026-06-18T07:39:34.226788+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "e4a7604a-4aa8-4e0c-948c-f74833d3514c",
+  "catalog_product_id": "ea17afe4-1d0b-4de5-9550-405b91d8f3ec",
+  "kind": "manufacturer_datasheet",
+  "title": "Ficha Tecnica Grifo Durban",
+  "storage_path": "products/ea17afe4-1d0b-4de5-9550-405b91d8f3ec/docs/1781700726439-Ficha_Tecnica_-_ES_EN_-_Durban_2.0.pdf",
+  "file_size_bytes": 676477,
+  "mime_type": "application/pdf",
+  "display_order": 0,
+  "created_at": "2026-06-17T12:52:07.251032+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ }
+]

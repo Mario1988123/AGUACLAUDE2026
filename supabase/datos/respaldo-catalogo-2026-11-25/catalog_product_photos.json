@@ -1,0 +1,122 @@
+[
+ {
+  "id": "16e08734-3886-4091-9617-c5c1e2889e60",
+  "catalog_product_id": "d7a839e5-5536-47c5-90ed-e1e9b53e26cc",
+  "storage_path": "products/d7a839e5-5536-47c5-90ed-e1e9b53e26cc/photo-1785317521304.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-07-29T09:32:01.882644+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "1d491235-0bbf-4274-afbd-e1e700d6b973",
+  "catalog_product_id": "171a4d33-ba66-406d-b63d-7e695cdea551",
+  "storage_path": "products/171a4d33-ba66-406d-b63d-7e695cdea551/photo-1782300299183.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-06-24T11:24:59.86249+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "328a8c2d-b77a-4f4e-bfd3-6f924a76274f",
+  "catalog_product_id": "4338a48a-ed01-4207-adbc-5a32f61d054c",
+  "storage_path": "products/4338a48a-ed01-4207-adbc-5a32f61d054c/photo-1781700046815.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-06-17T12:40:47.429284+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "47ca9658-27b1-49ed-be1d-b0a7c105a7e9",
+  "catalog_product_id": "2cb2ad7b-1467-4e7d-b189-2af73fefed70",
+  "storage_path": "products/2cb2ad7b-1467-4e7d-b189-2af73fefed70/photo-1781700902168.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-06-17T12:55:02.856958+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "4a456135-0d94-44c1-9b13-4058e450da8f",
+  "catalog_product_id": "5203c01e-89b0-4b27-8fd3-810ac71917aa",
+  "storage_path": "products/5203c01e-89b0-4b27-8fd3-810ac71917aa/photo-1781768348665.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-06-18T07:39:09.257563+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "733cf2f0-208b-4f80-a308-24fa8cdd9f22",
+  "catalog_product_id": "ea17afe4-1d0b-4de5-9550-405b91d8f3ec",
+  "storage_path": "products/ea17afe4-1d0b-4de5-9550-405b91d8f3ec/photo-1781700689785.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-06-17T12:51:30.622861+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "a30fa58f-1c07-4b2a-8970-81923b119aa3",
+  "catalog_product_id": "eb1af50a-42ec-482d-9fc1-7c13c75424f4",
+  "storage_path": "products/eb1af50a-42ec-482d-9fc1-7c13c75424f4/photo-1783585380006.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-07-09T08:23:00.837262+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "b90990a3-85b4-4934-8772-c5bd855f122b",
+  "catalog_product_id": "95f0573e-65c3-4f32-98be-e1116a0ff867",
+  "storage_path": "products/95f0573e-65c3-4f32-98be-e1116a0ff867/photo-1783585959985.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-07-09T08:32:41.124089+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "d72069bf-7981-4bea-997f-233d42210683",
+  "catalog_product_id": "6ac988a3-eb83-40f8-9144-6dfa7c89f2d4",
+  "storage_path": "products/6ac988a3-eb83-40f8-9144-6dfa7c89f2d4/photo-1785242168096.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-07-28T12:36:08.54051+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "e1532eff-99e3-4a2a-9f88-96bcfc48a4fb",
+  "catalog_product_id": "ef1be30e-e9c7-415a-8a53-a8387dba5380",
+  "storage_path": "products/ef1be30e-e9c7-415a-8a53-a8387dba5380/photo-1786436941572.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-08-11T08:29:02.42298+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "ea88ade5-58f8-441b-96b1-78690efa3a26",
+  "catalog_product_id": "073297a2-2d0d-483a-98b5-f61edc32ab02",
+  "storage_path": "products/073297a2-2d0d-483a-98b5-f61edc32ab02/photo-1783585701735.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-07-09T08:28:22.377213+00:00",
+  "tipo_foto": null
+ },
+ {
+  "id": "ecce1248-b5d9-4529-abb7-7751d77c8659",
+  "catalog_product_id": "77dc2c34-2d47-45ca-b8d7-d7f4e2f7b355",
+  "storage_path": "products/77dc2c34-2d47-45ca-b8d7-d7f4e2f7b355/photo-1781701203203.png",
+  "alt_text": null,
+  "is_main": true,
+  "display_order": 0,
+  "created_at": "2026-06-17T13:00:03.924676+00:00",
+  "tipo_foto": null
+ }
+]

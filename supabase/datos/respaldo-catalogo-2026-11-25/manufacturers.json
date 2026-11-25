@@ -1,0 +1,50 @@
+[
+ {
+  "id": "32c0fdb7-27de-43ed-ba75-102f24e91576",
+  "name": "Hidrosalud",
+  "logo_path": null,
+  "website": "https://hidrosalud.com",
+  "notes": null,
+  "is_active": true,
+  "sort_order": 0,
+  "created_at": "2026-06-18T12:33:08.80931+00:00",
+  "updated_at": "2026-06-18T12:33:08.80931+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "d076ac3c-ff91-4cf8-86fe-e567fa5494be",
+  "name": "CORSA",
+  "logo_path": null,
+  "website": "https://corsa.es",
+  "notes": null,
+  "is_active": true,
+  "sort_order": 0,
+  "created_at": "2026-06-18T12:31:55.337699+00:00",
+  "updated_at": "2026-06-18T12:31:55.337699+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "f56eb6cf-aed9-439a-a73e-6c1c5e83a77b",
+  "name": "Osmofilter",
+  "logo_path": null,
+  "website": "www.osmofilter.com",
+  "notes": null,
+  "is_active": true,
+  "sort_order": 0,
+  "created_at": "2026-06-17T06:02:11.044474+00:00",
+  "updated_at": "2026-06-17T06:02:23.8089+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ },
+ {
+  "id": "f5b042e1-dfc6-4058-b074-3934d147ffc7",
+  "name": "Ionfilter",
+  "logo_path": null,
+  "website": "https://ionfilter.com",
+  "notes": null,
+  "is_active": true,
+  "sort_order": 0,
+  "created_at": "2026-06-18T12:32:26.249865+00:00",
+  "updated_at": "2026-06-18T12:32:26.249865+00:00",
+  "created_by": "6061318b-e53a-4238-93cc-e1641b2325ae"
+ }
+]

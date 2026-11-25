@@ -1,0 +1,44 @@
+{
+  "_leeme": [
+    "Ref de la descarga de Osmofilter -> ref que ya existe en el maestro. Con alias, el script COMPLETA la fila existente (no crea otra).",
+    "Comprobado el 2026-11-25 con datos del maestro (solo SELECT) y de D:/OSMONOVA/catalogo (solo lectura). Mario aún no lo ha confirmado (§H.5): se aplica por defecto y se le enseña.",
+    "Para quitar un alias, borra su entrada en «alias»: entonces se crearía una fila nueva con la ref de Osmofilter."
+  ],
+  "alias": {
+    "RO5063": "RO5063.1",
+    "RO5098": "RO5098.1"
+  },
+  "evidencia": {
+    "RO5063": {
+      "conclusion": "Mismo artículo (confianza alta).",
+      "descarga": "«Grifo 3 Vías DURBAN 2.0 Mate», familia Grifos Osmofilter - Equipo. Sin características ni foto principal: solo imagenes/miniatura.webp (200 px).",
+      "maestro_RO5063.1": "name «Grifo Durban», short_description «Grifo Durban de 3 vías con caño extraible y acabado mate», fabricante Osmofilter, categoría Grifos, 260 x 515 mm, sin atributos. Su ficha técnica subida a mano se llama «Ficha_Tecnica_-_ES_EN_-_Durban_2.0.pdf».",
+      "coincide": [
+        "Modelo DURBAN 2.0, 3 vías, acabado mate.",
+        "La miniatura de la descarga es un grifo de caño extraíble con muelle en acero mate: lo mismo que dice la descripción del maestro («caño extraible y acabado mate»)."
+      ],
+      "no_se_puede_comparar": "La descarga no trae características de RO5063: no hay medidas ni atributos con los que cotejar los 260 x 515 mm del maestro.",
+      "otras_pistas": [
+        "RO5063.1 no aparece en ningún listado de Osmofilter (osmo_cats, Excel del catálogo, productos.json); RO5063 sí.",
+        "En Osmofilter, el único sufijo «.N» es RO5071.1 / RO5071.2 (DUBLÍN Mate / Brillo). Si RO5063.1 fuera un acabado distinto, la descripción del maestro no diría «mate»."
+      ]
+    },
+    "RO5098": {
+      "conclusion": "Mismo artículo (confianza alta).",
+      "descarga": "«Grifo 3 Vías caño flexible BILBAO 2.0 Mate» (en el Excel: «Grifo 3 Vías caño flexible, BILBAO»). Sin características ni foto principal: solo imagenes/miniatura.webp (200 px).",
+      "maestro_RO5098.1": "name «Grifo Bilbao», short_description «Grifo Bilbao de tres vías con caño extensible y negro», fabricante Osmofilter, categoría Grifos, 188 x 359 mm, sin atributos ni documentos.",
+      "coincide": [
+        "Modelo BILBAO, 3 vías, caño flexible/extensible.",
+        "La miniatura de la descarga es un grifo de cuerpo de acero mate con el caño flexible NEGRO: explica el «y negro» de la descripción del maestro, que a primera vista parecía chocar con «Mate»."
+      ],
+      "no_se_puede_comparar": "La descarga no trae características de RO5098: no hay medidas con las que cotejar los 188 x 359 mm del maestro.",
+      "otras_pistas": [
+        "RO5098.1 no aparece en ningún listado de Osmofilter; RO5098 sí."
+      ]
+    }
+  },
+  "sin_alias": {
+    "EN0901": "Está en el maestro (Enfriador, Osmofilter) y no aparece en la descarga ni en el Excel: se queda como está.",
+    "equipos_del_excel_no_descargados": "Los 35 equipos del Excel que no están en la descarga (OZ0040, OZ0052, FRO1003P, RO1899...) NO son alias: el Excel los describe como artículos distintos (versiones «Solo exportación», con pedal, personalizaciones). Sus enlaces de recambio se pierden."
+  }
+}

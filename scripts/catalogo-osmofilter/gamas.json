@@ -1,0 +1,1780 @@
+{
+  "_leeme": [
+    "Gamas del maestro (plan §A.4 y respuestas de Mario §H.1). Lo escribe el script a partir de una lista hecha a mano; ESTE fichero manda: se puede editar.",
+    "modelo = nombre corto que va en catalog_products.name y .modelo de todas las variantes (salvo «nombre» propio en la variante).",
+    "rasgos = lo que distingue a la variante (catalog_products.rasgos_identificacion). En pantalla: «MODELO · rasgos — REF».",
+    "cabeza = ref real que hace de cabeza de gama (gama_id null). Si una ref de la gama ya existe en el maestro, es ella.",
+    "Una gama de una sola ref = producto suelto: no se escribe gama_id.",
+    "revisar = true: dudosa, Mario tiene que mirarla antes de cargar.",
+    "descripcion_osmofilter y nombre_osmofilter son solo informativos (sin la marca ni «hasta fin de existencias»)."
+  ],
+  "total_refs": 174,
+  "total_gamas": 85,
+  "gamas_con_variantes": 42,
+  "gamas": [
+    {
+      "modelo": "BLUE MOUNTAIN",
+      "cabeza": "FRO1046",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1046",
+          "rasgos": "Sobremesa · Ósmosis inversa · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Sobremesa BLUE MOUNTAIN c/Bomba",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        },
+        {
+          "ref": "FRO1047",
+          "rasgos": "Ósmosis inversa · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE MOUNTAIN c/Bomba",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        },
+        {
+          "ref": "FRO1055",
+          "rasgos": "Sobremesa · Ósmosis inversa · Negro · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Sobremesa BLUE MOUNTAIN c/Bomba Negro",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        },
+        {
+          "ref": "FRO1056",
+          "rasgos": "Ósmosis inversa · Negro · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE MOUNTAIN c/Bomba Negro",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        },
+        {
+          "ref": "FRO1075",
+          "rasgos": "Ósmosis inversa · Negro · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE MOUNTAIN s/Bomba Negro",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        },
+        {
+          "ref": "FRO1059",
+          "rasgos": "Sobremesa · Ultrafiltración",
+          "descripcion_osmofilter": "Dispensador ultrafiltración BLUE MOUNTAIN sobremesa",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        },
+        {
+          "ref": "FRO1060",
+          "rasgos": "Ultrafiltración",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración BLUE MOUNTAIN",
+          "nombre_osmofilter": "BLUE MOUNTAIN"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE MOUNTAIN HIGH",
+      "cabeza": "FRO1116",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "nota": "¿Va dentro de BLUE MOUNTAIN? Osmofilter le da otro nombre: se deja aparte.",
+      "variantes": [
+        {
+          "ref": "FRO1116",
+          "rasgos": "Ósmosis inversa · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE MOUNTAIN HIGH s/Bomba",
+          "nombre_osmofilter": "BLUE MOUNTAIN HIGH"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE OCEAN",
+      "cabeza": "FRO1004",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1004",
+          "rasgos": "Inox · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Inox. BLUE OCEAN c/Bomba",
+          "nombre_osmofilter": "BLUE OCEAN"
+        },
+        {
+          "ref": "FRO1003",
+          "rasgos": "Inox · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Inox. BLUE OCEAN s/Bomba",
+          "nombre_osmofilter": "BLUE OCEAN"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE RIVER",
+      "cabeza": "FRO1018",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1018",
+          "rasgos": "Filtración · Inox",
+          "descripcion_osmofilter": "Dispensador Filtración Inox. BLUE RIVER",
+          "nombre_osmofilter": "BLUE RIVER"
+        },
+        {
+          "ref": "FRO1018P",
+          "rasgos": "Filtración · Inox · c/Pedal",
+          "descripcion_osmofilter": "Dispensador Filtración Inox. BLUE RIVER c/Pedal",
+          "nombre_osmofilter": "BLUE RIVER"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE SEA 2.0",
+      "cabeza": "FRO1077",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1077",
+          "rasgos": "c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE SEA 2.0 c/Bomba",
+          "nombre_osmofilter": "BLUE SEA 2.0"
+        },
+        {
+          "ref": "FRO1079",
+          "rasgos": "Sobremesa · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Sobremesa BLUE SEA 2.0 s/Bomba",
+          "nombre_osmofilter": "BLUE SEA 2.0"
+        },
+        {
+          "ref": "FRO1081",
+          "rasgos": "s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE SEA 2.0 s/Bomba",
+          "nombre_osmofilter": "BLUE SEA 2.0"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE SEA 3.0",
+      "cabeza": "FRO1090",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1090",
+          "rasgos": "Ósmosis inversa · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE SEA 3.0 c/Bomba",
+          "nombre_osmofilter": "BLUE SEA 3.0"
+        },
+        {
+          "ref": "FRO1104",
+          "rasgos": "Sobremesa · Ósmosis inversa · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Sobremesa Ósmosis Inversa BLUE SEA 3.0 c/Bomba",
+          "nombre_osmofilter": "BLUE SEA 3.0"
+        },
+        {
+          "ref": "FRO1091",
+          "rasgos": "Sobremesa · Ósmosis inversa · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Sobremesa Ósmosis Inversa BLUE SEA 3.0 s/Bomba",
+          "nombre_osmofilter": "BLUE SEA 3.0"
+        },
+        {
+          "ref": "FRO1094",
+          "rasgos": "Ultrafiltración",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración BLUE SEA 3.0",
+          "nombre_osmofilter": "BLUE SEA 3.0"
+        },
+        {
+          "ref": "FRO1098",
+          "rasgos": "Sobremesa · Ultrafiltración",
+          "descripcion_osmofilter": "Dispensador Sobremesa Ultrafiltración BLUE SEA 3.0",
+          "nombre_osmofilter": "BLUE SEA 3.0"
+        },
+        {
+          "ref": "FRO1095",
+          "rasgos": "Vacío (sin tratamiento)",
+          "descripcion_osmofilter": "Dispensador Vacío BLUE SEA 3.0",
+          "nombre_osmofilter": "BLUE SEA 3.0"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE SPRING",
+      "cabeza": "FRO1064",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1073",
+          "rasgos": "Ósmosis inversa · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE SPRING c/Bomba",
+          "nombre_osmofilter": "BLUE SPRING"
+        },
+        {
+          "ref": "FRO1065",
+          "rasgos": "Ósmosis inversa · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE SPRING s/Bomba",
+          "nombre_osmofilter": "BLUE SPRING"
+        },
+        {
+          "ref": "FRO1064",
+          "rasgos": "Ultrafiltración",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración BLUE SPRING",
+          "nombre_osmofilter": "BLUE SPRING"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE STORM",
+      "cabeza": "FRO1061",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Osmofilter llama «BLUE STROM» (errata) a FRO1062 y FRO1117; la descripción dice BLUE STORM. Se unen en una gama.",
+      "variantes": [
+        {
+          "ref": "FRO1062",
+          "rasgos": "Ósmosis inversa · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE STORM s/Bomba",
+          "nombre_osmofilter": "BLUE STROM"
+        },
+        {
+          "ref": "FRO1117",
+          "rasgos": "Ósmosis inversa · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE STORM c/Bomba",
+          "nombre_osmofilter": "BLUE STROM"
+        },
+        {
+          "ref": "FRO1061",
+          "rasgos": "Sobremesa · Ósmosis inversa · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Sobremesa BLUE STORM s/Bomba",
+          "nombre_osmofilter": "BLUE STORM"
+        },
+        {
+          "ref": "FRO1063",
+          "rasgos": "Ultrafiltración",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración BLUE STORM",
+          "nombre_osmofilter": "BLUE STORM"
+        }
+      ]
+    },
+    {
+      "modelo": "COMPACT600 PH",
+      "cabeza": "RO1202",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Mezcla dos familias de Osmofilter: RO1202 y RO1203 son «Flujo directo» y RO1214 «Ósmosis doméstica» (compacto). ¿Misma gama?",
+      "variantes": [
+        {
+          "ref": "RO1202",
+          "rasgos": "Flujo directo · Blanco",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo COMPACT600 PH Blanca",
+          "nombre_osmofilter": "COMPACT600 PH Blanco"
+        },
+        {
+          "ref": "RO1203",
+          "rasgos": "Flujo directo · Negro",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo COMPACT600 PH Negro",
+          "nombre_osmofilter": "COMPACT600 PH Negro"
+        },
+        {
+          "ref": "RO1214",
+          "rasgos": "Negro · LED",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa COMPACT600 PH Negro LED",
+          "nombre_osmofilter": "COMPACT600 PH Negra LED"
+        }
+      ]
+    },
+    {
+      "modelo": "COSMOS",
+      "cabeza": "RO1059",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Osmofilter llama «COSMOS Negro» a RO1065 y RO1066: se unen con COSMOS y el color va en el rasgo.",
+      "variantes": [
+        {
+          "ref": "RO1058",
+          "rasgos": "s/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto COSMOS s/Bomba",
+          "nombre_osmofilter": "COSMOS"
+        },
+        {
+          "ref": "RO1059",
+          "rasgos": "c/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto COSMOS c/Bomba",
+          "nombre_osmofilter": "COSMOS"
+        },
+        {
+          "ref": "RO1065",
+          "rasgos": "Negro · s/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto COSMOS s/Bomba Negro",
+          "nombre_osmofilter": "COSMOS Negro"
+        },
+        {
+          "ref": "RO1066",
+          "rasgos": "Negro · c/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto COSMOS c/Bomba Negro",
+          "nombre_osmofilter": "COSMOS Negro"
+        }
+      ]
+    },
+    {
+      "modelo": "DANNA",
+      "cabeza": "DDANA",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Tres nombres de Osmofilter (DANNA 30 TM68C3, DANNA 30 TM68 PILOT, DANNA TM68). DDANAP se describe como «Custom».",
+      "variantes": [
+        {
+          "ref": "DDANA",
+          "rasgos": "30 L · Válvula TM68C3 · Azul",
+          "descripcion_osmofilter": "Descalcificador DANNA TM68 Azul (30L) 1.. valve",
+          "nombre_osmofilter": "DANNA 30 TM68C3"
+        },
+        {
+          "ref": "DDANAP",
+          "rasgos": "30 L · Válvula TM68 PILOT · Azul",
+          "descripcion_osmofilter": "Descalcificador Custom TM68 PILOT Azul (30L) 1\" valve",
+          "nombre_osmofilter": "DANNA 30 TM68 PILOT"
+        },
+        {
+          "ref": "DE6835",
+          "rasgos": "35 L · Válvula TM68",
+          "descripcion_osmofilter": "Descalcificador DANNA TM68 35L",
+          "nombre_osmofilter": "DANNA TM68"
+        }
+      ]
+    },
+    {
+      "modelo": "DOLMA",
+      "cabeza": "DOL920",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Válvulas distintas (TM68, TM69 PILOT). Osmofilter llama «DOLMA TM69 LED» a DOL920.",
+      "variantes": [
+        {
+          "ref": "DO6820",
+          "rasgos": "20 L · Válvula TM68 · 1\"",
+          "descripcion_osmofilter": "Descalcificador DOLMA 20L 10x30 TM68 1\"",
+          "nombre_osmofilter": "Descalcificador DOLMA 20L 10x30 TM68 1"
+        },
+        {
+          "ref": "DOL920",
+          "rasgos": "20 L · Válvula TM69 PILOT · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador DOLMA 20L 10x30 TM69 PILOT 3/4\"",
+          "nombre_osmofilter": "DOLMA TM69 LED"
+        },
+        {
+          "ref": "DOL930",
+          "rasgos": "30 L · Válvula TM69 PILOT · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador DOLMA 30L 10x30 TM69 PILOT 3/4\"",
+          "nombre_osmofilter": "Descalcificador DOLMA 30L 10x30 TM69 PILOT 3 4"
+        }
+      ]
+    },
+    {
+      "modelo": "NOVO TM68",
+      "cabeza": "NO6835",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "NOVO partido por válvula. Alternativa: una sola gama NOVO con la válvula en el rasgo.",
+      "variantes": [
+        {
+          "ref": "NO6814",
+          "rasgos": "14 L · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO TM68 1\" 14L",
+          "nombre_osmofilter": "Descalcificador NOVO TM68 1 14L"
+        },
+        {
+          "ref": "NO6825",
+          "rasgos": "25 L · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO TM68 1\" 25L",
+          "nombre_osmofilter": "Descalcificador NOVO TM68 1 25L"
+        },
+        {
+          "ref": "NO6835",
+          "rasgos": "35 L · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO TM68 1\" 35L",
+          "nombre_osmofilter": "NOVO TM68"
+        }
+      ]
+    },
+    {
+      "modelo": "NOVO TM69",
+      "cabeza": "NO6922",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "NOVO partido por válvula.",
+      "variantes": [
+        {
+          "ref": "NO6914",
+          "rasgos": "14 L · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 14L TM69 3/4\"",
+          "nombre_osmofilter": "NOVO TM69"
+        },
+        {
+          "ref": "NO6922",
+          "rasgos": "22 L · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 22L TM69 3/4\"",
+          "nombre_osmofilter": "NOVO TM69"
+        },
+        {
+          "ref": "NO6930",
+          "rasgos": "30 L · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 30L TM69 3/4\"",
+          "nombre_osmofilter": "NOVO TM69"
+        }
+      ]
+    },
+    {
+      "modelo": "NOVO TM69 LED",
+      "cabeza": "NOL922",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Nombre de Osmofilter; la descripción dice «TM69 PILOT». NOL914 se llama «Descalcificador NOVO 14L TM69 PILOT 3/4» en Osmofilter.",
+      "variantes": [
+        {
+          "ref": "NOL914",
+          "rasgos": "14 L · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 14L TM69 PILOT 3/4\"",
+          "nombre_osmofilter": "Descalcificador NOVO 14L TM69 PILOT 3 4"
+        },
+        {
+          "ref": "NOL922",
+          "rasgos": "22 L · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 22L TM69 PILOT 3/4\"",
+          "nombre_osmofilter": "NOVO TM69 LED"
+        },
+        {
+          "ref": "NOL935",
+          "rasgos": "35 L · 3/4\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 35L TM69 PILOT 3/4\"",
+          "nombre_osmofilter": "NOVO TM69 LED"
+        }
+      ]
+    },
+    {
+      "modelo": "NOVO CLACK",
+      "cabeza": "NOC135",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "NOVO partido por válvula.",
+      "variantes": [
+        {
+          "ref": "NOC114",
+          "rasgos": "14 L · Contracorriente · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 14L CLACK Contracorriente 1\"v",
+          "nombre_osmofilter": "Descalcificador NOVO 14L CLACK Contracorriente 1 v"
+        },
+        {
+          "ref": "NOC122",
+          "rasgos": "22 L · Contracorriente · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 22L CLACK Contracorriente 1\"",
+          "nombre_osmofilter": "Descalcificador NOVO 22L CLACK Contracorriente 1"
+        },
+        {
+          "ref": "NOC135",
+          "rasgos": "35 L · Contracorriente · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 35L CLACK Contracorriente 1\"v",
+          "nombre_osmofilter": "NOVO CLACK"
+        }
+      ]
+    },
+    {
+      "modelo": "NOVO LOGIX",
+      "cabeza": "NO7610",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "NO7631 es «NOVO ECO» (sin boya ni chimenea). ¿Misma gama?",
+      "variantes": [
+        {
+          "ref": "NO7610",
+          "rasgos": "10 L · 1\"",
+          "descripcion_osmofilter": "Descalcificador NOVO 10L LOGIX 760 1\"",
+          "nombre_osmofilter": "Descalcificador NOVO 10L LOGIX 760 1"
+        },
+        {
+          "ref": "NO7631",
+          "rasgos": "ECO · 30 L · s/Boya · s/Chimenea",
+          "descripcion_osmofilter": "Descalcificador NOVO ECO 30L LOGIX 760 s/Boya s/ Chimenea",
+          "nombre_osmofilter": "Descalcificador NOVO ECO 30L LOGIX 760 s Boya s Chimenea"
+        }
+      ]
+    },
+    {
+      "modelo": "NOVO HYDRO",
+      "cabeza": "NOHD10",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "NOVO partido por válvula.",
+      "variantes": [
+        {
+          "ref": "NOHD10",
+          "rasgos": "10 L · 1\" · Digital",
+          "descripcion_osmofilter": "Descalcificador NOVO 10L HYDRO 1\" Digital",
+          "nombre_osmofilter": "NOVO 10L HYDRO"
+        },
+        {
+          "ref": "NOHD20",
+          "rasgos": "20 L · 1\" · Digital",
+          "descripcion_osmofilter": "Descalcificador NOVO 20L HYDRO 1\" Digital",
+          "nombre_osmofilter": "NOVO 20L HYDRO"
+        },
+        {
+          "ref": "NOHD30",
+          "rasgos": "30 L · 1\" · Digital",
+          "descripcion_osmofilter": "Descalcificador NOVO 30L HYDRO 1\" Digital",
+          "nombre_osmofilter": "NOVO 30L HYDRO"
+        }
+      ]
+    },
+    {
+      "modelo": "GLACIAL MECÁNICA",
+      "cabeza": "FRO1092",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1092",
+          "rasgos": "Ósmosis inversa · Blanco · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa GLACIAL MECÁNICA c/Bomba Blanco",
+          "nombre_osmofilter": "GLACIAL MECÁNICA"
+        },
+        {
+          "ref": "FRO1099",
+          "rasgos": "Ósmosis inversa · Negro · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa GLACIAL MECÁNICA c/bomba, Negro",
+          "nombre_osmofilter": "GLACIAL MECÁNICA"
+        },
+        {
+          "ref": "FRO1096",
+          "rasgos": "Ultrafiltración · Blanco",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración GLACIAL MECÁNICA Blanco",
+          "nombre_osmofilter": "GLACIAL MECÁNICA"
+        },
+        {
+          "ref": "FRO1101",
+          "rasgos": "Ultrafiltración · Negro",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración GLACIAL MECÁNICA negro",
+          "nombre_osmofilter": "GLACIAL MECÁNICA"
+        }
+      ]
+    },
+    {
+      "modelo": "GLASSGOW",
+      "cabeza": "GLA021",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "GLA011",
+          "rasgos": "10 L · 3/4\" · Negro",
+          "descripcion_osmofilter": "Descalcificador GLASSGOW 3/4\" 10L Negro",
+          "nombre_osmofilter": "GLASSGOW"
+        },
+        {
+          "ref": "GLA021",
+          "rasgos": "20 L · 3/4\" · Negro",
+          "descripcion_osmofilter": "Descalcificador GLASSGOW 3/4\" 20L Negro",
+          "nombre_osmofilter": "GLASSGOW"
+        }
+      ]
+    },
+    {
+      "modelo": "MIDEA ECO 5600",
+      "cabeza": "MI0040",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "MI0045",
+          "rasgos": "Ósmosis inversa · 2 salidas · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa 2 Salidas MIDEA ECO5600 c/Bomba",
+          "nombre_osmofilter": "MIDEA ECO 5600"
+        },
+        {
+          "ref": "MI0040",
+          "rasgos": "Ósmosis inversa · 2 salidas · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa 2 Salidas MIDEA ECO5600 s/Bomba",
+          "nombre_osmofilter": "MIDEA ECO 5600"
+        },
+        {
+          "ref": "MI0041",
+          "rasgos": "Ultrafiltración · 2 temperaturas",
+          "descripcion_osmofilter": "Dispensador Ultrafiltración 2 Temperaturas MIDEA ECO5600",
+          "nombre_osmofilter": "MIDEA ECO 5600"
+        }
+      ]
+    },
+    {
+      "modelo": "HORIZON ALKA",
+      "cabeza": "HO0001",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Osmofilter llama «HORIZON» a HO0001 y «HORIZON ALKA» a HO0002; las dos descripciones dicen «HORIZON Alka».",
+      "variantes": [
+        {
+          "ref": "HO0001",
+          "rasgos": "s/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto HORIZON Alka s/Bomba",
+          "nombre_osmofilter": "HORIZON"
+        },
+        {
+          "ref": "HO0002",
+          "rasgos": "c/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Compacto HORIZON Alka c/Bomba",
+          "nombre_osmofilter": "HORIZON ALKA"
+        }
+      ]
+    },
+    {
+      "modelo": "ICE 40 UP",
+      "cabeza": "HO1102",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "La «G» de Osmofilter es «con gas» (comprobado con la característica «Agua con gas»). Se ponen en la misma gama con su nombre propio; alternativa: gama aparte «ICE G 40 UP».",
+      "variantes": [
+        {
+          "ref": "HO1102",
+          "rasgos": "Pantalla · 2 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 40 UP. Pantalla, 2 grifos",
+          "nombre_osmofilter": "ICE 40 UP"
+        },
+        {
+          "ref": "HO1118",
+          "rasgos": "Pantalla · 2 grifos · MIRROR",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 40 UP. Pantalla, 2 grifos. MIRROR",
+          "nombre_osmofilter": "ICE 40 UP"
+        },
+        {
+          "ref": "HO1120",
+          "rasgos": "LED · 2 grifos · Negro",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 40 UP, LED 2 grifos, Negro",
+          "nombre_osmofilter": "ICE 40 UP LED"
+        },
+        {
+          "ref": "HO1103",
+          "nombre": "ICE G 40 UP",
+          "rasgos": "Con gas · Pantalla · 2 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 40 UP. Pantalla, 2 grifos",
+          "nombre_osmofilter": "ICE G 40 UP"
+        },
+        {
+          "ref": "HO1119",
+          "nombre": "ICE G 40 UP",
+          "rasgos": "Con gas · Pantalla · 2 grifos · MIRROR",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 40 UP. Pantalla, 2 grifos. MIRROR",
+          "nombre_osmofilter": "ICE G 40 UP"
+        },
+        {
+          "ref": "HO1121",
+          "nombre": "ICE G 40 UP",
+          "rasgos": "Con gas · LED · 2 grifos · Negro",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 40 UP, LED 2 grifos, Negro",
+          "nombre_osmofilter": "ICE G 40 UP LED"
+        }
+      ]
+    },
+    {
+      "modelo": "ICE 80 UP",
+      "cabeza": "HO1064",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Igual que ICE 40 UP: la «G» es con gas.",
+      "variantes": [
+        {
+          "ref": "HO1064",
+          "rasgos": "Pantalla · 2 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 80 UP. Pantalla, 2 grifos",
+          "nombre_osmofilter": "ICE 80 UP"
+        },
+        {
+          "ref": "HO1082",
+          "rasgos": "Pantalla · 3 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 80 UP. Pantalla. 3 grifos",
+          "nombre_osmofilter": "ICE 80 UP"
+        },
+        {
+          "ref": "HO1116",
+          "rasgos": "Pantalla · 2 grifos · MIRROR",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 80 UP. Pantalla, 2 grifos. MIRROR",
+          "nombre_osmofilter": "ICE 80 UP"
+        },
+        {
+          "ref": "HO2027",
+          "rasgos": "Mecánico · 2 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 80 UP , 2 Grifos Mecánico",
+          "nombre_osmofilter": "ICE 80 UP"
+        },
+        {
+          "ref": "HO1109",
+          "rasgos": "LED · 2 grifos · Negro",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 80 UP, LED, 2 grifos, Negro",
+          "nombre_osmofilter": "ICE 80 UP LED"
+        },
+        {
+          "ref": "HO1065",
+          "nombre": "ICE G 80 UP",
+          "rasgos": "Con gas · Pantalla · 2 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 80 UP. Pantalla, 2 grifos",
+          "nombre_osmofilter": "ICE G 80 UP"
+        },
+        {
+          "ref": "HO1083",
+          "nombre": "ICE G 80 UP",
+          "rasgos": "Con gas · Pantalla · 3 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 80 UP. Pantalla, 3 grifos",
+          "nombre_osmofilter": "ICE G 80 UP"
+        },
+        {
+          "ref": "HO1117",
+          "nombre": "ICE G 80 UP",
+          "rasgos": "Con gas · Pantalla · 2 grifos · MIRROR",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 80 UP. Pantalla, 2 grifos. MIRROR",
+          "nombre_osmofilter": "ICE G 80 UP"
+        },
+        {
+          "ref": "HO2032",
+          "nombre": "ICE G 80 UP",
+          "rasgos": "Con gas · Mecánico · 3 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA ICE G 80 UP, 3 grifos Mecánico",
+          "nombre_osmofilter": "ICE G 80 UP"
+        },
+        {
+          "ref": "HO1110",
+          "nombre": "ICE G 80 UP",
+          "rasgos": "Con gas · LED · 2 grifos · Negro",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 80 UP, LED, 2 grifos, Negro",
+          "nombre_osmofilter": "ICE G 80 UP LED"
+        }
+      ]
+    },
+    {
+      "modelo": "ICE 80 UNDER",
+      "cabeza": "HO1122",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "La «G» es con gas.",
+      "variantes": [
+        {
+          "ref": "HO1122",
+          "rasgos": "3 salidas",
+          "descripcion_osmofilter": "Enfriador HORECA ICE 80 UNDER, 3 salidas",
+          "nombre_osmofilter": "ICE 80 UNDER"
+        },
+        {
+          "ref": "HO1123",
+          "nombre": "ICE G 80 UNDER",
+          "rasgos": "Con gas · 3 salidas",
+          "descripcion_osmofilter": "Enfriador HORECA ICE G 80 UNDER, 3 salidas",
+          "nombre_osmofilter": "ICE G 80 UNDER"
+        }
+      ]
+    },
+    {
+      "modelo": "ICE 110 UP",
+      "cabeza": "HO1084",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "La «G» es con gas.",
+      "variantes": [
+        {
+          "ref": "HO1084",
+          "rasgos": "Pantalla · 3 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE 110 UP. Pantalla, 3 grifos",
+          "nombre_osmofilter": "ICE 110 UP"
+        },
+        {
+          "ref": "HO1085",
+          "nombre": "ICE G 110 UP",
+          "rasgos": "Con gas · Pantalla · 3 grifos",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 110 UP. Pantalla, 3 grifos",
+          "nombre_osmofilter": "ICE G 110 UP"
+        }
+      ]
+    },
+    {
+      "modelo": "ICE 110 UNDER",
+      "cabeza": "HO1086",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "La «G» es con gas.",
+      "variantes": [
+        {
+          "ref": "HO1086",
+          "rasgos": "3 salidas",
+          "descripcion_osmofilter": "Enfriador HORECA ICE 110 UNDER, 3 salidas",
+          "nombre_osmofilter": "ICE 110 UNDER"
+        },
+        {
+          "ref": "HO1087",
+          "nombre": "ICE G 110 UNDER",
+          "rasgos": "Con gas · 3 salidas",
+          "descripcion_osmofilter": "Enfriador HORECA, ICE G 110 UNDER, 3 salidas",
+          "nombre_osmofilter": "ICE G 110 UNDER"
+        }
+      ]
+    },
+    {
+      "modelo": "ICEBERG 2.0",
+      "cabeza": "FRO1088",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1088",
+          "rasgos": "c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa ICEBERG 2.0 c/Bomba",
+          "nombre_osmofilter": "ICEBERG 2.0"
+        },
+        {
+          "ref": "FRO1103",
+          "rasgos": "Negro · c/Bomba",
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa ICEBERG 2.0 c/Bomba Negro",
+          "nombre_osmofilter": "ICEBERG 2.0"
+        },
+        {
+          "ref": "FRO1102",
+          "rasgos": "Sobremesa · Negro · s/Bomba",
+          "descripcion_osmofilter": "Dispensador Sobremesa Ósmosis Inversa s/bomba ICEBERG 2.0 Negro",
+          "nombre_osmofilter": "ICEBERG 2.0"
+        }
+      ]
+    },
+    {
+      "modelo": "LONDRES",
+      "cabeza": "RO5062",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5062",
+          "rasgos": "Negro",
+          "descripcion_osmofilter": "Grifo 3 Vías LONDRES Negro",
+          "nombre_osmofilter": "LONDRES"
+        },
+        {
+          "ref": "RO5111",
+          "rasgos": "Oro cepillado",
+          "descripcion_osmofilter": "Grifo 3 Vías Londres Oro cepillado",
+          "nombre_osmofilter": "LONDRES"
+        }
+      ]
+    },
+    {
+      "modelo": "DUBLÍN 2.0",
+      "cabeza": "RO5071.1",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5071.1",
+          "rasgos": "Mate",
+          "descripcion_osmofilter": "Grifo 3 Vías DUBLÍN 2.0 Mate",
+          "nombre_osmofilter": "DUBLÍN"
+        },
+        {
+          "ref": "RO5071.2",
+          "rasgos": "Brillo",
+          "descripcion_osmofilter": "Grifo 3 Vías DUBLÍN 2.0 Brillo",
+          "nombre_osmofilter": "DUBLÍN"
+        }
+      ]
+    },
+    {
+      "modelo": "DURBAN 2.0",
+      "cabeza": "RO5063",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "nota": "RO5063 es alias de RO5063.1, que ya existe en el maestro (ver alias.json).",
+      "variantes": [
+        {
+          "ref": "RO5063",
+          "ref_maestro": "RO5063.1",
+          "rasgos": "Mate",
+          "descripcion_osmofilter": "Grifo 3 Vías DURBAN 2.0 Mate",
+          "nombre_osmofilter": "Grifo 3 Vías DURBAN 2.0 Mate"
+        },
+        {
+          "ref": "RO5113",
+          "rasgos": "Negro",
+          "descripcion_osmofilter": "Grifo 3 vías DURBAN 2.0 Negro",
+          "nombre_osmofilter": "DURBAN 2.0 Negro"
+        }
+      ]
+    },
+    {
+      "modelo": "PARÍS",
+      "cabeza": "RO5102",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": true,
+      "nota": "Cuatro grifos PARÍS: estándar (cromo), mate, extensible y 1300. ¿Misma gama?",
+      "variantes": [
+        {
+          "ref": "RO5102",
+          "rasgos": "Extensible · Mate",
+          "descripcion_osmofilter": "Grifo 3 Vías PARÍS Extensible Mate",
+          "nombre_osmofilter": "PARÍS MATE EXT"
+        },
+        {
+          "ref": "RO5066",
+          "rasgos": "Mate",
+          "descripcion_osmofilter": "Grifo 3 Vías PARÍS MATE",
+          "nombre_osmofilter": "PARÍS MATE"
+        },
+        {
+          "ref": "RO5105",
+          "rasgos": "1300 · Mate",
+          "descripcion_osmofilter": "Grifo 3 Vías PARIS 1300 Mate",
+          "nombre_osmofilter": "PARÍS 1300 MATE"
+        },
+        {
+          "ref": "RO5021",
+          "rasgos": "Cromo",
+          "descripcion_osmofilter": "Grifo 3 Vías PARÍS",
+          "nombre_osmofilter": "PARIS"
+        }
+      ]
+    },
+    {
+      "modelo": "GAMA ALTA",
+      "cabeza": "RO5028",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": true,
+      "nota": "Grifos «Gama Alta» de Osmofilter sin nombre de modelo. RO5031 es de 2 vías.",
+      "variantes": [
+        {
+          "ref": "RO5028",
+          "rasgos": "Caño corto · Brillo",
+          "descripcion_osmofilter": "Grifo Gama Alta Caño Corto Brillo",
+          "nombre_osmofilter": "GRIFO GAMA ALTA"
+        },
+        {
+          "ref": "RO5096",
+          "rasgos": "Caño corto · Mate",
+          "descripcion_osmofilter": "Grifo Gama Alta Caño Corto Mate",
+          "nombre_osmofilter": "Grifo Gama Alta Caño Corto Mate"
+        },
+        {
+          "ref": "RO5013",
+          "rasgos": "Caño largo · Brillo",
+          "descripcion_osmofilter": "Grifo Gama Alta Caño Largo Brillo",
+          "nombre_osmofilter": "Grifo Gama Alta Caño Largo Brillo"
+        },
+        {
+          "ref": "RO5026",
+          "rasgos": "Caño largo · Mate inox",
+          "descripcion_osmofilter": "Grifo Gama Alta Caño Largo Mate Inox.",
+          "nombre_osmofilter": "Grifo Gama Alta Caño Largo Mate Inox"
+        },
+        {
+          "ref": "RO5085",
+          "rasgos": "Caño largo · Negro mate",
+          "descripcion_osmofilter": "Grifo Gama Alta Caño Largo Negro Mate",
+          "nombre_osmofilter": "Grifo Gama Alta Caño Largo Negro Mate"
+        },
+        {
+          "ref": "RO5031",
+          "rasgos": "2 vías · Agua fría/natural",
+          "descripcion_osmofilter": "Grifo Gama Alta 2 Vías Agua Fría/Natural",
+          "nombre_osmofilter": "Grifo Gama Alta 2 Vías Agua Fría Natural"
+        }
+      ]
+    },
+    {
+      "modelo": "SERIE ONE KT001",
+      "cabeza": "RO5114",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5114",
+          "rasgos": "Mate",
+          "descripcion_osmofilter": "Grifo de cocina SERIE ONE KT001M mate",
+          "nombre_osmofilter": "KT001M"
+        },
+        {
+          "ref": "RO5116",
+          "rasgos": "Brillo",
+          "descripcion_osmofilter": "Grifo de cocina SERIE ONE KT001B brillo",
+          "nombre_osmofilter": "KT001B"
+        }
+      ]
+    },
+    {
+      "modelo": "MAXI 600GPD",
+      "cabeza": "RO1086",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1087",
+          "rasgos": "Filtros de 10\"",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa MAXI 600GPD 10\"",
+          "nombre_osmofilter": "MAXI 600GPD de 10"
+        },
+        {
+          "ref": "RO1086",
+          "rasgos": "Filtros de 20\" · s/Manómetro",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa MAXI 600GPD 20\" s/Manómetro",
+          "nombre_osmofilter": "MAXI 600GPD de 20"
+        }
+      ]
+    },
+    {
+      "modelo": "MICROTECH UF",
+      "cabeza": "RO1078",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1069",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ultrafiltración MICROTECH UF",
+          "nombre_osmofilter": "MICROTECH UF"
+        },
+        {
+          "ref": "RO1078",
+          "rasgos": "c/Filtro de hidrógeno",
+          "descripcion_osmofilter": "Equipo Ultrafiltración MICROTECH UF c/Filtro Hidrógeno",
+          "nombre_osmofilter": "MICROTECH UF"
+        }
+      ]
+    },
+    {
+      "modelo": "NEOZONE",
+      "cabeza": "OZ0046E",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "OZ0046E",
+          "rasgos": "s/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono PROWATER NEOZONE negro inox s/Grifo",
+          "nombre_osmofilter": "NEOZONE Negro"
+        },
+        {
+          "ref": "OZ0046E.G",
+          "rasgos": "c/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono PROWATER NEOZONE negro inox c/Grifo",
+          "nombre_osmofilter": "NEOZONE"
+        }
+      ]
+    },
+    {
+      "modelo": "OXYGEN PLUS",
+      "cabeza": "OZ0040E",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "OZ0040E",
+          "rasgos": "s/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono OXI HOME OXYGEN PLUS s/Grifo",
+          "nombre_osmofilter": "OXYGEN PLUS"
+        },
+        {
+          "ref": "OZ0040E.G",
+          "rasgos": "c/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono OXI HOME OXYGEN PLUS c/Grifo",
+          "nombre_osmofilter": "OXYGEN PLUS"
+        }
+      ]
+    },
+    {
+      "modelo": "OXYON",
+      "cabeza": "OZ0052E",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "OZ0052E",
+          "rasgos": "Azul · s/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono Pure Clean OXYON azul s/Grifo",
+          "nombre_osmofilter": "OXYON"
+        },
+        {
+          "ref": "OZ0052E.G",
+          "rasgos": "Azul · c/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono Pure Clean OXYON azul c/Grifo",
+          "nombre_osmofilter": "OXYON"
+        },
+        {
+          "ref": "OZ0062E",
+          "rasgos": "Gris · s/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono Pure Clean OXYON Gris s/grifo",
+          "nombre_osmofilter": "OXYON"
+        },
+        {
+          "ref": "OZ0062E.G",
+          "rasgos": "Gris · c/Grifo",
+          "descripcion_osmofilter": "Equipo Ozono Pure Clean OXYON Gris c/grifo",
+          "nombre_osmofilter": "OXYON"
+        }
+      ]
+    },
+    {
+      "modelo": "O5",
+      "cabeza": "RO1020",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1020",
+          "rasgos": "s/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa 5 Etapas O5 s/Bomba",
+          "nombre_osmofilter": "O5"
+        },
+        {
+          "ref": "RO1021",
+          "nombre": "O5 2.0",
+          "rasgos": "2.0 · c/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa 5 Etapas O5 2.0 c/Bomba",
+          "nombre_osmofilter": "O5"
+        }
+      ]
+    },
+    {
+      "modelo": "PURE FIVE",
+      "cabeza": "RO1047",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1047",
+          "rasgos": "c/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa 5 Etapas PURE FIVE c/Bomba",
+          "nombre_osmofilter": "PURE FIVE"
+        },
+        {
+          "ref": "RO1044",
+          "rasgos": "s/Bomba",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa 5 Etapas PURE FIVE s/Bomba",
+          "nombre_osmofilter": "PURE FIVE"
+        }
+      ]
+    },
+    {
+      "modelo": "PROLIME",
+      "cabeza": "DCAL05",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "DCAL05",
+          "rasgos": null,
+          "descripcion_osmofilter": "Desincrustador Electrónico PROLIME",
+          "nombre_osmofilter": "PROLIME"
+        },
+        {
+          "ref": "DCAL06",
+          "nombre": "PROLIME TOUCH",
+          "rasgos": "Táctil",
+          "descripcion_osmofilter": "Desincrustador Electrónico PROLIME TOUCH",
+          "nombre_osmofilter": "PROLIME TOUCH"
+        }
+      ]
+    },
+    {
+      "modelo": "IZZY ALKA",
+      "cabeza": "RO1893",
+      "motivo_cabeza": "ficha más completa (sin descatalogados ni nombre propio)",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1893",
+          "nombre": "IZZY 600 ALKA",
+          "rasgos": "600 GPD · Negro",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo IZZY 600 ALKA negro",
+          "nombre_osmofilter": "IZZY 600 ALKA Negro"
+        },
+        {
+          "ref": "RO1894",
+          "nombre": "IZZY 800 ALKA",
+          "rasgos": "800 GPD · Negro",
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo IZZY 800 ALKA Negro",
+          "nombre_osmofilter": "IZZY 800 ALKA Negro"
+        }
+      ]
+    },
+    {
+      "modelo": "ABYSS",
+      "cabeza": "AT6928",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "nota": "Osmofilter da la ref (AT6928) como nombre; el modelo sale de la descripción.",
+      "variantes": [
+        {
+          "ref": "AT6928",
+          "rasgos": null,
+          "descripcion_osmofilter": "Descalcificador TM69 PILOT Negro (25L) 3/4.. valve ABYSS",
+          "nombre_osmofilter": "AT6928"
+        }
+      ]
+    },
+    {
+      "modelo": "ATLANTIS",
+      "cabeza": "AT6925",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "AT6925",
+          "rasgos": null,
+          "descripcion_osmofilter": "Descalcificador ATLANTIS TM69 PILOT (25L) 3/4.. valve",
+          "nombre_osmofilter": "ATLANTIS"
+        }
+      ]
+    },
+    {
+      "modelo": "ALKA FLOW",
+      "cabeza": "RO1895",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1895",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo 800 GPD ALKA FLOW",
+          "nombre_osmofilter": "ALKA FLOW"
+        }
+      ]
+    },
+    {
+      "modelo": "AQUAPLUS 600",
+      "cabeza": "RO1209",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1209",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Flujo Directo 600GPD Blanco. AQUAPLUS 600",
+          "nombre_osmofilter": "AQUAPLUS"
+        }
+      ]
+    },
+    {
+      "modelo": "AQUARION",
+      "cabeza": "RO1172",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1172",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo 1000GPD AQUARION",
+          "nombre_osmofilter": "AQUARION"
+        }
+      ]
+    },
+    {
+      "modelo": "BLACK STONE",
+      "cabeza": "RO1896",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1896",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo 1000GPD BLACK STONE",
+          "nombre_osmofilter": "BLACK STONE"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE GLACIAL",
+      "cabeza": "FRO1039",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1039",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE GLACIAL c/Bomba Bayoneta",
+          "nombre_osmofilter": "BLUE GLACIAL"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE PACIFIC",
+      "cabeza": "FRO1048",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1048",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa BLUE PACIFIC c/Bomba",
+          "nombre_osmofilter": "BLUE PACIFIC"
+        }
+      ]
+    },
+    {
+      "modelo": "BLUE TECH",
+      "cabeza": "FRO1084",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1084",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa Sobremesa BLUE TECH",
+          "nombre_osmofilter": "BLUE TECH"
+        }
+      ]
+    },
+    {
+      "modelo": "BERLIN 2.0",
+      "cabeza": "RO5048",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5048",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 3 Vías BERLIN 2.0 Mate",
+          "nombre_osmofilter": "Grifo 3 Vías BERLIN 2.0 Mate"
+        }
+      ]
+    },
+    {
+      "modelo": "BILBAO 2.0",
+      "cabeza": "RO5098",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "nota": "RO5098 es alias de RO5098.1, que ya existe en el maestro.",
+      "variantes": [
+        {
+          "ref": "RO5098",
+          "ref_maestro": "RO5098.1",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 3 Vías caño flexible BILBAO 2.0 Mate",
+          "nombre_osmofilter": "Grifo 3 Vías caño flexible BILBAO 2.0 Mate"
+        }
+      ]
+    },
+    {
+      "modelo": "BURDEOS",
+      "cabeza": "RO5072",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5072",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 3 Vías BURDEOS brillo",
+          "nombre_osmofilter": "BURDEOS"
+        }
+      ]
+    },
+    {
+      "modelo": "ECO 15 G UP",
+      "cabeza": "HO1101",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "HO1101",
+          "rasgos": null,
+          "descripcion_osmofilter": "Enfriador HORECA, ECO 15 G UP",
+          "nombre_osmofilter": "ECO 15 G UP"
+        }
+      ]
+    },
+    {
+      "modelo": "ECO 20",
+      "cabeza": "HO2029",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "HO2029",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador HORECA ECO 20L/H Eléctrico Inox.",
+          "nombre_osmofilter": "ECO 20"
+        }
+      ]
+    },
+    {
+      "modelo": "ECO DROP 2.0",
+      "cabeza": "RO1080",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1080",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo ósmosis inversa flujo directo 600GPD ECO DROP 2.0",
+          "nombre_osmofilter": "ECO DROP 2.0"
+        }
+      ]
+    },
+    {
+      "modelo": "ECO25 ELITE",
+      "cabeza": "HO1128",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "HO1128",
+          "rasgos": null,
+          "descripcion_osmofilter": "Enfriador HORECA, ECO25 ELITE",
+          "nombre_osmofilter": "ECO25 ELITE"
+        }
+      ]
+    },
+    {
+      "modelo": "FRIZZIA",
+      "cabeza": "RO5112",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5112",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 5 Vías Mate FRIZZIA",
+          "nombre_osmofilter": "FRIZZIA"
+        }
+      ]
+    },
+    {
+      "modelo": "GOLDEN HOOP",
+      "cabeza": "RO1131",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1131",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo 800GPD GOLDEN HOOP",
+          "nombre_osmofilter": "GOLDEN HOOP"
+        }
+      ]
+    },
+    {
+      "modelo": "H2 SPARK",
+      "cabeza": "HY0700",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "HY0700",
+          "rasgos": null,
+          "descripcion_osmofilter": "Hidrogenador Flujo Directo H2SPARK",
+          "nombre_osmofilter": "H2 SPARK"
+        }
+      ]
+    },
+    {
+      "modelo": "H2WAVE",
+      "cabeza": "HY2020",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "HY2020",
+          "rasgos": null,
+          "descripcion_osmofilter": "Jarra Hidrogenadora H2WAVE",
+          "nombre_osmofilter": "H2WAVE"
+        }
+      ]
+    },
+    {
+      "modelo": "INDIC",
+      "cabeza": "FRO1093",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "FRO1093",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Ósmosis Inversa INDIC c/Bomba",
+          "nombre_osmofilter": "INDIC"
+        }
+      ]
+    },
+    {
+      "modelo": "LISBOA",
+      "cabeza": "RO5064",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5064",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 4 Vías LISBOA",
+          "nombre_osmofilter": "LISBOA"
+        }
+      ]
+    },
+    {
+      "modelo": "MEGA",
+      "cabeza": "RO1168P",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1168P",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo Mega 700GPD RQA",
+          "nombre_osmofilter": "MEGA"
+        }
+      ]
+    },
+    {
+      "modelo": "METEOR",
+      "cabeza": "RO1171",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1171",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo 800GPD METEOR",
+          "nombre_osmofilter": "METEOR"
+        }
+      ]
+    },
+    {
+      "modelo": "MIDEA ECO TOUCH 2.0",
+      "cabeza": "MI0037",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "MI0037",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Sobremesa Ultrafiltración MIDEA ECO TOUCH 2.0 c/Pantalla Táctil",
+          "nombre_osmofilter": "MIDEA ECO TOUCH 2.0"
+        }
+      ]
+    },
+    {
+      "modelo": "MIDEA FRIZZIA",
+      "cabeza": "MI0042",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "MI0042",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Bajo encimera FRIZZIA/MIDEA c/Gas",
+          "nombre_osmofilter": "MIDEA FRIZZIA"
+        }
+      ]
+    },
+    {
+      "modelo": "MIDEA H600",
+      "cabeza": "MI0018",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "MI0018",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Flujo Directo MIDEA H600 600GPD",
+          "nombre_osmofilter": "MIDEA H600"
+        }
+      ]
+    },
+    {
+      "modelo": "MINISOFT",
+      "cabeza": "DM7569",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "DM7569",
+          "rasgos": null,
+          "descripcion_osmofilter": "Descalcificador MINISOFT TM69 PILOT 7L 3/4\"",
+          "nombre_osmofilter": "MINISOFT TM69 PILOT"
+        }
+      ]
+    },
+    {
+      "modelo": "MÓNACO",
+      "cabeza": "RO5050",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5050",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 3 Vías MÓNACO",
+          "nombre_osmofilter": "MONACO"
+        }
+      ]
+    },
+    {
+      "modelo": "PRAGA",
+      "cabeza": "RO5108",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5108",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 5 Vías PRAGA Brillo",
+          "nombre_osmofilter": "PRAGA"
+        }
+      ]
+    },
+    {
+      "modelo": "PROTECTA",
+      "cabeza": "DCAL08",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "DCAL08",
+          "rasgos": null,
+          "descripcion_osmofilter": "Desincrustador PROTECTA",
+          "nombre_osmofilter": "PROTECTA"
+        }
+      ]
+    },
+    {
+      "modelo": "PROTEX",
+      "cabeza": "DCAL07",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "DCAL07",
+          "rasgos": null,
+          "descripcion_osmofilter": "Desincrustador PROTEX",
+          "nombre_osmofilter": "PROTEX"
+        }
+      ]
+    },
+    {
+      "modelo": "QYRO",
+      "cabeza": "RO1073P",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1073P",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo 1000GPD QYRO (CUSTOM 1000)",
+          "nombre_osmofilter": "QYRO"
+        }
+      ]
+    },
+    {
+      "modelo": "RO MOBI",
+      "cabeza": "RO1082",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1082",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Sobremesa RO MOBI s/Instalación",
+          "nombre_osmofilter": "RO MOBI"
+        }
+      ]
+    },
+    {
+      "modelo": "RO MOON",
+      "cabeza": "RO1146",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1146",
+          "rasgos": null,
+          "descripcion_osmofilter": "Dispensador Sobremesa RO MOON s/Instalación",
+          "nombre_osmofilter": "RO MOON"
+        }
+      ]
+    },
+    {
+      "modelo": "RYDON",
+      "cabeza": "RO1207",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1207",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo flujo directo hidrogenador 800GPD c/grifo smart RYDON",
+          "nombre_osmofilter": "RYDON"
+        }
+      ]
+    },
+    {
+      "modelo": "SENDA 138",
+      "cabeza": "RO1064",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1064",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo SENDA 138 600GPD",
+          "nombre_osmofilter": "SENDA 138"
+        }
+      ]
+    },
+    {
+      "modelo": "SERIE ONE KT002",
+      "cabeza": "RO5115",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5115",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo de cocina SERIE ONE KT002M mate",
+          "nombre_osmofilter": "KT002M"
+        }
+      ]
+    },
+    {
+      "modelo": "SILVER BEAST",
+      "cabeza": "RO1112",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1112",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo SILVER BEAST 1000GPD",
+          "nombre_osmofilter": "SILVER BEAST"
+        }
+      ]
+    },
+    {
+      "modelo": "THIN800",
+      "cabeza": "RO1121",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1121",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ósmosis Inversa Flujo Directo c/grifo Smart THIN800",
+          "nombre_osmofilter": "THIN800"
+        }
+      ]
+    },
+    {
+      "modelo": "XT23UF",
+      "cabeza": "RO1084",
+      "motivo_cabeza": "única",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO1084",
+          "rasgos": null,
+          "descripcion_osmofilter": "Equipo Ultrafiltración XT23UF",
+          "nombre_osmofilter": "XT23UF"
+        }
+      ]
+    },
+    {
+      "modelo": "ZAGREB",
+      "cabeza": "RO5089",
+      "motivo_cabeza": "ya existe en el maestro",
+      "revisar": false,
+      "variantes": [
+        {
+          "ref": "RO5089",
+          "rasgos": null,
+          "descripcion_osmofilter": "Grifo 3 Vías Abatible ZAGREB",
+          "nombre_osmofilter": "ZAGREB"
+        }
+      ]
+    }
+  ]
+}

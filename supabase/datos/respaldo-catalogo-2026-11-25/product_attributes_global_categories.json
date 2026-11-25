@@ -1,0 +1,637 @@
+[
+ {
+  "attribute_key": "common_dimensions_mm",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_dimensions_mm",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_dimensions_mm",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_dimensions_mm",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_dimensions_mm",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_installation_type",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_installation_type",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_weight_kg",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_weight_kg",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_weight_kg",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_weight_kg",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "common_weight_kg",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_cold_prod_lh",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_cold_prod_lh",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_cold_tank_l",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_cold_temp_c",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_cold_temp_c",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_cooling_power_w",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_energy_class",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_filters_included",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_frequency_hz",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_heating_power_w",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_hot_prod_lh",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_hot_prod_lh",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_hot_tank_l",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_hot_temp_c",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_hot_temp_c",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_inner_material",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_noise_dba",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_power_total_w",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_power_total_w",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_refrigerant",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_refrigerant_charge_g",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_sanitization",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_sanitization",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_supply_system",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_supply_system",
+  "category_key": "horeca",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_tap_flow_lmin",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "dispenser_voltage_v",
+  "category_key": "dispensers",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_body_material",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_capacity_l",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_chlorine_reduction_pct",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_connection_inches",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_max_flow_lmin",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_max_pressure_bar",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_max_temp_c",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_media_type",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_micron_absolute",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_micron_nominal",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_pressure_drop_initial_bar",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_size_inches",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "filter_useful_life_months",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_booster_power_w",
+  "category_key": "osmosis_direct_flow",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_booster_pump",
+  "category_key": "osmosis_direct_flow",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_booster_voltage_v",
+  "category_key": "osmosis_direct_flow",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_free_chlorine_max_ppm",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_max_tds_in_ppm",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_membrane_life_months",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_membrane_size",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_membrane_type",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_ph_max",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_ph_min",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_postfilter_life_months",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_prefilter_life_months",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_pressure_max_bar",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_pressure_min_bar",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_production_gpd",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_production_gpd",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_production_gpd",
+  "category_key": "osmosis_5_stages",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_production_gpd",
+  "category_key": "osmosis_compact",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_production_gpd",
+  "category_key": "osmosis_direct_flow",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_production_lday",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_recovery_pct",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_stages",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_stages",
+  "category_key": "osmosis_5_stages",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_tank_air_pressure_psi",
+  "category_key": "osmosis_5_stages",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_tank_capacity_l",
+  "category_key": "osmosis_5_stages",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_tank_capacity_l",
+  "category_key": "osmosis_compact",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_tap_flow_lmin",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_tds_rejection_pct",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_temp_max_c",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "osmosis_temp_min_c",
+  "category_key": "osmosis",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_concentration_ppm",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_generator_tech",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_lifetime_hours",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_max_flow_lmin",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_power_w",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_production_gh",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "ozone_voltage_v",
+  "category_key": "ozone",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_ambient_temp_max_c",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_bypass_integrated",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_config",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_cycle_capacity_fm3",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_inlet_outlet_inches",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_max_hardness_fr",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_nominal_flow_m3h",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_peak_flow_m3h",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_power_w",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_pressure_drop_bar",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_regen_type",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_resin_volume_l",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_salt_efficiency_glr",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_salt_per_regen_kg",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_salt_tank_kg",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_tank_material",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_temp_max_c",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_temp_min_c",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_valve_brand_model",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_voltage_v",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_water_per_regen_l",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_wifi_app",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_working_pressure_max_bar",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "softener_working_pressure_min_bar",
+  "category_key": "softeners",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_chamber_material",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_chamber_max_pressure_bar",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_connection_inches",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_dose_mjcm2",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_flow_at_dose_lmin",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_intensity_sensor",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_lamp_alarm",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_lamp_life_hours",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_lamp_power_w",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_lamp_type",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_power_total_w",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_required_uvt_pct",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_voltage_v",
+  "category_key": "filters",
+  "is_required": false
+ },
+ {
+  "attribute_key": "uv_wavelength_nm",
+  "category_key": "filters",
+  "is_required": false
+ }
+]

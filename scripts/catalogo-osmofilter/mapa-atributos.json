@@ -1,0 +1,1197 @@
+{
+  "_leeme": [
+    "Emparejamiento de las caracteristicas de Osmofilter con los atributos globales (plan §A.5).",
+    "Clave = nombre del atributo en ficha.json (grupos_ft[].items[].atributo). destino por categoria global: clave exacta, «osmosis*» (osmosis y sus subcategorias) o «*» (resto).",
+    "transformacion: numero | booleano (Si/No) | texto | enum (con «valores») | rango («2–6» -> [min, max]) | rango_con_unidad («80–85 ºC») | produccion («75 GPD - 0,2 L/min»).",
+    "En atributos numericos, «0» y «No» significan «no tiene»: no se crea fila. En texto, «No» solo se salta si lleva no_es_sin_fila.",
+    "Un global existente solo se reutiliza si coinciden significado, unidad y tipo; el script lo comprueba contra la base de datos y lo marca si el tipo no casa.",
+    "Atributo de Osmofilter sin entrada aqui = la prueba en seco lo lista y no se carga."
+  ],
+  "grupos": {
+    "Características físicas": "fisicas",
+    "Características eléctricas": "electricas",
+    "Características técnicas": "tecnicas",
+    "Características extra": "extra"
+  },
+  "orden_grupos": {
+    "fisicas": 20,
+    "electricas": 30,
+    "tecnicas": 40,
+    "extra": 60
+  },
+  "columnas": {
+    "Dimensión Ancho (a)": {
+      "columna": "dim_width_mm",
+      "factor": 1
+    },
+    "Dimensión Alto (b)": {
+      "columna": "dim_height_mm",
+      "factor": 1
+    },
+    "Dimensión Fondo (c)": {
+      "columna": "dim_depth_mm",
+      "factor": 1
+    },
+    "Peso": {
+      "columna": "weight_grams",
+      "factor": 1000
+    }
+  },
+  "rellenar_globales_existentes": {
+    "_nota": "Solo si el campo esta en null en la base de datos. grupo se rellena tambien en todos los reutilizados, solo si esta en null.",
+    "softener_cycle_capacity_fm3": {
+      "unit": "ºHf x m3"
+    }
+  },
+  "nuevos": {
+    "dispenser_dispense_height_mm": {
+      "name_es": "Altura de dispensación (d)",
+      "data_type": "number",
+      "unit": "mm",
+      "grupo": "fisicas"
+    },
+    "horeca_depth_alt_mm": {
+      "name_es": "Fondo (c')",
+      "data_type": "number",
+      "unit": "mm",
+      "grupo": "fisicas"
+    },
+    "osmosis_tank_diameter_mm": {
+      "name_es": "Diámetro del depósito",
+      "data_type": "number",
+      "unit": "mm",
+      "grupo": "fisicas"
+    },
+    "common_power_supply": {
+      "name_es": "Alimentación eléctrica",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "electricas"
+    },
+    "common_power_total_w": {
+      "name_es": "Potencia total",
+      "data_type": "number",
+      "unit": "W",
+      "grupo": "electricas"
+    },
+    "tap_aerator": {
+      "name_es": "Aireador",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_drip_tray": {
+      "name_es": "Bandeja de drenaje",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "osmosis_maintenance_lock": {
+      "name_es": "Bloqueo por mantenimiento",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_connectivity": {
+      "name_es": "Conectividad",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_flow_meter": {
+      "name_es": "Cuentalitros",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_free_dispense": {
+      "name_es": "Dispensación libre",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_programmable_dispense": {
+      "name_es": "Dispensación programable",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "dispenser_double_float": {
+      "name_es": "Doble boya",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_dual_program_dispense": {
+      "name_es": "Doble programación de dispensación",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "osmosis_hydrogenator": {
+      "name_es": "Hidrogenador",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_cabinet_install": {
+      "name_es": "Instalación en mueble (cabinet)",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_maintenance_alert": {
+      "name_es": "Aviso de mantenimiento",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "softener_hardness_mixer": {
+      "name_es": "Mezclador de dureza",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "osmosis_water_mixing": {
+      "name_es": "Mezcla de agua",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_deco_panel": {
+      "name_es": "Panel decorativo",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_lcd_display": {
+      "name_es": "Pantalla LCD",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "horeca_bottle_positioner": {
+      "name_es": "Posicionador de botellas",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_post_treatment": {
+      "name_es": "Post-tratamiento",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_leak_protection": {
+      "name_es": "Protección antifugas",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_reset": {
+      "name_es": "Reset",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "softener_resin_brand": {
+      "name_es": "Resina",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "softener_salt_sensor": {
+      "name_es": "Sensor de sal",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_eco_system": {
+      "name_es": "Sistema ECO",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "dispenser_tap_tubing": {
+      "name_es": "Tubo del grifo",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "common_uv": {
+      "name_es": "Lámpara UV",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "extra"
+    },
+    "dispenser_hot_water": {
+      "name_es": "Agua caliente",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_sparkling_water": {
+      "name_es": "Agua con gas",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_cold_water": {
+      "name_es": "Agua fría",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_ambient_water": {
+      "name_es": "Agua natural",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "softener_salt_recommended_kg": {
+      "name_es": "Cantidad de sal recomendada",
+      "data_type": "number",
+      "unit": "kg",
+      "grupo": "tecnicas"
+    },
+    "hydrogen_orp_mv": {
+      "name_es": "Capacidad ORP",
+      "data_type": "text",
+      "unit": "mV",
+      "grupo": "tecnicas"
+    },
+    "horeca_cold_continuous_l": {
+      "name_es": "Producción fría en continuo",
+      "data_type": "number",
+      "unit": "L",
+      "grupo": "tecnicas"
+    },
+    "dispenser_cold_prod_delta5_lh": {
+      "name_es": "Capacidad de enfriamiento (Δ5 ºC)",
+      "data_type": "number",
+      "unit": "L/h",
+      "grupo": "tecnicas"
+    },
+    "horeca_carbonator_l": {
+      "name_es": "Capacidad del carbonatador",
+      "data_type": "number",
+      "unit": "L",
+      "grupo": "tecnicas"
+    },
+    "dispenser_ambient_tank_l": {
+      "name_es": "Capacidad del depósito natural",
+      "data_type": "number",
+      "unit": "L",
+      "grupo": "tecnicas"
+    },
+    "osmosis_pressurized_tank_gal": {
+      "name_es": "Capacidad del depósito presurizado",
+      "data_type": "number",
+      "unit": "Gal",
+      "grupo": "tecnicas"
+    },
+    "dispenser_total_storage_l": {
+      "name_es": "Capacidad total de almacenamiento",
+      "data_type": "number",
+      "unit": "L",
+      "grupo": "tecnicas"
+    },
+    "ozone_working_flow_lmin": {
+      "name_es": "Caudal de trabajo",
+      "data_type": "number",
+      "unit": "L/min",
+      "grupo": "tecnicas"
+    },
+    "softener_valve_max_flow_m3h": {
+      "name_es": "Caudal máximo de la válvula",
+      "data_type": "number",
+      "unit": "m³/h",
+      "grupo": "tecnicas"
+    },
+    "horeca_compressor_hp": {
+      "name_es": "Compresor",
+      "data_type": "text",
+      "unit": "HP",
+      "grupo": "tecnicas"
+    },
+    "hydrogen_concentration_ppb": {
+      "name_es": "Concentración de hidrógeno",
+      "data_type": "text",
+      "unit": "ppb",
+      "grupo": "tecnicas"
+    },
+    "horeca_overflow_connection": {
+      "name_es": "Conexión rebosadero",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "common_connections": {
+      "name_es": "Conexiones",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "horeca_gas_connection": {
+      "name_es": "Conexión de gas",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "common_inlet_connection": {
+      "name_es": "Conexión agua de entrada",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "osmosis_filtered_connection": {
+      "name_es": "Conexión agua filtrada",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "osmosis_hydrogen_connection": {
+      "name_es": "Conexión agua hidrogenada",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "osmosis_permeate_connection": {
+      "name_es": "Conexión agua osmotizada",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "common_reject_connection": {
+      "name_es": "Conexión agua de rechazo",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_cold_temp_control": {
+      "name_es": "Control de temperatura fría",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "horeca_ice_bank_l": {
+      "name_es": "Depósito banco de hielo",
+      "data_type": "number",
+      "unit": "L",
+      "grupo": "tecnicas"
+    },
+    "dispenser_outlets": {
+      "name_es": "Salidas de agua",
+      "data_type": "number",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "tap_spout_shape": {
+      "name_es": "Forma del caño",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "softener_flow_direction": {
+      "name_es": "Funcionamiento de la válvula",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "common_mounting": {
+      "name_es": "Instalación",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "tap_material": {
+      "name_es": "Material de fabricación",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_hot_tank_material": {
+      "name_es": "Material del depósito caliente",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_cold_tank_material": {
+      "name_es": "Material del depósito frío",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_ambient_tank_material": {
+      "name_es": "Material del depósito natural",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "common_valve_material": {
+      "name_es": "Material de la válvula",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "tap_ways": {
+      "name_es": "Número de vías",
+      "data_type": "number",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "tap_lever_position": {
+      "name_es": "Posición de la palanca",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "horeca_co2_pressure_bar": {
+      "name_es": "Presión de CO₂",
+      "data_type": "text",
+      "unit": "bar",
+      "grupo": "tecnicas"
+    },
+    "common_pressure_min_bar": {
+      "name_es": "Presión de trabajo mínima",
+      "data_type": "number",
+      "unit": "bar",
+      "grupo": "tecnicas"
+    },
+    "common_pressure_max_bar": {
+      "name_es": "Presión de trabajo máxima",
+      "data_type": "number",
+      "unit": "bar",
+      "grupo": "tecnicas"
+    },
+    "ozone_output_mgl": {
+      "name_es": "Producción de ozono",
+      "data_type": "text",
+      "unit": "mg/l",
+      "grupo": "tecnicas"
+    },
+    "common_production_lmin": {
+      "name_es": "Producción",
+      "data_type": "number",
+      "unit": "L/min",
+      "grupo": "tecnicas"
+    },
+    "ozone_outlet_flow_lmin": {
+      "name_es": "Caudal de salida",
+      "data_type": "text",
+      "unit": "L/min",
+      "grupo": "tecnicas"
+    },
+    "softener_service_during_regen": {
+      "name_es": "Servicio durante la regeneración",
+      "data_type": "boolean",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "osmosis_tds_first_glass": {
+      "name_es": "TDS primer vaso",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "dispenser_hot_temp_min_c": {
+      "name_es": "Temperatura agua caliente mínima",
+      "data_type": "number",
+      "unit": "ºC",
+      "grupo": "tecnicas"
+    },
+    "dispenser_hot_temp_max_c": {
+      "name_es": "Temperatura agua caliente máxima",
+      "data_type": "number",
+      "unit": "ºC",
+      "grupo": "tecnicas"
+    },
+    "common_inlet_temp_min_c": {
+      "name_es": "Temperatura agua de entrada mínima",
+      "data_type": "number",
+      "unit": "ºC",
+      "grupo": "tecnicas"
+    },
+    "common_inlet_temp_max_c": {
+      "name_es": "Temperatura agua de entrada máxima",
+      "data_type": "number",
+      "unit": "ºC",
+      "grupo": "tecnicas"
+    },
+    "tap_finish": {
+      "name_es": "Acabado",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "osmosis_tap_type": {
+      "name_es": "Tipo de grifo",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "tap_handle_type": {
+      "name_es": "Tipo de mando",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "softener_salt_type": {
+      "name_es": "Tipo de sal",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    },
+    "common_treatment_type": {
+      "name_es": "Tipo de tratamiento",
+      "data_type": "text",
+      "unit": null,
+      "grupo": "tecnicas"
+    }
+  },
+  "atributos": {
+    "Altura dispensación (d)": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_dispense_height_mm"
+      }
+    },
+    "Dimensión Fondo (c')": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "horeca_depth_alt_mm"
+      },
+      "nota": "Solo Horeca: segundo fondo (c'). Qué mide exactamente [sin verificar]; mirar medidas.webp."
+    },
+    "Diametro del tanque": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "osmosis_tank_diameter_mm"
+      }
+    },
+    "Alimentación eléctrica": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_power_supply"
+      },
+      "nota": "Es un rango (220-240V~50/60Hz): no se parte en dispenser_voltage_v y _frequency_hz."
+    },
+    "Potencia calentamiento": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_heating_power_w"
+      }
+    },
+    "Potencia enfriamiento": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_cooling_power_w"
+      }
+    },
+    "Potencia total": {
+      "transformacion": "numero",
+      "destino": {
+        "dispensers": "dispenser_power_total_w",
+        "horeca": "dispenser_power_total_w",
+        "ozone": "ozone_power_w",
+        "*": "common_power_total_w"
+      }
+    },
+    "Aireador": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "tap_aerator"
+      }
+    },
+    "Bandeja drenaje": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "common_drip_tray"
+      }
+    },
+    "Bloqueo mantenimiento": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "osmosis_maintenance_lock"
+      }
+    },
+    "Bypass incluido": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "softener_bypass_integrated"
+      }
+    },
+    "Conectividad": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "common_connectivity"
+      },
+      "nota": "No se reutiliza softener_wifi_app: Osmofilter no dice que sea WiFi/App."
+    },
+    "Cuentalitros": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_flow_meter"
+      }
+    },
+    "Dispensación libre": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_free_dispense"
+      }
+    },
+    "Dispensación programable": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_programmable_dispense"
+      }
+    },
+    "Doble boya": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "dispenser_double_float"
+      }
+    },
+    "Doble programación dispensación": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_dual_program_dispense"
+      }
+    },
+    "Hidrogenador": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "osmosis_hydrogenator"
+      }
+    },
+    "Instalación cabinet": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_cabinet_install"
+      }
+    },
+    "Mantenimiento": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_maintenance_alert"
+      }
+    },
+    "Mezclador dureza": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "softener_hardness_mixer"
+      }
+    },
+    "Mixing agua": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "osmosis_water_mixing"
+      }
+    },
+    "Panel Deco": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_deco_panel"
+      }
+    },
+    "Pantalla LCD": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "common_lcd_display"
+      }
+    },
+    "Posicionador botellas": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "horeca_bottle_positioner"
+      }
+    },
+    "Post-tratamiento": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_post_treatment"
+      }
+    },
+    "Protección anti-fugas": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_leak_protection"
+      }
+    },
+    "Regeneración": {
+      "transformacion": "enum",
+      "destino": {
+        "*": "softener_regen_type"
+      },
+      "valores": {
+        "Volumétrica": "volumétrica",
+        "Cronométrica": "cronométrica"
+      }
+    },
+    "Reset": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "common_reset"
+      }
+    },
+    "Resina": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "softener_resin_brand"
+      }
+    },
+    "Sensor sal": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "softener_salt_sensor"
+      }
+    },
+    "Sistema ECO": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "common_eco_system"
+      }
+    },
+    "Tubing grifo": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "dispenser_tap_tubing"
+      }
+    },
+    "UV": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "common_uv"
+      },
+      "nota": "No se convierte a dispenser_sanitization = UV: seria deducir."
+    },
+    "Agua caliente": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "dispenser_hot_water"
+      }
+    },
+    "Agua con gas": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "dispenser_sparkling_water"
+      }
+    },
+    "Agua fría": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "dispenser_cold_water"
+      }
+    },
+    "Agua natural": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "dispenser_ambient_water"
+      }
+    },
+    "Cantidad de sal recomendada": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "softener_salt_recommended_kg"
+      },
+      "nota": "No es softener_salt_tank_kg (capacidad del deposito de sal)."
+    },
+    "Capacidad Calentamiento": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_hot_prod_lh"
+      }
+    },
+    "Capacidad ORP": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "hydrogen_orp_mv"
+      },
+      "nota": "Rango raro («450-580», «Hasta 450»): texto."
+    },
+    "Capacidad Producción Fría Contínuo": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "horeca_cold_continuous_l"
+      }
+    },
+    "Capacidad de enfriamiento <10ºC": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_cold_prod_lh"
+      }
+    },
+    "Capacidad de enfriamiento Delta 5ºC": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_cold_prod_delta5_lh"
+      },
+      "nota": "Dos medidas distintas no caben en un atributo: <10ºC va a dispenser_cold_prod_lh."
+    },
+    "Capacidad del carbonatador": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "horeca_carbonator_l"
+      }
+    },
+    "Capacidad del depósito caliente": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_hot_tank_l"
+      }
+    },
+    "Capacidad del depósito frío": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_cold_tank_l"
+      }
+    },
+    "Capacidad del depósito natural": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_ambient_tank_l"
+      }
+    },
+    "Capacidad depósito presurizado": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "osmosis_pressurized_tank_gal"
+      },
+      "nota": "En galones: no se convierte a osmosis_tank_capacity_l."
+    },
+    "Capacidad total de almacenamiento": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_total_storage_l"
+      }
+    },
+    "Caudal de trabajo": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "ozone_working_flow_lmin"
+      },
+      "nota": "No es ozone_max_flow_lmin (caudal maximo)."
+    },
+    "Caudal máx. de la válvula": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "softener_valve_max_flow_m3h"
+      },
+      "nota": "No es «Caudal punta» del equipo: no se fuerza."
+    },
+    "Caudal nominal": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "softener_nominal_flow_m3h"
+      }
+    },
+    "Compresor": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "horeca_compressor_hp"
+      },
+      "nota": "Fracciones de HP («1/6»): texto."
+    },
+    "Concentración de hidrógeno": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "hydrogen_concentration_ppb"
+      }
+    },
+    "Conexion Rebosadero": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "horeca_overflow_connection"
+      },
+      "no_es_sin_fila": true
+    },
+    "Conexiones": {
+      "transformacion": "texto",
+      "destino": {
+        "softeners": "softener_inlet_outlet_inches",
+        "*": "common_connections"
+      }
+    },
+    "Conexión Gas": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "horeca_gas_connection"
+      },
+      "no_es_sin_fila": true
+    },
+    "Conexión agua entrada": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_inlet_connection"
+      }
+    },
+    "Conexión agua filtrada": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "osmosis_filtered_connection"
+      }
+    },
+    "Conexión agua hidrogenada": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "osmosis_hydrogen_connection"
+      },
+      "no_es_sin_fila": true
+    },
+    "Conexión agua osmotizada": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "osmosis_permeate_connection"
+      }
+    },
+    "Conexión agua rechazo": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_reject_connection"
+      }
+    },
+    "Consumo de sal por regeneración": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "softener_salt_per_regen_kg"
+      }
+    },
+    "Control de temperatura fría": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "dispenser_cold_temp_control"
+      }
+    },
+    "Depósito banco de hielo": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "horeca_ice_bank_l"
+      }
+    },
+    "Dispensadores / Salidas de agua": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "dispenser_outlets"
+      }
+    },
+    "Forma de caño": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "tap_spout_shape"
+      },
+      "nota": "Texto, no enum: Osmofilter escribe «Forma de L» y «Forma en L»."
+    },
+    "Funcionamiento de la válvula": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "softener_flow_direction"
+      },
+      "nota": "El enum softener_regen_type mezcla este concepto con otro: no se reutiliza."
+    },
+    "Instalación": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_mounting"
+      },
+      "nota": "Los valores no casan con el enum common_installation_type."
+    },
+    "Litros de resina": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "softener_resin_volume_l"
+      }
+    },
+    "Material de fabricación": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "tap_material"
+      }
+    },
+    "Material depósito del agua caliente": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "dispenser_hot_tank_material"
+      }
+    },
+    "Material depósito del agua fría": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "dispenser_cold_tank_material"
+      }
+    },
+    "Material depósito del agua natural": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "dispenser_ambient_tank_material"
+      }
+    },
+    "Material válvula": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_valve_material"
+      }
+    },
+    "Modelo de válvula": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "softener_valve_brand_model"
+      }
+    },
+    "Número de vías": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "tap_ways"
+      },
+      "nota": "No choca con 3_vias / 4_vias de Infinity (otra clave)."
+    },
+    "Posición de palanca": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "tap_lever_position"
+      }
+    },
+    "Presión CO₂": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "horeca_co2_pressure_bar"
+      },
+      "nota": "Rango raro (12 equipos): texto."
+    },
+    "Presión de trabajo": {
+      "transformacion": "rango",
+      "destino": {
+        "softeners": [
+          "softener_working_pressure_min_bar",
+          "softener_working_pressure_max_bar"
+        ],
+        "osmosis*": [
+          "osmosis_pressure_min_bar",
+          "osmosis_pressure_max_bar"
+        ],
+        "*": [
+          "common_pressure_min_bar",
+          "common_pressure_max_bar"
+        ]
+      }
+    },
+    "Producción Ozono": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "ozone_output_mgl"
+      },
+      "nota": "ozone_production_gh va en g/h: otra magnitud."
+    },
+    "Producción": {
+      "transformacion": "produccion",
+      "destino": {
+        "*": {
+          "gpd": "osmosis_production_gpd",
+          "lmin": "common_production_lmin"
+        }
+      },
+      "nota": "«75 GPD - 0,2 L/min» se parte en dos. «No» = sin fila."
+    },
+    "Refrigerante": {
+      "transformacion": "enum",
+      "destino": {
+        "*": "dispenser_refrigerant"
+      },
+      "valores": {
+        "R290a": "R290",
+        "R290": "R290",
+        "R600a": "R600a",
+        "R134a": "R134a"
+      },
+      "nota": "«R290a» se guarda como «R290» [decide, a confirmar]."
+    },
+    "Rendimiento del equipo": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "softener_cycle_capacity_fm3"
+      }
+    },
+    "Salida caudal de agua": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "ozone_outlet_flow_lmin"
+      },
+      "nota": "Rango raro («4 - 7»): texto."
+    },
+    "Servicio durante regeneración": {
+      "transformacion": "booleano",
+      "destino": {
+        "*": "softener_service_during_regen"
+      }
+    },
+    "TDS Entrada Max": {
+      "transformacion": "numero",
+      "destino": {
+        "*": "osmosis_max_tds_in_ppm"
+      }
+    },
+    "TDs Primer vaso": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "osmosis_tds_first_glass"
+      }
+    },
+    "Temperatura del agua caliente": {
+      "transformacion": "rango_con_unidad",
+      "destino": {
+        "*": [
+          "dispenser_hot_temp_min_c",
+          "dispenser_hot_temp_max_c"
+        ]
+      },
+      "nota": "dispenser_hot_temp_c es un numero unico: no se toca. «No» = sin fila; «Maximo de 99ºC» = solo maxima."
+    },
+    "Temperatura del agua entrada": {
+      "transformacion": "rango",
+      "destino": {
+        "softeners": [
+          "softener_temp_min_c",
+          "softener_temp_max_c"
+        ],
+        "osmosis*": [
+          "osmosis_temp_min_c",
+          "osmosis_temp_max_c"
+        ],
+        "*": [
+          "common_inlet_temp_min_c",
+          "common_inlet_temp_max_c"
+        ]
+      }
+    },
+    "Tipo de acabado": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "tap_finish"
+      },
+      "nota": "No es common_color."
+    },
+    "Tipo de grifo": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "osmosis_tap_type"
+      }
+    },
+    "Tipo de mando": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "tap_handle_type"
+      }
+    },
+    "Tipo de sal": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "softener_salt_type"
+      }
+    },
+    "Tipo tratamiento": {
+      "transformacion": "texto",
+      "destino": {
+        "*": "common_treatment_type"
+      }
+    }
+  }
+}
