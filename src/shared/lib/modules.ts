@@ -90,6 +90,9 @@ export const MODULES: ModuleEntry[] = [
   { key: "proposals", label: "Propuestas", icon: "FileText", href: "/propuestas", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "free_trials", label: "Pruebas gratuitas", icon: "Gift", href: "/pruebas-gratuitas", configHref: "/configuracion/pruebas-gratuitas", group: "sales", rolesAllowed: SALES_ROLES },
   { key: "savings_calculator", label: "Calculadora ahorro", icon: "Calculator", href: "/calculadora-ahorro", configHref: "/configuracion/calculadora-ahorro", group: "sales", rolesAllowed: SALES_ROLES },
+  // Captación WhatsApp: opt-in que solo activa el superadmin (coste por
+  // mensaje). La página exige además su propio guard estricto.
+  { key: "captacion", label: "Captación", icon: "MessageCircle", href: "/captacion", configHref: "/configuracion/captacion", group: "sales", rolesAllowed: [...LEVEL_1_2, "sales_rep", "telemarketer"] },
   { key: "contracts", label: "Contratos", icon: "FileSignature", href: "/contratos", configHref: "/configuracion/contratos", group: "sales", rolesAllowed: SALES_ROLES },
 
   // ===== 3. VENTAS (resultado) =====

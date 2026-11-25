@@ -17,6 +17,13 @@ export interface ModuleRow {
   is_active: boolean;
 }
 
+/**
+ * Módulos que solo enciende o apaga el superadmin (desde
+ * /superadmin/empresas/[id]): llevan contrato y coste por uso. El admin de
+ * la empresa no los ve en /configuracion/modulos ni puede tocarlos.
+ */
+const SOLO_SUPERADMIN = new Set<string>(["captacion"]);
+
 async function ensureAdmin() {
   const session = await requireSession();
   if (!session.is_superadmin && !session.roles.includes("company_admin"))
@@ -58,7 +65,9 @@ export async function listCompanyModules(): Promise<ModuleRow[]> {
   for (const c of (company ?? []) as Array<{ module_key: string; is_active: boolean }>) {
     activeMap.set(c.module_key, c.is_active);
   }
-  return cats.map((c) => ({
+  return cats
+    .filter((c) => session.is_superadmin || !SOLO_SUPERADMIN.has(c.key))
+    .map((c) => ({
     key: c.key,
     label_es: c.label_es,
     description_es: c.description_es,
@@ -77,6 +86,9 @@ export async function listCompanyModules(): Promise<ModuleRow[]> {
 export async function toggleCompanyModule(moduleKey: string, isActive: boolean): Promise<void> {
   const session = await ensureAdmin();
   if (!session.company_id) throw new Error("Sin empresa");
+  if (SOLO_SUPERADMIN.has(moduleKey) && !session.is_superadmin) {
+    throw new Error("Este módulo lo activa Vercomi. Pídeselo a soporte.");
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 

@@ -23,6 +23,16 @@ const serverEnvSchema = z.object({
   // empresas en modo 'resend' caen a SMTP.
   RESEND_API_KEY: z.string().optional(),
   RESEND_WEBHOOK_SECRET: z.string().optional(),
+  // Captación WhatsApp (app de Meta de Vercomi, Tech Provider). Todas
+  // opcionales: sin ellas el módulo enseña «sin configurar» y no conecta.
+  // META_APP_SECRET firma los webhooks; sin él /api/webhooks/whatsapp no
+  // acepta nada. CAPTACION_ENVIOS_ACTIVOS=1 es la tercera llave del frío.
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  META_CONFIG_ID: z.string().optional(),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
+  META_GRAPH_VERSION: z.string().regex(/^v\d+\.\d+$/).optional(),
+  CAPTACION_ENVIOS_ACTIVOS: z.string().optional(),
 });
 
 export const publicEnv = envSchema.parse({
@@ -38,4 +48,10 @@ export const serverEnv = () =>
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    META_APP_ID: process.env.META_APP_ID,
+    META_APP_SECRET: process.env.META_APP_SECRET,
+    META_CONFIG_ID: process.env.META_CONFIG_ID,
+    META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN,
+    META_GRAPH_VERSION: process.env.META_GRAPH_VERSION || undefined,
+    CAPTACION_ENVIOS_ACTIVOS: process.env.CAPTACION_ENVIOS_ACTIVOS,
   });
