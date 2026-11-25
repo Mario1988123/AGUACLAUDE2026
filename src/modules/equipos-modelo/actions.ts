@@ -342,7 +342,23 @@ export async function corregirModeloEquipoAction(input: {
     if (!eq) return { ok: false, error: "Equipo no encontrado" };
 
     let tipo: TipoEquipo | null = eq.estado.tipo;
+    // Un accesorio (grifo, enfriador…) no es fuente ni ósmosis: se acepta tal
+    // cual y se le quita el tipo de equipo.
+    let esAccesorio = false;
     if (productId) {
+      const { data: acc } = await admin
+        .from("products")
+        .select("id")
+        .eq("id", productId)
+        .eq("company_id", companyId)
+        .eq("kind", "accessory")
+        .is("deleted_at", null)
+        .maybeSingle();
+      esAccesorio = !!acc;
+    }
+    if (productId && esAccesorio) {
+      tipo = null;
+    } else if (productId) {
       const cat = await cargarCatalogoModelo(companyId);
       const err = validarModeloElegido(productId, cat);
       if (err) return { ok: false, error: err };
@@ -381,7 +397,7 @@ export async function corregirModeloEquipoAction(input: {
       .update({
         product_id: productId,
         external_equipment_model_id: externoId,
-        ...(tipo ? { tipo_equipo: tipo } : {}),
+        ...(esAccesorio ? { tipo_equipo: null } : tipo ? { tipo_equipo: tipo } : {}),
         pendiente_identificar: false,
         modelo_identificado_at: new Date().toISOString(),
         modelo_identificado_por: session.user_id,

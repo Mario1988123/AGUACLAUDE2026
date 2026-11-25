@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Search, Droplets, GlassWater, Package, Check } from "lucide-react";
+import { ChevronLeft, Search, Droplets, GlassWater, Package, Check, Puzzle } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import {
@@ -35,7 +35,7 @@ import type { DatosHojaIdentificar } from "./datos";
  *  - oficina: desde la ficha; además puede guardar solo el tipo.
  *  - corregir: solo admin, pide motivo (decisión 5).
  */
-type Paso = "equipo" | "tipo" | "gama" | "variante" | "externo" | "motivo";
+type Paso = "equipo" | "tipo" | "gama" | "variante" | "externo" | "accesorio" | "motivo";
 
 export function HojaIdentificarEquipo({
   open,
@@ -71,7 +71,9 @@ export function HojaIdentificarEquipo({
   const [busca, setBusca] = useState("");
   const [motivo, setMotivo] = useState("");
   const [eleccion, setEleccion] = useState<
-    { product_id: string; nombre: string } | { external_id: string; nombre: string } | null
+    | { product_id: string; nombre: string; accesorio?: boolean }
+    | { external_id: string; nombre: string }
+    | null
   >(null);
 
   const gamas = useMemo(() => {
@@ -86,6 +88,12 @@ export function HojaIdentificarEquipo({
     );
   }, [tipo, busca, cat]);
 
+  const accesorios = useMemo(() => {
+    const lista = datos.accesorios ?? [];
+    const t = busca.trim().toLowerCase();
+    return t ? lista.filter((a) => a.nombre.toLowerCase().includes(t)) : lista;
+  }, [busca, datos.accesorios]);
+
   const externos = useMemo(() => {
     const t = busca.trim().toLowerCase();
     return t ? datos.externos.filter((e) => e.nombre.toLowerCase().includes(t)) : datos.externos;
@@ -94,10 +102,11 @@ export function HojaIdentificarEquipo({
   function atras() {
     setBusca("");
     if (paso === "variante") setPaso("gama");
-    else if (paso === "gama" || paso === "externo") setPaso("tipo");
+    else if (paso === "gama" || paso === "externo" || paso === "accesorio") setPaso("tipo");
     else if (paso === "tipo" && pedirEquipo) setPaso("equipo");
     else if (paso === "motivo") {
       if (eleccion && "external_id" in eleccion) setPaso("externo");
+      else if (eleccion && "accesorio" in eleccion && eleccion.accesorio) setPaso("accesorio");
       else if (gama && variantesDe(gama.id, cat).length > 0) setPaso("variante");
       else setPaso("gama");
     }
@@ -155,7 +164,11 @@ export function HojaIdentificarEquipo({
     });
   }
 
-  function elegir(sel: { product_id: string; nombre: string } | { external_id: string; nombre: string }) {
+  function elegir(
+    sel:
+      | { product_id: string; nombre: string; accesorio?: boolean }
+      | { external_id: string; nombre: string },
+  ) {
     if (modo === "corregir") {
       setEleccion(sel);
       setPaso("motivo");
@@ -175,7 +188,9 @@ export function HojaIdentificarEquipo({
             ? `¿Cuál de ${gama?.name ?? "la gama"}?`
             : paso === "externo"
               ? "Equipo de otra marca"
-              : "Motivo de la corrección";
+              : paso === "accesorio"
+                ? "¿Qué accesorio es?"
+                : "Motivo de la corrección";
 
   const botonBase =
     "flex min-h-14 w-full items-center gap-3 rounded-xl border-2 border-border bg-card p-3 text-left transition active:scale-[0.99] hover:bg-muted/40 disabled:opacity-50";
@@ -283,6 +298,22 @@ export function HojaIdentificarEquipo({
                 <Package className="h-5 w-5 shrink-0 text-muted-foreground" />
                 <span className="font-semibold">Equipo de otra marca</span>
               </button>
+              {modo === "corregir" && (
+                <button
+                  type="button"
+                  className={`${botonBase} border-dashed`}
+                  onClick={() => {
+                    setBusca("");
+                    setPaso("accesorio");
+                  }}
+                >
+                  <Puzzle className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold">Accesorio</span>
+                    <span className="block text-xs text-muted-foreground">Grifo, enfriador…</span>
+                  </span>
+                </button>
+              )}
               {modo === "oficina" && tipo && (
                 <Button
                   type="button"
@@ -298,7 +329,7 @@ export function HojaIdentificarEquipo({
             </>
           )}
 
-          {(paso === "gama" || paso === "externo") && (
+          {(paso === "gama" || paso === "externo" || paso === "accesorio") && (
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -391,6 +422,27 @@ export function HojaIdentificarEquipo({
               ))
             ))}
 
+          {paso === "accesorio" &&
+            (accesorios.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No hay accesorios en el catálogo{busca ? " con ese nombre" : ""}. Dalos de alta en
+                Productos con el tipo «Accesorio».
+              </p>
+            ) : (
+              accesorios.map((a) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  disabled={pending}
+                  className={botonBase}
+                  onClick={() => elegir({ product_id: a.id, nombre: a.nombre, accesorio: true })}
+                >
+                  <Foto p={{ main_image_url: a.main_image_url }} />
+                  <span className="font-semibold">{a.nombre}</span>
+                </button>
+              ))
+            ))}
+
           {paso === "motivo" && eleccion && (
             <div className="space-y-3">
               <p className="text-sm">
@@ -431,7 +483,7 @@ export function HojaIdentificarEquipo({
   );
 }
 
-function Foto({ p }: { p: ProductoModelo }) {
+function Foto({ p }: { p: Pick<ProductoModelo, "main_image_url"> }) {
   if (!p.main_image_url) {
     return (
       <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted">

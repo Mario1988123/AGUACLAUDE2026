@@ -191,6 +191,8 @@ export interface DatosHojaIdentificar {
   productos: ProductoModelo[];
   tipoCategoria: Record<string, TipoEquipo | null>;
   externos: Array<{ id: string; nombre: string }>;
+  /** Accesorios del catálogo (solo se ofrecen al corregir o desde la oficina). */
+  accesorios?: Array<{ id: string; nombre: string; main_image_url: string | null }>;
   equipos: Array<{
     id: string;
     etiqueta: string;
@@ -200,20 +202,41 @@ export interface DatosHojaIdentificar {
   }>;
 }
 
+/** Productos de tipo accesorio (grifos, enfriadores…) de la empresa, para poder
+ *  corregir un extra del pack que se dio de alta con el modelo equivocado. */
+export async function cargarAccesorios(
+  companyId: string,
+): Promise<Array<{ id: string; nombre: string; main_image_url: string | null }>> {
+  const admin = createAdminClient() as Admin;
+  const { data } = await admin
+    .from("products")
+    .select("id, name, main_image_url")
+    .eq("company_id", companyId)
+    .eq("kind", "accessory")
+    .is("deleted_at", null)
+    .order("name")
+    .limit(500);
+  return ((data ?? []) as Array<{ id: string; name: string | null; main_image_url: string | null }>).map(
+    (p) => ({ id: p.id, nombre: p.name ?? "Sin nombre", main_image_url: p.main_image_url ?? null }),
+  );
+}
+
 export async function cargarDatosHojaIdentificar(
   companyId: string,
   customerId: string,
 ): Promise<DatosHojaIdentificar> {
-  const [cat, externos, equipos] = await Promise.all([
+  const [cat, externos, equipos, accesorios] = await Promise.all([
     cargarCatalogoModelo(companyId),
     cargarModelosExternos(companyId),
     cargarEquiposConModelo(companyId, { customerIds: [customerId] }),
+    cargarAccesorios(companyId),
   ]);
   const solo = catalogoSoloEquipos(cat);
   return {
     productos: solo.productos,
     tipoCategoria: solo.tipoCategoria,
     externos,
+    accesorios,
     equipos: equipos.map((e) => ({
       id: e.id,
       etiqueta: e.etiqueta,
