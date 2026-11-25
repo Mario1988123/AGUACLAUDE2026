@@ -34,6 +34,14 @@ export async function cuentaPortalDeUsuario(userId: string): Promise<SesionPorta
     .maybeSingle();
   if (!cliente || cliente.deleted_at) return null;
 
+  // Empresa pausada o de baja (2026-11-27): su portal también se cierra.
+  const { data: empresa } = await admin
+    .from("companies")
+    .select("status")
+    .eq("id", cuenta.company_id)
+    .maybeSingle();
+  if (empresa?.status === "suspended" || empresa?.status === "cancelled") return null;
+
   return {
     user_id: userId,
     cuenta_id: cuenta.id,

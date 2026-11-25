@@ -2,6 +2,7 @@ import { createClient } from "@/shared/lib/supabase/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { motivoBloqueoEmpresa } from "@/shared/lib/empresas/estado";
 
 export interface SessionClaims {
   user_id: string;
@@ -87,14 +88,24 @@ async function requireSessionUncached(): Promise<SessionClaims> {
   // la tabla no existe o falla, devolvemos valores neutros (no bloqueamos).
   let mustChangePassword = false;
   let profileStatus: string | null = null;
+  let companyStatus: string | null = null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
-    const { data } = await admin
-      .from("user_profiles")
-      .select("must_change_password, status")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    // Estado de la empresa (pausada / de baja) en paralelo con el perfil.
+    const companyPromise =
+      !isSuperadmin && companyId
+        ? admin.from("companies").select("status").eq("id", companyId).maybeSingle()
+        : Promise.resolve({ data: null });
+    const [{ data }, { data: companyRow }] = await Promise.all([
+      admin
+        .from("user_profiles")
+        .select("must_change_password, status")
+        .eq("user_id", user.id)
+        .maybeSingle(),
+      companyPromise,
+    ]);
+    companyStatus = (companyRow as { status?: string | null } | null)?.status ?? null;
     mustChangePassword = Boolean(
       (data as { must_change_password?: boolean } | null)?.must_change_password,
     );
@@ -128,11 +139,23 @@ async function requireSessionUncached(): Promise<SessionClaims> {
   // aunque conserve sesión/JWT válido. Antes "Suspender" solo cambiaba el badge
   // y el ex-empleado seguía dentro hasta que el token caducaba. Superadmin y
   // 'invited' (onboarding) no se bloquean aquí.
+  //
+  // 2026-11-27: antes redirigía a /login?error=suspended, pero el middleware
+  // manda a "/" a quien tiene sesión y abre /login → "/" → requireSession →
+  // /login… en bucle. Ahora va a /acceso-bloqueado, que no pide sesión de
+  // empresa y explica el motivo.
   if (
     !isSuperadmin &&
     (profileStatus === "suspended" || profileStatus === "inactive")
   ) {
-    redirect("/login?error=suspended");
+    redirect("/acceso-bloqueado?motivo=usuario" as never);
+  }
+
+  // Empresa pausada o dada de baja: nadie de la empresa entra (el superadmin
+  // sí). Si la lectura falló, companyStatus es null y no se bloquea.
+  const motivoEmpresa = isSuperadmin ? null : motivoBloqueoEmpresa(companyStatus);
+  if (motivoEmpresa) {
+    redirect(`/acceso-bloqueado?motivo=${motivoEmpresa}` as never);
   }
 
   return {

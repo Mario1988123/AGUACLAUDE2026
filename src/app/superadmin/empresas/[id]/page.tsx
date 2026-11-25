@@ -1,8 +1,16 @@
 import { notFound } from "next/navigation";
-import { getCompany, getCompanyAdmin } from "@/modules/superadmin/companies/actions";
+import {
+  getCompany,
+  getCompanyAdmin,
+  getCompaniesMetrics,
+} from "@/modules/superadmin/companies/actions";
 import { createClient } from "@/shared/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
-import { Badge } from "@/shared/ui/badge";
+import { StatusPill } from "@/shared/components/status-pill";
+import { BackButton } from "@/shared/components/back-button";
+import { ShieldCheck } from "lucide-react";
+import { estadoEmpresa, esEmpresaProtegida } from "@/shared/lib/empresas/estado";
+import { ZonaPeligrosaEmpresa } from "@/modules/superadmin/companies/ciclo-vida-ui";
 import { CompanyEditForm } from "@/modules/superadmin/companies/edit-form";
 import { CompanyModulesPanel } from "@/modules/superadmin/companies/modules-panel";
 import { CompanyAdminPanel } from "@/modules/superadmin/companies/admin-panel";
@@ -14,20 +22,6 @@ export const dynamic = "force-dynamic";
 interface PageProps {
   params: Promise<{ id: string }>;
 }
-
-const statusLabel: Record<string, string> = {
-  trial: "Prueba",
-  active: "Activa",
-  suspended: "Suspendida",
-  cancelled: "Cancelada",
-};
-
-const statusVariant: Record<string, "default" | "secondary" | "success" | "warning" | "destructive"> = {
-  trial: "warning",
-  active: "success",
-  suspended: "destructive",
-  cancelled: "secondary",
-};
 
 const userStatusLabel: Record<string, string> = {
   active: "Activo",
@@ -46,17 +40,22 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
   }
 
   // Filtramos a campos serializables/ usados por el cliente
+  const fiscal = (company.fiscal_data ?? {}) as Record<string, string | null>;
   const safeCompany = {
     id: company.id,
     name: company.name ?? "",
     slug: company.slug ?? "",
-    status: company.status ?? "trial",
     max_users: company.max_users ?? 5,
     max_storage_mb: company.max_storage_mb ?? 1024,
     monthly_cost_cents: company.monthly_cost_cents ?? 0,
     billing_email: company.billing_email ?? null,
     primary_color: company.primary_color ?? "#2563eb",
+    fiscal_legal_name: fiscal.legal_name ?? "",
+    fiscal_tax_id: fiscal.tax_id ?? "",
+    fiscal_address: fiscal.address ?? "",
   };
+  const status = company.status ?? "trial";
+  const protegida = esEmpresaProtegida(company.id, company.protegida);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -142,7 +141,8 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
   }
 
   const companyAdmin = await getCompanyAdmin(id);
-  const [modulesRes, companyModulesRes, usersRes] = await Promise.all([
+  const metrica = (await getCompaniesMetrics([id]).catch(() => new Map())).get(id);
+  const [modulesRes, companyModulesRes, usersRes, ajustesRes] = await Promise.all([
     supabase
       .from("modules_catalog")
       .select("key, label_es, description_es, is_core, is_parked, sort_order")
@@ -153,7 +153,36 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
       .select("user_id, full_name, status, created_at")
       .eq("company_id", id)
       .order("created_at"),
+    // Datos que la propia empresa rellena en Configuración (solo lectura aquí).
+    supabase
+      .from("company_settings")
+      .select(
+        "contact_phone, contact_email, fiscal_legal_name, fiscal_tax_id, fiscal_street, fiscal_address, fiscal_postal_code, fiscal_city, fiscal_province",
+      )
+      .eq("company_id", id)
+      .maybeSingle(),
   ]);
+  const ajustes = (ajustesRes.data ?? null) as Record<string, string | null> | null;
+  const datosEmpresa: Array<[string, string]> = ajustes
+    ? (
+        [
+          ["Razón social", ajustes.fiscal_legal_name],
+          ["CIF / NIF", ajustes.fiscal_tax_id],
+          ["Teléfono", ajustes.contact_phone],
+          ["Email", ajustes.contact_email],
+          [
+            "Dirección",
+            [
+              ajustes.fiscal_street ?? ajustes.fiscal_address,
+              [ajustes.fiscal_postal_code, ajustes.fiscal_city].filter(Boolean).join(" "),
+              ajustes.fiscal_province,
+            ]
+              .filter(Boolean)
+              .join(", "),
+          ],
+        ] as Array<[string, string | null | undefined]>
+      ).filter((x): x is [string, string] => Boolean(x[1]))
+    : [];
 
   const modulesCatalog = (modulesRes.data ?? []) as {
     key: string;
@@ -174,20 +203,28 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
     created_at: string;
   }[];
 
-  const status = safeCompany.status;
   const activeMap = new Map(companyModules.map((m) => [m.module_key, m.is_active]));
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{safeCompany.name}</h1>
-            <Badge variant={statusVariant[status] ?? "secondary"}>
-              {statusLabel[status] ?? status}
-            </Badge>
+      <div className="space-y-3">
+        <BackButton href="/superadmin" label="Empresas" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="min-w-0 break-words text-2xl font-bold">{safeCompany.name}</h1>
+            <StatusPill label={estadoEmpresa(status).label} tone={estadoEmpresa(status).tono} />
+            {protegida ? (
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Protegida
+              </span>
+            ) : null}
           </div>
           <p className="text-sm text-muted-foreground">slug: {safeCompany.slug}</p>
+          {status === "cancelled" && company.cancelled_at ? (
+            <p className="text-sm text-muted-foreground">
+              De baja desde el {new Date(company.cancelled_at).toLocaleDateString("es-ES")}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -268,25 +305,62 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
               panel tenant.
             </p>
           ) : (
-            <div className="overflow-x-auto"><table className="w-full text-sm">
-              <thead className="text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 text-left">Nombre</th>
-                  <th className="py-2 text-left">Estado</th>
-                  <th className="py-2 text-left">Alta</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {users.map((u) => (
-                  <tr key={u.user_id}>
-                    <td className="py-2">{u.full_name}</td>
-                    <td className="py-2">{userStatusLabel[u.status] ?? u.status}</td>
-                    <td className="py-2">{new Date(u.created_at).toLocaleDateString("es-ES")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table></div>
+            <ul className="divide-y">
+              {users.map((u) => (
+                <li key={u.user_id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                  <span className="min-w-0 truncate">{u.full_name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {userStatusLabel[u.status] ?? u.status} ·{" "}
+                    {new Date(u.created_at).toLocaleDateString("es-ES")}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Datos que ha puesto la empresa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {datosEmpresa.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              La empresa aún no ha rellenado sus datos en Configuración.
+            </p>
+          ) : (
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+              {datosEmpresa.map(([k, v]) => (
+                <div key={k} className="min-w-0">
+                  <dt className="text-xs text-muted-foreground">{k}</dt>
+                  <dd className="break-words">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Los edita la empresa en Configuración; son los que salen en sus facturas y documentos.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-destructive">Zona peligrosa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ZonaPeligrosaEmpresa
+            companyId={id}
+            nombre={safeCompany.name}
+            status={status}
+            protegida={protegida}
+            recuento={{
+              usuarios: metrica?.users_count ?? users.length,
+              clientes: metrica?.customers_count ?? 0,
+              contratos: metrica?.contracts_active_count ?? 0,
+            }}
+          />
         </CardContent>
       </Card>
     </div>

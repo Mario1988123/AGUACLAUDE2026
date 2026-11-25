@@ -19,4 +19,6 @@ export interface CompanyDetail extends CompanyListItem {
   activated_at: string | null;
   cancelled_at: string | null;
   updated_at: string;
+  /** Columna de la migración 20261127110000; puede no venir si no se ha aplicado. */
+  protegida?: boolean | null;
 }

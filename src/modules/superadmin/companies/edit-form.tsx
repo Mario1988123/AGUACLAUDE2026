@@ -1,23 +1,26 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { updateCompanySafeAction } from "./actions";
-import type { CompanyStatus } from "./types";
 
 interface CompanyEditFormProps {
   company: {
     id: string;
     name?: string | null;
-    status?: string | null;
+    slug?: string | null;
     max_users?: number | null;
     max_storage_mb?: number | null;
     monthly_cost_cents?: number | null;
     billing_email?: string | null;
     primary_color?: string | null;
+    fiscal_legal_name?: string | null;
+    fiscal_tax_id?: string | null;
+    fiscal_address?: string | null;
   };
 }
 
@@ -36,32 +39,47 @@ function eurToCents(s: string): number | null {
   return Math.round(n * 100);
 }
 
+/**
+ * Datos, plan y límites de la empresa. El estado (pausar, baja, reactivar) no
+ * se cambia aquí: va en la «Zona peligrosa», que además lo deja auditado.
+ */
 export function CompanyEditForm({ company }: CompanyEditFormProps) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [form, setForm] = useState<{
-    name: string;
-    status: CompanyStatus;
-    max_users: number;
-    max_storage_mb: number;
-    monthly_cost_cents: number;
-    billing_email: string;
-    primary_color: string;
-  }>({
+  const [form, setForm] = useState({
     name: company.name ?? "",
-    status: (company.status as CompanyStatus) || "trial",
+    slug: company.slug ?? "",
     max_users: company.max_users ?? 5,
     max_storage_mb: company.max_storage_mb ?? 1024,
-    monthly_cost_cents: company.monthly_cost_cents ?? 0,
     billing_email: company.billing_email ?? "",
     primary_color: company.primary_color ?? "#2563eb",
+    fiscal_legal_name: company.fiscal_legal_name ?? "",
+    fiscal_tax_id: company.fiscal_tax_id ?? "",
+    fiscal_address: company.fiscal_address ?? "",
   });
   // Estado local del campo de coste mostrado en EUROS al usuario.
   const [costInputEur, setCostInputEur] = useState<string>(
     centsToEur(company.monthly_cost_cents),
   );
 
+  function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
+    setForm((f) => ({ ...f, [k]: v }));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (form.name.trim().length < 2) {
+      notify.error("Falta el nombre", "El nombre necesita al menos 2 caracteres.");
+      return;
+    }
+    if (!Number.isInteger(form.max_users) || form.max_users < 1) {
+      notify.error("Usuarios máx. no válido", "Tiene que ser 1 o más.");
+      return;
+    }
+    if (!Number.isInteger(form.max_storage_mb) || form.max_storage_mb < 64) {
+      notify.error("Almacenamiento no válido", "El mínimo son 64 MB.");
+      return;
+    }
     // Convertir euros tecleados a céntimos antes de enviar a la action.
     const cents = eurToCents(costInputEur);
     if (cents === null) {
@@ -79,79 +97,133 @@ export function CompanyEditForm({ company }: CompanyEditFormProps) {
         return;
       }
       notify.success("Empresa actualizada");
+      router.refresh();
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Nombre</Label>
-        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+    <form onSubmit={handleSubmit} className="space-y-5">
+      <fieldset className="space-y-3">
+        <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Identificación
+        </legend>
         <div className="space-y-2">
-          <Label>Estado</Label>
-          <select
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value as CompanyStatus })}
-            className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-          >
-            <option value="trial">Prueba</option>
-            <option value="active">Activa</option>
-            <option value="suspended">Suspendida</option>
-            <option value="cancelled">Cancelada</option>
-          </select>
+          <Label htmlFor="emp-nombre">Nombre</Label>
+          <Input id="emp-nombre" value={form.name} onChange={(e) => set("name", e.target.value)} />
         </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-2">
+            <Label htmlFor="emp-slug">Slug</Label>
+            <Input
+              id="emp-slug"
+              value={form.slug}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              onChange={(e) => set("slug", e.target.value.toLowerCase())}
+            />
+            <p className="text-xs text-muted-foreground">Minúsculas, números y guiones.</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="emp-color">Color</Label>
+            <Input
+              id="emp-color"
+              type="color"
+              className="h-11 w-full p-1 sm:w-20"
+              value={form.primary_color}
+              onChange={(e) => set("primary_color", e.target.value)}
+            />
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Datos fiscales y contacto
+        </legend>
         <div className="space-y-2">
-          <Label>Color</Label>
+          <Label htmlFor="emp-razon">Razón social</Label>
           <Input
-            type="color"
-            value={form.primary_color}
-            onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+            id="emp-razon"
+            value={form.fiscal_legal_name}
+            onChange={(e) => set("fiscal_legal_name", e.target.value)}
           />
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="space-y-2">
-          <Label>Usuarios máx.</Label>
-          <Input
-            type="number"
-            min={1}
-            value={form.max_users}
-            onChange={(e) => setForm({ ...form, max_users: Number(e.target.value) })}
-          />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="emp-cif">CIF / NIF</Label>
+            <Input
+              id="emp-cif"
+              value={form.fiscal_tax_id}
+              autoCapitalize="characters"
+              onChange={(e) => set("fiscal_tax_id", e.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="emp-email">Email de facturación</Label>
+            <Input
+              id="emp-email"
+              type="email"
+              inputMode="email"
+              value={form.billing_email}
+              onChange={(e) => set("billing_email", e.target.value)}
+            />
+          </div>
         </div>
         <div className="space-y-2">
-          <Label>Storage MB</Label>
+          <Label htmlFor="emp-dir">Dirección fiscal</Label>
           <Input
-            type="number"
-            min={64}
-            value={form.max_storage_mb}
-            onChange={(e) => setForm({ ...form, max_storage_mb: Number(e.target.value) })}
+            id="emp-dir"
+            value={form.fiscal_address}
+            onChange={(e) => set("fiscal_address", e.target.value)}
           />
         </div>
-        <div className="space-y-2">
-          <Label>Coste/mes (€)</Label>
-          <Input
-            type="text"
-            inputMode="decimal"
-            placeholder="199,50"
-            value={costInputEur}
-            onChange={(e) => setCostInputEur(e.target.value)}
-          />
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Plan y límites
+        </legend>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label htmlFor="emp-usuarios">Usuarios máx.</Label>
+            <Input
+              id="emp-usuarios"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              value={form.max_users}
+              onChange={(e) => set("max_users", Number(e.target.value))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="emp-mb">Almacenamiento (MB)</Label>
+            <Input
+              id="emp-mb"
+              type="number"
+              inputMode="numeric"
+              min={64}
+              value={form.max_storage_mb}
+              onChange={(e) => set("max_storage_mb", Number(e.target.value))}
+            />
+          </div>
+          <div className="col-span-2 space-y-2 sm:col-span-1">
+            <Label htmlFor="emp-coste">Coste al mes (€)</Label>
+            <Input
+              id="emp-coste"
+              type="text"
+              inputMode="decimal"
+              placeholder="199,50"
+              value={costInputEur}
+              onChange={(e) => setCostInputEur(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
-      <div className="space-y-2">
-        <Label>Email facturación</Label>
-        <Input
-          type="email"
-          value={form.billing_email}
-          onChange={(e) => setForm({ ...form, billing_email: e.target.value })}
-        />
-      </div>
+      </fieldset>
+
       <div className="flex justify-end">
-        <Button type="submit" disabled={pending}>
-          {pending ? "Guardando..." : "Guardar cambios"}
+        <Button type="submit" disabled={pending} className="h-11 w-full sm:w-auto">
+          {pending ? "Guardando…" : "Guardar cambios"}
         </Button>
       </div>
     </form>

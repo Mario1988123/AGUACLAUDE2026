@@ -17,7 +17,10 @@ async function ensureSuperadmin() {
   return session;
 }
 
-export async function listCompanies(filters?: { status?: string }): Promise<CompanyListItem[]> {
+export async function listCompanies(filters?: {
+  status?: string;
+  q?: string;
+}): Promise<CompanyListItem[]> {
   await ensureSuperadmin();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
@@ -28,6 +31,10 @@ export async function listCompanies(filters?: { status?: string }): Promise<Comp
     )
     .order("created_at", { ascending: false });
   if (filters?.status) query = query.eq("status", filters.status);
+  // Búsqueda por nombre o slug. Se quitan los caracteres que rompen el
+  // filtro `or` de PostgREST (comas, paréntesis, comodines).
+  const q = (filters?.q ?? "").replace(/[,()%*\\]/g, " ").trim();
+  if (q) query = query.or(`name.ilike.*${q}*,slug.ilike.*${q}*`);
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as CompanyListItem[];
@@ -256,13 +263,46 @@ export async function updateCompanyAction(id: string, input: CompanyUpdateInput)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const update: Record<string, unknown> = {};
-  if (parsed.name !== undefined) update.name = parsed.name;
-  if (parsed.status !== undefined) update.status = parsed.status;
+  if (parsed.name !== undefined) update.name = parsed.name.trim();
+  if (parsed.slug !== undefined) {
+    const slug = serverSlugify(parsed.slug);
+    if (slug.length < 2) throw new Error("El slug necesita al menos 2 caracteres");
+    const { data: otra } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("slug", slug)
+      .neq("id", id)
+      .maybeSingle();
+    if (otra) throw new Error(`Ya existe otra empresa con el slug "${slug}"`);
+    update.slug = slug;
+  }
+  // Datos fiscales: se mezclan con lo que ya hubiera en fiscal_data para no
+  // perder claves que este formulario no conoce.
+  if (
+    parsed.fiscal_legal_name !== undefined ||
+    parsed.fiscal_tax_id !== undefined ||
+    parsed.fiscal_address !== undefined
+  ) {
+    const { data: actual } = await supabase
+      .from("companies")
+      .select("fiscal_data")
+      .eq("id", id)
+      .maybeSingle();
+    const fiscal = { ...((actual?.fiscal_data as Record<string, unknown> | null) ?? {}) };
+    if (parsed.fiscal_legal_name !== undefined) fiscal.legal_name = parsed.fiscal_legal_name.trim();
+    if (parsed.fiscal_tax_id !== undefined)
+      fiscal.tax_id = parsed.fiscal_tax_id.trim().toUpperCase().replace(/[\s.-]/g, "");
+    if (parsed.fiscal_address !== undefined) fiscal.address = parsed.fiscal_address.trim();
+    update.fiscal_data = fiscal;
+  }
+  // El estado ya no se cambia aquí: va por cambiarEstadoEmpresaSafeAction
+  // (ciclo-vida-actions.ts), que además fecha la baja y lo audita.
   if (parsed.max_users !== undefined) update.max_users = parsed.max_users;
   if (parsed.max_storage_mb !== undefined) update.max_storage_mb = parsed.max_storage_mb;
   if (parsed.monthly_cost_cents !== undefined) update.monthly_cost_cents = parsed.monthly_cost_cents;
   if (parsed.billing_email !== undefined) update.billing_email = parsed.billing_email || null;
   if (parsed.primary_color !== undefined) update.primary_color = parsed.primary_color;
+  if (Object.keys(update).length === 0) return;
 
   const { error } = await supabase.from("companies").update(update).eq("id", id);
   if (error) throw error;
