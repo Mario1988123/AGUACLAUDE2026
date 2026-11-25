@@ -82,32 +82,44 @@ function decodeURIComponentSeguro(s: string): string {
 
 export interface TelefonoElegido {
   e164: string | null;
-  /** 3 = móvil de enlace de WhatsApp · 2 = móvil de su web · 1 = móvil de OSM · 0 = sin móvil */
+  /** 3 = enlace de WhatsApp en su web (móvil o fijo) · 2 = móvil de su web · 1 = móvil de OSM · 0 = sin móvil */
   prioridad: 0 | 1 | 2 | 3;
   fuente: "osm" | "web_propia" | "whatsapp_web" | null;
   url: string | null;
+  /** true = un enlace de WhatsApp prueba que ese número lo tiene. */
+  whatsapp: boolean;
+}
+
+/** ¿Se le puede escribir? Móvil, o fijo con WhatsApp demostrado. */
+export function contactablePorWhatsapp(t: { e164: string | null; whatsapp: boolean }): boolean {
+  return Boolean(t.e164 && (t.whatsapp || esMovilES(t.e164)));
 }
 
 /**
- * Elige el teléfono: primero un móvil (con la prioridad del plan §4.2.8) y,
- * si no hay ninguno, el primer fijo (que irá a «revisar»).
+ * Elige el teléfono (plan §4.2.8). Un número de un enlace de WhatsApp de su
+ * web es lo mejor, aunque sea fijo: el enlace demuestra que atienden por
+ * WhatsApp (decisión de Mario del 25-11-2026). Después, el móvil de su web y
+ * el de OSM. Si solo hay fijos sin enlace de WhatsApp, se devuelve el fijo con
+ * `whatsapp: false` y quien llama lo omite.
  */
 export function elegirTelefono(
   deOsm: CandidatoTelefono[],
-  urlOsm: string,
+  urlOsm: string | null,
   deWeb: Array<CandidatoTelefono & { url: string }>,
 ): TelefonoElegido {
   const waMovil = deWeb.find((c) => c.origen === "whatsapp" && esMovilES(c.e164));
-  if (waMovil) return { e164: waMovil.e164, prioridad: 3, fuente: "whatsapp_web", url: waMovil.url };
+  if (waMovil) return { e164: waMovil.e164, prioridad: 3, fuente: "whatsapp_web", url: waMovil.url, whatsapp: true };
+  const waFijo = deWeb.find((c) => c.origen === "whatsapp");
+  if (waFijo) return { e164: waFijo.e164, prioridad: 3, fuente: "whatsapp_web", url: waFijo.url, whatsapp: true };
   const webMovil = deWeb.find((c) => esMovilES(c.e164));
-  if (webMovil) return { e164: webMovil.e164, prioridad: 2, fuente: "web_propia", url: webMovil.url };
+  if (webMovil) return { e164: webMovil.e164, prioridad: 2, fuente: "web_propia", url: webMovil.url, whatsapp: false };
   const osmMovil = deOsm.find((c) => esMovilES(c.e164));
-  if (osmMovil) return { e164: osmMovil.e164, prioridad: 1, fuente: "osm", url: urlOsm };
+  if (osmMovil) return { e164: osmMovil.e164, prioridad: 1, fuente: "osm", url: urlOsm, whatsapp: false };
   const osmFijo = deOsm[0];
-  if (osmFijo) return { e164: osmFijo.e164, prioridad: 0, fuente: "osm", url: urlOsm };
+  if (osmFijo) return { e164: osmFijo.e164, prioridad: 0, fuente: "osm", url: urlOsm, whatsapp: false };
   const webFijo = deWeb[0];
-  if (webFijo) return { e164: webFijo.e164, prioridad: 0, fuente: "web_propia", url: webFijo.url };
-  return { e164: null, prioridad: 0, fuente: null, url: null };
+  if (webFijo) return { e164: webFijo.e164, prioridad: 0, fuente: "web_propia", url: webFijo.url, whatsapp: false };
+  return { e164: null, prioridad: 0, fuente: null, url: null, whatsapp: false };
 }
 
 // -----------------------------------------------------------------------------
@@ -217,8 +229,11 @@ export interface ElementoOsm {
 
 export interface FichaNegocio {
   nombre: string;
-  osm_id: string;
-  osm_url: string;
+  /** De OSM. Nulo si la ficha viene de Places. */
+  osm_id: string | null;
+  osm_url: string | null;
+  /** De Places: lo ÚNICO que se guarda de Google. */
+  place_id?: string | null;
   direccion: string | null;
   municipio: string | null;
   codigo_postal: string | null;
@@ -281,4 +296,64 @@ export function fichaDeElemento(el: ElementoOsm): FichaNegocio | null {
     email: correo && correo.includes("@") && !CORREO_BASURA.test(correo) ? correo : null,
     telefonos_osm: telefonos,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Google Places (complemento, con tope mensual)
+// -----------------------------------------------------------------------------
+
+/**
+ * Nombre del negocio leído de SU web (de Places no se guarda el nombre):
+ * og:site_name, después og:title y después <title>, quitando el eslogan
+ * que suele ir tras «|», «–», «-» o «·».
+ */
+export function nombreDeHtml(html: string): string | null {
+  const meta = (prop: string) =>
+    new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*content=["']([^"']+)["']`, "i").exec(html)?.[1] ??
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${prop}["']`, "i").exec(html)?.[1];
+  const bruto = meta("og:site_name") ?? meta("og:title") ?? /<title[^>]*>([^<]+)<\/title>/i.exec(html)?.[1] ?? null;
+  if (!bruto) return null;
+  const limpio = bruto
+    .replace(/&amp;/g, "&")
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&#8211;|&ndash;/g, "–")
+    .replace(/&#8217;/g, "’")
+    .replace(/&[a-z]+;|&#\d+;/gi, " ")
+    .split(/\s[|–\-·:]\s|\s\|\s?/)[0]!
+    .replace(/\s+/g, " ")
+    .trim();
+  if (limpio.length < 2 || /^(inicio|home|bienvenid|welcome|p[aá]gina principal)/i.test(limpio)) return null;
+  return limpio.slice(0, 200);
+}
+
+/** Cuerpo de Places Text Search (New) para un término en una zona. */
+export function cuerpoPlaces(termino: string, z: Zona, pageToken?: string): Record<string, unknown> {
+  const base: Record<string, unknown> = { languageCode: "es", regionCode: "ES", pageSize: 20 };
+  if (pageToken) base.pageToken = pageToken;
+  if (z.tipo === "radio") {
+    return {
+      ...base,
+      textQuery: termino,
+      locationBias: {
+        circle: { center: { latitude: z.lat, longitude: z.lng }, radius: Math.min(50_000, Math.round(z.km * 1000)) },
+      },
+    };
+  }
+  const donde =
+    z.tipo === "municipio"
+      ? `${z.nombre.replace(/["\\]/g, "")}, ${PROVINCIAS.find((p) => p.iso === z.provincia_iso)?.nombre ?? ""}`
+      : PROVINCIAS.find((p) => p.iso === z.iso)?.nombre ?? "";
+  return { ...base, textQuery: `${termino} en ${donde}` };
+}
+
+/** Distancia en km (para descartar lo que Places devuelve fuera del radio: el sesgo no es una restricción). */
+export function distanciaKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
 }

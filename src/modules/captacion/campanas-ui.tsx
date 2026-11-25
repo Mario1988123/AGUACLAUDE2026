@@ -151,12 +151,23 @@ export function NuevaCampana({ tipologias }: { tipologias: TipologiaFila[] }) {
 // Botones de búsqueda
 // -----------------------------------------------------------------------------
 
-export function AccionesBusqueda({ campanaId, hayPendientes }: { campanaId: string; hayPendientes: boolean }) {
+export function AccionesBusqueda({
+  campanaId,
+  hayPendientes,
+  places,
+}: {
+  campanaId: string;
+  hayPendientes: boolean;
+  places: { configurado: boolean; usadas: number; tope: number };
+}) {
   const router = useRouter();
   const [buscando, startBuscar] = useTransition();
   const [procesando, startProcesar] = useTransition();
+  const [google, startGoogle] = useTransition();
+  const quedan = Math.max(0, places.tope - places.usadas);
 
   return (
+    <div className="space-y-2">
     <div className="flex flex-col gap-2 sm:flex-row">
       <Button
         variant={hayPendientes ? "outline" : "default"}
@@ -193,6 +204,31 @@ export function AccionesBusqueda({ campanaId, hayPendientes }: { campanaId: stri
         </Button>
       ) : null}
     </div>
+    {places.configurado ? (
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+        <Button
+          variant="outline"
+          className="h-11"
+          disabled={buscando || procesando || google || quedan === 0}
+          onClick={() =>
+            startGoogle(async () => {
+              const r = await buscarNegociosAction(campanaId, "places");
+              if (!r.ok) toast.error(r.error);
+              else if (r.creadas === 0) toast.info("Ya hay una búsqueda de Google en marcha para esa zona.");
+              else toast.success("Búsqueda en Google en cola. Pulsa «Procesar ahora».");
+              router.refresh();
+            })
+          }
+        >
+          {google ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+          Buscar también en Google
+        </Button>
+        <span className="text-xs tabular-nums text-muted-foreground">
+          {places.usadas} de {places.tope} consultas gratis este mes (todas las empresas)
+        </span>
+      </div>
+    ) : null}
+    </div>
   );
 }
 
@@ -222,7 +258,8 @@ export function TarjetaProspecto({ p }: { p: ProspectoFila }) {
       router.refresh();
     });
 
-  const puedePasar = p.etapa !== "nuevo" && p.es_movil && !p.revisar_motivo?.startsWith("Su teléfono ya es");
+  const conWhatsapp = p.es_movil || p.telefono_fuente === "whatsapp_web";
+  const puedePasar = p.etapa !== "nuevo" && conWhatsapp && !p.revisar_motivo?.startsWith("Su teléfono ya es");
 
   return (
     <li className="space-y-2 rounded-xl border border-border p-4">
@@ -236,7 +273,7 @@ export function TarjetaProspecto({ p }: { p: ProspectoFila }) {
         {p.telefono_e164 ? (
           <a href={`tel:${p.telefono_e164}`} className="shrink-0 text-sm font-medium tabular-nums text-primary">
             {formatoTel(p.telefono_e164)}
-            {!p.es_movil ? <span className="ml-1 text-xs text-muted-foreground">(fijo)</span> : null}
+            {!p.es_movil ? <span className="ml-1 text-xs text-muted-foreground">(fijo con WhatsApp)</span> : null}
           </a>
         ) : null}
       </div>

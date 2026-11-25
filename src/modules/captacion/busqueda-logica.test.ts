@@ -75,7 +75,7 @@ describe("elegirTelefono", () => {
         { e164: "+34622000000", origen: "whatsapp", url: "https://a.es/contacto" },
       ],
     );
-    expect(r).toEqual({ e164: "+34622000000", prioridad: 3, fuente: "whatsapp_web", url: "https://a.es/contacto" });
+    expect(r).toEqual({ e164: "+34622000000", prioridad: 3, fuente: "whatsapp_web", url: "https://a.es/contacto", whatsapp: true });
   });
   it("después el móvil de su web, luego el de OSM", () => {
     expect(elegirTelefono([], osmUrl, [{ e164: "+34611000000", origen: "texto", url: "https://a.es" }]).prioridad).toBe(2);
@@ -156,5 +156,41 @@ describe("web y dominio", () => {
     expect(normalizarWeb("www.ejemplo.es")).toBe("https://www.ejemplo.es/");
     expect(normalizarWeb("javascript:alert(1)")).toBeNull();
     expect(dominioDe("https://www.Ejemplo.es/contacto")).toBe("ejemplo.es");
+  });
+});
+
+describe("Places", () => {
+  it("nombre desde la web: og:site_name, og:title o title sin eslogan", async () => {
+    const { nombreDeHtml } = await import("./busqueda-logica");
+    expect(nombreDeHtml(`<meta property="og:site_name" content="Hotel Mar &amp; Sol">`)).toBe("Hotel Mar & Sol");
+    expect(nombreDeHtml(`<title>Gestoría Pérez | Asesoría fiscal en Andratx</title>`)).toBe("Gestoría Pérez");
+    expect(nombreDeHtml(`<title>Inicio</title>`)).toBeNull();
+    expect(nombreDeHtml(`<p>sin título</p>`)).toBeNull();
+  });
+  it("cuerpo con sesgo de círculo para el radio y texto con lugar para municipio", async () => {
+    const { cuerpoPlaces } = await import("./busqueda-logica");
+    const r = cuerpoPlaces("hotel", { tipo: "radio", lat: 39.57, lng: 2.42, km: 15 });
+    expect(r).toMatchObject({ textQuery: "hotel", locationBias: { circle: { radius: 15000 } }, pageSize: 20 });
+    const m = cuerpoPlaces("hotel", { tipo: "municipio", nombre: "Andratx", provincia_iso: "ES-PM" }, "tok");
+    expect(m).toMatchObject({ textQuery: "hotel en Andratx, Illes Balears", pageToken: "tok" });
+  });
+  it("distancia", async () => {
+    const { distanciaKm } = await import("./busqueda-logica");
+    const d = distanciaKm({ lat: 39.5746, lng: 2.4202 }, { lat: 39.5696, lng: 2.6502 }); // Andratx → Palma
+    expect(d).toBeGreaterThan(18);
+    expect(d).toBeLessThan(22);
+  });
+});
+
+describe("fijo con WhatsApp (decisión del 25-11-2026)", () => {
+  it("un fijo en un enlace wa.me vale; un fijo suelto, no", async () => {
+    const { elegirTelefono, contactablePorWhatsapp } = await import("./busqueda-logica");
+    const wa = elegirTelefono([], null, [{ e164: "+34971123456", origen: "whatsapp", url: "https://hotel.es" }]);
+    expect(wa).toMatchObject({ e164: "+34971123456", prioridad: 3, fuente: "whatsapp_web", whatsapp: true });
+    expect(contactablePorWhatsapp(wa)).toBe(true);
+    const fijo = elegirTelefono([{ e164: "+34971123456", origen: "osm" }], "https://osm", []);
+    expect(contactablePorWhatsapp(fijo)).toBe(false);
+    const movil = elegirTelefono([{ e164: "+34611223344", origen: "osm" }], "https://osm", []);
+    expect(contactablePorWhatsapp(movil)).toBe(true);
   });
 });

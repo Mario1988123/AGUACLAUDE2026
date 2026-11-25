@@ -33,6 +33,11 @@ const serverEnvSchema = z.object({
   META_WEBHOOK_VERIFY_TOKEN: z.string().optional(),
   META_GRAPH_VERSION: z.string().regex(/^v\d+\.\d+$/).optional(),
   CAPTACION_ENVIOS_ACTIVOS: z.string().optional(),
+  // Google Places (complemento de OSM en captación). Clave de SERVIDOR,
+  // restringida a «Places API (New)» en el proyecto aguaclaude. Tope mensual
+  // de todas las empresas: PLACES_TOPE_MENSUAL (por defecto y máximo, 1.000).
+  GOOGLE_PLACES_SERVER_KEY: z.string().optional(),
+  PLACES_TOPE_MENSUAL: z.string().optional(),
 });
 
 export const publicEnv = envSchema.parse({

@@ -57,13 +57,18 @@ export default async function CampanaPage({
           Se buscan en OpenStreetMap y se lee la web de cada uno para sacar el teléfono que publica.
           Los que ya son clientes o leads van a «Revisar»; nunca a «Nuevos».
         </p>
-        <AccionesBusqueda campanaId={campana.id} hayPendientes={hayPendientes} />
+        <AccionesBusqueda campanaId={campana.id} hayPendientes={hayPendientes} places={datos.places} />
         {busquedas.length > 0 ? (
           <ul className="divide-y divide-border">
             {busquedas.map((b) => (
               <li key={b.id} className="space-y-1 py-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium">{describirZona(b.zona)}</span>
+                  <span className="min-w-0 truncate font-medium">
+                    {describirZona(b.zona)}
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      {b.fuente === "places" ? "Google" : "Mapa"}
+                    </span>
+                  </span>
                   <StatusPill {...(ESTADO_BUSQUEDA[b.estado] ?? { label: b.estado, tone: "info" as const })} className="shrink-0" />
                 </div>
                 <div className="text-xs tabular-nums text-muted-foreground">

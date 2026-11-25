@@ -1,12 +1,16 @@
 import "server-only";
 import { admin } from "./servidor";
 import { captacionActiva } from "./guard";
-import { AGENTE, telefonosDeWeb } from "./web";
+import { AGENTE, leerNegocioWeb } from "./web";
+import { placesConfigurado, textSearch, topePlacesMensual } from "./places";
 import {
   consultaOverpass,
+  cuerpoPlaces,
+  distanciaKm,
   dominioDe,
+  normalizarWeb,
   elegirTelefono,
-  esMovilES,
+  contactablePorWhatsapp,
   fichaDeElemento,
   normalizarTelefonoES,
   type CandidatoTelefono,
@@ -42,7 +46,12 @@ interface Cursor {
   fichas: FichaNegocio[];
   i: number;
   duplicados: number;
+  /** Solo Places: por qué término y página va la recogida. `hecha` = ya se puede leer webs. */
+  places?: { t: number; token?: string; paginas: number; hecha: boolean };
 }
+
+/** Páginas de 20 resultados por término (3 = 60 sitios, el máximo de Text Search). */
+const PAGINAS_POR_TERMINO = 3;
 
 interface FilaBusqueda {
   id: string;
@@ -62,6 +71,7 @@ interface Campana {
   id: string;
   tipologia_clave: string | null;
   etiquetas_osm: string[];
+  terminos_busqueda: string[];
 }
 
 export interface ResumenCola {
@@ -152,14 +162,16 @@ async function procesarFicha(
   const db = admin();
   const companyId = b.company_id;
 
-  // 1) ¿Ya lo tenemos por el elemento del mapa? No hace falta ni leer su web.
-  const { data: porOsm } = await db
-    .from("captacion_prospectos")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("osm_id", f.osm_id)
-    .limit(1);
-  if ((porOsm ?? []).length) return "duplicado";
+  // 1) ¿Ya lo tenemos por el elemento del mapa o por Places? No hace falta ni leer su web.
+  if (f.osm_id || f.place_id) {
+    const { data: ya } = await db
+      .from("captacion_prospectos")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq(f.osm_id ? "osm_id" : "place_id", (f.osm_id ?? f.place_id)!)
+      .limit(1);
+    if ((ya ?? []).length) return "duplicado";
+  }
 
   const dominio = dominioDe(f.web);
   if (dominio) {
@@ -177,8 +189,15 @@ async function procesarFicha(
     .map((t) => normalizarTelefonoES(t))
     .filter((t): t is string => Boolean(t))
     .map((e164) => ({ e164, origen: "osm" as const }));
-  const deWeb = f.web ? await telefonosDeWeb(f.web) : [];
+  const web = f.web ? await leerNegocioWeb(f.web) : null;
+  const deWeb = web?.telefonos ?? [];
   const tel = elegirTelefono(deOsm, f.osm_url, deWeb);
+  // De Places no llega el nombre (no se guarda): sale de su web, o no hay ficha.
+  const nombre = f.nombre || web?.nombre || null;
+  if (!nombre) return "descartado";
+  // Solo fijo y sin enlace de WhatsApp: no se sabe si lo tiene, se omite
+  // (decisión de Mario del 25-11-2026). Ni se guarda.
+  if (tel.e164 && !contactablePorWhatsapp(tel)) return "descartado";
 
   // 3) Bloqueos (de este módulo y del agente de voz): ni se guarda.
   if (tel.e164) {
@@ -195,7 +214,7 @@ async function procesarFicha(
   const { data: coinc, error: eCoinc } = await db.rpc("captacion_coincidencias", {
     p_company_id: companyId,
     p_tel9: tel.e164 ? tel.e164.slice(-9) : null,
-    p_nombre: f.nombre,
+    p_nombre: nombre,
     p_cp: f.codigo_postal,
   });
   if (eCoinc) throw new Error(`Deduplicación: ${eCoinc.message}`);
@@ -214,16 +233,13 @@ async function procesarFicha(
   } else if (!tel.e164) {
     etapa = "revisar";
     motivo = "No publica ningún teléfono";
-  } else if (!esMovilES(tel.e164)) {
-    etapa = "revisar";
-    motivo = "Solo tiene fijo";
   }
 
   const { error } = await db.from("captacion_prospectos").insert({
     company_id: companyId,
     campana_id: campana.id,
     busqueda_id: b.id,
-    nombre_negocio: f.nombre,
+    nombre_negocio: nombre,
     tipologia_clave: campana.tipologia_clave,
     direccion: f.direccion,
     municipio: f.municipio ?? (b.zona.tipo === "municipio" ? b.zona.nombre : null),
@@ -238,6 +254,7 @@ async function procesarFicha(
     dominio,
     email: f.email,
     osm_id: f.osm_id,
+    place_id: f.place_id ?? null,
     etapa,
     revisar_motivo: motivo,
     cliente_coincidente_id: cliente,
@@ -293,7 +310,7 @@ export async function procesarColaBusquedas(opciones: {
 
     const { data: camp } = await db
       .from("captacion_campanas")
-      .select("id, tipologia_clave, etiquetas_osm, estado")
+      .select("id, tipologia_clave, etiquetas_osm, terminos_busqueda, estado")
       .eq("id", b.campana_id)
       .eq("company_id", b.company_id)
       .maybeSingle();
@@ -302,22 +319,75 @@ export async function procesarColaBusquedas(opciones: {
       await guardarAvance(b, null, { estado: "fallida", error: "Campaña terminada o borrada", terminada_at: new Date().toISOString() });
       continue;
     }
-    if (b.fuente !== "osm") {
-      // Places queda apagado (decisión de Mario n.º 7): no se busca ahí.
-      await guardarAvance(b, null, { estado: "fallida", error: "Google Places no está activado", terminada_at: new Date().toISOString() });
+    if (b.fuente === "places" && !placesConfigurado()) {
+      // Se queda reservada (6 min): no se vuelve a coger en esta ejecución y
+      // no tapa a las búsquedas de OSM que van detrás.
+      await guardarAvance(b, b.cursor, { error: "Falta la clave de Google Places en el servidor." });
       continue;
     }
 
     let cursor = b.cursor;
     try {
-      // Primera pasada: el mapa.
-      if (!cursor) {
+      // Places: recogida de sitios, llamada a llamada, dentro del tope del mes.
+      if (b.fuente === "places" && !cursor?.places?.hecha) {
+        cursor ??= { fichas: [], i: 0, duplicados: 0 };
+        cursor.places ??= { t: 0, paginas: 0, hecha: false };
+        const pl = cursor.places;
+        const terminos = (campana.terminos_busqueda ?? []).filter(Boolean);
+        const vistos = new Set(cursor.fichas.map((f) => f.place_id));
+        let agotado = false;
+        while (pl.t < terminos.length && quedan() > MARGEN_MS) {
+          const usadas = await db.rpc("captacion_reservar_llamada_places", { p_busqueda_id: b.id, p_tope: topePlacesMensual() });
+          if (usadas.error) throw new Error(usadas.error.message);
+          if ((usadas.data as number) < 0) {
+            agotado = true;
+            break;
+          }
+          const r0 = await textSearch(cuerpoPlaces(terminos[pl.t]!, b.zona, pl.token), quedan() - 5_000);
+          for (const s of r0.places) {
+            if (!s.id || vistos.has(s.id)) continue;
+            vistos.add(s.id);
+            const web = normalizarWeb(s.websiteUri);
+            if (!web) continue; // sin web no hay de dónde sacar nombre ni teléfono
+            if (b.zona.tipo === "radio" && s.location) {
+              const d = distanciaKm({ lat: b.zona.lat, lng: b.zona.lng }, { lat: s.location.latitude, lng: s.location.longitude });
+              if (d > b.zona.km) continue; // el sesgo de Places no es una restricción
+            }
+            cursor.fichas.push({
+              nombre: "", osm_id: null, osm_url: null, place_id: s.id,
+              direccion: null, municipio: null, codigo_postal: null, lat: null, lng: null,
+              web, email: null, telefonos_osm: [],
+            });
+          }
+          pl.paginas++;
+          if (r0.nextPageToken && pl.paginas < PAGINAS_POR_TERMINO) {
+            pl.token = r0.nextPageToken;
+          } else {
+            pl.t++;
+            pl.paginas = 0;
+            pl.token = undefined;
+          }
+          b.encontrados = cursor.fichas.length;
+          await guardarAvance(b, cursor, { estado: "en_curso" });
+        }
+        if (pl.t >= terminos.length) pl.hecha = true;
+        if (agotado && !pl.hecha) {
+          // Tope del mes: lo recogido se procesa; el resto, el mes que viene.
+          await guardarAvance(b, cursor, {
+            error: `Tope de Google Places del mes alcanzado (${topePlacesMensual()}). Sigue el mes que viene.`,
+          });
+          if (cursor.fichas.length <= cursor.i) continue; // reservada: no tapa a las demás
+        }
+      }
+
+      // Primera pasada de OSM: el mapa.
+      if (b.fuente === "osm" && !cursor) {
         const elementos = await consultarOverpass(consultaOverpass(campana.etiquetas_osm, b.zona), quedan);
         const vistos = new Set<string>();
         const fichas: FichaNegocio[] = [];
         for (const el of elementos) {
           const f = fichaDeElemento(el);
-          if (f && !vistos.has(f.osm_id)) {
+          if (f?.osm_id && !vistos.has(f.osm_id)) {
             vistos.add(f.osm_id);
             fichas.push(f);
           }
@@ -326,6 +396,8 @@ export async function procesarColaBusquedas(opciones: {
         b.encontrados = fichas.length;
         await guardarAvance(b, cursor, { estado: "en_curso", error: null });
       }
+
+      if (!cursor) throw new Error("Búsqueda sin datos que procesar.");
 
       // Pasadas siguientes: la web de cada negocio y la deduplicación.
       let desdeGuardado = 0;
@@ -351,7 +423,8 @@ export async function procesarColaBusquedas(opciones: {
         }
       }
 
-      if (cursor.i >= cursor.fichas.length) {
+      const recogidaHecha = b.fuente !== "places" || cursor.places?.hecha === true;
+      if (cursor.i >= cursor.fichas.length && recogidaHecha) {
         await guardarAvance(b, null, {
           estado: "hecha",
           terminada_at: new Date().toISOString(),

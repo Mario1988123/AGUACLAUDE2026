@@ -7,7 +7,8 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
 import { captacionActiva } from "./guard";
 import { admin } from "./servidor";
 import { procesarColaBusquedas } from "./busqueda";
-import { esMovilES, filtroOsmValido, zonaValida, type Zona } from "./busqueda-logica";
+import { placesConfigurado, topePlacesMensual } from "./places";
+import { contactablePorWhatsapp, filtroOsmValido, zonaValida, type Zona } from "./busqueda-logica";
 
 /**
  * Campañas (versión mínima de la fase 6: a quién y dónde) y revisión de
@@ -92,6 +93,7 @@ export async function listarCampanas(): Promise<{ campanas: CampanaFila[]; tipol
 
 export interface BusquedaFila {
   id: string;
+  fuente: "osm" | "places";
   zona: Zona;
   estado: string;
   encontrados: number;
@@ -126,6 +128,7 @@ export async function obtenerCampana(id: string, etapa: string): Promise<{
   busquedas: BusquedaFila[];
   prospectos: ProspectoFila[];
   recuento: Record<string, number>;
+  places: { configurado: boolean; usadas: number; tope: number };
 } | null> {
   const s = await requireSession();
   if (!s.company_id || !esGestor(s) || !(await captacionActiva(s.company_id))) return null;
@@ -139,18 +142,20 @@ export async function obtenerCampana(id: string, etapa: string): Promise<{
     .maybeSingle();
   if (!campana) return null;
 
-  const [{ data: busquedas }, { data: prospectos }, recuento] = await Promise.all([
+  const [{ data: busquedas }, { data: prospectos }, recuento, { data: usadas }] = await Promise.all([
     db.from("captacion_busquedas")
-      .select("id, zona, estado, encontrados, nuevos, revisar, descartados, error, created_at, terminada_at, cursor")
+      .select("id, fuente, zona, estado, encontrados, nuevos, revisar, descartados, error, created_at, terminada_at, cursor")
       .eq("campana_id", id).eq("company_id", s.company_id).order("created_at", { ascending: false }).limit(20),
     db.from("captacion_prospectos")
       .select("id, nombre_negocio, municipio, direccion, telefono_e164, es_movil, telefono_fuente, telefono_url_fuente, prioridad, web, etapa, revisar_motivo, cliente_coincidente_id, lead_coincidente_id")
       .eq("campana_id", id).eq("company_id", s.company_id).eq("etapa", etapa)
       .order("prioridad", { ascending: false }).order("nombre_negocio").limit(200),
     contarPorEtapa(s.company_id, id, ["nuevo", "revisar", "descartado"]),
+    db.rpc("captacion_llamadas_places_mes"),
   ]);
 
   return {
+    places: { configurado: placesConfigurado(), usadas: (usadas as number | null) ?? 0, tope: topePlacesMensual() },
     campana: campana as CampanaFila,
     busquedas: ((busquedas ?? []) as Array<BusquedaFila & { cursor: { i: number; fichas: unknown[] } | null }>).map(
       ({ cursor, ...b }) => ({ ...b, progreso: cursor ? { i: cursor.i, total: cursor.fichas.length } : null }),
@@ -212,10 +217,17 @@ export async function crearCampanaAction(input: unknown): Promise<Resultado<{ id
 }
 
 /** Encola una búsqueda por cada zona de la campaña (si no hay ya una en marcha). No busca en caliente. */
-export async function buscarNegociosAction(campanaId: string): Promise<Resultado<{ creadas: number }>> {
+export async function buscarNegociosAction(
+  campanaId: string,
+  fuente: "osm" | "places" = "osm",
+): Promise<Resultado<{ creadas: number }>> {
   try {
     const s = await sesionGestor();
     z.string().uuid().parse(campanaId);
+    z.enum(["osm", "places"]).parse(fuente);
+    if (fuente === "places" && !placesConfigurado()) {
+      return { ok: false, error: "Google Places no está configurado en el servidor." };
+    }
     const db = admin();
     const { data: camp } = await db
       .from("captacion_campanas")
@@ -230,13 +242,14 @@ export async function buscarNegociosAction(campanaId: string): Promise<Resultado
       .from("captacion_busquedas")
       .select("zona")
       .eq("campana_id", campanaId)
+      .eq("fuente", fuente)
       .in("estado", ["pendiente", "en_curso"]);
     const ocupadas = new Set(((enMarcha ?? []) as Array<{ zona: Zona }>).map((b) => JSON.stringify(b.zona)));
     const zonas = ((camp as { zonas: Zona[] }).zonas ?? []).filter((z0) => zonaValida(z0) && !ocupadas.has(JSON.stringify(z0)));
     if (zonas.length === 0) return { ok: true, creadas: 0 };
 
     const { error } = await db.from("captacion_busquedas").insert(
-      zonas.map((zona) => ({ company_id: s.company_id, campana_id: campanaId, fuente: "osm", zona, created_by: s.user_id })),
+      zonas.map((zona) => ({ company_id: s.company_id, campana_id: campanaId, fuente, zona, created_by: s.user_id })),
     );
     if (error) throw new Error(error.message);
     revalidatePath(`/captacion/campanas/${campanaId}`);
@@ -279,17 +292,19 @@ export async function marcarProspectoAction(input: unknown): Promise<Resultado> 
     const db = admin();
     const { data: pr } = await db
       .from("captacion_prospectos")
-      .select("id, campana_id, etapa, telefono_e164, revisar_motivo")
+      .select("id, campana_id, etapa, telefono_e164, telefono_fuente, revisar_motivo")
       .eq("id", p.id)
       .eq("company_id", s.company_id)
       .maybeSingle();
     if (!pr) return { ok: false, error: "No encontrado." };
-    const fila = pr as { campana_id: string | null; etapa: string; telefono_e164: string | null; revisar_motivo: string | null };
+    const fila = pr as { campana_id: string | null; etapa: string; telefono_e164: string | null; telefono_fuente: string | null; revisar_motivo: string | null };
     if (!["nuevo", "revisar", "descartado"].includes(fila.etapa)) {
       return { ok: false, error: "Este negocio ya está en marcha; no se cambia desde aquí." };
     }
     if (p.accion === "nuevo") {
-      if (!esMovilES(fila.telefono_e164)) return { ok: false, error: "Sin móvil no se le puede escribir por WhatsApp." };
+      if (!contactablePorWhatsapp({ e164: fila.telefono_e164, whatsapp: fila.telefono_fuente === "whatsapp_web" })) {
+        return { ok: false, error: "Sin móvil ni WhatsApp comprobado no se le puede escribir." };
+      }
       if (fila.revisar_motivo?.startsWith("Su teléfono ya es")) {
         return { ok: false, error: "Ese teléfono ya es de un cliente o lead: no se le escribe en frío." };
       }

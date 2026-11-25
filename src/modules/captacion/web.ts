@@ -1,7 +1,7 @@
 import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import { telefonosDeHtml, type CandidatoTelefono } from "./busqueda-logica";
+import { nombreDeHtml, telefonosDeHtml, type CandidatoTelefono } from "./busqueda-logica";
 
 /**
  * Lectura de la web de un negocio para sacar el teléfono que publica.
@@ -127,27 +127,38 @@ const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * estaba (prueba de origen).
  */
 export async function telefonosDeWeb(web: string): Promise<Array<CandidatoTelefono & { url: string }>> {
-  const out: Array<CandidatoTelefono & { url: string }> = [];
+  return (await leerNegocioWeb(web)).telefonos;
+}
+
+/** Teléfonos y nombre (de la portada) que publica la web del negocio. */
+export async function leerNegocioWeb(
+  web: string,
+): Promise<{ telefonos: Array<CandidatoTelefono & { url: string }>; nombre: string | null; leida: boolean }> {
+  const telefonos: Array<CandidatoTelefono & { url: string }> = [];
   const vistos = new Set<string>();
+  let nombre: string | null = null;
+  let leida = false;
   let base: URL;
   try {
     base = new URL(web);
   } catch {
-    return out;
+    return { telefonos, nombre, leida };
   }
   const paginas = [base.toString(), new URL("/contacto", base).toString()];
   for (const [i, p] of paginas.entries()) {
     if (i > 0) {
-      if (out.some((c) => /^\+34(6\d|7[1-4])/.test(c.e164))) break;
+      if (telefonos.some((c) => /^\+34(6\d|7[1-4])/.test(c.e164))) break;
       await pausa(PAUSA_MS);
     }
     const r = await leerPagina(p);
     if (!r) continue;
+    leida = true;
+    if (i === 0) nombre = nombreDeHtml(r.html);
     for (const c of telefonosDeHtml(r.html)) {
       if (vistos.has(c.e164)) continue;
       vistos.add(c.e164);
-      out.push({ ...c, url: r.url });
+      telefonos.push({ ...c, url: r.url });
     }
   }
-  return out;
+  return { telefonos, nombre, leida };
 }
