@@ -40,14 +40,19 @@ export default async function CaptacionPage() {
               <StatusPill label="Sin conectar" tone="neutral" />
             )}
           </div>
-          <Button asChild variant="outline" className="w-full sm:w-auto">
-            <Link href={"/configuracion/captacion" as never}>Configurar el número</Link>
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button asChild className="h-12">
+              <Link href={"/captacion/campanas" as never}>Campañas y negocios</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-12">
+              <Link href={"/configuracion/captacion" as never}>Configurar el número</Link>
+            </Button>
+          </div>
         </section>
       ) : null}
 
       <p className="text-sm text-muted-foreground">
-        Aquí aparecerán las conversaciones y las campañas en cuanto estén listas.
+        Las conversaciones aparecerán aquí cuando esté lista la bandeja.
       </p>
     </div>
   );
