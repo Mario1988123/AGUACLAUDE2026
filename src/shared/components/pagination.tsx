@@ -8,6 +8,8 @@ interface Props {
   hasMore?: boolean;
   /** Otros searchParams a preservar (filtros). */
   preserveParams?: Record<string, string | undefined>;
+  /** Botones de 44 px (regla del dedo). Por defecto, los de siempre (36 px). */
+  grande?: boolean;
 }
 
 /**
@@ -23,7 +25,9 @@ export function Pagination({
   totalCount,
   hasMore,
   preserveParams,
+  grande = false,
 }: Props) {
+  const alto = grande ? "h-11" : "h-9";
   const totalPages = totalCount
     ? Math.max(1, Math.ceil(totalCount / pageSize))
     : null;
@@ -50,12 +54,12 @@ export function Pagination({
       {hasPrev ? (
         <Link
           href={buildHref(page - 1) as never}
-          className="inline-flex h-9 items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          className={`inline-flex ${alto} items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted`}
         >
           ← Anterior
         </Link>
       ) : (
-        <span className="inline-flex h-9 items-center rounded-xl border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+        <span className={`inline-flex ${alto} items-center rounded-xl border border-border bg-muted/30 px-3 text-sm text-muted-foreground`}>
           ← Anterior
         </span>
       )}
@@ -65,12 +69,12 @@ export function Pagination({
       {hasNext ? (
         <Link
           href={buildHref(page + 1) as never}
-          className="inline-flex h-9 items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
+          className={`inline-flex ${alto} items-center rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted`}
         >
           Siguiente →
         </Link>
       ) : (
-        <span className="inline-flex h-9 items-center rounded-xl border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+        <span className={`inline-flex ${alto} items-center rounded-xl border border-border bg-muted/30 px-3 text-sm text-muted-foreground`}>
           Siguiente →
         </span>
       )}
