@@ -1,227 +1,110 @@
-// Sin "use server" (auditoría 2026-10-01): solo la llama el cron diario. Como
-// server action cualquiera podía dispararla desde el navegador.
+// Sin "use server" (auditoría 2026-10-01): solo la llama el cron. Como server
+// action cualquiera podía dispararla desde el navegador.
 
 import type { EmpresasEnServicio } from "@/shared/lib/empresas/en-servicio";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
-import { notifyByRoles } from "@/modules/notifications/notifier";
-import { diaMananaCron, rangoDiaMadridUtc } from "@/modules/scheduling/fechas-madrid";
+import { notify } from "@/modules/notifications/notifier";
+import { claveDiaMadrid, sumarDiasClave } from "@/modules/scheduling/fechas-madrid";
+import {
+  ESTADOS_ABIERTOS,
+  calcularSugerencia,
+  crearOrdenSugerida,
+} from "./carga-sugerida-datos";
+import { esTablaQueFalta } from "./filtros-carga";
+
+/** Hora de Madrid a la que el cron horario prepara las sugerencias de la tarde. */
+export const HORA_SUGERENCIA_TARDE = 16;
 
 /**
- * Genera órdenes de carga sugeridas para mañana.
+ * Sugerencias de carga AUTOMÁTICAS de la tarde (Mario 2026-11-25).
  *
- * Para cada empresa:
- *  1. Lee instalaciones agendadas para mañana con installer_user_id.
- *  2. Agrupa por técnico → lista de productos necesarios (sumando cantidades).
- *  3. Para cada técnico: busca su furgoneta (warehouses.kind='vehicle' con
- *     assigned_user_id = técnico). Si no hay, salta.
- *  4. Resta el stock que ya tiene en la furgoneta (state='new').
- *  5. Crea un loading_request (origen=principal, destino=furgoneta,
- *     needed_for=fecha_mañana) con sus loading_request_items.
- *  6. Idempotente: si ya hay loading_request del mismo destino + needed_for,
- *     no se duplica.
- *  7. Notifica al admin/director técnico que hay órdenes pendientes.
+ * Antes (hasta 2026-11-25) esto generaba una orden por técnico con TODAS las
+ * instalaciones de mañana, sin preguntar a nadie, y leía `companies` filtrando
+ * por `deleted_at`, columna que no existe: la consulta fallaba en silencio y
+ * en producción no se generó nunca ninguna orden (0 filas en loading_requests).
+ *
+ * Ahora la sugerencia se genera SI EL TÉCNICO LA PIDE: a mano desde «Mi
+ * furgoneta» o, solo si lo ha activado y carga por la tarde, aquí. Para cada
+ * técnico con `preferencias_carga_tecnico.sugerencia_auto` y momento 'tarde'
+ * de una empresa EN SERVICIO:
+ *  1. Calcula la carga de mañana (trabajos + reserva − lo que lleva).
+ *  2. Si no hay nada que cargar o ya tiene una orden abierta para mañana, nada.
+ *  3. Crea la orden «solicitada» (no mueve stock) y le avisa SOLO a él.
+ * Sin avisos a la oficina: las órdenes salen en /almacenes como siempre.
  */
-export async function generateLoadingRequestsForTomorrow(
-  /** Solo empresas en servicio (pausadas y de baja no generan órdenes de carga). */
-  enServicio?: EmpresasEnServicio,
-): Promise<{
-  companies: number;
-  requests_created: number;
-  errors: number;
-}> {
+export async function generarSugerenciasDeLaTarde(
+  enServicio: EmpresasEnServicio,
+  ahora: Date = new Date(),
+): Promise<{ tecnicos: number; creadas: number; errores: number; omitido?: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const stats = { companies: 0, requests_created: 0, errors: 0 };
+  const stats = { tecnicos: 0, creadas: 0, errores: 0 } as {
+    tecnicos: number;
+    creadas: number;
+    errores: number;
+    omitido?: string;
+  };
+  if (enServicio.ids.length === 0) return stats;
 
-  // Ventana "mañana" en hora de Madrid (auditoría 2026-10-01, I33). Antes se
-  // calculaba en UTC: en verano, con el cron a las 00:00 de Madrid, la orden
-  // de carga salía para el MISMO día y la ventana iba de 02:00 a 01:59.
-  const neededFor = diaMananaCron();
-  const { desde: dayStartIso, hasta: dayEndIso } = rangoDiaMadridUtc(neededFor);
+  const { data, error } = await admin
+    .from("preferencias_carga_tecnico")
+    .select("company_id, user_id")
+    .eq("sugerencia_auto", true)
+    .eq("momento", "tarde")
+    .in("company_id", enServicio.ids)
+    .limit(1000);
+  if (error) {
+    if (esTablaQueFalta(error)) return { ...stats, omitido: "Migración 20261128130000 sin aplicar" };
+    throw new Error(error.message);
+  }
 
-  // OJO (2026-11-28): `companies` no tiene deleted_at, así que esta consulta
-  // probablemente falla en silencio y no sale ninguna orden de carga. No se
-  // arregla aquí para no estrenar avisos sin que Mario lo decida.
-  const { data: companies } = await admin
-    .from("companies")
-    .select("id")
-    .is("deleted_at", null);
-  for (const c of (companies ?? []) as Array<{ id: string }>) {
-    if (enServicio && !enServicio.has(c.id)) continue;
-    stats.companies += 1;
+  const dia = sumarDiasClave(claveDiaMadrid(ahora), 1);
+  for (const p of (data ?? []) as Array<{ company_id: string; user_id: string }>) {
+    if (!enServicio.has(p.company_id)) continue;
+    stats.tecnicos += 1;
     try {
-      // Almacén principal
-      const { data: warehouses } = await admin
-        .from("warehouses")
-        .select("id, kind, assigned_user_id")
-        .eq("company_id", c.id)
-        .is("deleted_at", null);
-      const whs = (warehouses ?? []) as Array<{
-        id: string;
-        kind: string;
-        assigned_user_id: string | null;
-      }>;
-      const main = whs.find((w) => w.kind === "main") ?? whs.find((w) => w.kind !== "vehicle");
-      if (!main) continue;
+      const s = await calcularSugerencia(admin, p.company_id, p.user_id, dia);
+      if ("error" in s || s.lineas.length === 0) continue;
 
-      // Instalaciones de mañana. SOLO las que MONTAN equipo (normal/prueba):
-      // las desinstalaciones (kind='uninstall') retiran material, no lo cargan,
-      // y las reubicaciones (relocation) mueven equipo ya instalado. Antes una
-      // desinstalación generaba carga de furgoneta con el equipo a retirar.
-      const { data: insts } = await admin
-        .from("installations")
-        .select("id, installer_user_id")
-        .eq("company_id", c.id)
-        .in("status", ["scheduled"])
-        .in("kind", ["normal", "free_trial"])
-        .gte("scheduled_at", dayStartIso)
-        .lt("scheduled_at", dayEndIso)
-        .is("deleted_at", null);
-      const installations = (insts ?? []) as Array<{
-        id: string;
-        installer_user_id: string | null;
-      }>;
-      if (installations.length === 0) continue;
+      const { data: abiertas } = await admin
+        .from("loading_requests")
+        .select("id")
+        .eq("company_id", p.company_id)
+        .eq("destination_warehouse_id", s.furgoneta.id)
+        .eq("needed_for", dia)
+        .in("status", ESTADOS_ABIERTOS as unknown as string[])
+        .limit(1);
+      if (((abiertas ?? []) as unknown[]).length > 0) continue;
 
-      // Items por instalación
-      const instIds = installations.map((i) => i.id);
-      const { data: items } = await admin
-        .from("installation_items")
-        .select("installation_id, product_id, quantity")
-        .in("installation_id", instIds);
-      const itemsByInst = new Map<
-        string,
-        Array<{ product_id: string; quantity: number }>
-      >();
-      for (const it of (items ?? []) as Array<{
-        installation_id: string;
-        product_id: string;
-        quantity: number;
-      }>) {
-        if (!itemsByInst.has(it.installation_id))
-          itemsByInst.set(it.installation_id, []);
-        itemsByInst
-          .get(it.installation_id)!
-          .push({ product_id: it.product_id, quantity: it.quantity });
-      }
+      const r = await crearOrdenSugerida(admin, {
+        companyId: p.company_id,
+        userId: null,
+        furgonetaId: s.furgoneta.id,
+        origenId: s.origen.id,
+        dia,
+        lineas: s.lineas.map((l) => ({ tipo: l.tipo, id: l.id, cantidad: l.aCargar })),
+        automatica: true,
+      });
+      stats.creadas += 1;
 
-      // Por técnico
-      const byTechnician = new Map<string, Map<string, number>>();
-      for (const inst of installations) {
-        if (!inst.installer_user_id) continue;
-        const items = itemsByInst.get(inst.id) ?? [];
-        if (!byTechnician.has(inst.installer_user_id))
-          byTechnician.set(inst.installer_user_id, new Map());
-        const acc = byTechnician.get(inst.installer_user_id)!;
-        for (const it of items) {
-          acc.set(it.product_id, (acc.get(it.product_id) ?? 0) + it.quantity);
-        }
-      }
-
-      let createdForCompany = 0;
-
-      for (const [technicianId, productNeeds] of byTechnician.entries()) {
-        // Furgoneta del técnico
-        const van = whs.find(
-          (w) => w.kind === "vehicle" && w.assigned_user_id === technicianId,
-        );
-        if (!van) continue;
-
-        // Idempotencia: ya hay request para esa van+día?
-        const { data: existing } = await admin
-          .from("loading_requests")
-          .select("id, status")
-          .eq("destination_warehouse_id", van.id)
-          .eq("needed_for", neededFor)
-          .in("status", ["requested", "preparing", "prepared"])
-          .limit(1);
-        if (((existing ?? []) as Array<unknown>).length > 0) continue;
-
-        // Stock actual en furgoneta para descontar
-        const productIds = Array.from(productNeeds.keys());
-        const { data: vanStock } = await admin
-          .from("warehouse_stock")
-          .select("product_id, quantity")
-          .eq("warehouse_id", van.id)
-          .in("product_id", productIds);
-        const vanStockMap = new Map<string, number>();
-        for (const s of (vanStock ?? []) as Array<{ product_id: string; quantity: number }>) {
-          vanStockMap.set(s.product_id, (vanStockMap.get(s.product_id) ?? 0) + s.quantity);
-        }
-
-        // Líneas a cargar = needed - already in van
-        const lines: Array<{ product_id: string; quantity: number }> = [];
-        for (const [pid, needed] of productNeeds.entries()) {
-          const already = vanStockMap.get(pid) ?? 0;
-          const toLoad = needed - already;
-          if (toLoad > 0) lines.push({ product_id: pid, quantity: toLoad });
-        }
-        if (lines.length === 0) continue;
-
-        // Crear loading_request
-        const { data: lr, error: lrErr } = await admin
-          .from("loading_requests")
-          .insert({
-            company_id: c.id,
-            source_warehouse_id: main.id,
-            destination_warehouse_id: van.id,
-            status: "requested",
-            needed_for: neededFor,
-            requested_by: null,
-            notes: "Generado automáticamente — instalaciones del día siguiente",
-          })
-          .select("id")
-          .single();
-        if (lrErr || !lr) {
-          stats.errors += 1;
-          continue;
-        }
-        const lrId = (lr as { id: string }).id;
-        const lineRows = lines.map((l) => ({
-          loading_request_id: lrId,
-          company_id: c.id,
-          product_id: l.product_id,
-          quantity_requested: l.quantity,
-        }));
-        await admin.from("loading_request_items").insert(lineRows);
-
-        stats.requests_created += 1;
-        createdForCompany += 1;
-
-        // Notificar al técnico
-        try {
-          await admin.from("notifications").insert({
-            company_id: c.id,
-            recipient_user_id: technicianId,
-            kind: "loading.suggested",
-            severity: "info",
-            title: "Sugerencia de carga para mañana",
-            body: `${lines.length} producto(s) a cargar para tus instalaciones de mañana.`,
-            subject_type: "loading_request",
-            subject_id: lrId,
-            action_url: `/almacenes/${van.id}`,
-          });
-        } catch {
-          /* fail-soft */
-        }
-      }
-
-      if (createdForCompany > 0) {
-        try {
-          await notifyByRoles(c.id, ["company_admin", "technical_director"], {
-            kind: "loading.batch",
-            severity: "info",
-            title: "Órdenes de carga generadas",
-            body: `${createdForCompany} furgoneta(s) tienen sugerencia de carga para mañana.`,
-            action_url: "/almacenes",
-          });
-        } catch {
-          /* fail-soft */
-        }
+      try {
+        await notify({
+          company_id: p.company_id,
+          recipient_user_id: p.user_id,
+          kind: "loading.suggested",
+          severity: "info",
+          title: "Tu carga para mañana",
+          body: `${s.lineas.length} artículo(s) para cargar en la furgoneta. Revísala en Mi furgoneta.`,
+          subject_type: "loading_request",
+          subject_id: r.id,
+          action_url: "/mi-furgoneta",
+        });
+      } catch {
+        /* fail-soft */
       }
     } catch (e) {
-      console.error("[generateLoadingRequestsForTomorrow]", c.id, e);
-      stats.errors += 1;
+      console.error("[generarSugerenciasDeLaTarde]", p.company_id, p.user_id, e);
+      stats.errores += 1;
     }
   }
   return stats;

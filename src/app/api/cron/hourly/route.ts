@@ -130,10 +130,28 @@ export async function GET(req: NextRequest) {
     tracker.error("verifacti-estados", e);
   }
 
+  // Carga sugerida de la tarde (2026-11-25): una vez al día, a las 16:xx de
+  // Madrid, SOLO para los técnicos que cargan por la tarde y la tienen
+  // activada en «Mi furgoneta». Idempotente: si ya tienen orden abierta para
+  // mañana, no se crea otra.
+  let cargaTarde: Record<string, unknown> | null = null;
+  try {
+    const { madridParts } = await import("@/shared/lib/format-date");
+    const { generarSugerenciasDeLaTarde, HORA_SUGERENCIA_TARDE } = await import(
+      "@/modules/warehouses/auto-loading"
+    );
+    if (madridParts(new Date()).hour === HORA_SUGERENCIA_TARDE) {
+      cargaTarde = await generarSugerenciasDeLaTarde(enServicio);
+    }
+  } catch (e) {
+    tracker.error("carga-sugerida-tarde", e);
+  }
+
   const stats = {
     punches_closed: punchesClosed,
     notified_users: notifiedUsers,
     verifacti_consultados: verifactiConsultados,
+    carga_sugerida_tarde: cargaTarde,
   };
   await tracker.finish({ summary: stats });
   return NextResponse.json({

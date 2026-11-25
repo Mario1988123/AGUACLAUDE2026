@@ -4,6 +4,8 @@ import { listarMiFurgonetaSemaforo } from "@/modules/warehouses/furgoneta-action
 import { MiFurgonetaVista } from "@/modules/warehouses/mi-furgoneta-vista";
 import { resumenRutaPorModelo } from "@/modules/equipos-modelo/ruta";
 import { ResumenRutaCard } from "@/modules/equipos-modelo/resumen-ruta-card";
+import { datosPanelCarga } from "@/modules/warehouses/carga-sugerida-datos";
+import { CargaSugeridaPanel } from "@/modules/warehouses/carga-sugerida-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +48,21 @@ export default async function MiFurgonetaPage() {
     );
   }
 
+  // Carga sugerida (2026-11-25): trabajos del día + reserva − lo que lleva.
+  const panel = session.company_id
+    ? await datosPanelCarga(session.company_id, session.user_id).catch((e) => {
+        console.error("[mi-furgoneta] panel de carga:", e);
+        return null;
+      })
+    : null;
+
   return (
     <div className="space-y-4">
       <MiFurgonetaVista
         nombre={furgoneta.nombre}
         matricula={furgoneta.matricula}
         productos={productos}
+        panelCarga={panel ? <CargaSugeridaPanel preferencia={panel.preferencia} pendientes={panel.pendientes} /> : null}
       />
       {resumenRuta}
     </div>

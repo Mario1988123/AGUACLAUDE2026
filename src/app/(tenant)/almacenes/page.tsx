@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listLoadingRequests, listWarehouses } from "@/modules/warehouses/actions";
 import { assertModuleActive } from "@/shared/lib/auth/module-guard";
 import { listWarehouseStockSummary } from "@/modules/warehouses/stock-summary-actions";
@@ -110,17 +111,25 @@ export default async function AlmacenesPage() {
                 );
               })()}
             </CardTitle>
-            <CreateLoadingRequestButton
-              warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, kind: w.kind }))}
-              products={products.map((p) => ({ id: p.id, name: p.name }))}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href={"/almacenes/reserva" as never}
+                className="inline-flex h-11 items-center rounded-xl border border-border px-3 text-sm font-semibold hover:bg-muted"
+              >
+                Carga de reserva
+              </Link>
+              <CreateLoadingRequestButton
+                warehouses={warehouses.map((w) => ({ id: w.id, name: w.name, kind: w.kind }))}
+                products={products.map((p) => ({ id: p.id, name: p.name }))}
+              />
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           {requests.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Sin solicitudes. El sistema genera sugerencias automáticas cada
-              noche según las instalaciones agendadas para mañana.
+              Sin solicitudes. Cada técnico pide su carga sugerida desde «Mi
+              furgoneta» (trabajos del día + reserva − lo que ya lleva).
             </p>
           ) : (
             <div className="overflow-x-auto"><table className="w-full min-w-[480px] text-sm">

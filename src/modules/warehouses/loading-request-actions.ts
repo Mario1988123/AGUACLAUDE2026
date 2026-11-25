@@ -202,17 +202,22 @@ export async function deliverLoadingRequestAction(requestId: string) {
     }
   }
 
+  // Filtros de la orden (carga sugerida, 2026-11-25): van en la tabla hermana
+  // loading_request_filtros y su stock en filter_stock. Sin migración no hay.
+  const { entregarFiltrosDeOrden } = await import("./filtros-carga");
+  const faltasFiltros = await entregarFiltrosDeOrden(admin, r, session.user_id);
+
   // Entrega PARCIAL: si algún producto se entregó por debajo de lo pedido
   // (faltaba stock), dejamos constancia (evento + aviso) en lugar de marcar
   // "entregada" en silencio. Fail-soft.
-  if (shortages.length > 0) {
+  if (shortages.length > 0 || faltasFiltros.length > 0) {
     try {
       await admin.from("events").insert({
         company_id: r.company_id,
         subject_type: "loading_request",
         subject_id: requestId,
         kind: "loading_request.partial_delivery",
-        payload: { shortages },
+        payload: { shortages, filtros: faltasFiltros },
         actor_user_id: session.user_id,
       });
     } catch {
@@ -227,7 +232,7 @@ export async function deliverLoadingRequestAction(requestId: string) {
           kind: "loading_request.partial_delivery",
           severity: "warning",
           title: "Carga de furgoneta incompleta",
-          body: `Faltó stock para ${shortages.length} producto(s) al cargar la furgoneta. Revisa el almacén y reponlo.`,
+          body: `Faltó stock para ${shortages.length + faltasFiltros.length} artículo(s) al cargar la furgoneta. Revisa el almacén y reponlo.`,
           subject_type: "loading_request",
           subject_id: requestId,
           action_url: "/almacenes",

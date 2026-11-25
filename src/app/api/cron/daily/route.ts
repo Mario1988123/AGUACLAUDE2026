@@ -699,16 +699,11 @@ export async function GET(req: NextRequest) {
     tracker.error("maintenance-window", e);
   }
 
-  // 4b) Generar órdenes de carga sugeridas para mañana (furgonetas)
-  let loadingStats = { companies: 0, requests_created: 0, errors: 0 };
-  try {
-    const { generateLoadingRequestsForTomorrow } = await import(
-      "@/modules/warehouses/auto-loading"
-    );
-    loadingStats = await generateLoadingRequestsForTomorrow(enServicio);
-  } catch (e) {
-    console.error("[cron/daily] auto-loading failed:", e);
-  }
+  // 4b) Órdenes de carga de furgoneta: ya NO se generan aquí (2026-11-25).
+  // La carga sugerida la pide el técnico desde «Mi furgoneta» o, si la tiene
+  // activada y carga por la tarde, la prepara el cron horario a las 16:00 de
+  // Madrid (warehouses/auto-loading.ts). A las 23:00 llegaba tarde.
+  const loadingStats = { movido_a: "cron/hourly 16:00 Madrid, solo técnicos que la activan" };
 
   // 5) Recalcular alertas inteligentes de stock por empresa
   const stockAlertsStats = { companies: 0, alerts: 0, failed: 0 };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { PackagePlus, PackageMinus, Search, X, Minus, Plus } from "lucide-react";
 import { notify } from "@/shared/hooks/use-toast";
@@ -33,10 +33,13 @@ export function MiFurgonetaVista({
   nombre,
   matricula,
   productos,
+  panelCarga,
 }: {
   nombre: string;
   matricula: string | null;
   productos: ProductoFurgoneta[];
+  /** Carga sugerida para los trabajos (2026-11-25). */
+  panelCarga?: ReactNode;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [sentido, setSentido] = useState<Sentido | null>(null);
@@ -75,6 +78,8 @@ export function MiFurgonetaVista({
           <PackageMinus className="h-4 w-4" /> Devolver
         </button>
       </div>
+
+      {panelCarga}
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
         {(["verde", "ambar", "gris"] as ColorStock[]).map((c) => (
