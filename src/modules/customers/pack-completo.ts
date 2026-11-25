@@ -5,9 +5,10 @@ import { idsPackCompleto, type FilaPack } from "@/shared/lib/packs/complemento";
 type Admin = any;
 
 /**
- * Pack con complemento (Horeca + ósmosis/UF): se retira entero (Mario
- * 2026-11-25). Amplía la selección con las otras partes ACTIVAS del pack del
- * mismo cliente. Los extras de siempre no se tocan.
+ * Pack con complemento (Horeca + ósmosis/UF): amplía la selección con las
+ * otras partes ACTIVAS del pack del mismo cliente. Solo se llama cuando el
+ * usuario elige «el pack entero»: una parte también puede retirarse sola
+ * (Mario 2026-11-28). Los extras de siempre no se tocan.
  *
  * Defensivo: si la columna pack_role no existe (migración 20261127100000 sin
  * aplicar) o falla la lectura, devuelve la selección tal cual.

@@ -290,3 +290,20 @@ export function parteConMantenimiento(
 ): "principal" | "complemento" {
   return hayComplemento && tipoSinMantenimiento(tipoPrincipal) ? "complemento" : "principal";
 }
+
+/**
+ * Partes del pack con complemento que NO se han elegido y que irían si se
+ * retira el pack entero. Vacío = la selección ya es el pack completo o no hay
+ * pack con complemento. Mario 2026-11-28: una parte puede retirarse sola
+ * («pueden entrar por partes, no todo el pack»), así que esto solo sirve para
+ * avisar y dejar elegir entre «solo esta parte» y «el pack entero».
+ */
+export function partesDelPackNoElegidas(ids: string[], filas: FilaPack[]): string[] {
+  const elegidos = ids.map((x) => x.toLowerCase());
+  const normal = filas.map((f) => ({
+    id: f.id.toLowerCase(),
+    parent_equipment_id: f.parent_equipment_id ? f.parent_equipment_id.toLowerCase() : null,
+    pack_role: f.pack_role,
+  }));
+  return idsPackCompleto(elegidos, normal).filter((id) => !elegidos.includes(id));
+}

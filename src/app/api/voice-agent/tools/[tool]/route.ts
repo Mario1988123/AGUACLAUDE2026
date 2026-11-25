@@ -20,6 +20,7 @@ import {
   type ResolvedCaller,
 } from "@/modules/voice-agent/lookup";
 import { sendVoiceConfirmation } from "@/modules/voice-agent/whatsapp-out";
+import { empresaEstaEnServicio } from "@/shared/lib/empresas/en-servicio";
 import {
   getMaintenanceOfferableSlots,
   ensureConfirmationToken,
@@ -133,6 +134,11 @@ export async function POST(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+  // Empresa pausada o de baja: el agente no crea leads, incidencias ni
+  // WhatsApp (Mario 2026-11-28).
+  if (!(await empresaEstaEnServicio(admin, companyId))) {
+    return NextResponse.json({ ok: false, error: "company_not_in_service" }, { status: 403 });
+  }
   const call = await buildContext(admin, companyId, body);
   if (!call) {
     return NextResponse.json({ ok: false, error: "call_not_found" }, { status: 404 });

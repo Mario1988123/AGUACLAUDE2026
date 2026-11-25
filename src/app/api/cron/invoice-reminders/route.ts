@@ -6,6 +6,11 @@ import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
+import {
   claveDiaMadrid,
   diferenciaDiasClave,
 } from "@/modules/scheduling/fechas-madrid";
@@ -37,6 +42,18 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const offInvoicing = await companiesWithModuleDisabled("invoicing");
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    tracker.error("empresas-en-servicio", e);
+    return null;
+  });
+  if (!enServicio) {
+    await tracker.finish({ ok: false, summary: { abortado: MOTIVO_SIN_EMPRESAS } });
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
+
 
   // ===== Recordatorios de impago automáticos (decisión 2026-05-20) =====
   // Para cada factura vencida con saldo pendiente, mandar el recordatorio
@@ -74,6 +91,7 @@ export async function GET(req: NextRequest) {
           .in("status", ["issued", "overdue"])
           .lt("due_date", hoyMadrid)
           .is("deleted_at", null)
+          .in("company_id", EN)
           .order("id")
           .range(from, to),
       { label: "cron/invoice-reminders" },

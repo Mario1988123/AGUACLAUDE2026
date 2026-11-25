@@ -28,6 +28,8 @@ type Admin = any;
 export async function avisarLeadsInactivos(
   admin: Admin,
   fueraDeTiempo: (seccion: string) => boolean,
+  /** Solo empresas en servicio: las pausadas y de baja no reciben avisos. */
+  enServicio?: { has: (companyId: string | null | undefined) => boolean },
 ): Promise<{ avisos_comercial: number; resumenes_admin: number; errores: number }> {
   const stats = { avisos_comercial: 0, resumenes_admin: 0, errores: 0 };
 
@@ -77,6 +79,7 @@ export async function avisarLeadsInactivos(
 
   for (const [companyId, leads] of porEmpresa) {
     if (fueraDeTiempo("leads-inactivos")) break;
+    if (enServicio && !enServicio.has(companyId)) continue;
     try {
       const dias = diasInactividad(settingsPorEmpresa.get(companyId));
       const corte = new Date(Date.now() - dias * 86_400_000).toISOString();

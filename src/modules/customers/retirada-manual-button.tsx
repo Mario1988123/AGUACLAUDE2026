@@ -25,6 +25,8 @@ import {
 } from "./retirada-logica";
 import { retirarEquipoManualAction } from "./retirada-manual-actions";
 import { notificarResultadoRetirada } from "./retirada-resultado";
+import { AvisoPackParcial, faltanDelPack } from "./aviso-pack-parcial";
+import type { PackRole } from "@/shared/lib/packs/complemento";
 
 interface EquipoOpcion {
   id: string;
@@ -34,6 +36,9 @@ interface EquipoOpcion {
   is_ours: boolean;
   /** En renting: no se puede retirar (Mario 2026-11-09). */
   en_renting?: boolean;
+  /** Pack: principal del que cuelga y rol (para avisar si se marca una sola parte). */
+  parent_equipment_id?: string | null;
+  pack_role?: PackRole | null;
 }
 
 interface AlmacenOpcion {
@@ -87,12 +92,21 @@ export function RetiradaManualButton({
   const [almacenId, setAlmacenId] = useState(almacenPorDefecto);
   const [estado, setEstado] = useState<EstadoEquipoRetirado>("operative");
   const [motivo, setMotivo] = useState("");
+  const [packEntero, setPackEntero] = useState(false);
 
   if (equipment.length === 0) return null;
 
   const destinoDe = (id: string): DestinoEquipo => destinos[id] ?? "warehouse";
   const elegidos = equipment.filter((e) => seleccion.has(e.id));
-  const vuelveStock = elegidos.some((e) => e.is_ours && destinoDe(e.id) === "warehouse");
+  const restoDelPack = faltanDelPack(
+    equipment,
+    elegidos.map((e) => e.id),
+  );
+  const totalARetirar = elegidos.length + (packEntero ? restoDelPack.length : 0);
+  const vuelveStock =
+    elegidos.some((e) => e.is_ours && destinoDe(e.id) === "warehouse") ||
+    (packEntero &&
+      restoDelPack.some((id) => equipment.find((e) => e.id.toLowerCase() === id)?.is_ours));
   const motivoOk = motivo.trim().length >= MOTIVO_MIN;
   const fechaOk = !!fecha && fecha <= hoy;
   const puedeEnviar =
@@ -117,6 +131,7 @@ export function RetiradaManualButton({
         destination_warehouse_id: vuelveStock ? almacenId : null,
         estado_equipo: estado,
         motivo: motivo.trim(),
+        pack_entero: restoDelPack.length > 0 ? packEntero : false,
         destinos: elegidos.map((e) => ({
           equipment_id: e.id,
           destino: e.is_ours ? destinoDe(e.id) : ("not_ours" as DestinoEquipo),
@@ -130,6 +145,7 @@ export function RetiradaManualButton({
       setOpen(false);
       setMotivo("");
       setSeleccion(new Set());
+      setPackEntero(false);
       router.refresh();
     });
   }
@@ -206,6 +222,13 @@ export function RetiradaManualButton({
               })}
             </ul>
           </fieldset>
+
+          <AvisoPackParcial
+            equipos={equipment}
+            seleccion={elegidos.map((e) => e.id)}
+            packEntero={packEntero}
+            onChange={setPackEntero}
+          />
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -317,8 +340,8 @@ export function RetiradaManualButton({
             >
               {pending
                 ? "Retirando…"
-                : elegidos.length > 1
-                  ? `Retirar ${elegidos.length} equipos`
+                : totalARetirar > 1
+                  ? `Retirar ${totalARetirar} equipos`
                   : "Retirar equipo"}
             </Button>
           </DialogFooter>

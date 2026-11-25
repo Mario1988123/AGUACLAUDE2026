@@ -1,6 +1,7 @@
 // Sin "use server" (auditoría 2026-10-01): solo la llama el cron diario. Como
 // server action cualquiera podía dispararla desde el navegador.
 
+import type { EmpresasEnServicio } from "@/shared/lib/empresas/en-servicio";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { diaMananaCron, rangoDiaMadridUtc } from "@/modules/scheduling/fechas-madrid";
@@ -20,7 +21,10 @@ import { diaMananaCron, rangoDiaMadridUtc } from "@/modules/scheduling/fechas-ma
  *     no se duplica.
  *  7. Notifica al admin/director técnico que hay órdenes pendientes.
  */
-export async function generateLoadingRequestsForTomorrow(): Promise<{
+export async function generateLoadingRequestsForTomorrow(
+  /** Solo empresas en servicio (pausadas y de baja no generan órdenes de carga). */
+  enServicio?: EmpresasEnServicio,
+): Promise<{
   companies: number;
   requests_created: number;
   errors: number;
@@ -35,11 +39,15 @@ export async function generateLoadingRequestsForTomorrow(): Promise<{
   const neededFor = diaMananaCron();
   const { desde: dayStartIso, hasta: dayEndIso } = rangoDiaMadridUtc(neededFor);
 
+  // OJO (2026-11-28): `companies` no tiene deleted_at, así que esta consulta
+  // probablemente falla en silencio y no sale ninguna orden de carga. No se
+  // arregla aquí para no estrenar avisos sin que Mario lo decida.
   const { data: companies } = await admin
     .from("companies")
     .select("id")
     .is("deleted_at", null);
   for (const c of (companies ?? []) as Array<{ id: string }>) {
+    if (enServicio && !enServicio.has(c.id)) continue;
     stats.companies += 1;
     try {
       // Almacén principal

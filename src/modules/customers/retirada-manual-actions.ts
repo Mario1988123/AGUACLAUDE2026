@@ -90,9 +90,12 @@ export async function retirarEquipoManualAction(
     if (cErr) return { ok: false, error: cErr.message };
     if (!cust) return { ok: false, error: "Cliente no encontrado" };
 
-    // Pack con complemento (Horeca + ósmosis/UF): se retira entero.
+    // Pack con complemento (Horeca + ósmosis/UF): el usuario elige si va el
+    // pack entero o solo la parte marcada (Mario 2026-11-28).
     const elegidos = new Set(d.equipment_ids.map((x) => x.toLowerCase()));
-    d.equipment_ids = await ampliarConPackCompleto(admin, companyId, d.customer_id, d.equipment_ids);
+    if (entrada.pack_entero !== false) {
+      d.equipment_ids = await ampliarConPackCompleto(admin, companyId, d.customer_id, d.equipment_ids);
+    }
 
     const { data: eqRows, error: eErr } = await admin
       .from("customer_equipment")

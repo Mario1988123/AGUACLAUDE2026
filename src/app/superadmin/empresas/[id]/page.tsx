@@ -228,6 +228,31 @@ export default async function EmpresaDetallePage({ params }: PageProps) {
         </div>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Lo que tiene</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+            {(
+              [
+                ["Clientes", metrica?.customers_count],
+                ["Contratos activos", metrica?.contracts_active_count],
+                ["Equipos instalados", metrica?.equipment_active_count],
+                ["Usuarios", metrica?.users_count ?? users.length],
+                ["Productos", metrica?.products_count],
+                ["Leads", metrica?.leads_count],
+              ] as Array<[string, number | undefined]>
+            ).map(([etiqueta, valor]) => (
+              <div key={etiqueta} className="rounded-xl border bg-muted/20 p-3">
+                <dt className="text-xs text-muted-foreground">{etiqueta}</dt>
+                <dd className="text-lg font-semibold tabular-nums">{valor ?? "—"}</dd>
+              </div>
+            ))}
+          </dl>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>

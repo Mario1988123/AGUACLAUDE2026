@@ -131,6 +131,8 @@ export async function refreshAllScraperPrices(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   companyId?: string,
+  /** Cron: solo marcas de empresas en servicio (pausadas y de baja no). */
+  enServicio?: { has: (companyId: string | null | undefined) => boolean },
 ): Promise<{ ok: number; failed: number; total: number }> {
   let q = admin
     .from("savings_water_brands")
@@ -148,11 +150,12 @@ export async function refreshAllScraperPrices(
     scrape_query: string | null;
     consecutive_failures: number;
   }> | null) ?? [];
+  const aProcesar = enServicio ? list.filter((b) => enServicio.has(b.company_id)) : list;
 
   let ok = 0;
   let failed = 0;
 
-  for (const b of list) {
+  for (const b of aProcesar) {
     const query = b.scrape_query || b.name;
     const r =
       b.price_source === "scraper_mercadona"
@@ -195,5 +198,5 @@ export async function refreshAllScraperPrices(
     }
   }
 
-  return { ok, failed, total: list.length };
+  return { ok, failed, total: aProcesar.length };
 }

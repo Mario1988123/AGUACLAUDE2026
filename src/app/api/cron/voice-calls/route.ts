@@ -7,6 +7,10 @@ import { loadVoiceSettings, checkCallAllowed } from "@/modules/voice-agent/setti
 import { placeCall } from "@/modules/voice-agent/provider";
 import { seedMaintenanceCallQueue } from "@/modules/voice-agent/queue-actions";
 import type { CallPurpose } from "@/modules/voice-agent/guardrails";
+import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+} from "@/shared/lib/empresas/en-servicio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,6 +67,17 @@ export async function GET(req: NextRequest) {
 
   // --- Empresas con el módulo encendido ----------------------------------
   const disabled = await companiesWithModuleDisabled("voice_agent");
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    tracker.error("empresas-en-servicio", e);
+    return null;
+  });
+  if (!enServicio) {
+    await tracker.finish({ ok: false, summary: { abortado: MOTIVO_SIN_EMPRESAS } });
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+
   let companies: string[] = [];
   try {
     const { data, error } = await admin
@@ -72,7 +87,7 @@ export async function GET(req: NextRequest) {
     if (error) throw new Error(error.message);
     companies = ((data ?? []) as Array<{ company_id: string }>)
       .map((r) => r.company_id)
-      .filter((id) => !disabled.has(id));
+      .filter((id) => !disabled.has(id) && enServicio.has(id));
   } catch (e) {
     tracker.error("list_companies", e);
   }

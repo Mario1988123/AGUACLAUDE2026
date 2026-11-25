@@ -8,6 +8,11 @@ import { getSystemTemplateByKey } from "@/modules/mailing/system-templates";
 import { ensureConfirmationToken } from "@/modules/maintenance/public-confirmation-actions";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
+import {
   claveDiaMadrid,
   rangoDiaMadridUtc,
   sumarDiasClave,
@@ -45,6 +50,18 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const stats = { confirm_request: 0, day_before: 0, errors: 0 };
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    tracker.error("empresas-en-servicio", e);
+    return null;
+  });
+  if (!enServicio) {
+    await tracker.finish({ ok: false, summary: { abortado: MOTIVO_SIN_EMPRESAS } });
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
+
 
   // Empresas que han DESACTIVADO el módulo maintenance: no enviarles
   // recordatorios de visitas (degradación suave del módulo OFF).
@@ -61,6 +78,7 @@ export async function GET(req: NextRequest) {
       .is("customer_reminder_sent_at", null)
       .gte("scheduled_at", from.toISOString())
       .lte("scheduled_at", to.toISOString())
+      .in("company_id", EN)
       .limit(200);
     for (const j of (jobs ?? []) as Array<{
       id: string;
@@ -101,6 +119,7 @@ export async function GET(req: NextRequest) {
       .is("customer_day_before_sent_at", null)
       .gte("scheduled_at", desde)
       .lt("scheduled_at", hasta)
+      .in("company_id", EN)
       .limit(500);
     if (errJobs) throw new Error(errJobs.message);
     for (const j of (jobs ?? []) as Array<{

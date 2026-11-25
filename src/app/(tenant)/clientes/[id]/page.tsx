@@ -296,6 +296,8 @@ export default async function CustomerDetailPage({
       display_name: e.product_name ?? e.external_model_name ?? "Equipo",
       serial_number: e.serial_number,
       is_ours: !!e.product_name,
+      parent_equipment_id: e.parent_equipment_id,
+      pack_role: e.pack_role,
     }));
 
   // Bandera "cliente en riesgo": incidencia abierta con prioridad
@@ -705,6 +707,8 @@ export default async function CustomerDetailPage({
                               e.product_name ?? e.external_model_name ?? "Equipo",
                             serial_number: e.serial_number,
                             is_ours: !!e.product_name,
+                            parent_equipment_id: e.parent_equipment_id,
+                            pack_role: e.pack_role,
                           }))}
                         warehouses={warehouseOptions}
                       />

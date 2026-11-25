@@ -49,6 +49,9 @@ export interface UninstallEquipmentInput {
     equipment_id: string;
     disposition: EquipmentDisposition;
   }> | null;
+  // Pack con complemento: true/sin indicar = el pack entero; false = solo lo
+  // marcado (Mario 2026-11-28: una parte puede volver sola al almacén).
+  pack_entero?: boolean | null;
 }
 
 /**
@@ -84,13 +87,12 @@ export async function createUninstallAction(
     for (const d of input.equipment_dispositions ?? []) {
       destinos.set(d.equipment_id.toLowerCase(), d.disposition);
     }
-    // Pack con complemento (Horeca + ósmosis/UF): se retira entero.
-    const equipmentIds = await ampliarConPackCompleto(
-      admin,
-      session.company_id,
-      input.customer_id,
-      input.equipment_ids,
-    );
+    // Pack con complemento (Horeca + ósmosis/UF): el pack entero salvo que se
+    // elija retirar solo la parte marcada.
+    const equipmentIds =
+      input.pack_entero === false
+        ? input.equipment_ids
+        : await ampliarConPackCompleto(admin, session.company_id, input.customer_id, input.equipment_ids);
     const creada = await crearOrdenRetirada(admin, {
       company_id: session.company_id,
       user_id: session.user_id,

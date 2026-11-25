@@ -2,6 +2,7 @@
 
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { idsEmpresasEnServicioOTodas, soloVisibles } from "@/shared/lib/empresas/en-servicio";
 
 /**
  * Cuenta para el badge del bell del header.
@@ -17,10 +18,13 @@ export async function fetchUnreadCount(): Promise<number> {
   const session = await requireSession();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
+  // Sin avisos de empresas pausadas o de baja (Mario 2026-11-28).
+  const visibles = await idsEmpresasEnServicioOTodas();
   try {
-    const { count, error } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
+    const { count, error } = await soloVisibles(
+      supabase.from("notifications").select("id", { count: "exact", head: true }),
+      visibles,
+    )
       .eq("recipient_user_id", session.user_id)
       .eq("category", "alert")
       .is("read_at", null)
@@ -29,9 +33,10 @@ export async function fetchUnreadCount(): Promise<number> {
     return count ?? 0;
   } catch {
     // fallback defensivo si category aún no existe
-    const { count } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
+    const { count } = await soloVisibles(
+      supabase.from("notifications").select("id", { count: "exact", head: true }),
+      visibles,
+    )
       .eq("recipient_user_id", session.user_id)
       .is("read_at", null);
     return count ?? 0;

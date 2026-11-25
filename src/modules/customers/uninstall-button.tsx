@@ -8,12 +8,16 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
 import { createUninstallAction } from "./uninstall-actions";
+import { AvisoPackParcial, faltanDelPack } from "./aviso-pack-parcial";
+import type { PackRole } from "@/shared/lib/packs/complemento";
 
 interface EquipmentOption {
   id: string;
   display_name: string;
   serial_number: string | null;
   is_ours: boolean;
+  parent_equipment_id?: string | null;
+  pack_role?: PackRole | null;
 }
 
 interface WarehouseOption {
@@ -44,6 +48,8 @@ export function UninstallEquipmentButton({
   const [scheduledAt, setScheduledAt] = useState("");
   const [defaultState, setDefaultState] = useState<"used" | "damaged">("used");
   const [notes, setNotes] = useState("");
+  const [packEntero, setPackEntero] = useState(false);
+  const restoDelPack = faltanDelPack(equipment, Array.from(selected));
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -71,6 +77,7 @@ export function UninstallEquipmentButton({
         scheduled_at: scheduledAt || null,
         default_state: defaultState,
         notes: notes || null,
+        pack_entero: restoDelPack.length > 0 ? packEntero : false,
       });
       if (!r.ok) {
         notify.error("No se pudo crear la desinstalación", r.error);
@@ -78,7 +85,7 @@ export function UninstallEquipmentButton({
       }
       notify.success(
         "Orden de desinstalación creada",
-        `${selected.size} equipo(s). Se completará desde /instalaciones.`,
+        `${selected.size + (packEntero ? restoDelPack.length : 0)} equipo(s). Se completará desde /instalaciones.`,
       );
       setOpen(false);
       router.push(`/instalaciones/${r.installation_id}` as never);
@@ -156,6 +163,13 @@ export function UninstallEquipmentButton({
                   </ul>
                 )}
               </div>
+
+              <AvisoPackParcial
+                equipos={equipment}
+                seleccion={Array.from(selected)}
+                packEntero={packEntero}
+                onChange={setPackEntero}
+              />
 
               <div className="space-y-1">
                 <Label>Almacén destino</Label>

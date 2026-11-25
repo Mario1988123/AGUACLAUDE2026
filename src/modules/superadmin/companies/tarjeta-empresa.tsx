@@ -11,11 +11,15 @@ export function TarjetaEmpresa({
   usuarios,
   clientes,
   contratos,
+  equipos,
+  productos,
 }: {
   empresa: { id: string; name: string; slug: string; status: string; max_users: number };
   usuarios: number;
   clientes: number;
   contratos: number;
+  equipos: number;
+  productos: number;
 }) {
   const e = estadoEmpresa(c.status);
   return (
@@ -48,6 +52,14 @@ export function TarjetaEmpresa({
           <div>
             <dt className="text-xs text-muted-foreground">Contratos</dt>
             <dd className="tabular-nums">{contratos}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Equipos</dt>
+            <dd className="tabular-nums">{equipos}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-muted-foreground">Productos</dt>
+            <dd className="tabular-nums">{productos}</dd>
           </div>
         </dl>
       </Link>

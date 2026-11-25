@@ -4,6 +4,7 @@ import {
   elegirEquipoMantenimiento,
   etiquetaParteDelPack,
   idsPackCompleto,
+  partesDelPackNoElegidas,
   lineaQueLlevaMantenimiento,
   lineasConPrecio,
   llevaMantenimiento,
@@ -244,5 +245,26 @@ describe("lineaQueLlevaMantenimiento con datos de siempre", () => {
       { id: 3, maintenance_included: true, parent_item_id: "h", pack_role: "complemento" as const, tipo: "osmosis" },
     ]);
     expect(l?.id).toBe(3);
+  });
+});
+
+describe("partesDelPackNoElegidas", () => {
+  const filas = [
+    { id: "h", parent_equipment_id: null, pack_role: null },
+    { id: "o", parent_equipment_id: "h", pack_role: "complemento" as const },
+    { id: "g", parent_equipment_id: "h", pack_role: "extra" as const },
+    { id: "s", parent_equipment_id: null, pack_role: null },
+  ];
+  it("una parte sola del pack: dice qué falta", () => {
+    expect(partesDelPackNoElegidas(["o"], filas)).toEqual(["h", "g"]);
+    expect(partesDelPackNoElegidas(["h"], filas)).toEqual(["o", "g"]);
+  });
+  it("el pack entero o un equipo suelto: nada", () => {
+    expect(partesDelPackNoElegidas(["h", "o", "g"], filas)).toEqual([]);
+    expect(partesDelPackNoElegidas(["s"], filas)).toEqual([]);
+    expect(partesDelPackNoElegidas(["g"], filas)).toEqual([]);
+  });
+  it("no distingue mayúsculas en los ids", () => {
+    expect(partesDelPackNoElegidas(["O"], filas)).toEqual(["h", "g"]);
   });
 });

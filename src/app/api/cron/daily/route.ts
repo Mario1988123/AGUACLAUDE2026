@@ -4,6 +4,11 @@ import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { notifyByRoles } from "@/modules/notifications/notifier";
 import { avisarLeadsInactivos } from "@/modules/leads/aviso-inactividad";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
+import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
 import { companiesWithModuleDisabled } from "@/shared/lib/auth/module-guard";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
 import { registrarCuotaMensualContrato } from "@/modules/invoices/create-core";
@@ -69,6 +74,19 @@ export async function GET(req: NextRequest) {
     schedule_incidents_opened: 0,
   };
 
+  // Empresas EN SERVICIO (trial o active). Las pausadas y las de baja no
+  // generan NADA automático (Mario 2026-11-28): cada sección filtra su
+  // consulta raíz con EN o salta con enServicio.has(). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    tracker.error("empresas-en-servicio", e);
+    return null;
+  });
+  if (!enServicio) {
+    await tracker.finish({ ok: false, summary: { abortado: MOTIVO_SIN_EMPRESAS } });
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
+
   // Sets de empresas que han DESACTIVADO cada módulo. Se usan en los bloques
   // de abajo para saltar empresas con el módulo OFF (degradación suave: el
   // cron no genera datos/avisos de un módulo que la empresa apagó). Empresas
@@ -112,7 +130,8 @@ export async function GET(req: NextRequest) {
       .from("company_modules")
       .select("company_id")
       .eq("module_key", "time_tracking")
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .in("company_id", EN);
     type CM = { company_id: string };
     for (const cm of ((activeCompanies ?? []) as CM[])) {
       if (fueraDeTiempo("schedule-incidents")) break;
@@ -302,7 +321,8 @@ export async function GET(req: NextRequest) {
     .eq("status", "signed")
     .not("service_start_date", "is", null)
     .lte("service_start_date", todayIsoDate)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .in("company_id", EN);
   for (const c of ((dueContracts ?? []) as Array<{ id: string; company_id: string }>)) {
     if (fueraDeTiempo("contracts-activation")) break;
     try {
@@ -331,7 +351,7 @@ export async function GET(req: NextRequest) {
   // el lead se queda con su comercial; se avisa a él y un resumen al admin.
   try {
     if (!fueraDeTiempo("leads-inactivos")) {
-      const r = await avisarLeadsInactivos(admin, fueraDeTiempo);
+      const r = await avisarLeadsInactivos(admin, fueraDeTiempo, enServicio);
       stats.leads_aviso_comercial = r.avisos_comercial;
       stats.leads_resumen_admin = r.resumenes_admin;
     }
@@ -354,7 +374,8 @@ export async function GET(req: NextRequest) {
     .in("status", ["scheduled"])
     .gte("scheduled_at", tomorrowStartIso)
     .lt("scheduled_at", tomorrowEndIso)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .in("company_id", EN);
   for (const inst of (insts ?? []) as Array<{
     id: string;
     company_id: string;
@@ -513,7 +534,8 @@ export async function GET(req: NextRequest) {
     .select("id, company_id, scheduled_at, technician_user_id")
     .eq("status", "scheduled")
     .gte("scheduled_at", tomorrowStartIso)
-    .lt("scheduled_at", tomorrowEndIso);
+    .lt("scheduled_at", tomorrowEndIso)
+    .in("company_id", EN);
   for (const j of (jobs ?? []) as Array<{
     id: string;
     company_id: string;
@@ -564,7 +586,8 @@ export async function GET(req: NextRequest) {
       .from("products")
       .select("id, company_id, name, stock_min")
       .eq("stock_managed", true)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .in("company_id", EN);
     for (const p of (prods ?? []) as Array<{
       id: string;
       company_id: string;
@@ -594,6 +617,7 @@ export async function GET(req: NextRequest) {
   for (const ls of lowStockRows) {
     if (fueraDeTiempo("stock-low")) break;
     if (offWarehouses.has(ls.company_id)) continue;
+    if (!enServicio.has(ls.company_id)) continue;
     try {
       // Idempotencia: solo notifica si no ha habido otra notif del mismo producto en 24h
       const since = new Date();
@@ -631,7 +655,7 @@ export async function GET(req: NextRequest) {
     const { processGeocodeBacklog } = await import(
       "@/modules/addresses/geocode-backlog"
     );
-    const r = await processGeocodeBacklog(30);
+    const r = await processGeocodeBacklog(30, enServicio);
     geocodeStats.processed = r.processed;
     geocodeStats.succeeded = r.succeeded;
     geocodeStats.failed = r.failed;
@@ -657,7 +681,8 @@ export async function GET(req: NextRequest) {
       // esta ventana no se recalculaba nunca desde el cron (auditoría I1).
       .in("status", ["signed", "active"])
       .not("service_start_date", "is", null)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .in("company_id", EN);
     if (errActive) throw new Error(errActive.message);
     for (const c of (activeContracts ?? []) as Array<{ id: string; company_id: string }>) {
       if (offMaintenance.has(c.company_id)) continue;
@@ -680,7 +705,7 @@ export async function GET(req: NextRequest) {
     const { generateLoadingRequestsForTomorrow } = await import(
       "@/modules/warehouses/auto-loading"
     );
-    loadingStats = await generateLoadingRequestsForTomorrow();
+    loadingStats = await generateLoadingRequestsForTomorrow(enServicio);
   } catch (e) {
     console.error("[cron/daily] auto-loading failed:", e);
   }
@@ -691,7 +716,7 @@ export async function GET(req: NextRequest) {
     const { data: companiesAll } = await admin
       .from("companies")
       .select("id")
-      .is("cancelled_at", null);
+      .in("id", EN);
     const { recomputeStockAlertsForCompany } = await import(
       "@/modules/warehouses/alert-actions"
     );
@@ -715,6 +740,9 @@ export async function GET(req: NextRequest) {
     const { processVerifactuQueue } = await import(
       "@/modules/invoices/verifactu-queue"
     );
+    // [decide] La cola AEAT NO se filtra: son facturas ya emitidas y su
+    // envío es obligación fiscal aunque la empresa esté en pausa (además,
+    // VeriFactu está pausado). Sí se filtra el aviso de rechazos de abajo.
     verifactu = await processVerifactuQueue();
     // Notificar a admin si hay rechazos AEAT en la cola (status='failed')
     if (verifactu.failed > 0) {
@@ -724,7 +752,8 @@ export async function GET(req: NextRequest) {
         .from("invoice_aeat_submissions")
         .select("company_id")
         .eq("status", "failed")
-        .gte("responded_at", since.toISOString());
+        .gte("responded_at", since.toISOString())
+        .in("company_id", EN);
       // Agrupar manualmente por empresa
       const byCompany = new Map<string, number>();
       for (const r of (failedRecords ?? []) as Array<{
@@ -759,7 +788,10 @@ export async function GET(req: NextRequest) {
     const { retryFailedPayments, retryFailedWebhookEvents } = await import(
       "@/modules/gocardless/retry"
     );
-    gcRetry.payments = await retryFailedPayments();
+    // Reintentar un cobro es generar un cobro: solo empresas en servicio.
+    gcRetry.payments = await retryFailedPayments(enServicio);
+    // [decide] Los webhooks fallidos sí se reprocesan: reflejan lo que ya ha
+    // pasado en el banco (no generan nada) y perderlos descuadraría cobros.
     gcRetry.webhooks = await retryFailedWebhookEvents();
   } catch (e) {
     console.error("[cron/daily] gocardless retry failed:", e);
@@ -782,6 +814,7 @@ export async function GET(req: NextRequest) {
       )
       .in("status", ["open", "assigned", "in_progress"])
       .not("deadline_at", "is", null)
+      .in("company_id", EN)
       .limit(500);
     const since = new Date();
     since.setHours(0, 0, 0, 0);
@@ -911,7 +944,8 @@ export async function GET(req: NextRequest) {
     const { computeCycleRange } = await import("@/modules/points/cycles-utils");
     const { data: pointSettings } = await admin
       .from("company_settings")
-      .select("company_id, points_settings");
+      .select("company_id, points_settings")
+      .in("company_id", EN);
     type PS = {
       company_id: string;
       points_settings: { cycle_close_day?: number } | null;
@@ -1039,6 +1073,7 @@ export async function GET(req: NextRequest) {
       .eq("status", "sent")
       .lt("sent_at", cutoff.toISOString())
       .is("deleted_at", null)
+      .in("company_id", EN)
       .select("id");
     phase2.proposals_expired = ((expired ?? []) as Array<unknown>).length;
   } catch (e) {
@@ -1059,7 +1094,8 @@ export async function GET(req: NextRequest) {
       .eq("status", "sent")
       .gte("sent_at", cutoff8.toISOString())
       .lte("sent_at", cutoff7.toISOString())
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .in("company_id", EN);
     for (const p of ((stale ?? []) as Array<{
       id: string;
       company_id: string;
@@ -1096,6 +1132,7 @@ export async function GET(req: NextRequest) {
       .update({ status: "expired" })
       .eq("status", "installed")
       .lt("expires_at", todayDate)
+      .in("company_id", EN)
       .select("id, company_id, assigned_installer_user_id");
     phase2.free_trials_expired = ((expiredTrials ?? []) as Array<unknown>).length;
     for (const t of (expiredTrials ?? []) as Array<{
@@ -1133,6 +1170,7 @@ export async function GET(req: NextRequest) {
     const { data: activeContracts } = await admin
       .from("contracts")
       .select("id, company_id, customer_id, service_start_date")
+      .in("company_id", EN)
       .eq("status", "active")
       .eq("maintenance_included", true)
       .is("deleted_at", null);
@@ -1203,6 +1241,7 @@ export async function GET(req: NextRequest) {
       const { data: forgotten } = await admin
         .from("installations")
         .select("id, company_id, installer_user_id, reference_code")
+        .in("company_id", EN)
         .eq("status", "in_progress")
         .gte("scheduled_at", dayStart.toISOString())
         .is("deleted_at", null);
@@ -1244,7 +1283,7 @@ export async function GET(req: NextRequest) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const adminCli = (createAdminClient()) as any;
       const { refreshAllScraperPrices } = await import("@/modules/savings/scrapers");
-      scraperStats = await refreshAllScraperPrices(adminCli);
+      scraperStats = await refreshAllScraperPrices(adminCli, undefined, enServicio);
       console.log(`[cron/daily] savings scraper:`, scraperStats);
     } catch (e) {
       console.error("[cron/daily] savings scraper failed:", e);
@@ -1287,7 +1326,8 @@ export async function GET(req: NextRequest) {
           .eq("status", "active")
           .in("plan_type", ["renting", "rental"])
           .gt("monthly_cents", 0)
-          .is("deleted_at", null);
+          .is("deleted_at", null)
+          .in("company_id", EN);
       let q = await runSel(
         "id, company_id, customer_id, monthly_cents, reference_code, plan_type, paused_at, billing_starts_at",
       );
@@ -1367,7 +1407,8 @@ export async function GET(req: NextRequest) {
       const { data: autoCompanies } = await admin
         .from("social_settings")
         .select("company_id")
-        .eq("autonomous_mode", true);
+        .eq("autonomous_mode", true)
+        .in("company_id", EN);
       const { generateMonthlyPosts } = await import(
         "@/modules/social/generator"
       );
@@ -1411,7 +1452,7 @@ export async function GET(req: NextRequest) {
     const { data: companiesAllW } = await admin
       .from("companies")
       .select("id")
-      .is("cancelled_at", null);
+      .in("id", EN);
     const { reconcileContractPaymentsForCompany } = await import(
       "@/modules/wallet/reconcile-payments"
     );
@@ -1455,6 +1496,7 @@ export async function GET(req: NextRequest) {
       .lte("paused_at", thirtyDaysAgo.toISOString())
       .eq("plan_type", "rental")
       .in("status", ["signed", "active"])
+      .in("company_id", EN)
       .is("deleted_at", null);
     for (const c of ((pausedContracts ?? []) as Array<{
       id: string;
@@ -1537,7 +1579,7 @@ export async function GET(req: NextRequest) {
     const { data: companiesAll } = await admin
       .from("companies")
       .select("id")
-      .is("cancelled_at", null);
+      .in("id", EN);
     const { reconcileSalesRecordsForCompany } = await import(
       "@/modules/sales/reconcile"
     );

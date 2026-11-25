@@ -9,6 +9,7 @@ import {
 } from "@/modules/voice-agent/prompts";
 import { resolveCallerByPhone, logVoiceEvent } from "@/modules/voice-agent/lookup";
 import { verifyVoiceSignature } from "@/modules/voice-agent/webhook-auth";
+import { empresaEstaEnServicio } from "@/shared/lib/empresas/en-servicio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -87,7 +88,12 @@ export async function POST(req: NextRequest) {
       companyErr.message ?? companyErr,
     );
   }
-  const company = (companyId as string | null) ?? null;
+  // Empresa pausada o de baja: la IA no atiende (Mario 2026-11-28). Se
+  // trata como «número sin empresa» y la plataforma desvía al humano.
+  const company =
+    companyId && (await empresaEstaEnServicio(admin, companyId as string))
+      ? (companyId as string)
+      : null;
 
   const settings = company ? await loadVoiceSettings(company) : null;
   const gate = evaluateInboundGate(

@@ -185,6 +185,8 @@ export default async function SuperadminCompaniesPage({
                   usuarios={m?.users_count ?? 0}
                   clientes={m?.customers_count ?? 0}
                   contratos={m?.contracts_active_count ?? 0}
+                  equipos={m?.equipment_active_count ?? 0}
+                  productos={m?.products_count ?? 0}
                 />
               );
             })}
@@ -201,6 +203,8 @@ export default async function SuperadminCompaniesPage({
                   <th className="px-3 py-3 text-right">Leads</th>
                   <th className="px-3 py-3 text-right">Clientes</th>
                   <th className="px-3 py-3 text-right">Contratos</th>
+                  <th className="px-3 py-3 text-right">Equipos</th>
+                  <th className="px-3 py-3 text-right">Productos</th>
                   <th className="px-3 py-3 text-right">Coste/mes</th>
                   <th className="px-3 py-3 text-right">Edad</th>
                   <th className="px-4 py-3 text-right">Acciones</th>
@@ -238,6 +242,10 @@ export default async function SuperadminCompaniesPage({
                       <td className="px-3 py-3 text-right tabular-nums">
                         {m?.contracts_active_count ?? 0}
                       </td>
+                      <td className="px-3 py-3 text-right tabular-nums">
+                        {m?.equipment_active_count ?? 0}
+                      </td>
+                      <td className="px-3 py-3 text-right tabular-nums">{m?.products_count ?? 0}</td>
                       <td className="px-3 py-3 text-right tabular-nums">
                         {formatCents(c.monthly_cost_cents)}
                       </td>

@@ -1,6 +1,7 @@
 // No es "use server": estas funciones no comprueban sesión (las llama el
 // cron) y como server action quedaban invocables desde el navegador.
 import "server-only";
+import { idsParaFiltro, type EmpresasEnServicio } from "@/shared/lib/empresas/en-servicio";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { notifyByRoles } from "@/modules/notifications/notifier";
@@ -48,7 +49,10 @@ const MAX_EVENT_RETRIES = 5;
  *  - Si llega al máximo de reintentos, notifica al admin (mandato muerto o
  *    fondos insuficientes recurrente → contactar cliente).
  */
-export async function retryFailedPayments(): Promise<{
+export async function retryFailedPayments(
+  /** Solo empresas en servicio: a una pausada o de baja no se le reintenta ningún cobro. */
+  enServicio?: EmpresasEnServicio,
+): Promise<{
   attempted: number;
   succeeded: number;
   exhausted: number;
@@ -57,14 +61,15 @@ export async function retryFailedPayments(): Promise<{
   const admin = createAdminClient() as any;
   const stats = { attempted: 0, succeeded: 0, exhausted: 0 };
 
-  const { data: failed } = await admin
+  let consultaFallidos = admin
     .from("gocardless_payments")
     .select(
       "id, company_id, mandate_id, customer_id, contract_id, invoice_id, contract_payment_id, wallet_entry_id, amount_cents, description, retry_count, failure_reason",
     )
     .eq("status", "failed")
-    .lt("retry_count", MAX_PAYMENT_RETRIES)
-    .limit(50);
+    .lt("retry_count", MAX_PAYMENT_RETRIES);
+  if (enServicio) consultaFallidos = consultaFallidos.in("company_id", idsParaFiltro(enServicio));
+  const { data: failed } = await consultaFallidos.limit(50);
   type P = {
     id: string;
     company_id: string;

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { categoryOfKind } from "./category-of-kind";
+import { empresaEstaEnServicio } from "@/shared/lib/empresas/en-servicio";
 
 export type NotificationSeverity = "info" | "success" | "warning" | "error";
 /**
@@ -47,6 +48,8 @@ export interface NotifyInput {
 
 export async function notify(input: NotifyInput): Promise<void> {
   const admin = createAdminClient();
+  // Empresa pausada o de baja: ni aviso ni push (Mario 2026-11-28).
+  if (!(await empresaEstaEnServicio(admin, input.company_id))) return;
   const finalCategory = input.category ?? categoryOfKind(input.kind);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from("notifications").insert({
@@ -92,6 +95,8 @@ export async function notifyByRoles(
 ): Promise<void> {
   if (roleKeys.length === 0) return;
   const admin = createAdminClient();
+  // Empresa pausada o de baja: ni aviso ni push (Mario 2026-11-28).
+  if (!(await empresaEstaEnServicio(admin, companyId))) return;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: roles } = await (admin as any)
     .from("user_roles")

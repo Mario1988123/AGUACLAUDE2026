@@ -1,5 +1,6 @@
 "use server";
 
+import { idsParaFiltro, type EmpresasEnServicio } from "@/shared/lib/empresas/en-servicio";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { forwardGeocodeAction } from "@/shared/lib/geocoding/actions";
 
@@ -29,7 +30,11 @@ interface BacklogRow {
  *
  * Devuelve resumen de lo procesado.
  */
-export async function processGeocodeBacklog(maxBatch = 30): Promise<{
+export async function processGeocodeBacklog(
+  maxBatch = 30,
+  /** Solo direcciones de empresas en servicio (pausadas y de baja no gastan geocodificación). */
+  enServicio?: EmpresasEnServicio,
+): Promise<{
   processed: number;
   succeeded: number;
   failed: number;
@@ -38,7 +43,7 @@ export async function processGeocodeBacklog(maxBatch = 30): Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
-  const { data: rows } = await admin
+  let consulta = admin
     .from("addresses")
     .select(
       "id, street, street_number, postal_code, city, province, notes, geo_retries",
@@ -48,7 +53,9 @@ export async function processGeocodeBacklog(maxBatch = 30): Promise<{
     .or("geo_source.is.null,geo_source.neq.none")
     .not("street", "is", null)
     .not("postal_code", "is", null)
-    .lt("geo_retries", 3)
+    .lt("geo_retries", 3);
+  if (enServicio) consulta = consulta.in("company_id", idsParaFiltro(enServicio));
+  const { data: rows } = await consulta
     .order("created_at", { ascending: true })
     .limit(maxBatch);
 

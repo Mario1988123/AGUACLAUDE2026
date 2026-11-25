@@ -1,6 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
+import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -123,6 +128,17 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    console.error("[cron] empresas en servicio:", e);
+    return null;
+  });
+  if (!enServicio) {
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
+
   for (const url of feeds) {
     try {
       const res = await fetch(url, {
@@ -177,7 +193,8 @@ export async function GET(req: NextRequest) {
               .from("company_modules")
               .select("company_id")
               .eq("module_key", "time_tracking")
-              .eq("is_active", true);
+              .eq("is_active", true)
+              .in("company_id", EN);
             for (const c of ((companies ?? []) as Array<{ company_id: string }>)) {
               const { data: admins } = await admin
                 .from("user_roles")

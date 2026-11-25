@@ -46,10 +46,38 @@ export interface CompanyMetric {
   leads_count: number;
   customers_count: number;
   contracts_active_count: number;
+  /** Equipos instalados (customer_equipment activos). */
+  equipment_active_count: number;
+  /** Productos de su catálogo (sin borrar). */
+  products_count: number;
 }
 
+/** Recuentos que se piden por empresa (clave de CompanyMetric → tabla y filtros). */
+const RECUENTOS: Array<{
+  clave: Exclude<keyof CompanyMetric, "company_id">;
+  tabla: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  filtrar: (q: any) => any;
+}> = [
+  { clave: "users_count", tabla: "user_profiles", filtrar: (q) => q },
+  { clave: "leads_count", tabla: "leads", filtrar: (q) => q.is("deleted_at", null) },
+  { clave: "customers_count", tabla: "customers", filtrar: (q) => q.is("deleted_at", null) },
+  {
+    clave: "contracts_active_count",
+    tabla: "contracts",
+    filtrar: (q) => q.eq("status", "active").is("deleted_at", null),
+  },
+  { clave: "equipment_active_count", tabla: "customer_equipment", filtrar: (q) => q.eq("is_active", true) },
+  { clave: "products_count", tabla: "products", filtrar: (q) => q.is("deleted_at", null) },
+];
+
 /**
- * Métricas agregadas por empresa para el panel superadmin.
+ * Métricas por empresa para el panel superadmin.
+ *
+ * Antes se traían las filas y se contaban en JS: PostgREST corta en 1000
+ * (max_rows) y el indicador de clientes salía «1000». Ahora cada recuento es
+ * un `count: 'exact', head: true` por empresa y tabla (no baja filas).
+ * Si un recuento falla, ese número queda en 0 y se registra en el log.
  */
 export async function getCompaniesMetrics(companyIds: string[]): Promise<Map<string, CompanyMetric>> {
   await ensureSuperadmin();
@@ -58,26 +86,6 @@ export async function getCompaniesMetrics(companyIds: string[]): Promise<Map<str
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
 
-  const [users, leads, customers, contracts] = await Promise.all([
-    supabase.from("user_profiles").select("company_id").in("company_id", companyIds),
-    supabase
-      .from("leads")
-      .select("company_id")
-      .in("company_id", companyIds)
-      .is("deleted_at", null),
-    supabase
-      .from("customers")
-      .select("company_id")
-      .in("company_id", companyIds)
-      .is("deleted_at", null),
-    supabase
-      .from("contracts")
-      .select("company_id")
-      .in("company_id", companyIds)
-      .eq("status", "active")
-      .is("deleted_at", null),
-  ]);
-
   for (const id of companyIds) {
     map.set(id, {
       company_id: id,
@@ -85,21 +93,26 @@ export async function getCompaniesMetrics(companyIds: string[]): Promise<Map<str
       leads_count: 0,
       customers_count: 0,
       contracts_active_count: 0,
+      equipment_active_count: 0,
+      products_count: 0,
     });
   }
-  function bump(rows: Array<{ company_id: string }>, key: keyof CompanyMetric) {
-    for (const r of rows) {
-      const m = map.get(r.company_id);
-      if (m && typeof m[key] === "number") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (m as any)[key] = (m[key] as number) + 1;
-      }
-    }
-  }
-  bump((users.data ?? []) as Array<{ company_id: string }>, "users_count");
-  bump((leads.data ?? []) as Array<{ company_id: string }>, "leads_count");
-  bump((customers.data ?? []) as Array<{ company_id: string }>, "customers_count");
-  bump((contracts.data ?? []) as Array<{ company_id: string }>, "contracts_active_count");
+
+  await Promise.all(
+    companyIds.flatMap((id) =>
+      RECUENTOS.map(async (r) => {
+        const { count, error } = await r.filtrar(
+          supabase.from(r.tabla).select("company_id", { count: "exact", head: true }).eq("company_id", id),
+        );
+        if (error) {
+          console.error(`[getCompaniesMetrics] ${r.tabla}:`, error.message);
+          return;
+        }
+        const m = map.get(id);
+        if (m) m[r.clave] = count ?? 0;
+      }),
+    ),
+  );
   return map;
 }
 

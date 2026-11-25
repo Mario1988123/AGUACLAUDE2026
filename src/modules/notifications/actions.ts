@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
+import { idsEmpresasEnServicioOTodas, soloVisibles } from "@/shared/lib/empresas/en-servicio";
 import { categoryOfKind } from "./category-of-kind";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
@@ -28,13 +29,19 @@ export interface NotificationRow {
  */
 export async function listMyNotifications(): Promise<NotificationRow[]> {
   const session = await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  // Sin avisos de empresas pausadas o de baja (Mario 2026-11-28).
+  const visibles = await idsEmpresasEnServicioOTodas();
   try {
-    const { data, error } = await supabase
-      .from("notifications")
-      .select(
-        "id, kind, category, severity, title, body, action_url, read_at, auto_resolved_at, created_at",
-      )
+    const { data, error } = await soloVisibles(
+      supabase
+        .from("notifications")
+        .select(
+          "id, kind, category, severity, title, body, action_url, read_at, auto_resolved_at, created_at",
+        ),
+      visibles,
+    )
       .eq("recipient_user_id", session.user_id)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -42,9 +49,12 @@ export async function listMyNotifications(): Promise<NotificationRow[]> {
     return (data ?? []) as NotificationRow[];
   } catch {
     // Fallback sin column category — clasificamos en JS
-    const { data } = await supabase
-      .from("notifications")
-      .select("id, kind, severity, title, body, action_url, read_at, created_at")
+    const { data } = await soloVisibles(
+      supabase
+        .from("notifications")
+        .select("id, kind, severity, title, body, action_url, read_at, created_at"),
+      visibles,
+    )
       .eq("recipient_user_id", session.user_id)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -64,11 +74,15 @@ export async function listMyNotifications(): Promise<NotificationRow[]> {
  */
 export async function getUnreadCount(): Promise<number> {
   const session = await requireSession();
-  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = (await createClient()) as any;
+  // Sin avisos de empresas pausadas o de baja (Mario 2026-11-28).
+  const visibles = await idsEmpresasEnServicioOTodas();
   try {
-    const { count, error } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
+    const { count, error } = await soloVisibles(
+      supabase.from("notifications").select("id", { count: "exact", head: true }),
+      visibles,
+    )
       .eq("recipient_user_id", session.user_id)
       .eq("category", "alert")
       .is("read_at", null)
@@ -76,9 +90,10 @@ export async function getUnreadCount(): Promise<number> {
     if (error) throw error;
     return count ?? 0;
   } catch {
-    const { count } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
+    const { count } = await soloVisibles(
+      supabase.from("notifications").select("id", { count: "exact", head: true }),
+      visibles,
+    )
       .eq("recipient_user_id", session.user_id)
       .is("read_at", null);
     return count ?? 0;

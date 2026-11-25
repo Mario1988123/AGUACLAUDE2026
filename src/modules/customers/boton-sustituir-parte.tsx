@@ -7,7 +7,14 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { notify } from "@/shared/hooks/use-toast";
-import { sustituirParteDelPackAction } from "./sustituir-parte-actions";
+import { sustituirParteDelPackAction, type DestinoUnidadVieja } from "./sustituir-parte-actions";
+
+const ESTADO_VIEJA_LABEL: Record<DestinoUnidadVieja, string> = {
+  damaged: "Averiado: entra al almacén como dañado",
+  needs_review: "Para revisar: entra como dañado con la marca «para revisar»",
+  operative: "Funciona: entra al almacén como usado",
+  no_vuelve: "No vuelve al almacén (se tira o no es nuestro)",
+};
 
 /**
  * «Sustituir esta parte» de un pack con complemento (Horeca + ósmosis/UF).
@@ -30,6 +37,7 @@ export function BotonSustituirParte({
   const [productId, setProductId] = useState(productIdActual ?? opciones[0]?.id ?? "");
   const [serie, setSerie] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [estadoVieja, setEstadoVieja] = useState<DestinoUnidadVieja>("damaged");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -38,6 +46,7 @@ export function BotonSustituirParte({
     setProductId(productIdActual ?? opciones[0]?.id ?? "");
     setSerie("");
     setMotivo("");
+    setEstadoVieja("damaged");
   }
 
   function guardar() {
@@ -47,6 +56,7 @@ export function BotonSustituirParte({
         product_id: productId,
         serial_number: serie || null,
         motivo,
+        estado_vieja: estadoVieja,
       });
       if (!r.ok) {
         notify.error("No se pudo sustituir", r.error);
@@ -123,9 +133,24 @@ export function BotonSustituirParte({
                 className="w-full rounded-xl border border-input bg-background p-2 text-base"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sp-estado-vieja">El equipo que sale</Label>
+              <select
+                id="sp-estado-vieja"
+                value={estadoVieja}
+                onChange={(e) => setEstadoVieja(e.target.value as DestinoUnidadVieja)}
+                className="h-12 w-full rounded-xl border border-input bg-background px-3 text-base"
+              >
+                {(Object.keys(ESTADO_VIEJA_LABEL) as DestinoUnidadVieja[]).map((k) => (
+                  <option key={k} value={k}>
+                    {ESTADO_VIEJA_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </div>
             <p className="text-[11px] text-muted-foreground">
-              El equipo nuevo se descuenta de tu furgoneta o, si no tienes, del almacén principal.
-              El que sale no vuelve solo al stock.
+              El equipo nuevo se descuenta de tu furgoneta o, si no tienes, del almacén principal, y
+              el que sale entra en ese mismo almacén. Solo vuelve esta parte, no el pack entero.
             </p>
             <Button
               type="button"

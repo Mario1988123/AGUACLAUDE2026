@@ -3,6 +3,11 @@ import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { agruparCambios, enTramos, type AgregadosChurn } from "./calculo";
+import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,6 +73,18 @@ export async function GET(req: NextRequest) {
     cut_by_time: false,
   };
 
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    tracker.error("empresas-en-servicio", e);
+    return null;
+  });
+  if (!enServicio) {
+    await tracker.finish({ ok: false, summary: { abortado: MOTIVO_SIN_EMPRESAS } });
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
+
   try {
     const ahoraMs = Date.now();
     const seisMeses = new Date(ahoraMs - 180 * 86400000).toISOString();
@@ -80,6 +97,7 @@ export async function GET(req: NextRequest) {
               .from("customers")
               .select("id, churn_score")
               .is("deleted_at", null)
+              .in("company_id", EN)
               .order("id")
               .range(a, b),
           "customers",

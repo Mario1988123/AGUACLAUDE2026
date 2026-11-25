@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { esEstadoEquipo, estadoStockDeEquipo, type EstadoEquipoRetirado } from "./retirada-logica";
+
+/** Qué pasa con la unidad que sale: su estado físico o que no vuelve. */
+export type DestinoUnidadVieja = EstadoEquipoRetirado | "no_vuelve";
 
 /**
  * «Sustituir esta parte» de un pack con complemento (Horeca + ósmosis/UF).
@@ -18,7 +22,13 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
  *  - la unidad vieja queda como equipo dado de baja (histórico) con su modelo
  *    y su número de serie;
  *  - la unidad nueva se descuenta del almacén: la furgoneta de quien la hace
- *    o, si no tiene, el almacén principal. La vieja NO vuelve al stock sola.
+ *    o, si no tiene, el almacén principal;
+ *  - la unidad vieja ENTRA en ese mismo almacén (Mario 2026-11-28: «pueden
+ *    entrar por partes, no todo el pack»), por el mismo camino que la retirada
+ *    (aplicarCierreRetirada): RPC adjust_stock_batch, movimiento 'return',
+ *    estado used / damaged según su estado físico y la marca «PARA REVISAR»
+ *    en la nota. Si no es nuestra (sin producto del catálogo) o se marca que
+ *    no vuelve, no entra;
  *  - queda el evento customer.equipment_pack_part_replaced.
  * Permisos: admin de empresa y director técnico (como reubicar o dar de baja).
  */
@@ -27,6 +37,8 @@ export async function sustituirParteDelPackAction(input: {
   product_id: string;
   serial_number?: string | null;
   motivo: string;
+  /** Estado de la unidad que sale. Por defecto «Dañado» (se cambia porque falla). */
+  estado_vieja?: DestinoUnidadVieja | null;
 }): Promise<
   | { ok: true; equipo_id: string; aviso_stock: string | null }
   | { ok: false; error: string }
@@ -46,6 +58,10 @@ export async function sustituirParteDelPackAction(input: {
     if (motivo.length < 3) return { ok: false, error: "Escribe el motivo de la sustitución" };
     const serieNueva = (input.serial_number ?? "").trim() || null;
     if (!input.equipo_id || !input.product_id) return { ok: false, error: "Elige el equipo nuevo" };
+    const destinoVieja: DestinoUnidadVieja =
+      input.estado_vieja === "no_vuelve" || esEstadoEquipo(input.estado_vieja)
+        ? input.estado_vieja
+        : "damaged";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
@@ -168,11 +184,14 @@ export async function sustituirParteDelPackAction(input: {
       return { ok: false, error: upErr.message };
     }
 
-    // 5) Stock de la unidad nueva: furgoneta de quien sustituye o almacén
-    //    principal. Fail-soft: la sustitución no se deshace por el stock.
-    let avisoStock: string | null = null;
+    // 5) Stock: la unidad nueva sale y la vieja entra, en la furgoneta de
+    //    quien sustituye o en el almacén principal (como la retirada agendada).
+    //    Fail-soft: la sustitución no se deshace por el stock.
+    const avisos: string[] = [];
     let almacenId: string | null = null;
     let movidas = 0;
+    let devueltas = 0;
+    let estadoDevuelta: "used" | "damaged" | null = null;
     try {
       const { data: whs } = await admin
         .from("warehouses")
@@ -185,7 +204,7 @@ export async function sustituirParteDelPackAction(input: {
         lista.find((w) => w.kind === "main")?.id ??
         null;
       if (!almacenId) {
-        avisoStock = "No hay almacén del que descontar el equipo nuevo: ajusta el stock a mano.";
+        avisos.push("No hay almacén del que descontar el equipo nuevo: ajusta el stock a mano.");
       } else {
         const { decrementStock } = await import("@/modules/warehouses/stock-decrement");
         movidas = await decrementStock({
@@ -198,13 +217,49 @@ export async function sustituirParteDelPackAction(input: {
           notes: `Sustitución de una parte del pack (equipo ${eq.id})`,
         });
         if (movidas < 1) {
-          avisoStock = "No había stock del equipo nuevo en el almacén: revisa el inventario.";
+          avisos.push("No había stock del equipo nuevo en el almacén: revisa el inventario.");
         }
       }
     } catch (e) {
-      console.error("[sustituirParteDelPack] stock:", e);
-      avisoStock = "No se pudo descontar el stock del equipo nuevo: ajústalo a mano.";
+      console.error("[sustituirParteDelPack] stock nuevo:", e);
+      avisos.push("No se pudo descontar el stock del equipo nuevo: ajústalo a mano.");
     }
+
+    // La unidad vieja vuelve al almacén (mismo camino que la retirada).
+    if (destinoVieja !== "no_vuelve" && eq.product_id) {
+      if (!almacenId) {
+        avisos.push("El equipo que sale no ha entrado en ningún almacén: súmalo a mano.");
+      } else {
+        const { estado, nota } = estadoStockDeEquipo(destinoVieja);
+        const notas = [
+          `Sustituido en el pack (equipo ${eq.id})`,
+          eq.serial_number ? `S/N ${eq.serial_number}` : null,
+          nota,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        try {
+          const { adjustStockBatch } = await import("@/modules/warehouses/adjust-stock");
+          await adjustStockBatch(companyId, session.user_id, [
+            {
+              warehouse_id: almacenId,
+              product_id: eq.product_id,
+              state: estado,
+              delta: 1,
+              movement_type: "return",
+              notes: notas,
+              reason: `Sustitución de una parte del pack — entra como ${estado}`,
+            },
+          ]);
+          devueltas = 1;
+          estadoDevuelta = estado;
+        } catch (e) {
+          console.error("[sustituirParteDelPack] stock viejo:", e);
+          avisos.push("No se pudo sumar al almacén el equipo que sale: súmalo a mano.");
+        }
+      }
+    }
+    const avisoStock = avisos.length > 0 ? avisos.join(" ") : null;
 
     await admin.from("events").insert({
       company_id: companyId,
@@ -222,12 +277,16 @@ export async function sustituirParteDelPackAction(input: {
         historico_equipo_id: historicoId,
         almacen_id: almacenId,
         unidades_descontadas: movidas,
+        unidades_devueltas: devueltas,
+        estado_devuelta: estadoDevuelta,
+        destino_vieja: destinoVieja,
         motivo,
       },
       actor_user_id: session.user_id,
     });
 
     revalidatePath(`/clientes/${eq.customer_id}`);
+    if (almacenId) revalidatePath(`/almacenes/${almacenId}`);
     return { ok: true, equipo_id: eq.id, aviso_stock: avisoStock };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

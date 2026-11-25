@@ -23,6 +23,19 @@ export function esEmpresaProtegida(id: string, columnaProtegida?: boolean | null
   return columnaProtegida === true || EMPRESAS_PROTEGIDAS.includes(id);
 }
 
+/**
+ * Estados en los que una empresa está EN SERVICIO: entra su gente y corren
+ * sus procesos automáticos (crons, avisos, correos, push, WhatsApp, visitas,
+ * cobros). Pausada (suspended) y de baja (cancelled) no generan nada
+ * automático (Mario 2026-11-28). Un estado desconocido o nulo NO cuenta como
+ * en servicio.
+ */
+export const ESTADOS_EN_SERVICIO: readonly EstadoEmpresa[] = ["trial", "active"];
+
+export function empresaEnServicio(status: string | null | undefined): boolean {
+  return status === "trial" || status === "active";
+}
+
 export type MotivoBloqueo = "pausada" | "baja";
 
 /** Motivo por el que los usuarios de la empresa no pueden entrar, o null. */

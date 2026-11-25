@@ -5,6 +5,11 @@ import { notifyByRoles } from "@/modules/notifications/notifier";
 import { sendViaSmtp } from "@/modules/mailing/smtp";
 import { sumarGastoGoogleUsd } from "@/shared/lib/google-maps/gasto";
 import { fetchAllRows } from "@/shared/lib/supabase/fetch-all";
+import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,6 +36,17 @@ export async function GET(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
+
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    console.error("[cron] empresas en servicio:", e);
+    return null;
+  });
+  if (!enServicio) {
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
   const today = new Date().toISOString().slice(0, 10);
   const stats = {
     scanned: 0,
@@ -45,7 +61,8 @@ export async function GET(req: NextRequest) {
     .select(
       "id, name, gmaps_mode, gmaps_monthly_cap_usd, gmaps_daily_cap_usd",
     )
-    .neq("gmaps_mode", "disabled");
+    .neq("gmaps_mode", "disabled")
+    .in("id", EN);
 
   for (const c of (companies ?? []) as Array<{
     id: string;

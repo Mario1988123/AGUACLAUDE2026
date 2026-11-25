@@ -2,6 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
+import {
+  MOTIVO_SIN_EMPRESAS,
+  empresasEnServicio,
+  idsParaFiltro,
+} from "@/shared/lib/empresas/en-servicio";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,6 +35,18 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
 
+  // Empresas EN SERVICIO (trial o active): las pausadas y las de baja no
+  // generan nada automático (Mario 2026-11-28). Falla cerrado.
+  const enServicio = await empresasEnServicio(admin).catch((e) => {
+    tracker.error("empresas-en-servicio", e);
+    return null;
+  });
+  if (!enServicio) {
+    await tracker.finish({ ok: false, summary: { abortado: MOTIVO_SIN_EMPRESAS } });
+    return NextResponse.json({ ok: false, error: MOTIVO_SIN_EMPRESAS }, { status: 500 });
+  }
+  const EN = idsParaFiltro(enServicio);
+
   let punchesClosed = 0;
   let notifiedUsers = 0;
   try {
@@ -54,6 +71,7 @@ export async function GET(req: NextRequest) {
       .select("id, user_id, company_id, punched_at")
       .eq("auto_closed", true)
       .gte("punched_at", since)
+      .in("company_id", EN)
       .limit(500);
     if (error) throw new Error(error.message);
     type Row = { id: string; user_id: string; company_id: string; punched_at: string };

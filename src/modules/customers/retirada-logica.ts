@@ -99,6 +99,12 @@ export interface EntradaRetiradaManual {
   estado_equipo?: string | null;
   motivo: string;
   destinos?: Array<{ equipment_id: string; destino: string }> | null;
+  /**
+   * Pack con complemento: true = se retira el pack entero aunque se marque
+   * una parte; false = solo lo marcado (Mario 2026-11-28: «pueden entrar por
+   * partes»). Sin indicar = pack entero (lo de antes); la ficha siempre lo manda.
+   */
+  pack_entero?: boolean | null;
 }
 
 export interface RetiradaManualValidada {
