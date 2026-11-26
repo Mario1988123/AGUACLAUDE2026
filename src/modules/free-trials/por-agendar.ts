@@ -2,6 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { leerDisponibilidad, type Disponibilidad } from "./disponibilidad";
+import { PRUEBAS_GESTIONADAS_DESDE } from "./corte-pruebas";
 
 /**
  * Pruebas gratuitas PEDIDAS y sin agendar (estado draft) para la agenda y
@@ -47,6 +48,8 @@ export async function contarPruebasPorAgendar(companyId: string): Promise<number
     .select("id", { count: "exact", head: true })
     .eq("company_id", companyId)
     .eq("status", "draft")
+    // Las anteriores se gestionaron fuera de la app (corte-pruebas.ts).
+    .gte("created_at", PRUEBAS_GESTIONADAS_DESDE)
     .is("deleted_at", null);
   return count ?? 0;
 }
@@ -65,6 +68,8 @@ export async function listarPruebasPorAgendar(
     )
     .eq("company_id", companyId)
     .eq("status", "draft")
+    // Las anteriores se gestionaron fuera de la app (corte-pruebas.ts).
+    .gte("created_at", PRUEBAS_GESTIONADAS_DESDE)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
     .limit(limite);

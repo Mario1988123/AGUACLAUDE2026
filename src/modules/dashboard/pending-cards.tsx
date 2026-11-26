@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PRUEBAS_GESTIONADAS_DESDE } from "@/modules/free-trials/corte-pruebas";
 import { Gift, AlertCircle } from "lucide-react";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
@@ -29,6 +30,8 @@ export async function getPendingTrials(): Promise<PendingTrial[]> {
     )
     .eq("company_id", session.company_id)
     .in("status", ["scheduled", "installed"])
+    // Las anteriores al 26-11-2026 se gestionaron fuera de la app.
+    .gte("created_at", PRUEBAS_GESTIONADAS_DESDE)
     .is("deleted_at", null)
     .order("installed_at", { ascending: false, nullsFirst: false })
     .limit(10);

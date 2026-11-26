@@ -15,6 +15,7 @@
  */
 import { diasRestantesPrueba, fechaMadrid } from "@/modules/leads/prueba-lead";
 import { nombreDePrueba } from "./instalacion-prueba";
+import { PRUEBAS_GESTIONADAS_DESDE } from "./corte-pruebas";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -63,6 +64,8 @@ export async function avisosDiariosPruebas(
     )
     .in("company_id", empresas)
     .in("status", ["installed", "expired", "scheduled"])
+    // Las anteriores se gestionaron fuera de la app (corte-pruebas.ts).
+    .gte("created_at", PRUEBAS_GESTIONADAS_DESDE)
     .is("deleted_at", null)
     .limit(1000);
   const pruebas = ((data ?? []) as FilaPrueba[]).filter((p) => !off.has(p.company_id));
