@@ -129,7 +129,7 @@ const PRODUCTOS = leerJson(path.join(ORIGEN, LISTA || 'productos.json')).product
 const RECAMBIOS_JSON = LISTA ? {} : leerJson(path.join(ORIGEN, 'recambios_por_equipo.json')).equipos;
 // Modo lista: nombre y rasgos a mano, y refs que no se cargan nunca (Distribución y Retail)
 const MAPA_RES = LISTA ? leerJson(path.join(AQUI, 'nuevos-residencial-mapa.json')) : null;
-const EXCLUIR = new Set((MAPA_RES?.excluir || []).map(lower));
+const EXCLUIR = new Set([...(MAPA_RES?.excluir || []), ...(MAPA_RES?.excluir_ficha || [])].map(lower));
 
 function carpetaDe(p) {
   if (LISTA) {
