@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Banknote, CalendarClock, Repeat } from "lucide-react";
+import { Check, Banknote, CalendarClock, Wrench, CheckCheck, Repeat2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -16,33 +16,50 @@ import { MoneyInput } from "@/shared/components/money-input";
 import { notify } from "@/shared/hooks/use-toast";
 import {
   acceptFreeTrialAction,
+  equiposParaQuedarseSafeAction,
   getFreeTrialAcceptDefaultsAction,
   type FreeTrialAcceptDefaults,
 } from "./actions";
 
-type Plan = "cash" | "rental" | "renting";
+type Plan = "rental" | "cash";
+type Destino = "se_queda" | "reinstalar";
 
-const PLAN_META: Record<Plan, { label: string; icon: typeof Banknote }> = {
-  cash: { label: "Venta (contado)", icon: Banknote },
-  rental: { label: "Alquiler", icon: CalendarClock },
-  renting: { label: "Renting", icon: Repeat },
+const PLAN_META: Record<Plan, { label: string; ayuda: string; icon: typeof Banknote }> = {
+  rental: { label: "Alquiler", ayuda: "Esencial de pie o de sobremesa", icon: CalendarClock },
+  cash: { label: "Compra", ayuda: "Cualquier equipo con precio de venta", icon: Banknote },
 };
 
+/** Valor del selector para «el mismo equipo de la prueba». */
+const MISMO = "__mismo__";
+
 /**
- * Botón "Aceptar — generar contrato" que abre una ventana para elegir el plan
- * (venta / alquiler / renting) y las condiciones de pago (cuota, fianza,
- * instalación, 1ª cuota, periodicidad de mantenimiento). Los importes se
- * autorrellenan desde los planes de precio del producto y son editables.
- * Al confirmar crea el contrato en borrador YA con plan y pagos.
+ * «Se la queda» (Mario 2026-11-26). El comercial elige:
+ *  1. alquiler o compra;
+ *  2. el equipo: el de la prueba u otro (en alquiler solo los de prueba;
+ *     en compra cualquiera con precio de venta);
+ *  3. qué pasa con el instalado: se queda como está, se vuelve a fijar, o
+ *     —si cambia de equipo— se retira el de prueba y se instala el nuevo;
+ *  4. las condiciones (se autorrellenan con los precios del equipo).
+ * Crea el contrato en borrador y la orden que toque (reinstalar o retirar).
  */
-export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
+export function AcceptFreeTrialButton({
+  trialId,
+  isProvisional = false,
+}: {
+  trialId: string;
+  isProvisional?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
   const [defaults, setDefaults] = useState<FreeTrialAcceptDefaults | null>(null);
+  const [itemsPrueba, setItemsPrueba] = useState<FreeTrialAcceptDefaults["items"]>([]);
+  const [equipos, setEquipos] = useState<Array<{ id: string; nombre: string }>>([]);
 
-  const [plan, setPlan] = useState<Plan>("renting");
+  const [plan, setPlan] = useState<Plan>("rental");
+  const [equipo, setEquipo] = useState<string>(MISMO);
+  const [destino, setDestino] = useState<Destino>(isProvisional ? "reinstalar" : "se_queda");
   const [durationMonths, setDurationMonths] = useState<number>(36);
   const [totalCents, setTotalCents] = useState<number | null>(null);
   const [monthlyCents, setMonthlyCents] = useState<number | null>(null);
@@ -54,47 +71,89 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
   const [maintPeriodicity, setMaintPeriodicity] = useState<number>(12);
   const [maintMonthsIncluded, setMaintMonthsIncluded] = useState<number | null>(null);
 
-  // Cargar importes sugeridos al abrir la ventana (una sola vez).
+  const cambia = equipo !== MISMO;
+  const nombrePrueba = itemsPrueba.map((i) => i.name).join(", ") || "el de la prueba";
+  // ¿Vale el equipo de la prueba para este plan?
+  const mismoVale = useMemo(
+    () =>
+      itemsPrueba.length > 0 &&
+      itemsPrueba.every((i) => equipos.some((e) => e.id === i.product_id)),
+    [itemsPrueba, equipos],
+  );
+
+  function aplicarPrecios(d: FreeTrialAcceptDefaults, p: Plan) {
+    setDefaults(d);
+    setMaintPeriodicity(d.maintenance_periodicity_months || 12);
+    if (p === "cash") {
+      setTotalCents(d.cash_total_cents);
+    } else {
+      setMonthlyCents(d.rental_monthly_cents);
+      if (d.rental_durations.length) setDurationMonths(d.rental_durations[d.rental_durations.length - 1]!);
+    }
+  }
+
+  // Al abrir: precios del equipo de la prueba.
   useEffect(() => {
     if (!open || defaults) return;
     setLoading(true);
-    getFreeTrialAcceptDefaultsAction(trialId).then((r) => {
-      setLoading(false);
-      if (!r.ok) {
-        notify.error("No se pudieron cargar los precios", r.error);
-        return;
-      }
-      const d = r.defaults;
-      setDefaults(d);
-      setTotalCents(d.cash_total_cents);
-      setMonthlyCents(d.renting_monthly_cents ?? d.rental_monthly_cents);
-      setMaintPeriodicity(d.maintenance_periodicity_months || 12);
-      if (d.renting_durations.length) {
-        setDurationMonths(d.renting_durations[d.renting_durations.length - 1]!);
-      }
-    });
+    getFreeTrialAcceptDefaultsAction(trialId)
+      .then((r) => {
+        setLoading(false);
+        if (!r.ok) {
+          notify.error("No se pudieron cargar los precios", r.error);
+          return;
+        }
+        setItemsPrueba(r.defaults.items);
+        aplicarPrecios(r.defaults, plan);
+      })
+      .catch(() => {
+        // Sin esto la ventana se quedaba en «Cargando…» para siempre.
+        setLoading(false);
+        notify.error("No se pudieron cargar los precios", "Recarga la página.");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaults, trialId]);
 
-  function selectPlan(p: Plan) {
-    setPlan(p);
-    if (!defaults) return;
-    if (p === "cash") {
-      setTotalCents(defaults.cash_total_cents);
-    } else {
-      const monthly =
-        p === "rental" ? defaults.rental_monthly_cents : defaults.renting_monthly_cents;
-      setMonthlyCents(monthly);
-      const durs = p === "rental" ? defaults.rental_durations : defaults.renting_durations;
-      if (durs.length) setDurationMonths(durs[durs.length - 1]!);
+  // Equipos posibles según el plan.
+  useEffect(() => {
+    if (!open) return;
+    equiposParaQuedarseSafeAction(plan)
+      .then((r) => {
+        if (!r.ok) {
+          notify.error("No se pudieron cargar los equipos", r.error);
+          return;
+        }
+        setEquipos(r.equipos);
+      })
+      .catch(() => notify.error("No se pudieron cargar los equipos", "Recarga la página."));
+  }, [open, plan]);
+
+  // Si el de la prueba no vale para este plan, hay que elegir otro.
+  useEffect(() => {
+    if (equipos.length > 0 && itemsPrueba.length > 0 && !mismoVale && equipo === MISMO) {
+      setEquipo(equipos[0]!.id);
     }
-  }
+  }, [equipos, itemsPrueba, mismoVale, equipo]);
+
+  // Precios del equipo elegido.
+  useEffect(() => {
+    if (!open || !defaults) return;
+    getFreeTrialAcceptDefaultsAction(trialId, cambia ? equipo : null)
+      .then((r) => {
+        if (r.ok) aplicarPrecios(r.defaults, plan);
+      })
+      .catch(() => {
+        /* se quedan los precios anteriores; se pueden escribir a mano */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipo, plan]);
 
   function submit() {
     if (plan === "cash" && (!totalCents || totalCents <= 0)) {
       notify.warning("Indica el precio de venta");
       return;
     }
-    if (plan !== "cash" && (!monthlyCents || monthlyCents <= 0)) {
+    if (plan === "rental" && (!monthlyCents || monthlyCents <= 0)) {
       notify.warning("Indica la cuota mensual");
       return;
     }
@@ -115,14 +174,20 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
         maintenance_included: maintenanceIncluded,
         maintenance_periodicity_months: maintenanceIncluded ? maintPeriodicity : null,
         maintenance_months_included: maintenanceIncluded ? maintMonthsIncluded : null,
+        destino_equipo: cambia ? "cambiar" : destino,
+        producto_nuevo_id: cambia ? equipo : null,
       });
       if (!r.ok) {
         notify.error("No se pudo aceptar", r.error);
         return;
       }
       notify.success(
-        "Prueba aceptada",
-        "Contrato creado en borrador con el plan y los pagos. Te llevamos a la ficha.",
+        "Se la queda",
+        cambia
+          ? "Contrato en borrador. Se ha pedido retirar el equipo de prueba; al firmar se crea la instalación del nuevo."
+          : destino === "reinstalar"
+            ? "Contrato en borrador y orden para volver a fijar el equipo."
+            : "Contrato en borrador. El equipo instalado queda como definitivo.",
       );
       router.push(`/contratos/${r.contract_id}` as never);
     });
@@ -136,45 +201,103 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
         size="lg"
         className="w-full gap-2"
       >
-        <Check className="h-5 w-5" /> Aceptar — generar contrato
+        <Check className="h-5 w-5" /> Se la queda
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[92dvh] max-w-lg overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Aceptar prueba — condiciones del contrato</DialogTitle>
+            <DialogTitle>Se la queda</DialogTitle>
           </DialogHeader>
 
           {loading ? (
-            <p className="text-sm text-muted-foreground">Cargando precios del producto…</p>
+            <p className="text-sm text-muted-foreground">Cargando precios del equipo…</p>
           ) : (
             <div className="space-y-4">
-              {/* Tipo de plan */}
+              {/* 1. Alquiler o compra */}
               <div className="space-y-1.5">
-                <Label>Tipo de plan</Label>
-                <div className="grid grid-cols-3 gap-2">
+                <Label>¿Alquiler o compra?</Label>
+                <div className="grid grid-cols-2 gap-2">
                   {(Object.keys(PLAN_META) as Plan[]).map((p) => {
                     const Icon = PLAN_META[p].icon;
                     return (
                       <button
                         key={p}
                         type="button"
-                        onClick={() => selectPlan(p)}
-                        className={`flex min-w-0 flex-col items-center gap-1 rounded-xl border-2 p-2 text-center text-xs font-semibold break-words transition-colors ${
+                        onClick={() => setPlan(p)}
+                        aria-pressed={plan === p}
+                        className={`flex min-h-16 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl border-2 p-2 text-center transition-colors ${
                           plan === p
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border hover:bg-muted"
                         }`}
                       >
-                        <Icon className="h-4 w-4" />
-                        {PLAN_META[p].label}
+                        <Icon className="h-4 w-4" aria-hidden />
+                        <span className="text-sm font-bold">{PLAN_META[p].label}</span>
+                        <span className="text-[11px] leading-tight text-muted-foreground">
+                          {PLAN_META[p].ayuda}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Importes según plan */}
+              {/* 2. Equipo */}
+              <Field label="Equipo">
+                <select
+                  value={equipo}
+                  onChange={(e) => setEquipo(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
+                >
+                  {mismoVale && <option value={MISMO}>El de la prueba ({nombrePrueba})</option>}
+                  {equipos
+                    .filter((e) => !(mismoVale && itemsPrueba.some((i) => i.product_id === e.id)))
+                    .map((e) => (
+                      <option key={e.id} value={e.id}>
+                        Otro: {e.nombre}
+                      </option>
+                    ))}
+                </select>
+                {!mismoVale && itemsPrueba.length > 0 && (
+                  <p className="text-[11px] text-muted-foreground">
+                    {nombrePrueba} no está disponible en {plan === "rental" ? "alquiler" : "compra"}: elige el equipo.
+                  </p>
+                )}
+              </Field>
+
+              {/* 3. Qué pasa con el equipo instalado */}
+              <div className="space-y-1.5">
+                <Label>Equipo de la prueba</Label>
+                {cambia ? (
+                  <div className="flex items-start gap-2 rounded-xl border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                    <Repeat2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                    <span>
+                      <strong>Cambio de equipo.</strong> Se pide retirar el de la prueba y, al
+                      firmar el contrato, se crea la instalación del nuevo.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    <OpcionDestino
+                      activa={destino === "se_queda"}
+                      onClick={() => setDestino("se_queda")}
+                      icono={<CheckCheck className="h-4 w-4 text-emerald-600" aria-hidden />}
+                      titulo="Se queda como está"
+                      texto="La instalación ya es definitiva. No hay que volver."
+                    />
+                    <OpcionDestino
+                      activa={destino === "reinstalar"}
+                      onClick={() => setDestino("reinstalar")}
+                      icono={<Wrench className="h-4 w-4 text-amber-600" aria-hidden />}
+                      titulo="Se queda, pero hay que fijarlo"
+                      texto="Se crea una orden de reinstalación para agendar."
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Condiciones */}
               {plan === "cash" ? (
                 <Field label="Precio de venta (€)">
                   <MoneyInput valueCents={totalCents} onChangeCents={setTotalCents} />
@@ -191,7 +314,7 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
                           key={m}
                           type="button"
                           onClick={() => setDurationMonths(m)}
-                          className={`rounded-lg border px-3 py-1 text-sm transition-colors ${
+                          className={`min-h-10 rounded-lg border px-3 text-sm transition-colors ${
                             durationMonths === m
                               ? "border-primary bg-primary/10 font-semibold text-primary"
                               : "border-border hover:bg-muted"
@@ -202,11 +325,9 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
                       ))}
                     </div>
                   </Field>
-                  {plan === "rental" && (
-                    <Field label="Fianza (€)">
-                      <MoneyInput valueCents={depositCents} onChangeCents={setDepositCents} />
-                    </Field>
-                  )}
+                  <Field label="Fianza (€)">
+                    <MoneyInput valueCents={depositCents} onChangeCents={setDepositCents} />
+                  </Field>
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -282,7 +403,7 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
                 <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
                   Cancelar
                 </Button>
-                <Button variant="success" onClick={submit} disabled={pending}>
+                <Button variant="success" onClick={submit} disabled={pending || equipos.length === 0}>
                   {pending ? "Procesando…" : "Crear contrato"}
                 </Button>
               </div>
@@ -291,6 +412,37 @@ export function AcceptFreeTrialButton({ trialId }: { trialId: string }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function OpcionDestino({
+  activa,
+  onClick,
+  icono,
+  titulo,
+  texto,
+}: {
+  activa: boolean;
+  onClick: () => void;
+  icono: ReactNode;
+  titulo: string;
+  texto: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={activa}
+      className={`flex w-full items-start gap-2 rounded-xl border-2 p-3 text-left transition-colors ${
+        activa ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+      }`}
+    >
+      <span className="mt-0.5">{icono}</span>
+      <span>
+        <span className="block text-sm font-bold">{titulo}</span>
+        <span className="block text-xs text-muted-foreground">{texto}</span>
+      </span>
+    </button>
   );
 }
 

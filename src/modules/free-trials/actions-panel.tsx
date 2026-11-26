@@ -181,9 +181,8 @@ export function FreeTrialActionsPanel({
         {isProvisional && (
           <div className="rounded-xl border-2 border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground">
             <Wrench className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />
-            <strong>Instalación provisional.</strong> Al aceptar, recuerda
-            crear una orden de <strong>reubicación</strong> desde la ficha
-            del cliente para hacer la instalación definitiva.
+            <strong>Instalación provisional.</strong> Si se la queda, elige
+            «Se queda, pero hay que fijarlo» y se crea la orden de reinstalación.
           </div>
         )}
         {uninstallPanel()}
@@ -195,13 +194,12 @@ export function FreeTrialActionsPanel({
         >
           <FileDown className="h-4 w-4" /> Albarán de entrega firmado
         </a>
-        <AcceptFreeTrialButton trialId={trialId} />
+        <AcceptFreeTrialButton trialId={trialId} isProvisional={isProvisional} />
         <p className="text-xs text-muted-foreground">
-          <FileSignature className="inline h-3.5 w-3.5 -mt-0.5" /> Al aceptar
-          eliges el <strong>plan</strong> (venta / alquiler / renting) y las
-          condiciones de pago. Se crea un contrato en <strong>borrador</strong>{" "}
-          y, si la prueba estaba a un lead, lo convierte en cliente. La
-          instalación ya hecha se enlaza al nuevo contrato.
+          <FileSignature className="inline h-3.5 w-3.5 -mt-0.5" /> Eliges{" "}
+          <strong>alquiler o compra</strong>, el equipo (el de la prueba u otro) y qué
+          se hace con el instalado. Se crea el contrato en <strong>borrador</strong>{" "}
+          y, si era un lead, pasa a cliente.
         </p>
 
         <div className="border-t pt-4 space-y-3">

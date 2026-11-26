@@ -811,6 +811,8 @@ export interface FreeTrialAcceptDefaults {
 
 export async function getFreeTrialAcceptDefaultsAction(
   trialId: string,
+  /** Otro equipo distinto al de la prueba (cambio): precios de ese. */
+  productoId?: string | null,
 ): Promise<
   { ok: true; defaults: FreeTrialAcceptDefaults } | { ok: false; error: string }
 > {
@@ -833,11 +835,23 @@ export async function getFreeTrialAcceptDefaultsAction(
       .from("free_trial_items")
       .select("product_id, quantity, product_name_snapshot")
       .eq("free_trial_id", trialId);
-    const items = ((itemsRaw ?? []) as Array<{
+    let items = ((itemsRaw ?? []) as Array<{
       product_id: string;
       quantity: number;
       product_name_snapshot: string;
     }>);
+    if (productoId) {
+      const pid = z.string().uuid().parse(productoId);
+      const { data: prod } = await admin
+        .from("products")
+        .select("id, name")
+        .eq("id", pid)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      const pr = prod as { id: string; name: string } | null;
+      if (!pr) return { ok: false, error: "Equipo no encontrado" };
+      items = [{ product_id: pr.id, quantity: 1, product_name_snapshot: pr.name.trim() }];
+    }
 
     const defaults: FreeTrialAcceptDefaults = {
       items: items.map((i) => ({
@@ -938,6 +952,10 @@ export async function acceptFreeTrialAction(input: {
   maintenance_included?: boolean;
   maintenance_periodicity_months?: number | null;
   maintenance_months_included?: number | null;
+  /** Qué pasa con el equipo instalado (aceptar-equipo.ts). Por defecto se queda. */
+  destino_equipo?: "se_queda" | "reinstalar" | "cambiar";
+  /** Equipo nuevo cuando destino_equipo = «cambiar». */
+  producto_nuevo_id?: string | null;
 }): Promise<
   { ok: true; contract_id: string; customer_id: string }
   | { ok: false; error: string }
@@ -985,6 +1003,51 @@ export async function acceptFreeTrialAction(input: {
         ok: false,
         error: `No se puede aceptar una prueba en estado "${trial.status}"`,
       };
+    }
+
+    // Qué equipo se queda y qué se hace con el de prueba (Mario 2026-11-26).
+    const destino = input.destino_equipo ?? "se_queda";
+    if (!["se_queda", "reinstalar", "cambiar"].includes(destino)) {
+      return { ok: false, error: "Indica qué se hace con el equipo" };
+    }
+    let productoNuevo: { id: string; name: string } | null = null;
+    if (destino === "cambiar") {
+      if (!input.producto_nuevo_id) return { ok: false, error: "Elige el equipo nuevo" };
+      const pid = z.string().uuid().parse(input.producto_nuevo_id);
+      const { data: pn } = await admin
+        .from("products")
+        .select("id, name")
+        .eq("id", pid)
+        .eq("company_id", session.company_id)
+        .is("deleted_at", null)
+        .maybeSingle();
+      productoNuevo = pn as { id: string; name: string } | null;
+      if (!productoNuevo) return { ok: false, error: "Equipo nuevo no encontrado" };
+    }
+    if (input.plan_type === "rental" || input.plan_type === "cash") {
+      const { equiposParaQuedarse } = await import("./aceptar-equipo");
+      const validos = new Set(
+        (await equiposParaQuedarse(admin, session.company_id, input.plan_type)).map((e) => e.id),
+      );
+      let elegidos: string[];
+      if (productoNuevo) {
+        elegidos = [productoNuevo.id];
+      } else {
+        const { data: its } = await admin
+          .from("free_trial_items")
+          .select("product_id")
+          .eq("free_trial_id", trial.id);
+        elegidos = ((its ?? []) as Array<{ product_id: string }>).map((r) => r.product_id);
+      }
+      if (elegidos.some((id) => !validos.has(id))) {
+        return {
+          ok: false,
+          error:
+            input.plan_type === "rental"
+              ? "En alquiler solo van los equipos de prueba gratuita (la Esencial de pie o de sobremesa)."
+              : "Ese equipo no tiene precio de venta.",
+        };
+      }
     }
 
     // 2) Si era lead, convertirlo a cliente
@@ -1141,11 +1204,13 @@ export async function acceptFreeTrialAction(input: {
         .from("free_trial_items")
         .select("product_id, quantity, product_name_snapshot")
         .eq("free_trial_id", trial.id);
-      const list = ((items ?? []) as Array<{
-        product_id: string;
-        quantity: number;
-        product_name_snapshot: string;
-      }>);
+      const list = productoNuevo
+        ? [{ product_id: productoNuevo.id, quantity: 1, product_name_snapshot: productoNuevo.name.trim() }]
+        : ((items ?? []) as Array<{
+            product_id: string;
+            quantity: number;
+            product_name_snapshot: string;
+          }>);
       if (list.length > 0) {
         const productIds = list.map((it) => it.product_id);
         // Cargamos kind y precio de cada producto
@@ -1318,11 +1383,18 @@ export async function acceptFreeTrialAction(input: {
     // 6) Si ya hay installation enlazada (vía installations.free_trial_id),
     // la enlazamos también al nuevo contract_id Y al customer_id (que
     // puede no existir aún si la prueba era de un lead).
+    // Si CAMBIA de equipo, la instalación de la prueba no es la del contrato:
+    // solo se le pone el cliente, y al firmar se crea la del equipo nuevo.
     try {
       await admin
         .from("installations")
-        .update({ contract_id: contractId, customer_id: customerId })
-        .eq("free_trial_id", trial.id);
+        .update(
+          destino === "cambiar"
+            ? { customer_id: customerId }
+            : { contract_id: contractId, customer_id: customerId },
+        )
+        .eq("free_trial_id", trial.id)
+        .eq("company_id", session.company_id);
     } catch {
       /* no-op */
     }
@@ -1348,7 +1420,7 @@ export async function acceptFreeTrialAction(input: {
             ).map((x) => x.id),
           ],
         );
-      if (((existingCE ?? []) as Array<unknown>).length === 0) {
+      if (destino !== "cambiar" && ((existingCE ?? []) as Array<unknown>).length === 0) {
         const { data: instRow } = await admin
           .from("installations")
           .select("id, address_id")
@@ -1391,6 +1463,97 @@ export async function acceptFreeTrialAction(input: {
       console.warn("[acceptFreeTrial] customer_equipment backfill:", e);
     }
 
+    // 7.5) Qué pasa con el equipo de prueba. Nunca se queda colgando: o es
+    // definitivo, o hay orden de reinstalar, o hay orden de retirarlo.
+    let ordenEquipo: string | null = null;
+    try {
+      if (destino === "reinstalar") {
+        const { data: instPrueba } = await admin
+          .from("installations")
+          .select("id")
+          .eq("free_trial_id", trial.id)
+          .eq("kind", "free_trial")
+          .eq("company_id", session.company_id);
+        const idsInst = ((instPrueba ?? []) as Array<{ id: string }>).map((x) => x.id);
+        const { data: ce } = idsInst.length
+          ? await admin
+              .from("customer_equipment")
+              .select("id, product_id, address_id, serial_number")
+              .eq("company_id", session.company_id)
+              .eq("customer_id", customerId)
+              .in("installation_id", idsInst)
+              .limit(1)
+          : { data: [] };
+        const eq = ((ce ?? []) as Array<{
+          id: string;
+          product_id: string | null;
+          address_id: string | null;
+          serial_number: string | null;
+        }>)[0];
+        const ref = await siguienteReferencia(admin, session.company_id, "installations", "I");
+        const { data: reub, error: rErr } = await admin
+          .from("installations")
+          .insert({
+            company_id: session.company_id,
+            kind: "relocation",
+            status: "unscheduled",
+            reference_code: ref,
+            customer_id: customerId,
+            contract_id: contractId,
+            address_id: eq?.address_id ?? trial.installation_address_id,
+            notes: [
+              "Reinstalación para fijar el equipo de la prueba gratuita",
+              eq ? `customer_equipment_id=${eq.id}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          })
+          .select("id")
+          .single();
+        if (rErr) throw rErr;
+        ordenEquipo = (reub as { id: string }).id;
+        if (eq?.product_id) {
+          await admin.from("installation_items").insert({
+            installation_id: ordenEquipo,
+            company_id: session.company_id,
+            product_id: eq.product_id,
+            quantity: 1,
+            serial_number: eq.serial_number,
+            notes: "Reinstalación del equipo de prueba",
+          });
+        }
+      } else if (destino === "cambiar") {
+        const { data: almacenes } = await admin
+          .from("warehouses")
+          .select("id")
+          .eq("company_id", session.company_id)
+          .is("deleted_at", null)
+          .order("is_used_equipment_default", { ascending: false })
+          .limit(1);
+        const almacen = ((almacenes ?? []) as Array<{ id: string }>)[0]?.id;
+        if (!almacen) throw new Error("No hay almacén para devolver el equipo de prueba");
+        const { scheduleFreeTrialUninstallAction } = await import("./uninstall-actions");
+        const r = await scheduleFreeTrialUninstallAction({
+          trial_id: trial.id,
+          destination_warehouse_id: almacen,
+          notes: `Cambio de equipo: se queda ${productoNuevo?.name.trim() ?? "otro equipo"}`,
+        });
+        if (!r.ok) throw new Error(r.error);
+        ordenEquipo = r.installation_id;
+      }
+    } catch (e) {
+      console.error("[acceptFreeTrial] orden del equipo:", e);
+      // El contrato ya está creado: que quede constancia de que falta la orden.
+      await admin.from("events").insert({
+        company_id: session.company_id,
+        subject_type: "free_trial",
+        subject_id: trial.id,
+        kind: "free_trial.accept_order_failed",
+        payload: { destino, error: e instanceof Error ? e.message : String(e) },
+        actor_user_id: session.user_id,
+      });
+    }
+
     // 7) Marcar la prueba aceptada
     await admin
       .from("free_trials")
@@ -1410,7 +1573,13 @@ export async function acceptFreeTrialAction(input: {
           subject_type: "free_trial",
           subject_id: trial.id,
           kind: "free_trial.accepted",
-          payload: { contract_id: contractId, customer_id: customerId },
+          payload: {
+            contract_id: contractId,
+            customer_id: customerId,
+            destino_equipo: destino,
+            producto_nuevo_id: productoNuevo?.id ?? null,
+            orden_equipo_id: ordenEquipo,
+          },
           actor_user_id: session.user_id,
         },
         {
@@ -1788,6 +1957,23 @@ export async function cambiarDiasPruebaSafeAction(
     revalidatePath(`/pruebas-gratuitas/${id}`);
     if (t.lead_id) revalidatePath(`/leads/${t.lead_id}`);
     return { ok: true };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+/** Equipos que se puede quedar el cliente según alquiler o compra (aceptar-equipo.ts). */
+export async function equiposParaQuedarseSafeAction(
+  plan: "rental" | "cash",
+): Promise<{ ok: true; equipos: Array<{ id: string; nombre: string }> } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const p = z.enum(["rental", "cash"]).parse(plan);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { equiposParaQuedarse } = await import("./aceptar-equipo");
+    return { ok: true, equipos: await equiposParaQuedarse(admin, session.company_id, p) };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

@@ -15,6 +15,8 @@ import { getStepsForRoles } from "@/modules/onboarding/steps";
 import { OnboardingTour } from "@/modules/onboarding/onboarding-tour";
 import { ShiftReminders } from "@/modules/time-tracking/shift-reminders";
 import { RegistroPushNativo } from "@/modules/notifications/registro-push-nativo";
+import { AvisoPruebasPorAgendar } from "@/modules/free-trials/aviso-agendar";
+import { puedeAgendarPrueba } from "@/modules/free-trials/permisos";
 import { redirect } from "next/navigation";
 import { esSoloTecnico } from "@/shared/lib/auth/role-scope";
 import { empresasParaCambiar, entradaComoActual, puedeCambiarDeEmpresa } from "@/modules/superadmin/entrar-como";
@@ -201,6 +203,10 @@ export default async function TenantLayout({ children }: { children: React.React
       <ShiftReminders enabled={activeModuleKeys.includes("time_tracking")} />
       {/* Push nativo: solo actua dentro de la app con la marca HMPush/1 */}
       <RegistroPushNativo userId={session.user_id} />
+      {/* Pruebas gratuitas sin agendar: ventana que hay que cerrar (2026-11-26) */}
+      {activeModuleKeys.includes("free_trials") && puedeAgendarPrueba(session) && (
+        <AvisoPruebasPorAgendar />
+      )}
     </div>
   );
 }
