@@ -5,7 +5,9 @@ import { generateProductDatasheet } from "@/modules/products/datasheet-pdf";
 import { generateProductDatasheetV2 } from "@/modules/products/datasheet-pdf-v2";
 import { generateProductDatasheetIagua } from "@/modules/products/datasheet-iagua";
 import { generateProductDatasheetIaguaHtml } from "@/modules/products/datasheet-iagua-html";
-import { generateProductDatasheetAuto } from "@/modules/products/datasheet-pick";
+import { generateProductDatasheetAuto, generarFichaNueva } from "@/modules/products/datasheet-pick";
+import { esPlantillaNueva } from "@/modules/products/ficha/modelo";
+import { normalizarHex } from "@/modules/products/ficha/paleta";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +45,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const url = new URL(req.url);
   const wantsV1 =
     url.searchParams.get("v") === "1" || process.env.DATASHEET_USE_V1 === "true";
-  // Override de plantilla por query para previsualizar: ?t=iagua | ?t=standard
+  // Override de plantilla por query para previsualizar:
+  // ?t=iagua | standard | tarifa | escaparate | placa
   const forced = url.searchParams.get("t");
+  // Colores sin guardar (vista previa de /configuracion/pdf): ?p=RRGGBB&a=RRGGBB.
+  // Solo el administrador; el hexadecimal se valida.
+  const esAdmin = session.is_superadmin || session.roles.includes("company_admin");
+  const primario = esAdmin ? normalizarHex(url.searchParams.get("p")) : null;
+  const acento = esAdmin ? normalizarHex(url.searchParams.get("a")) : null;
   // Motor nuevo HTML→PDF (satori) para la IAGUA, en pruebas: ?engine=html
   const engine = url.searchParams.get("engine");
   try {
@@ -53,7 +61,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         ? await generateProductDatasheetIaguaHtml(id)
         : wantsV1
           ? await generateProductDatasheet(id)
-          : forced === "iagua"
+          : esPlantillaNueva(forced)
+            ? await generarFichaNueva(id, { plantilla: forced, primario, acento })
+            : forced === "iagua"
             ? await generateProductDatasheetIagua(id)
             : forced === "standard"
               ? await generateProductDatasheetV2(id)

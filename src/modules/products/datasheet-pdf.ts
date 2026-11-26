@@ -1,6 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { textoValorAtributo } from "./valor-atributo";
 
 interface ProductRow {
   id: string;
@@ -49,14 +50,9 @@ const BG_SOFT = rgb(0.96, 0.97, 0.99);
 const BG_HEADER = rgb(0.13, 0.27, 0.55);
 const WHITE = rgb(1, 1, 1);
 
+// Se lee la columna que tenga dato (ver valor-atributo.ts).
 function valueAsText(v: AttrValue): string {
-  if (v.data_type === "boolean") return v.value_boolean ? "Sí" : "No";
-  if (v.data_type === "number" || v.data_type === "dimension") {
-    if (v.value_number == null) return "—";
-    const n = new Intl.NumberFormat("es-ES").format(v.value_number);
-    return `${n}${v.unit ? " " + v.unit : ""}`;
-  }
-  return v.value_text ?? "—";
+  return textoValorAtributo(v) ?? "—";
 }
 
 function wrapText(font: PDFFont, text: string, size: number, maxW: number): string[] {
@@ -225,10 +221,10 @@ export async function generateProductDatasheet(productId: string): Promise<Uint8
     categoryName = (cat as { name: string } | null)?.name ?? null;
   }
 
-  const { data: attrs } = await admin
+  const { data: attrs, error: errAttrs } = await admin
     .from("product_attribute_values")
     .select(
-      "is_featured, value_text, value_number, value_boolean, data_type, attribute_id, product_attributes ( name, unit )",
+      "is_featured, value_text, value_number, value_boolean, attribute_id, product_attributes ( name, unit, data_type )",
     )
     .eq("product_id", productId)
     .eq("is_featured", true)
@@ -238,16 +234,16 @@ export async function generateProductDatasheet(productId: string): Promise<Uint8
     value_text: string | null;
     value_number: number | null;
     value_boolean: boolean | null;
-    data_type: string;
-    product_attributes: { name: string; unit: string | null } | null;
+    product_attributes: { name: string; unit: string | null; data_type: string | null } | null;
   };
+  if (errAttrs) console.error("[datasheet-v1] características:", errAttrs.message);
   const featured = ((attrs ?? []) as Row[]).map<AttrValue>((r) => ({
     attribute_name: r.product_attributes?.name ?? "",
     unit: r.product_attributes?.unit ?? null,
     value_text: r.value_text,
     value_number: r.value_number,
     value_boolean: r.value_boolean,
-    data_type: r.data_type,
+    data_type: r.product_attributes?.data_type ?? "text",
     is_featured: r.is_featured,
   }));
 

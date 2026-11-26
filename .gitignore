@@ -90,3 +90,6 @@ movil/ios/capacitor-cordova-ios-plugins/
 *.p8
 *.p12
 *.mobileprovision
+
+# Vistas previas locales de las fichas técnicas (PDF y capturas), no van al repo
+.revision-fichas/

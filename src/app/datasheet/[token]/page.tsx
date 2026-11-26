@@ -12,6 +12,7 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { resolvePublicShareToken } from "@/modules/products/share-actions";
+import { textoValorAtributo } from "@/modules/products/valor-atributo";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ interface FiscalView {
   fiscal_phone: string | null;
   fiscal_city: string | null;
   fiscal_province: string | null;
+  pdf_brand_color?: string | null;
 }
 
 interface ProductView {
@@ -155,20 +157,26 @@ export default async function PublicDatasheetPage({
   const { data: fiscal } = await admin
     .from("company_settings")
     .select(
-      "fiscal_legal_name, fiscal_logo_url, fiscal_email, fiscal_phone, fiscal_city, fiscal_province",
+      "fiscal_legal_name, fiscal_logo_url, fiscal_email, fiscal_phone, fiscal_city, fiscal_province, pdf_brand_color",
     )
     .eq("company_id", data.company_id)
     .maybeSingle();
   const fi = (fiscal ?? {}) as FiscalView;
   const companyName = fi.fiscal_legal_name || co.trade_name || co.legal_name || "Empresa";
 
-  const brandColor = isValidHex(co.pdf_brand_color) ? co.pdf_brand_color : "#2563EB";
+  // «Color base» de /configuracion/pdf primero; si no, el de la empresa
+  // (antes se saltaba el de configuración, fallo 2026-11-27).
+  const brandColor = isValidHex(fi.pdf_brand_color)
+    ? fi.pdf_brand_color
+    : isValidHex(co.pdf_brand_color)
+      ? co.pdf_brand_color
+      : "#2563EB";
 
   // Atributos visibles
-  const { data: rawAttrs } = await admin
+  const { data: rawAttrs, error: errAttrs } = await admin
     .from("product_attribute_values")
     .select(
-      "is_visible, is_featured, value_text, value_number, value_boolean, data_type, display_order, product_attributes ( name, unit )",
+      "is_visible, is_featured, value_text, value_number, value_boolean, display_order, product_attributes ( name, unit )",
     )
     .eq("product_id", productId)
     .eq("is_visible", true)
@@ -179,25 +187,18 @@ export default async function PublicDatasheetPage({
     value_text: string | null;
     value_number: number | null;
     value_boolean: boolean | null;
-    data_type: string;
     product_attributes: { name: string; unit: string | null } | null;
   };
+  if (errAttrs) console.error("[datasheet-publica] características:", errAttrs.message);
   const attrs = ((rawAttrs ?? []) as AttrRow[])
     .map((r) => {
       const unit = r.product_attributes?.unit ?? null;
       return {
         name: r.product_attributes?.name ?? "",
         unit,
-        value:
-          r.data_type === "boolean"
-            ? r.value_boolean
-              ? "Sí"
-              : "No"
-            : r.data_type === "number" || r.data_type === "dimension"
-              ? r.value_number != null
-                ? `${new Intl.NumberFormat("es-ES").format(r.value_number)}${unit ? " " + unit : ""}`
-                : null
-              : r.value_text,
+        // data_type está en product_attributes (fallo 2026-11-27): se lee la
+        // columna que tenga dato.
+        value: textoValorAtributo({ ...r, unit }),
         featured: r.is_featured,
       };
     })

@@ -27,6 +27,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { textoValorAtributo, tieneValorAtributo } from "./valor-atributo";
 
 // =============================================================================
 // Tipos internos
@@ -81,6 +82,8 @@ interface FiscalInfo {
   fiscal_province: string | null;
   fiscal_address: string | null;
   fiscal_postal_code: string | null;
+  /** «Color base» de /configuracion/pdf (plantillas anteriores). */
+  pdf_brand_color?: string | null;
 }
 
 interface FilterAssignment {
@@ -142,20 +145,14 @@ function lighten(c: RGB, amount: number): RGB {
 // Formateo valor de atributo
 // =============================================================================
 
+// Se lee la columna que tenga dato (data_type está en product_attributes y un
+// número puede venir en texto): ver valor-atributo.ts.
 function valueAsText(v: AttrValue): string {
-  if (v.data_type === "boolean") return v.value_boolean ? "Sí" : "No";
-  if (v.data_type === "number" || v.data_type === "dimension") {
-    if (v.value_number == null) return "—";
-    const n = new Intl.NumberFormat("es-ES").format(v.value_number);
-    return `${n}${v.unit ? " " + v.unit : ""}`;
-  }
-  return v.value_text ?? "—";
+  return textoValorAtributo(v) ?? "—";
 }
 
 function hasValue(v: AttrValue): boolean {
-  if (v.data_type === "boolean") return v.value_boolean != null;
-  if (v.data_type === "number" || v.data_type === "dimension") return v.value_number != null;
-  return v.value_text != null && v.value_text.trim().length > 0;
+  return tieneValorAtributo(v);
 }
 
 // =============================================================================
@@ -396,20 +393,25 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
   const { data: fiscal } = await admin
     .from("company_settings")
     .select(
-      "fiscal_legal_name, fiscal_tax_id, fiscal_email, fiscal_phone, fiscal_logo_url, fiscal_city, fiscal_province, fiscal_address, fiscal_postal_code",
+      "fiscal_legal_name, fiscal_tax_id, fiscal_email, fiscal_phone, fiscal_logo_url, fiscal_city, fiscal_province, fiscal_address, fiscal_postal_code, pdf_brand_color",
     )
     .eq("company_id", p.company_id)
     .maybeSingle();
   const fi = (fiscal ?? {}) as FiscalInfo;
   const companyName = fi.fiscal_legal_name || co.trade_name || co.legal_name || "Empresa";
 
-  // Color del PDF: override por producto si existe, si no de la empresa.
-  const brandHex =
-    (p.datasheet_color_accent && /^#?[0-9a-f]{6}$/i.test(p.datasheet_color_accent)
-      ? p.datasheet_color_accent
-      : co.pdf_brand_color && /^#?[0-9a-f]{6}$/i.test(co.pdf_brand_color)
+  // Color del PDF: override por producto si existe; si no, el «Color base» de
+  // /configuracion/pdf (company_settings.pdf_brand_color) y, en último lugar,
+  // companies.primary_color. Antes se saltaba el de configuración y lo que la
+  // empresa elegía no llegaba al PDF (fallo 2026-11-27).
+  const esHex = (c: string | null | undefined): c is string => !!c && /^#?[0-9a-f]{6}$/i.test(c);
+  const brandHex = esHex(p.datasheet_color_accent)
+    ? p.datasheet_color_accent
+    : esHex(fi.pdf_brand_color)
+      ? fi.pdf_brand_color
+      : esHex(co.pdf_brand_color)
         ? co.pdf_brand_color
-        : DEFAULT_BRAND);
+        : DEFAULT_BRAND;
   const PRIMARY = hexToRgb(brandHex);
 
   // Categoría
@@ -427,10 +429,11 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
   // (toggle apaga atributo → no aparece en PDF; toggle enciende → vuelve).
   let attrRows: AttrValue[] = [];
   {
-    const { data: rows } = await admin
+    // data_type está en product_attributes, no en los valores (fallo 2026-11-27).
+    const { data: rows, error: errAttrs } = await admin
       .from("product_attribute_values")
       .select(
-        "is_visible, is_featured, value_text, value_number, value_boolean, data_type, display_order, attribute_id, product_attributes ( key, name, unit )",
+        "is_visible, is_featured, value_text, value_number, value_boolean, display_order, attribute_id, product_attributes ( key, name, unit, data_type )",
       )
       .eq("product_id", productId)
       .eq("is_visible", true)
@@ -441,10 +444,10 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
       value_text: string | null;
       value_number: number | null;
       value_boolean: boolean | null;
-      data_type: string;
       display_order: number;
-      product_attributes: { key: string; name: string; unit: string | null } | null;
+      product_attributes: { key: string; name: string; unit: string | null; data_type: string | null } | null;
     };
+    if (errAttrs) console.error("[datasheet-v2] características:", errAttrs.message);
     attrRows = ((rows ?? []) as Row[])
       .map<AttrValue>((r) => ({
         attribute_key: r.product_attributes?.key ?? "",
@@ -453,7 +456,7 @@ export async function generateProductDatasheetV2(productId: string): Promise<Uin
         value_text: r.value_text,
         value_number: r.value_number,
         value_boolean: r.value_boolean,
-        data_type: r.data_type,
+        data_type: r.product_attributes?.data_type ?? "text",
         is_visible: r.is_visible,
         is_featured: r.is_featured,
         display_order: r.display_order,

@@ -253,8 +253,18 @@ export async function createCompanyAction(formData: FormData) {
     );
   }
 
-  // Crear company_settings con defaults
-  await supabase.from("company_settings").insert({ company_id: companyId });
+  // Crear company_settings con defaults. Las empresas nuevas nacen con la
+  // ficha técnica «Tarifa» (decisión de Mario, 2026-11-27); el default de la
+  // columna sigue siendo 'standard'. Sin la migración 20261129100000 el CHECK
+  // no admite 'tarifa' (23514): entonces se crea como antes.
+  {
+    const r = await supabase
+      .from("company_settings")
+      .insert({ company_id: companyId, datasheet_template: "tarifa" });
+    if (r.error?.code === "23514") {
+      await supabase.from("company_settings").insert({ company_id: companyId });
+    }
+  }
 
   // Audit log
   try {

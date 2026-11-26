@@ -25,6 +25,7 @@ import {
 } from "pdf-lib";
 import { withSanitizer } from "@/shared/lib/pdf/dashstack";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { textoValorAtributo } from "./valor-atributo";
 
 // =============================================================================
 // Constantes layout
@@ -340,10 +341,12 @@ export async function generateProductCatalogV2(
   // Atributos destacados (is_featured)
   const featuredByProduct = new Map<string, Array<{ name: string; value: string }>>();
   if (products.length > 0) {
-    const { data: rawAttrs } = await admin
+    // data_type está en product_attributes (fallo 2026-11-27); el valor se
+    // lee de la columna que tenga dato.
+    const { data: rawAttrs, error: errAttrs } = await admin
       .from("product_attribute_values")
       .select(
-        "product_id, is_featured, is_visible, value_text, value_number, value_boolean, data_type, display_order, product_attributes ( name, unit )",
+        "product_id, is_featured, is_visible, value_text, value_number, value_boolean, display_order, product_attributes ( name, unit )",
       )
       .in(
         "product_id",
@@ -359,20 +362,12 @@ export async function generateProductCatalogV2(
       value_text: string | null;
       value_number: number | null;
       value_boolean: boolean | null;
-      data_type: string;
       product_attributes: { name: string; unit: string | null } | null;
     };
+    if (errAttrs) console.error("[catalog-pdf-v2] características:", errAttrs.message);
     for (const r of ((rawAttrs ?? []) as Row[])) {
       const unit = r.product_attributes?.unit ?? null;
-      let value: string | null = null;
-      if (r.data_type === "boolean") value = r.value_boolean ? "Sí" : "No";
-      else if (r.data_type === "number" || r.data_type === "dimension") {
-        if (r.value_number != null) {
-          value = `${new Intl.NumberFormat("es-ES").format(r.value_number)}${unit ? " " + unit : ""}`;
-        }
-      } else {
-        value = r.value_text;
-      }
+      const value = textoValorAtributo({ ...r, unit });
       if (value && r.product_attributes?.name) {
         if (!featuredByProduct.has(r.product_id))
           featuredByProduct.set(r.product_id, []);

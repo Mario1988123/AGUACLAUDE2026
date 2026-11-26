@@ -28,6 +28,7 @@ import { PDFDocument } from "pdf-lib";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { textoValorAtributo, tieneValorAtributo } from "./valor-atributo";
 
 // ===========================================================================
 // Escala y página (A4)
@@ -161,19 +162,13 @@ interface DatasheetExtra {
   ideal?: Array<{ title?: string; desc?: string }>;
 }
 
+// Se lee la columna que tenga dato (ver valor-atributo.ts).
 function attrValue(a: AttrValue): string {
-  if (a.data_type === "boolean") return a.value_boolean ? "Sí" : "No";
-  if (a.data_type === "number" || a.data_type === "dimension") {
-    if (a.value_number == null) return "—";
-    const n = new Intl.NumberFormat("es-ES").format(a.value_number);
-    return `${n}${a.unit ? " " + a.unit : ""}`;
-  }
-  return a.value_text ?? "—";
+  return textoValorAtributo(a) ?? "—";
 }
+
 function attrHasValue(a: AttrValue): boolean {
-  if (a.data_type === "boolean") return a.value_boolean != null;
-  if (a.data_type === "number" || a.data_type === "dimension") return a.value_number != null;
-  return !!a.value_text && a.value_text.trim().length > 0;
+  return tieneValorAtributo(a);
 }
 
 // ===========================================================================
@@ -260,10 +255,10 @@ export async function generateProductDatasheetIaguaHtml(productId: string): Prom
   // ---- Atributos visibles ----
   let attrs: AttrValue[] = [];
   try {
-    const { data: rows } = await admin
+    const { data: rows, error: errAttrs } = await admin
       .from("product_attribute_values")
       .select(
-        "is_featured, value_text, value_number, value_boolean, data_type, display_order, product_attributes ( name, unit )",
+        "is_featured, value_text, value_number, value_boolean, display_order, product_attributes ( name, unit, data_type )",
       )
       .eq("product_id", productId)
       .eq("is_visible", true)
@@ -273,9 +268,9 @@ export async function generateProductDatasheetIaguaHtml(productId: string): Prom
       value_text: string | null;
       value_number: number | null;
       value_boolean: boolean | null;
-      data_type: string;
-      product_attributes: { name: string; unit: string | null } | null;
+      product_attributes: { name: string; unit: string | null; data_type: string | null } | null;
     };
+    if (errAttrs) console.error("[datasheet-iagua-html] características:", errAttrs.message);
     attrs = ((rows ?? []) as Row[])
       .map<AttrValue>((r) => ({
         name: r.product_attributes?.name ?? "",
@@ -283,7 +278,7 @@ export async function generateProductDatasheetIaguaHtml(productId: string): Prom
         value_text: r.value_text,
         value_number: r.value_number,
         value_boolean: r.value_boolean,
-        data_type: r.data_type,
+        data_type: r.product_attributes?.data_type ?? "text",
         is_featured: r.is_featured,
       }))
       .filter((a) => a.name && attrHasValue(a));
