@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { Badge } from "@/shared/ui/badge";
 import { BackButton } from "@/shared/components/back-button";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { avisosStockApagados } from "@/modules/notifications/avisos-desactivados";
+import { AvisosStockSwitch } from "@/modules/config/notificaciones/avisos-stock-switch";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,9 @@ export default async function ConfigNotificacionesPage() {
   if (!session.is_superadmin && !session.roles.includes("company_admin")) {
     redirect("/dashboard");
   }
+  const stockApagado = session.company_id
+    ? await avisosStockApagados(createAdminClient(), session.company_id)
+    : false;
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-3">
@@ -37,6 +43,16 @@ export default async function ConfigNotificacionesPage() {
         </div>
         <BackButton href="/configuracion" />
       </div>
+      {session.company_id && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Avisos de la empresa</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <AvisosStockSwitch activoInicial={!stockApagado} />
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
@@ -47,12 +63,13 @@ export default async function ConfigNotificacionesPage() {
           {KINDS.map((k) => (
             <div
               key={k.kind}
-              className="flex items-center justify-between rounded-lg border bg-card p-2"
+              className="flex items-center justify-between gap-2 rounded-lg border bg-card p-2"
             >
-              <div>
-                <code className="text-xs font-mono text-primary">{k.kind}</code>
+              <div className="min-w-0">
+                <code className="break-all text-xs font-mono text-primary">{k.kind}</code>
                 <div className="mt-0.5 text-xs text-muted-foreground">
                   {k.desc}
+                  {stockApagado && k.kind === "installation.stock_shortage" ? " · apagado" : ""}
                 </div>
               </div>
               <div className="flex gap-1">

@@ -265,6 +265,7 @@ async function renderDashboard({
     criticalStockAlerts,
     consolidatedAlerts,
     pointsRanking,
+    stockAvisosApagados,
   ] = await Promise.all([
     getUpcomingMaintenance().catch(() => []),
     getUpcomingInstallations().catch(() => []),
@@ -277,6 +278,16 @@ async function renderDashboard({
       ? getConsolidatedAlerts().catch(() => null)
       : Promise.resolve(null),
     getPointsRanking(pointsScopeArgs).catch(() => []),
+    // Avisos de stock apagados en Configuración → Notificaciones: la tarjeta
+    // de stock no se enseña (Mario 2026-11-26).
+    session.company_id
+      ? import("@/modules/notifications/avisos-desactivados")
+          .then(async (m) => {
+            const { createAdminClient } = await import("@/shared/lib/supabase/admin");
+            return m.avisosStockApagados(createAdminClient(), session.company_id!);
+          })
+          .catch(() => false)
+      : Promise.resolve(false),
   ]);
   const pointsBreakdownAllowedIds =
     visibleUserIds === null
@@ -531,7 +542,7 @@ async function renderDashboard({
       {/* Pruebas pendientes: scope filtrado. Stock crítico: solo nivel 1/2. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <PendingTrialsCard items={pendingTrials} />
-        {(isLevel1 || isLevel2) && (
+        {(isLevel1 || isLevel2) && !stockAvisosApagados && (
           <CriticalStockAlertsCard items={criticalStockAlerts} />
         )}
       </div>

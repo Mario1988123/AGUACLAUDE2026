@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { recomputeSuggestionsForCompany } from "@/modules/warehouses/purchase-suggestions-actions";
+import { empresasConAvisosStockApagados } from "@/modules/notifications/avisos-desactivados";
 import {
   MOTIVO_SIN_EMPRESAS,
   empresasEnServicio,
@@ -43,9 +44,12 @@ export async function GET(req: NextRequest) {
     .eq("is_active", true)
     .in("company_id", EN);
 
-  const companyIds = ((cms ?? []) as Array<{ company_id: string }>).map(
-    (c) => c.company_id,
-  );
+  // Empresas que apagaron los avisos de stock (Configuración → Notificaciones,
+  // Mario 2026-11-26): ni se recalculan sugerencias ni se avisa.
+  const offAvisosStock = await empresasConAvisosStockApagados(admin);
+  const companyIds = ((cms ?? []) as Array<{ company_id: string }>)
+    .map((c) => c.company_id)
+    .filter((id) => !offAvisosStock.has(id));
 
   let totalCreated = 0;
   const perCompany: Array<{ company_id: string; created: number }> = [];

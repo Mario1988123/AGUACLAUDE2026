@@ -1127,6 +1127,14 @@ async function checkStockAndNotifyIfShortInner(installationId: string): Promise<
     | null;
   if (!i) return;
 
+  // Empresa con los avisos de stock apagados (Mario 2026-11-26: trabajan sin
+  // llevar el stock en la app). Ni incidencia de falta de stock —bloquearía
+  // iniciar el parte— ni aviso.
+  {
+    const { avisosStockApagados } = await import("@/modules/notifications/avisos-desactivados");
+    if (await avisosStockApagados(admin, i.company_id)) return;
+  }
+
   // Items requeridos
   const { data: items } = await admin
     .from("installation_items")

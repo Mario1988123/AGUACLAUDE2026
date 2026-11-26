@@ -170,28 +170,33 @@ export async function getProductAlerts(): Promise<ProductAlerts> {
     /* */
   }
 
-  // En calculadora pero sin stock en NINGÚN almacén
-  try {
-    const { data: inCalc } = await admin
-      .from("products")
-      .select("id")
-      .eq("company_id", session.company_id)
-      .eq("is_active", true)
-      .eq("show_in_calculator", true);
-    const calcIds = ((inCalc ?? []) as Array<{ id: string }>).map((p) => p.id);
-    if (calcIds.length > 0) {
-      const { data: stock } = await admin
-        .from("warehouse_stock")
-        .select("product_id, quantity")
-        .in("product_id", calcIds)
-        .gt("quantity", 0);
-      const withStock = new Set(
-        ((stock ?? []) as Array<{ product_id: string }>).map((r) => r.product_id),
-      );
-      out.in_calc_no_stock = calcIds.filter((id) => !withStock.has(id)).length;
+  // En calculadora pero sin stock en NINGÚN almacén. No cuenta si la empresa
+  // apagó los avisos de stock (Configuración → Notificaciones, 2026-11-26).
+  const { avisosStockApagados } = await import("@/modules/notifications/avisos-desactivados");
+  const stockApagado = await avisosStockApagados(admin, session.company_id);
+  if (!stockApagado) {
+    try {
+      const { data: inCalc } = await admin
+        .from("products")
+        .select("id")
+        .eq("company_id", session.company_id)
+        .eq("is_active", true)
+        .eq("show_in_calculator", true);
+      const calcIds = ((inCalc ?? []) as Array<{ id: string }>).map((p) => p.id);
+      if (calcIds.length > 0) {
+        const { data: stock } = await admin
+          .from("warehouse_stock")
+          .select("product_id, quantity")
+          .in("product_id", calcIds)
+          .gt("quantity", 0);
+        const withStock = new Set(
+          ((stock ?? []) as Array<{ product_id: string }>).map((r) => r.product_id),
+        );
+        out.in_calc_no_stock = calcIds.filter((id) => !withStock.has(id)).length;
+      }
+    } catch {
+      /* */
     }
-  } catch {
-    /* */
   }
 
   // Sin foto principal (photo_url NULL)

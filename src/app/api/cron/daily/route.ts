@@ -106,6 +106,12 @@ export async function GET(req: NextRequest) {
     companiesWithModuleDisabled("free_trials"),
     companiesWithModuleDisabled("warehouses"),
   ]);
+  // Empresas que apagaron los avisos de stock en Configuración →
+  // Notificaciones (Mario 2026-11-26): ni stock bajo ni alertas inteligentes.
+  const { empresasConAvisosStockApagados } = await import(
+    "@/modules/notifications/avisos-desactivados"
+  );
+  const offAvisosStock = await empresasConAvisosStockApagados(admin);
 
   // 0a) Autocierre de fichajes olvidados (también lo hace el cron horario,
   // pero lo repetimos aquí por si el horario fallara o no estuviera activo)
@@ -617,6 +623,7 @@ export async function GET(req: NextRequest) {
   for (const ls of lowStockRows) {
     if (fueraDeTiempo("stock-low")) break;
     if (offWarehouses.has(ls.company_id)) continue;
+    if (offAvisosStock.has(ls.company_id)) continue;
     if (!enServicio.has(ls.company_id)) continue;
     try {
       // Idempotencia: solo notifica si no ha habido otra notif del mismo producto en 24h
@@ -718,6 +725,7 @@ export async function GET(req: NextRequest) {
     for (const c of (companiesAll ?? []) as Array<{ id: string }>) {
       if (fueraDeTiempo("stock-alerts")) break;
       if (offWarehouses.has(c.id)) continue;
+      if (offAvisosStock.has(c.id)) continue;
       const r = await recomputeStockAlertsForCompany(c.id);
       stockAlertsStats.companies += 1;
       if (r.ok) stockAlertsStats.alerts += r.total;
