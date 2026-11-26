@@ -248,6 +248,12 @@ export async function getContractPreSignReadiness(
     blockers.push("IBAN del cliente (puede ser ES00 pendiente)");
   }
 
+  // Firma en persona: las dos firmas dibujadas (Mario 2026-11-26).
+  {
+    const { firmasQueFaltan } = await import("./firmas-dibujadas");
+    blockers.push(...(await firmasQueFaltan(admin, contractId)));
+  }
+
   if (!checks.has_email) warnings.push("Email del cliente");
   if (!checks.has_phone) warnings.push("Teléfono del cliente");
   if (ibanRequired && !checks.iban_validated && checks.has_iban) {

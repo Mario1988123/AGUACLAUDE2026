@@ -838,6 +838,17 @@ export async function markContractSigned(id: string) {
       "El contrato no tiene productos. Añade al menos un equipo antes de firmar.",
     );
   }
+  // Firma en persona: cliente y comercial tienen que haber firmado en la
+  // pantalla (Mario 2026-11-26). La firma a distancia no pasa por aquí.
+  {
+    const { firmasQueFaltan } = await import("./firmas-dibujadas");
+    const faltan = await firmasQueFaltan(admin, id);
+    if (faltan.length > 0) {
+      throw new Error(
+        `Falta: ${faltan.join(" y ").toLowerCase()}. Fírmalo en «Completar contrato» → Firmas.`,
+      );
+    }
+  }
   // Guard adicional: si el contrato es de domiciliación y el IBAN es
   // placeholder ES00, NO firmar. Antes se permitía y luego GoCardless
   // fallaba al intentar cobrar.
