@@ -1054,6 +1054,9 @@ export async function acceptFreeTrialAction(input: {
 
     // 2) Si era lead, convertirlo a cliente
     let customerId = trial.customer_id;
+    // Comercial de la venta (para objetivos, comisiones y puntos): el dueño
+    // del lead al convertirlo; si la prueba era de un cliente, su comercial.
+    let comercialVenta: string | null = null;
     if (!customerId && trial.lead_id) {
       const { data: lead } = await admin
         .from("leads")
@@ -1087,6 +1090,7 @@ export async function acceptFreeTrialAction(input: {
         creador: l.created_by,
         convierte: session.user_id,
       });
+      comercialVenta = duenoCliente ?? null;
       const { data: createdCust, error: cErr } = await admin
         .from("customers")
         .insert({
@@ -1166,6 +1170,43 @@ export async function acceptFreeTrialAction(input: {
       /* fail-soft */
     }
 
+    if (!comercialVenta && customerId) {
+      const { data: cu } = await admin
+        .from("customers")
+        .select("assigned_user_id")
+        .eq("id", customerId)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      comercialVenta = (cu as { assigned_user_id: string | null } | null)?.assigned_user_id ?? null;
+    }
+    comercialVenta = comercialVenta ?? session.user_id;
+
+    // Copia de las cláusulas del plan, como al crear desde propuesta: así el
+    // contrato firmado conserva las condiciones aunque luego cambie la
+    // plantilla (auditoría 2026-11-26: salía «Cláusulas (0)»).
+    let clausesSnapshot: Array<{ title: string; body: string; display_order: number }> = [];
+    try {
+      const planClausulas = input.plan_type ?? "renting";
+      const leer = () =>
+        admin
+          .from("contract_clause_templates")
+          .select("title, body, display_order")
+          .eq("company_id", session.company_id)
+          .eq("plan_type", planClausulas)
+          .eq("is_active", true)
+          .order("display_order");
+      let { data: tpls } = await leer();
+      if (!tpls || (tpls as Array<unknown>).length === 0) {
+        await admin.rpc("seed_default_clauses", { p_company_id: session.company_id });
+        tpls = (await leer()).data;
+      }
+      clausesSnapshot = ((tpls ?? []) as Array<{ title: string; body: string; display_order: number }>).map(
+        (t) => ({ title: t.title, body: t.body, display_order: t.display_order }),
+      );
+    } catch (e) {
+      console.warn("[acceptFreeTrial] cláusulas:", e);
+    }
+
     // 4) Crear contrato en draft con customer_snapshot
     const planType = input.plan_type ?? "renting";
     const maintenanceIncluded = input.maintenance_included ?? false;
@@ -1191,7 +1232,11 @@ export async function acceptFreeTrialAction(input: {
           : null,
         source_free_trial_id: trial.id,
         customer_snapshot: customerSnapshot,
+        clauses_snapshot: clausesSnapshot,
         created_by: session.user_id,
+        // Sin esto la venta quedaba sin comercial (auditoría 2026-11-26).
+        assigned_user_id: comercialVenta,
+        assigned_at: new Date().toISOString(),
       })
       .select("id")
       .single();
@@ -1339,7 +1384,7 @@ export async function acceptFreeTrialAction(input: {
         });
       }
       if (
-        planType !== "cash" &&
+        planType === "rental" &&
         input.charge_first_payment_now &&
         input.monthly_cents &&
         input.monthly_cents > 0
@@ -1356,7 +1401,10 @@ export async function acceptFreeTrialAction(input: {
           concept: "Instalación",
           amount_cents: input.installation_cents,
           method: "cash",
-          moment: "on_installation",
+          // Solo hay instalación futura si cambia de equipo; si se queda el
+          // instalado, se cobra al firmar (antes quedaba esperando una
+          // instalación que no iba a llegar).
+          moment: destino === "cambiar" ? "on_installation" : "on_signature",
         });
       }
       if (payments.length > 0) {
@@ -1554,6 +1602,30 @@ export async function acceptFreeTrialAction(input: {
         payload: { destino, error: e instanceof Error ? e.message : String(e) },
         actor_user_id: session.user_id,
       });
+    }
+
+    // Cómo tiene el cliente el equipo (alquiler, compra o renting): lo usan
+    // los mantenimientos incluidos y las retiradas (auditoría 2026-11-26).
+    if (destino !== "cambiar") {
+      try {
+        const { data: instIds } = await admin
+          .from("installations")
+          .select("id")
+          .eq("free_trial_id", trial.id)
+          .eq("kind", "free_trial")
+          .eq("company_id", session.company_id);
+        const ids = ((instIds ?? []) as Array<{ id: string }>).map((x) => x.id);
+        if (ids.length > 0) {
+          await admin
+            .from("customer_equipment")
+            .update({ acquisition_type: planType })
+            .eq("company_id", session.company_id)
+            .eq("customer_id", customerId)
+            .in("installation_id", ids);
+        }
+      } catch (e) {
+        console.warn("[acceptFreeTrial] acquisition_type:", e);
+      }
     }
 
     // 7) Marcar la prueba aceptada

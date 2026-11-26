@@ -6,7 +6,9 @@
  *  - instalada, quedan 2 días      → al comercial: «quedan 2 días»;
  *  - instalada, hoy es el último   → al comercial: «llama y decide»;
  *  - terminada sin decidir         → cada día al comercial y al admin;
- *  - agendada con la fecha pasada  → cada día al admin y al director técnico.
+ *  - agendada con la fecha pasada  → cada día al admin y al director técnico;
+ *  - se la quedó y el contrato lleva más de 2 días sin firmar → cada día al
+ *    comercial del contrato.
  *
  * El comercial es el dueño del lead; si no hay, quien creó la prueba.
  * Helper de SERVIDOR con admin client.
@@ -37,7 +39,13 @@ export async function avisosDiariosPruebas(
   admin: Admin,
   empresas: string[],
 ): Promise<Record<string, number>> {
-  const cuenta = { quedan_2: 0, ultimo_dia: 0, sin_decidir: 0, agendada_sin_hacer: 0 };
+  const cuenta = {
+    quedan_2: 0,
+    ultimo_dia: 0,
+    sin_decidir: 0,
+    agendada_sin_hacer: 0,
+    contrato_sin_firmar: 0,
+  };
   if (empresas.length === 0) return cuenta;
 
   // Empresas con el módulo de pruebas apagado: nada.
@@ -58,9 +66,52 @@ export async function avisosDiariosPruebas(
     .is("deleted_at", null)
     .limit(1000);
   const pruebas = ((data ?? []) as FilaPrueba[]).filter((p) => !off.has(p.company_id));
-  if (pruebas.length === 0) return cuenta;
-
   const { notify, notifyByRoles } = await import("@/modules/notifications/notifier");
+
+  // Contratos salidos de una prueba («se la queda») que nadie firma.
+  try {
+    const hace2 = new Date(Date.now() - 2 * 86_400_000).toISOString();
+    const { data: borradores } = await admin
+      .from("contracts")
+      .select("id, company_id, reference_code, assigned_user_id, created_by, customer_snapshot")
+      .in("company_id", empresas)
+      .in("status", ["draft", "pending_data", "pending_signature"])
+      .not("source_free_trial_id", "is", null)
+      .is("deleted_at", null)
+      .lt("created_at", hace2)
+      .limit(500);
+    for (const c of (borradores ?? []) as Array<{
+      id: string;
+      company_id: string;
+      reference_code: string | null;
+      assigned_user_id: string | null;
+      created_by: string | null;
+      customer_snapshot: Record<string, string | null> | null;
+    }>) {
+      if (off.has(c.company_id)) continue;
+      const quien = c.assigned_user_id ?? c.created_by;
+      if (!quien) continue;
+      const cs = c.customer_snapshot ?? {};
+      const nombre =
+        cs.trade_name || cs.legal_name || `${cs.first_name ?? ""} ${cs.last_name ?? ""}`.trim() || "el cliente";
+      await notify({
+        company_id: c.company_id,
+        recipient_user_id: quien,
+        kind: "contract.unsigned_from_trial",
+        category: "alert",
+        severity: "warning",
+        title: `Contrato sin firmar · ${nombre}`,
+        body: `Se quedó la prueba, pero el contrato${c.reference_code ? ` ${c.reference_code}` : ""} sigue sin firmar. Cobra y firma, o cancélalo si se echa atrás.`,
+        subject_type: "contract",
+        subject_id: c.id,
+        action_url: `/contratos/${c.id}`,
+      });
+      cuenta.contrato_sin_firmar++;
+    }
+  } catch (e) {
+    console.error("[avisosDiariosPruebas] contratos sin firmar:", e);
+  }
+  if (pruebas.length === 0) return cuenta;
   const hoy = fechaMadrid(new Date());
 
   // Dueño de cada lead (el comercial que lleva al cliente).

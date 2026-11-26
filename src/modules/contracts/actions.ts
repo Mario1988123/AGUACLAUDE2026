@@ -1232,16 +1232,31 @@ export async function markContractSigned(id: string) {
   // Reservar stock en almacén principal para todos los items del contrato.
   // Fail-soft: si falla, no rompe la firma (puede ser por falta de almacén
   // o tabla aún no migrada).
+  // Si el equipo es el de una prueba gratuita YA instalado, ni se reserva
+  // stock ni se espera a otra instalación: se activa ya (contrato-de-prueba.ts).
+  const { equipoDePruebaYaInstalado, activarContratoDePrueba } = await import(
+    "./contrato-de-prueba"
+  );
+  const yaInstaladoDePrueba = await equipoDePruebaYaInstalado(
+    admin,
+    session.company_id!,
+    id,
+  ).catch(() => false);
   try {
-    const { reserveStockForContractAction } = await import(
-      "@/modules/warehouses/reservation-actions"
-    );
-    const r = await reserveStockForContractAction(id);
-    if (!r.ok && r.error) {
-      console.warn("[markContractSigned] reservas no creadas:", r.error);
+    if (!yaInstaladoDePrueba) {
+      const { reserveStockForContractAction } = await import(
+        "@/modules/warehouses/reservation-actions"
+      );
+      const r = await reserveStockForContractAction(id);
+      if (!r.ok && r.error) {
+        console.warn("[markContractSigned] reservas no creadas:", r.error);
+      }
     }
   } catch (e) {
     console.error("[markContractSigned] reserveStock falló:", e);
+  }
+  if (yaInstaladoDePrueba) {
+    await activarContratoDePrueba(admin, session.company_id!, id, session.user_id);
   }
 
   // === Sales record + puntos ==============================================
@@ -1653,11 +1668,17 @@ export async function cancelContractAction(
     const admin = createAdminClient() as any;
     const { data: row } = await admin
       .from("contracts")
-      .select("id, status, company_id, signed_at")
+      .select("id, status, company_id, signed_at, source_free_trial_id")
       .eq("id", id)
       .maybeSingle();
     const c = row as
-      | { id: string; status: string; company_id: string; signed_at: string | null }
+      | {
+          id: string;
+          status: string;
+          company_id: string;
+          signed_at: string | null;
+          source_free_trial_id: string | null;
+        }
       | null;
     if (!c) return { ok: false, error: "Contrato no encontrado" };
     if (c.company_id !== session.company_id) return { ok: false, error: "Otra empresa" };
@@ -1665,10 +1686,26 @@ export async function cancelContractAction(
     // Verificar que no haya instalación con status distinto de "scheduled"/"unscheduled"
     const { data: insts } = await admin
       .from("installations")
-      .select("id, status")
+      .select("id, status, kind")
       .eq("contract_id", id)
       .is("deleted_at", null);
-    const installs = ((insts as Array<{ id: string; status: string }> | null) ?? []);
+    let installs = ((insts as Array<{ id: string; status: string; kind: string }> | null) ?? []);
+    // Se quedó la prueba pero se echa atrás ANTES de firmar (auditoría
+    // 2026-11-26): la instalación hecha de la prueba no bloquea. Se
+    // desengancha del contrato, la prueba vuelve a «no se la queda» y desde
+    // su ficha se agenda la retirada del equipo.
+    const pruebaSinFirmar = !c.signed_at && !!c.source_free_trial_id;
+    if (pruebaSinFirmar) {
+      const dePrueba = installs.filter((i) => i.kind === "free_trial");
+      if (dePrueba.length > 0) {
+        await admin
+          .from("installations")
+          .update({ contract_id: null })
+          .in("id", dePrueba.map((i) => i.id))
+          .eq("company_id", session.company_id);
+        installs = installs.filter((i) => i.kind !== "free_trial");
+      }
+    }
     const blockedByInstall = installs.some((i) =>
       ["in_progress", "completed"].includes(i.status),
     );
@@ -1840,6 +1877,35 @@ export async function cancelContractAction(
       payload: { reason, from_status: c.status },
       actor_user_id: session.user_id,
     });
+
+    // La prueba que había aceptado pasa a «no se la queda»: su ficha ofrece
+    // agendar la retirada del equipo (no se queda en un estado sin salida).
+    if (pruebaSinFirmar && c.source_free_trial_id) {
+      try {
+        await admin
+          .from("free_trials")
+          .update({
+            status: "rejected",
+            decided_outcome: "rejected",
+            decided_at: new Date().toISOString(),
+            rejected_reason: `Contrato cancelado antes de firmar: ${reason}`,
+          })
+          .eq("id", c.source_free_trial_id)
+          .eq("company_id", session.company_id)
+          .eq("status", "accepted");
+        await admin.from("events").insert({
+          company_id: session.company_id,
+          subject_type: "free_trial",
+          subject_id: c.source_free_trial_id,
+          kind: "free_trial.rejected",
+          payload: { reason, contract_id: id },
+          actor_user_id: session.user_id,
+        });
+        revalidatePath(`/pruebas-gratuitas/${c.source_free_trial_id}`);
+      } catch (e) {
+        console.error("[cancelContract] prueba de origen:", e);
+      }
+    }
 
     revalidatePath("/contratos");
     revalidatePath("/instalaciones");

@@ -231,16 +231,31 @@ export async function runPostSignSideEffects(opts: {
   }
 
   // --- Reservar stock -------------------------------------------------------
+  // Equipo de prueba gratuita ya instalado: sin reserva y se activa ya
+  // (contrato-de-prueba.ts).
+  const { equipoDePruebaYaInstalado, activarContratoDePrueba } = await import(
+    "./contrato-de-prueba"
+  );
+  const yaInstaladoDePrueba = await equipoDePruebaYaInstalado(
+    admin,
+    companyId,
+    contractId,
+  ).catch(() => false);
   try {
-    const { reserveStockForContractAction } = await import(
-      "@/modules/warehouses/reservation-actions"
-    );
-    const r = await reserveStockForContractAction(contractId);
-    if (!r.ok && r.error) {
-      console.warn("[post-sign] reservas no creadas:", r.error);
+    if (!yaInstaladoDePrueba) {
+      const { reserveStockForContractAction } = await import(
+        "@/modules/warehouses/reservation-actions"
+      );
+      const r = await reserveStockForContractAction(contractId);
+      if (!r.ok && r.error) {
+        console.warn("[post-sign] reservas no creadas:", r.error);
+      }
     }
   } catch (e) {
     console.error("[post-sign] reserveStock:", e);
+  }
+  if (yaInstaladoDePrueba) {
+    await activarContratoDePrueba(admin, companyId, contractId, actorUserId);
   }
 
   // --- Sales records (dashboard/objetivos). Puntos se otorgan al instalar. --

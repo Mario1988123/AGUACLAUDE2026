@@ -172,7 +172,7 @@ export function AcceptFreeTrialButton({
         monthly_cents: plan === "cash" ? null : monthlyCents,
         deposit_cents: plan === "rental" ? depositCents : null,
         installation_cents: installationIncluded ? null : installationCents,
-        charge_first_payment_now: plan !== "cash" ? chargeFirstNow : false,
+        charge_first_payment_now: plan === "rental" ? chargeFirstNow : false,
         maintenance_included: maintenanceIncluded,
         maintenance_periodicity_months: maintenanceIncluded ? maintPeriodicity : null,
         maintenance_months_included: maintenanceIncluded ? maintMonthsIncluded : null,
@@ -332,14 +332,16 @@ export function AcceptFreeTrialButton({
                       <MoneyInput valueCents={depositCents} onChangeCents={setDepositCents} />
                     </Field>
                   )}
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={chargeFirstNow}
-                      onChange={(e) => setChargeFirstNow(e.target.checked)}
-                    />
-                    Cobrar la 1ª cuota al firmar
-                  </label>
+                  {plan === "rental" && (
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={chargeFirstNow}
+                        onChange={(e) => setChargeFirstNow(e.target.checked)}
+                      />
+                      Cobrar la 1ª cuota al firmar
+                    </label>
+                  )}
                 </>
               )}
 
