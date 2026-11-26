@@ -39,14 +39,20 @@ function Foto({ item, className }: { item: ItemLista; className?: string }) {
 export function TarjetaRejilla({
   item,
   nombreCompleto = false,
+  href,
+  pie,
 }: {
   item: ItemLista;
   /** Dentro de una gama: nombre con los rasgos de la variante. */
   nombreCompleto?: boolean;
+  /** Enlace (por defecto, la ficha del maestro). */
+  href?: string;
+  /** Línea extra al pie (p. ej. el precio en la empresa). */
+  pie?: React.ReactNode;
 }) {
   return (
     <Link
-      href={`/superadmin/catalogo/productos/${item.id}` as never}
+      href={(href ?? `/superadmin/catalogo/productos/${item.id}`) as never}
       className="flex w-full flex-col overflow-hidden rounded-xl border bg-card transition-colors duration-100 hover:border-primary active:bg-muted/40"
     >
       <Foto item={item} className="bg-muted/40" />
@@ -62,6 +68,7 @@ export function TarjetaRejilla({
           {item.descatalogado ? " · Descatalogado" : ""}
           {!item.activo ? " · Inactivo" : ""}
         </span>
+        {pie}
       </span>
     </Link>
   );

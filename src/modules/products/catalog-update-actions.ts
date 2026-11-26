@@ -7,9 +7,10 @@
  * empresa copió (products.catalog_version_synced). Entonces se muestra el aviso
  * "⚠ Actualización disponible". La empresa decide:
  *   - Aplicar: RELLENA lo que la empresa tenga vacío (textos, medidas, peso) y
- *     AÑADE los atributos y documentos que le falten. NO toca nombre (lo bautiza
- *     la empresa), tipo, precio, stock, referencia interna, fotos ni valores ya
- *     puestos.
+ *     AÑADE los atributos, fotos y documentos que le falten. NO toca nombre (lo
+ *     bautiza la empresa), tipo, precio, stock, referencia interna, sus fotos ni
+ *     los valores que haya cambiado o añadido. Solo refresca los valores
+ *     heredados que siguen sin tocar (origen 'maestro', migración 20261129110000).
  *     Pone synced=version.
  *   - Descartar: sube synced=version sin copiar nada (se queda su versión).
  *
@@ -21,7 +22,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { isProductEditor, PRODUCTS_NOT_EDITOR_ERROR } from "./permissions";
-import { copyAttributes, copyDocuments } from "./catalog-copy-helpers";
+import { copyAttributes, copyDocuments, copyPhotos } from "./catalog-copy-helpers";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ProductCatalogStatus {
@@ -183,9 +184,13 @@ export async function applyCatalogUpdateSafeAction(
       })
       .eq("id", productId);
 
-    // Atributos: solo se AÑADEN los que la empresa aún no tiene; los valores que
-    // ya tenga (aunque los haya cambiado) se respetan.
+    // Atributos: se AÑADEN los que la empresa aún no tiene y se refrescan los
+    // heredados sin tocar; los que haya cambiado o añadido se respetan.
     await copyAttributes(admin, companyId, prod.catalog_product_id, productId, prod.category_id);
+
+    // Fotos: se AÑADEN las del maestro que falten (con su tipo); las suyas no se
+    // tocan y la principal solo cambia si no tenía.
+    await copyPhotos(admin, companyId, prod.catalog_product_id, productId);
 
     // Documentos: añadir SOLO los del maestro que aún no tenga (por título).
     const { data: existingDocs } = await admin

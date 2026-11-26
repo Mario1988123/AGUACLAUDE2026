@@ -1,498 +1,441 @@
-import { notFound } from "next/navigation";
-import { getProduct, listCategories } from "@/modules/products/actions";
-import { ProductEditButton } from "@/modules/products/edit-form";
-import { DeleteProductButton } from "@/modules/products/delete-product-button";
-import { ProductActiveToggle } from "@/modules/products/product-active-toggle";
-import { listPricingPlans } from "@/modules/products/pricing-actions";
-import { PricingPlansPanel } from "@/modules/products/pricing-panel";
-import {
-  listAttributes,
-  listProductAttributeValues,
-} from "@/modules/products/attributes-actions";
-import { AttributesPanel } from "@/modules/products/attributes-panel";
-import {
-  getProductSalesHistory,
-  getProductStockSummary,
-} from "@/modules/products/stock-actions";
-import { ProductStockPanel } from "@/modules/products/stock-panel";
-import { BarcodeScanner } from "@/modules/warehouses/barcode-scanner";
-import { ProductPhotoUploader } from "@/modules/products/photo-uploader";
-import { CollapsibleCard } from "@/modules/products/collapsible-card";
-import { PriceHistoryCard } from "@/modules/products/price-history-card";
-import { listPriceHistory } from "@/modules/products/bulk-actions";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { FileText, Pencil, Share2 } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
-import { KIND_LABEL, ROLE_LABEL, type ProductRole } from "@/modules/products/schemas";
+import { Card, CardContent } from "@/shared/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
 import { BackButton } from "@/shared/components/back-button";
 import { requireSession } from "@/shared/lib/auth/session";
-import { isProductEditor } from "@/modules/products/permissions";
-import { listProductShares } from "@/modules/products/share-actions";
-import { ShareDatasheetPanel } from "@/modules/products/share-panel";
-import { getCriticalAttributesState } from "@/modules/products/critical-attrs-actions";
-import { CriticalAttributesBanner } from "@/modules/products/critical-attrs-banner";
-import { listFilterAssignmentsByProduct } from "@/modules/products/filter-assignments-actions";
-import { listProductFilters } from "@/modules/products/filters-actions";
-import { ProductFiltersPanel } from "@/modules/products/product-filters-panel";
-import { listProductDocuments } from "@/modules/products/documents-actions";
-import {
-  listProductCertifications,
-  listCertificationsCatalog,
-} from "@/modules/products/certifications-actions";
-import { DocsAndCertsPanel } from "@/modules/products/docs-and-certs-panel";
-import { ExtendedFieldsPanel } from "@/modules/products/extended-fields-panel";
-import { ExtraTargetsPanel } from "@/modules/products/extra-targets-panel";
-import { listExtraTargets, listEquipmentProducts } from "@/modules/products/extra-targets-actions";
-import { DatasheetIaguaPanel } from "@/modules/products/datasheet-iagua-panel";
-import { getPdfSettings } from "@/modules/config/pdf/actions";
-import { listTagsCatalog } from "@/modules/products/tags-actions";
+import { CollapsibleCard } from "@/modules/products/collapsible-card";
+import { canSeeProductCost, isProductEditor } from "@/modules/products/permissions";
+import { leerFichaEmpresa } from "@/modules/products/productos-lectura";
+import { formatearEuros, repartirFotos } from "@/modules/products/productos-vista";
+import { getProductStockSummary } from "@/modules/products/stock-actions";
+import { listPriceHistory } from "@/modules/products/bulk-actions";
 import { getProductCatalogStatus } from "@/modules/products/catalog-update-actions";
 import { CatalogUpdateBanner } from "@/modules/products/catalog-update-banner";
-import { cargarPanelModeloProducto } from "@/modules/equipos-modelo/datos";
-import { PanelModeloProductoCard } from "@/modules/equipos-modelo/panel-modelo-producto";
+import { getCriticalAttributesState } from "@/modules/products/critical-attrs-actions";
+import { CriticalAttributesBanner } from "@/modules/products/critical-attrs-banner";
+import { KIND_LABEL } from "@/modules/products/schemas";
+import { formatearNumero } from "@/modules/superadmin/catalogo/catalogo-etiquetas";
+import { FichaGaleria } from "@/modules/superadmin/catalogo/ficha-galeria";
+import {
+  TablaCaracteristicas,
+  agruparCaracteristicas,
+  type FilaCaracteristica,
+} from "@/modules/superadmin/catalogo/ficha-caracteristicas";
+import { FichaTecnica } from "@/modules/superadmin/catalogo/ficha-tecnica";
+import { FichaVariantes } from "@/modules/superadmin/catalogo/ficha-variantes";
+import { FichaRecambios } from "@/modules/superadmin/catalogo/ficha-recambios";
+import { FichaDocumentos } from "@/modules/superadmin/catalogo/ficha-documentos";
 
 export const dynamic = "force-dynamic";
 
-function formatCents(cents: number | null) {
-  if (cents == null) return "—";
-  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100);
+/**
+ * Ficha de LECTURA de un producto de la empresa, con la misma estructura que la
+ * del catálogo maestro (cabecera, galería, ficha técnica por grupos con el
+ * dibujo de medidas junto a Físicas, variantes, recambios y documentos), más el
+ * precio y el stock. Sin un solo control de formulario: editar está en
+ * /productos/[id]/editar.
+ */
+
+function Contador({ n }: { n: number }) {
+  return <span className="text-sm font-normal text-muted-foreground tabular-nums">{n}</span>;
 }
 
-export default async function ProductDetailPage({
+const TAB_TRIGGER = "h-11 px-3 text-sm";
+const TITULO_SECCION = "mb-3 text-sm font-bold uppercase tracking-wide text-primary";
+const hrefVariante = (vid: string) => `/productos/${vid}`;
+
+export default async function ProductoFichaPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ abrir?: string }>;
+  searchParams?: Promise<{ abrir?: string; edit?: string }>;
 }) {
   const { id } = await params;
-  // ?abrir=filtros abre la tarjeta de filtros (enlace de «Necesitamos tu ayuda»).
-  const abrir = (await searchParams)?.abrir;
-  let product;
-  try {
-    product = await getProduct(id);
-  } catch {
-    notFound();
-  }
-  const [
-    pricingPlans,
-    attributes,
-    attrValues,
-    categories,
-    stockSummary,
-    salesHistory,
-    session,
-    priceHistory,
-    shares,
-    criticalState,
-  ] = await Promise.all([
-    listPricingPlans(id),
-    listAttributes((product as { category_id: string | null }).category_id),
-    listProductAttributeValues(id),
-    listCategories().catch(() => []),
-    getProductStockSummary(id).catch(() => ({ total: 0, by_warehouse: [] })),
-    getProductSalesHistory(id, 90).catch(() => []),
-    requireSession(),
-    listPriceHistory(id).catch(() => []),
-    listProductShares(id).catch(() => []),
-    getCriticalAttributesState(id).catch(() => ({ isDismissed: true, missing: [] })),
-  ]);
-  const catalogStatus = await getProductCatalogStatus(id).catch(() => ({
-    linked: false,
-    hasUpdate: false,
-    masterName: null,
-    fromVersion: null,
-    toVersion: null,
-  }));
-  const [filterAssignments, availableFilters, documents, productCerts, certCatalog, tagsCatalog] =
-    await Promise.all([
-      listFilterAssignmentsByProduct(id).catch(() => []),
-      listProductFilters({ active_only: true }).catch(() => []),
-      listProductDocuments(id).catch(() => []),
-      listProductCertifications(id).catch(() => []),
-      listCertificationsCatalog().catch(() => []),
-      listTagsCatalog().catch(() => []),
-    ]);
-  const extendedFieldsInitial = {
-    tags: ((product as { tags?: string[] | null }).tags) ?? null,
-    marketing_claim: (product as { marketing_claim?: string | null }).marketing_claim ?? null,
-    youtube_url: (product as { youtube_url?: string | null }).youtube_url ?? null,
-    qr_target_url: (product as { qr_target_url?: string | null }).qr_target_url ?? null,
-    barcode_ean13: (product as { barcode_ean13?: string | null }).barcode_ean13 ?? null,
-    country_of_origin: (product as { country_of_origin?: string | null }).country_of_origin ?? null,
-    manufacturer_name: (product as { manufacturer_name?: string | null }).manufacturer_name ?? null,
-    manufacturer_model: (product as { manufacturer_model?: string | null }).manufacturer_model ?? null,
-    warranty_months_general: (product as { warranty_months_general?: number | null }).warranty_months_general ?? null,
-    warranty_months_electronics: (product as { warranty_months_electronics?: number | null }).warranty_months_electronics ?? null,
-    warranty_months_body: (product as { warranty_months_body?: number | null }).warranty_months_body ?? null,
-    discontinued_at: (product as { discontinued_at?: string | null }).discontinued_at ?? null,
-    replaced_by_product_id: (product as { replaced_by_product_id?: string | null }).replaced_by_product_id ?? null,
-    installation_diagram_url: (product as { installation_diagram_url?: string | null }).installation_diagram_url ?? null,
-    datasheet_color_accent: (product as { datasheet_color_accent?: string | null }).datasheet_color_accent ?? null,
-  };
-  const otherProducts = categories.length > 0
-    ? [] // listado opcional para "reemplazado por" — se podrá rellenar más adelante
-    : [];
-  // El coste real es CMP calculado desde las compras y SOLO lo ve el admin
-  // (incluido director comercial). Los niveles 3 nunca lo ven.
-  const canSeeCost =
-    session.is_superadmin ||
-    session.roles.includes("company_admin") ||
-    session.roles.includes("commercial_director");
+  const sp = await searchParams;
+  // Enlaces antiguos («Necesitamos tu ayuda», lápiz de la tabla): ahora se edita en /editar.
+  if (sp?.abrir === "filtros") redirect(`/productos/${id}/editar?seccion=filtros#filtros` as never);
+  if (sp?.edit === "1") redirect(`/productos/${id}/editar` as never);
+
+  const session = await requireSession();
+  const p = await leerFichaEmpresa(id);
+  if (!p) notFound();
+
   const canEdit = isProductEditor(session);
-  // Modelo de equipo (plan 2026-11-13): null si la migración no está aplicada.
-  const panelModelo = session.company_id
-    ? await cargarPanelModeloProducto(session.company_id, product.id).catch(() => null)
+  const canSeeCost = canSeeProductCost(session);
+  const hrefEditar = `/productos/${p.id}/editar`;
+
+  const [stock, catalogStatus, criticalState, historial] = await Promise.all([
+    getProductStockSummary(p.id).catch(() => ({ total: 0, by_warehouse: [] })),
+    canEdit
+      ? getProductCatalogStatus(p.id).catch(() => null)
+      : Promise.resolve(null),
+    canEdit
+      ? getCriticalAttributesState(p.id).catch(() => ({ isDismissed: true, missing: [] }))
+      : Promise.resolve({ isDismissed: true, missing: [] }),
+    canSeeCost ? listPriceHistory(p.id).catch(() => []) : Promise.resolve([]),
+  ]);
+
+  // Físicas que viven en columnas del producto (cotas a/b/c y peso), como en el maestro.
+  const fisicasExtra: FilaCaracteristica[] = [];
+  if (p.anchoMm) fisicasExtra.push({ etiqueta: "Ancho (a)", valor: `${formatearNumero(p.anchoMm)} mm` });
+  if (p.altoMm) fisicasExtra.push({ etiqueta: "Alto (b)", valor: `${formatearNumero(p.altoMm)} mm` });
+  if (p.fondoMm) fisicasExtra.push({ etiqueta: "Fondo (c)", valor: `${formatearNumero(p.fondoMm)} mm` });
+  if (p.pesoG) fisicasExtra.push({ etiqueta: "Peso", valor: `${formatearNumero(p.pesoG / 1000)} kg` });
+  const visibles = p.caracteristicas.filter((c) => c.visible);
+  const bloques = agruparCaracteristicas(visibles, fisicasExtra);
+  const nCaract = bloques.reduce((s, b) => s + b.filas.length, 0);
+
+  // Galería repartida igual que en el maestro.
+  const reparto = repartirFotos(p.fotos);
+  const fotosImagenes = reparto.imagenes;
+  const imagenes = fotosImagenes.length > 0 && <FichaGaleria fotos={fotosImagenes} nombre={p.nombre} />;
+  const imagenMedidas = reparto.medidas;
+  const proyecciones = reparto.proyecciones.map((f) => ({
+    id: f.id,
+    etiqueta: f.etiqueta,
+    url: f.url,
+    miniatura: f.miniatura,
+  }));
+  const nRecambios = p.recambios.length;
+
+  const categoria = p.categoria
+    ? p.categoriaPadre
+      ? `${p.categoriaPadre} · ${p.categoria.nombre}`
+      : p.categoria.nombre
     : null;
-  // Borrar producto: solo admin de empresa (nivel 1) o superadmin.
-  const canDelete = session.is_superadmin || session.roles.includes("company_admin");
-  const publicBaseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-  // Plantilla de ficha PDF de la empresa: el editor IAGUA solo se muestra si la
-  // empresa usa esa plantilla.
-  const pdfSettings = canEdit ? await getPdfSettings().catch(() => null) : null;
-  const isIaguaTemplate = pdfSettings?.datasheet_template === "iagua";
+  const volver = p.categoria
+    ? { href: `/productos?cat=${p.categoria.id}`, label: p.categoria.nombre }
+    : { href: "/productos", label: "Productos" };
 
-  // Packs: si este producto es un EXTRA del configurador, cargamos sus objetivos
-  // (categorías/equipos) y el listado de equipos para poder configurarlos.
-  const productRoles = ((product as { roles?: string[] | null }).roles ?? []) as string[];
-  const isConfiguratorExtra = productRoles.includes("configurator_extra");
-  const [extraTargets, equipmentProductsForTargets] =
-    isConfiguratorExtra && canEdit
-      ? await Promise.all([
-          listExtraTargets(id).catch(() => ({ categoryIds: [], equipmentProductIds: [] })),
-          listEquipmentProducts().catch(() => []),
-        ])
-      : [{ categoryIds: [] as string[], equipmentProductIds: [] as string[] }, [] as Array<{ id: string; name: string; category_id: string | null }>];
+  // Precio y stock
+  const { contadoCents, desdeMesCents } = p.precio;
+  const hayStock = stock.total > 0;
+  const stockBajo = p.stockGestionado && p.stockMin > 0 && stock.total <= p.stockMin;
+  const insigniaStock = hayStock ? (
+    <Badge variant={stockBajo ? "warning" : "success"}>
+      {stockBajo ? "Stock bajo" : "Hay stock"}
+      {canSeeCost ? ` · ${stock.total.toLocaleString("es-ES")} ud` : ""}
+    </Badge>
+  ) : p.stockGestionado ? (
+    <Badge variant="secondary">Sin stock</Badge>
+  ) : null;
 
-  // Etiqueta de stock al lado del título.
-  // - Comerciales (level 3): solo "Hay stock" / "Sin stock", sin cantidad.
-  // - Admin / dir comercial: ven la cantidad total.
-  const hasStock = stockSummary.total > 0;
-  const isLow =
-    product.stock_managed &&
-    product.stock_min > 0 &&
-    stockSummary.total <= product.stock_min;
-  const stockBadge = isLow
-    ? { variant: "destructive" as const, label: hasStock ? "⚠ Stock bajo" : "Sin stock" }
-    : hasStock
-      ? { variant: "success" as const, label: "Hay stock" }
-      : { variant: "destructive" as const, label: "Sin stock" };
+  // Qué le falta a la ficha (solo editor, una sola vez).
+  const falta: Array<{ texto: string; seccion: string }> = [];
+  if (p.fotos.length === 0) falta.push({ texto: "foto", seccion: "fotos" });
+  if (visibles.length === 0) falta.push({ texto: "características", seccion: "caracteristicas" });
+  if (!p.anchoMm || !p.altoMm || !p.fondoMm) falta.push({ texto: "medidas", seccion: "datos" });
+  if (contadoCents == null) falta.push({ texto: "precio", seccion: "precio" });
+  if (!p.descCorta && !p.descLarga) falta.push({ texto: "descripción", seccion: "datos" });
+
+  const garantia = [
+    p.garantia.general ? `General ${p.garantia.general} meses` : null,
+    p.garantia.electronica ? `Electrónica ${p.garantia.electronica} meses` : null,
+    p.garantia.carcasa ? `Carcasa ${p.garantia.carcasa} meses` : null,
+  ].filter(Boolean);
+
+  const ultimoPrecio = (historial as Array<{ changed_at?: string; created_at?: string }>)[0];
+  const fechaUltimoPrecio = ultimoPrecio?.changed_at ?? ultimoPrecio?.created_at ?? null;
+
+  // ---------------------------------------------------------------- bloques
+  const variantes = <FichaVariantes variantes={p.variantes} actualId={p.id} hrefDe={hrefVariante} />;
+  const recambios = <FichaRecambios recambios={p.recambios} proyecciones={proyecciones} hrefBase={null} />;
+  const documentos = <FichaDocumentos documentos={p.documentos} />;
+  const descripcion = (p.descCorta || p.descLarga) && (
+    <div className="space-y-2 text-sm">
+      {p.descCorta && <p>{p.descCorta}</p>}
+      {p.descLarga && <p className="whitespace-pre-line text-muted-foreground">{p.descLarga}</p>}
+    </div>
+  );
+  const notaRecambios = p.recambiosDeGama && (
+    <p className="mb-2 text-xs text-muted-foreground">Son los de su gama: esta variante no tiene filtros propios.</p>
+  );
+  const gestion = canSeeCost && (
+    <dl className="divide-y text-sm">
+      <div className="grid grid-cols-2 gap-3 py-2">
+        <dt className="text-muted-foreground">Stock</dt>
+        <dd className="text-right font-medium tabular-nums">
+          {stock.total.toLocaleString("es-ES")} ud
+          {p.stockGestionado && p.stockMin > 0 ? ` · mínimo ${p.stockMin}` : ""}
+          {stock.by_warehouse.length > 0
+            ? ` · ${stock.by_warehouse.length} ${stock.by_warehouse.length === 1 ? "almacén" : "almacenes"}`
+            : ""}
+        </dd>
+      </div>
+      {p.costeCents != null && (
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <dt className="text-muted-foreground">Coste (CMP)</dt>
+          <dd className="text-right font-medium tabular-nums">{formatearEuros(p.costeCents)}</dd>
+        </div>
+      )}
+      {fechaUltimoPrecio && (
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <dt className="text-muted-foreground">Último cambio de precio</dt>
+          <dd className="text-right font-medium">
+            {new Date(fechaUltimoPrecio).toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" })}
+          </dd>
+        </div>
+      )}
+      {canEdit && (
+        <div className="pt-3">
+          <Link href={`${hrefEditar}?seccion=stock#stock` as never} className="text-sm font-semibold text-primary hover:underline">
+            Ver stock, coste e historial
+          </Link>
+        </div>
+      )}
+    </dl>
+  );
+
+  const acciones = (
+    <>
+      <a
+        href={`/api/pdf/product-datasheet/${p.id}`}
+        target="_blank"
+        rel="noopener"
+        className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 lg:flex-none"
+      >
+        <FileText className="h-4 w-4" /> Ficha técnica
+      </a>
+      {canEdit && (
+        <>
+          <Link
+            href={`${hrefEditar}?seccion=compartir#compartir` as never}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border bg-card text-sm font-semibold hover:bg-muted lg:w-auto lg:px-4"
+            aria-label="Compartir ficha técnica"
+          >
+            <Share2 className="h-4 w-4" /> <span className="hidden lg:inline">Compartir</span>
+          </Link>
+          <Link
+            href={hrefEditar as never}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border bg-card text-sm font-semibold hover:bg-muted lg:w-auto lg:px-4"
+            aria-label="Editar"
+          >
+            <Pencil className="h-4 w-4" /> <span className="hidden lg:inline">Editar</span>
+          </Link>
+        </>
+      )}
+    </>
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-extrabold tracking-tight">{product.name}</h1>
-            {product.is_active ? (
-              <Badge variant="success">Activo</Badge>
-            ) : (
-              <Badge variant="secondary">Inactivo</Badge>
-            )}
-            <Badge variant={stockBadge.variant}>{stockBadge.label}</Badge>
-            {canSeeCost && hasStock && (
-              <span className="text-xs text-muted-foreground tabular-nums">
-                ({stockSummary.total} ud)
-              </span>
-            )}
-          </div>
-          {product.short_description && (
-            <p className="mt-1 text-sm text-muted-foreground">
-              {product.short_description}
-            </p>
+    <div className="min-w-0">
+      {canEdit && (
+        <div className="mb-4 space-y-3">
+          {catalogStatus && <CatalogUpdateBanner productId={p.id} status={catalogStatus} />}
+          {!criticalState.isDismissed && criticalState.missing.length > 0 && (
+            <CriticalAttributesBanner productId={p.id} missing={criticalState.missing} />
           )}
-          <p className="mt-0.5 text-xs uppercase tracking-wide text-muted-foreground">
-            {KIND_LABEL[product.kind]}
-          </p>
-          {(() => {
-            const roles = ((product as { roles?: string[] | null }).roles ?? []).filter(
-              (r): r is ProductRole => r in ROLE_LABEL,
-            );
-            if (roles.length === 0) return null;
-            return (
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {roles.map((r) => (
-                  <Badge key={r} variant="outline">
-                    {ROLE_LABEL[r]}
-                  </Badge>
-                ))}
-              </div>
-            );
-          })()}
         </div>
-        <div className="flex items-center gap-3">
-          {canEdit && (
-            <ProductEditButton
-              productId={product.id}
-              initial={{
-                name: product.name,
-                category_id: (product as { category_id: string | null }).category_id,
-                internal_reference: product.internal_reference ?? null,
-                supplier_reference: product.supplier_reference ?? null,
-                short_description: product.short_description ?? null,
-                long_description: product.long_description ?? null,
-                dim_width_mm: product.dim_width_mm ?? null,
-                dim_height_mm: product.dim_height_mm ?? null,
-                dim_depth_mm: product.dim_depth_mm ?? null,
-                weight_grams: product.weight_grams ?? null,
-                stock_managed: product.stock_managed ?? false,
-                stock_min: product.stock_min ?? 0,
-                // undefined = la columna aún no existe (migración sin aplicar).
-                umbral_furgoneta: (product as { umbral_furgoneta?: number | null })
-                  .umbral_furgoneta,
-                show_in_calculator:
-                  (product as { show_in_calculator?: boolean }).show_in_calculator ?? false,
-                roles: (product as { roles?: string[] | null }).roles ?? [],
-              }}
-              categories={categories}
-            />
+      )}
+
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-6">
+        {/* Columna izquierda: cabecera + galería (fija en escritorio) */}
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-0 lg:self-start">
+          <BackButton href={volver.href} label={volver.label} />
+
+          <header className="space-y-2">
+            <div className="text-xs font-semibold text-muted-foreground">
+              {categoria ?? KIND_LABEL[p.kind as keyof typeof KIND_LABEL] ?? null}
+            </div>
+            <h1 className="text-2xl font-bold leading-tight break-words">{p.nombre}</h1>
+            {p.rasgos && <p className="text-base font-medium text-foreground/80">{p.rasgos}</p>}
+            {(p.ref || insigniaStock || !p.activo) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
+                {p.ref && (
+                  <span>
+                    Ref. <span className="font-mono font-semibold text-foreground">{p.ref}</span>
+                  </span>
+                )}
+                {!p.activo && <Badge variant="secondary">Inactivo</Badge>}
+                {insigniaStock}
+              </div>
+            )}
+            {(contadoCents != null || desdeMesCents != null) && (
+              <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+                {contadoCents != null && (
+                  <span className="text-lg font-bold tabular-nums">Contado {formatearEuros(contadoCents)}</span>
+                )}
+                {desdeMesCents != null && (
+                  <span className="text-sm font-semibold text-muted-foreground tabular-nums">
+                    desde {formatearEuros(desdeMesCents)}/mes
+                  </span>
+                )}
+              </p>
+            )}
+          </header>
+
+          {p.fotos.length > 0 ? (
+            <FichaGaleria fotos={reparto.portada} nombre={p.nombre} />
+          ) : (
+            canEdit && (
+              <Link
+                href={`${hrefEditar}?seccion=fotos#fotos` as never}
+                className="flex h-24 items-center justify-center rounded-xl border border-dashed text-sm font-semibold text-primary hover:bg-muted"
+              >
+                Añadir foto
+              </Link>
+            )
           )}
-          {canDelete && (
-            <ProductActiveToggle
-              productId={product.id}
-              isActive={product.is_active}
-            />
+
+          {descripcion && <div className="hidden lg:block">{descripcion}</div>}
+          {garantia.length > 0 && (
+            <p className="hidden text-sm text-muted-foreground lg:block">Garantía: {garantia.join(" · ")}</p>
           )}
-          {/* Borrar SOLO aparece si el producto está inactivo (regla 2026-06-12). */}
-          {canDelete && !product.is_active && (
-            <DeleteProductButton
-              productId={product.id}
-              isActive={product.is_active}
-            />
+          <div className="hidden flex-wrap gap-2 lg:flex">{acciones}</div>
+        </div>
+
+        {/* Móvil: bloques plegables de lectura */}
+        <div className="min-w-0 space-y-3 lg:hidden">
+          {descripcion}
+          {garantia.length > 0 && (
+            <p className="text-sm text-muted-foreground">Garantía: {garantia.join(" · ")}</p>
           )}
-          <a
-            href={`/api/pdf/product-datasheet/${product.id}`}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-sm font-semibold hover:bg-muted"
-          >
-            📄 Ficha técnica
-          </a>
-          <BackButton href="/productos" />
+          {canEdit && falta.length > 0 && <TarjetaFalta falta={falta} hrefEditar={hrefEditar} />}
+          {imagenes && (
+            <CollapsibleCard title="Imágenes del producto" badge={<Contador n={fotosImagenes.length} />} defaultOpen>
+              {imagenes}
+            </CollapsibleCard>
+          )}
+          {bloques.map((b) => (
+            <CollapsibleCard
+              key={b.clave}
+              title={b.titulo}
+              badge={<Contador n={b.filas.length} />}
+              defaultOpen={b.clave === "fisicas"}
+            >
+              <TablaCaracteristicas bloque={b} imagenMedidas={imagenMedidas} />
+            </CollapsibleCard>
+          ))}
+          {p.variantes.length > 0 && (
+            <CollapsibleCard title="Variantes de la gama" badge={<Contador n={p.variantes.length} />} defaultOpen={false}>
+              {variantes}
+            </CollapsibleCard>
+          )}
+          {(nRecambios > 0 || proyecciones.length > 0) && (
+            <CollapsibleCard title="Filtros y recambios" badge={<Contador n={nRecambios} />} defaultOpen={false}>
+              {notaRecambios}
+              {recambios}
+            </CollapsibleCard>
+          )}
+          {p.documentos.length > 0 && (
+            <CollapsibleCard title="Documentos" badge={<Contador n={p.documentos.length} />} defaultOpen={false}>
+              {documentos}
+            </CollapsibleCard>
+          )}
+          {gestion && (
+            <CollapsibleCard title="Gestión" defaultOpen={false}>
+              {gestion}
+            </CollapsibleCard>
+          )}
+        </div>
+
+        {/* Escritorio: pestañas */}
+        <div className="hidden min-w-0 space-y-4 lg:block">
+          {canEdit && falta.length > 0 && <TarjetaFalta falta={falta} hrefEditar={hrefEditar} />}
+          <Tabs defaultValue="ficha">
+            <TabsList className="h-auto w-full flex-wrap justify-start">
+              <TabsTrigger value="ficha" className={TAB_TRIGGER}>
+                Ficha <Contador n={nCaract} />
+              </TabsTrigger>
+              <TabsTrigger value="variantes" className={TAB_TRIGGER} disabled={p.variantes.length === 0}>
+                Variantes <Contador n={p.variantes.length} />
+              </TabsTrigger>
+              <TabsTrigger value="recambios" className={TAB_TRIGGER} disabled={nRecambios === 0 && proyecciones.length === 0}>
+                Recambios <Contador n={nRecambios} />
+              </TabsTrigger>
+              <TabsTrigger value="documentos" className={TAB_TRIGGER} disabled={p.documentos.length === 0}>
+                Documentos <Contador n={p.documentos.length} />
+              </TabsTrigger>
+              {gestion && (
+                <TabsTrigger value="gestion" className={TAB_TRIGGER}>
+                  Gestión
+                </TabsTrigger>
+              )}
+            </TabsList>
+            <TabsContent value="ficha">
+              <Card>
+                <CardContent className="space-y-8 pt-6">
+                  {imagenes && (
+                    <section aria-labelledby="ficha-imagenes">
+                      <h2 id="ficha-imagenes" className={TITULO_SECCION}>
+                        Imágenes del producto
+                      </h2>
+                      {imagenes}
+                    </section>
+                  )}
+                  {bloques.length > 0 && (
+                    <section aria-labelledby="ficha-caract">
+                      <h2 id="ficha-caract" className={TITULO_SECCION}>
+                        Ficha técnica
+                      </h2>
+                      <FichaTecnica bloques={bloques} imagenMedidas={imagenMedidas} />
+                    </section>
+                  )}
+                  {!imagenes && bloques.length === 0 && (
+                    <p className="text-sm text-muted-foreground">Este producto aún no tiene ficha técnica.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="variantes">
+              <Card>
+                <CardContent className="pt-6">{variantes}</CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="recambios">
+              <Card>
+                <CardContent className="pt-6">
+                  {notaRecambios}
+                  {recambios}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="documentos">
+              <Card>
+                <CardContent className="pt-6">{documentos}</CardContent>
+              </Card>
+            </TabsContent>
+            {gestion && (
+              <TabsContent value="gestion">
+                <Card>
+                  <CardContent className="pt-6">{gestion}</CardContent>
+                </Card>
+              </TabsContent>
+            )}
+          </Tabs>
         </div>
       </div>
 
-      {canEdit && <CatalogUpdateBanner productId={product.id} status={catalogStatus} />}
-
-      {canEdit && !criticalState.isDismissed && criticalState.missing.length > 0 && (
-        <CriticalAttributesBanner
-          productId={product.id}
-          missing={criticalState.missing}
-        />
-      )}
-
-      {canEdit && (
-        <CollapsibleCard title="📤 Compartir ficha técnica" defaultOpen={false}>
-          <ShareDatasheetPanel
-            productId={product.id}
-            initialShares={shares}
-            publicBaseUrl={publicBaseUrl}
-          />
-        </CollapsibleCard>
-      )}
-
-      {canEdit && (
-        <CollapsibleCard
-          title="🪪 Datos extendidos (marca, claim, garantías, tags...)"
-          defaultOpen={false}
-        >
-          <ExtendedFieldsPanel
-            productId={product.id}
-            initial={extendedFieldsInitial}
-            tagSuggestions={tagsCatalog.map((t) => ({
-              name: t.name,
-              color_hex: t.color_hex,
-            }))}
-            otherProducts={otherProducts}
-          />
-        </CollapsibleCard>
-      )}
-
-      {canEdit && isConfiguratorExtra && (
-        <ExtraTargetsPanel
-          productId={product.id}
-          categories={categories}
-          equipmentProducts={equipmentProductsForTargets.map((p) => ({
-            id: p.id,
-            name: p.name,
-          }))}
-          initialCategoryIds={extraTargets.categoryIds}
-          initialEquipmentIds={extraTargets.equipmentProductIds}
-        />
-      )}
-
-      {canEdit && isIaguaTemplate && (
-        <CollapsibleCard
-          title="🎨 Ficha IAGUA — contenido del PDF (portada + ventajas)"
-          defaultOpen={false}
-        >
-          <DatasheetIaguaPanel
-            productId={product.id}
-            initial={
-              (product as { datasheet_extra?: Record<string, unknown> | null })
-                .datasheet_extra ?? null
-            }
-          />
-        </CollapsibleCard>
-      )}
-
-      {panelModelo && (
-        <CollapsibleCard
-          title={`Modelo de equipo${
-            panelModelo.variantes.length > 0 ? ` · ${panelModelo.variantes.length} variantes` : ""
-          }`}
-          defaultOpen={panelModelo.variantes.length > 0 || !!panelModelo.producto.gama_id}
-        >
-          <PanelModeloProductoCard datos={panelModelo} canEdit={canEdit} />
-        </CollapsibleCard>
-      )}
-
-      <CollapsibleCard
-        title={`🔁 Filtros y recambios (${filterAssignments.length})`}
-        defaultOpen={abrir === "filtros"}
-      >
-        <ProductFiltersPanel
-          productId={product.id}
-          productName={product.name}
-          initial={filterAssignments}
-          availableFilters={availableFilters.map((f) => ({
-            id: f.id,
-            name: f.name,
-            filter_type: f.filter_type,
-            lifespan_months: f.lifespan_months,
-            internal_reference: f.internal_reference,
-          }))}
-          canEdit={canEdit}
-        />
-      </CollapsibleCard>
-
-      <CollapsibleCard
-        title={`📁 Documentos y certificaciones (${documents.length}/${productCerts.length})`}
-        defaultOpen={false}
-      >
-        <DocsAndCertsPanel
-          productId={product.id}
-          initialDocuments={documents}
-          initialCertifications={productCerts}
-          catalog={certCatalog}
-          canEdit={canEdit}
-        />
-      </CollapsibleCard>
-
-      <CollapsibleCard title="Foto principal">
-        <ProductPhotoUploader productId={product.id} currentUrl={product.main_image_url ?? null} />
-      </CollapsibleCard>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <CollapsibleCard title="Datos generales">
-          <div className="space-y-3 text-sm">
-            <Row label="Referencia interna" value={product.internal_reference} />
-            <Row label="Referencia proveedor" value={product.supplier_reference} />
-            <Row label="Descripción corta" value={product.short_description} />
-            <Row
-              label="Dimensiones (W×H×D)"
-              value={
-                product.dim_width_mm && product.dim_height_mm && product.dim_depth_mm
-                  ? `${product.dim_width_mm} × ${product.dim_height_mm} × ${product.dim_depth_mm} mm`
-                  : null
-              }
-            />
-            <Row label="Peso" value={product.weight_grams ? `${product.weight_grams} g` : null} />
-            {product.long_description && (
-              <div className="border-t pt-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                  Descripción larga
-                </div>
-                <p className="mt-1 whitespace-pre-wrap">{product.long_description}</p>
-              </div>
-            )}
-          </div>
-        </CollapsibleCard>
-
-        {canSeeCost && (
-          <CollapsibleCard
-            title={<span>💰 Coste real (CMP)</span>}
-            badge={<Badge variant="secondary">solo admin</Badge>}
-          >
-            <div className="space-y-3 text-sm">
-              <Row label="Coste medio ponderado" value={formatCents(product.cost_cents)} />
-            </div>
-          </CollapsibleCard>
-        )}
-
-        <CollapsibleCard title="Código de barras del fabricante" className="lg:col-span-2">
-          <div className="space-y-2">
-            <p className="text-sm">
-              Código actual:{" "}
-              {(product as { barcode?: string | null }).barcode ? (
-                <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
-                  {(product as { barcode?: string | null }).barcode}
-                </code>
-              ) : (
-                <span className="text-muted-foreground">— sin asociar —</span>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Escanea el código del fabricante una vez y queda memorizado.
-              En las salidas y conteos podrás identificar el producto al instante.
-            </p>
-            <BarcodeScanner associateToProductId={id} />
-          </div>
-        </CollapsibleCard>
-
-        <CollapsibleCard title="Stock y predicción" className="lg:col-span-2">
-          <ProductStockPanel
-            productId={id}
-            initial={{
-              stock_managed: product.stock_managed ?? false,
-              stock_min: product.stock_min ?? 0,
-              stock_max:
-                (product as { stock_max?: number | null }).stock_max ?? null,
-              lead_time_days:
-                (product as { lead_time_days?: number | null }).lead_time_days ?? null,
-              default_supplier_name:
-                (product as { default_supplier_name?: string | null })
-                  .default_supplier_name ?? null,
-            }}
-            summary={stockSummary}
-            history={salesHistory}
-            canSeeCost={canSeeCost}
-          />
-        </CollapsibleCard>
-
-        <CollapsibleCard
-          title={`Planes de precio (${pricingPlans.length})`}
-          defaultOpen={false}
-          className="lg:col-span-2"
-        >
-          <PricingPlansPanel productId={id} plans={pricingPlans} />
-        </CollapsibleCard>
-
-        <CollapsibleCard
-          title={`Atributos (${attrValues.length})`}
-          defaultOpen={false}
-          className="lg:col-span-2"
-        >
-          <AttributesPanel
-            productId={id}
-            attributes={attributes}
-            values={attrValues}
-          />
-        </CollapsibleCard>
-
-        {canSeeCost && (
-          <div className="lg:col-span-2">
-            <PriceHistoryCard rows={priceHistory} />
-          </div>
-        )}
+      {/* Móvil: barra inferior fija con las acciones */}
+      <div className="sticky bottom-0 z-10 -mx-[var(--marco-pad)] mt-4 flex gap-2 border-t bg-card px-[var(--marco-pad)] pt-2 pb-[calc(0.5rem+var(--safe-bottom))] lg:hidden">
+        {acciones}
       </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string | null }) {
+function TarjetaFalta({
+  falta,
+  hrefEditar,
+}: {
+  falta: Array<{ texto: string; seccion: string }>;
+  hrefEditar: string;
+}) {
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="col-span-2">{value || "—"}</div>
+    <div className="rounded-xl border border-dashed bg-muted/30 p-3 text-sm">
+      <span className="font-semibold">A esta ficha le falta: </span>
+      {falta.map((f, i) => (
+        <span key={f.texto}>
+          {i > 0 && " · "}
+          <Link href={`${hrefEditar}?seccion=${f.seccion}#${f.seccion}` as never} className="text-primary hover:underline">
+            {f.texto}
+          </Link>
+        </span>
+      ))}
     </div>
   );
 }

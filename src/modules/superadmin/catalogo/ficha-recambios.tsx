@@ -28,36 +28,50 @@ function Icono({ kind }: { kind: string }) {
   return <Package className="h-5 w-5" aria-hidden="true" />;
 }
 
-function Fila({ p, mostrarTipo }: { p: ProductoMini; mostrarTipo: boolean }) {
-  return (
-    <li>
-      <Link
-        href={`/superadmin/catalogo/productos/${p.id}` as never}
-        className="flex min-h-14 items-center gap-3 rounded-lg px-1 py-1.5 transition-colors duration-100 hover:bg-muted/50"
-      >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
-          {p.miniatura ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.miniatura} alt="" loading="lazy" className="h-full w-full object-contain p-0.5" />
-          ) : (
-            <Icono kind={p.kind} />
+/** Prefijo del enlace de cada fila (se le añade el id); null = filas sin enlace.
+ *  Es un texto y no una función porque este componente es de cliente. */
+type HrefBase = string | null;
+const HREF_MAESTRO: HrefBase = "/superadmin/catalogo/productos/";
+
+const FILA_CLS = "flex min-h-14 items-center gap-3 rounded-lg px-1 py-1.5";
+
+function Fila({ p, mostrarTipo, hrefBase }: { p: ProductoMini; mostrarTipo: boolean; hrefBase: HrefBase }) {
+  const href = hrefBase ? `${hrefBase}${p.id}` : null;
+  const contenido = (
+    <>
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground">
+        {p.miniatura ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.miniatura} alt="" loading="lazy" className="h-full w-full object-contain p-0.5" />
+        ) : (
+          <Icono kind={p.kind} />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="font-mono text-xs font-semibold">{p.ref}</span>
+          {mostrarTipo && (
+            <Badge variant={p.kind === "consumable" ? "default" : "secondary"} className="px-2 py-0.5 text-[11px]">
+              {KIND_ETIQUETA[p.kind] ?? p.kind}
+            </Badge>
           )}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="font-mono text-xs font-semibold">{p.ref}</span>
-            {mostrarTipo && (
-              <Badge variant={p.kind === "consumable" ? "default" : "secondary"} className="px-2 py-0.5 text-[11px]">
-                {KIND_ETIQUETA[p.kind] ?? p.kind}
-              </Badge>
-            )}
-          </span>
-          <span className="line-clamp-2 text-sm">{p.rasgos ? `${p.nombre} · ${p.rasgos}` : p.nombre}</span>
-        </span>
-        {p.cantidad != null && (
-          <span className="shrink-0 text-sm font-semibold tabular-nums">×{p.cantidad}</span>
-        )}
-      </Link>
+        <span className="line-clamp-2 text-sm">{p.rasgos ? `${p.nombre} · ${p.rasgos}` : p.nombre}</span>
+      </span>
+      {p.cantidad != null && (
+        <span className="shrink-0 text-sm font-semibold tabular-nums">×{p.cantidad}</span>
+      )}
+    </>
+  );
+  return (
+    <li>
+      {href ? (
+        <Link href={href as never} className={cn(FILA_CLS, "transition-colors duration-100 hover:bg-muted/50")}>
+          {contenido}
+        </Link>
+      ) : (
+        <div className={FILA_CLS}>{contenido}</div>
+      )}
     </li>
   );
 }
@@ -65,9 +79,12 @@ function Fila({ p, mostrarTipo }: { p: ProductoMini; mostrarTipo: boolean }) {
 export function FichaRecambios({
   recambios,
   proyecciones,
+  hrefBase = HREF_MAESTRO,
 }: {
   recambios: ProductoMini[];
   proyecciones: ProyeccionVista[];
+  /** Prefijo del enlace de cada fila; null = sin enlace. Superadmin por defecto. */
+  hrefBase?: HrefBase;
 }) {
   const [filtro, setFiltro] = useState<Filtro>("todos");
   const nCons = recambios.filter((r) => r.kind === "consumable").length;
@@ -133,7 +150,7 @@ export function FichaRecambios({
           )}
           <ul className="divide-y">
             {lista.map((p) => (
-              <Fila key={p.id} p={p} mostrarTipo />
+              <Fila key={p.id} p={p} mostrarTipo hrefBase={hrefBase} />
             ))}
           </ul>
         </>
@@ -143,14 +160,20 @@ export function FichaRecambios({
 }
 
 /** En un recambio: equipos en los que se usa. */
-export function FichaUsadoEn({ equipos }: { equipos: ProductoMini[] }) {
+export function FichaUsadoEn({
+  equipos,
+  hrefBase = HREF_MAESTRO,
+}: {
+  equipos: ProductoMini[];
+  hrefBase?: HrefBase;
+}) {
   if (equipos.length === 0) {
     return <p className="text-sm text-muted-foreground">No está enlazado a ningún equipo.</p>;
   }
   return (
     <ul className="divide-y">
       {equipos.map((p) => (
-        <Fila key={p.id} p={p} mostrarTipo={false} />
+        <Fila key={p.id} p={p} mostrarTipo={false} hrefBase={hrefBase} />
       ))}
     </ul>
   );

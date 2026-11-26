@@ -182,8 +182,18 @@ export async function importCatalogProductSafeAction(
     }
     const productId = (created as { id: string }).id;
 
-    await copyAttributes(admin, session.company_id, master.id, productId, categoryId);
-    await copyPhotos(admin, session.company_id, master.id, productId);
+    // El producto ya está creado: si una copia falla, se registra y se sigue
+    // (se puede completar luego con «Aplicar actualización» o la reparación).
+    try {
+      await copyAttributes(admin, session.company_id, master.id, productId, categoryId);
+    } catch (e) {
+      console.error("[importar] características:", e instanceof Error ? e.message : e);
+    }
+    try {
+      await copyPhotos(admin, session.company_id, master.id, productId);
+    } catch (e) {
+      console.error("[importar] fotos:", e instanceof Error ? e.message : e);
+    }
     await copyDocuments(admin, session.company_id, session.user_id, master.id, productId);
 
     revalidatePath("/productos");
