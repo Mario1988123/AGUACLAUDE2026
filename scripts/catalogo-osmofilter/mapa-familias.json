@@ -9,7 +9,8 @@
     "Osmosis doméstica - Equipos":          { "categoria": "osmosis",             "kind": "equipment" },
     "Ozonos - Equipos":                     { "categoria": "ozone",               "kind": "equipment" },
     "Desincrustadores - Equipos":           { "categoria": "descalers",           "kind": "equipment" },
-    "Hidrogenador - Equipo":                { "categoria": "hydrogen",            "kind": "equipment" }
+    "Hidrogenador - Equipo":                { "categoria": "hydrogen",            "kind": "equipment" },
+    "Filtros de superficie - Equipos":      { "categoria": "filters",             "kind": "equipment" }
   },
   "por_ref": {
     "_nota": "Osmosis domestica segun la descripcion [decide]: «5 Etapas» -> osmosis_5_stages; «Compacto» / COMPACT600 -> osmosis_compact; MAXI 600GPD -> osmosis; Ultrafiltracion -> filters.",
@@ -28,7 +29,12 @@
     "RO1087":  { "categoria": "osmosis" },
     "RO1069":  { "categoria": "filters" },
     "RO1078":  { "categoria": "filters" },
-    "RO1084":  { "categoria": "filters" }
+    "RO1084":  { "categoria": "filters" },
+    "_nota_nuevos_residencial": "2026-11-26, nuevos_residencial.json [decide], misma regla: «5 Etapas» -> osmosis_5_stages; Ultrafiltracion (aunque diga Compacto) -> filters; el resto de Osmosis domestica -> osmosis.",
+    "RO1056":  { "categoria": "osmosis_5_stages" },
+    "MI0006":  { "categoria": "osmosis_5_stages" },
+    "RO1070":  { "categoria": "filters" },
+    "RO1077":  { "categoria": "filters" }
   },
   "recambios": {
     "Consumible": { "categoria": "spare_parts", "kind": "consumable" },

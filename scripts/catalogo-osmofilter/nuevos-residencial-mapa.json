@@ -1,0 +1,530 @@
+{
+  "_leeme": [
+    "Mapa a mano de los 74 equipos residenciales de D:/OSMONOVA/catalogo/nuevos_residencial.json (2026-11-26). Lo lee cargar-nuevos-residencial.mjs; ESTE fichero manda y se puede editar.",
+    "nombre = nombre corto del modelo (catalog_products.name y .modelo). Sale de la descripción del ERP sin «Osmofilter» ni «hasta fin de existencias».",
+    "gama = ref de la CABEZA de una gama que YA existe en el maestro (gama_id null allí). Solo se ha puesto cuando es evidente por el nombre; si no, null (suelto).",
+    "rasgos = lo que distingue a la ref (catalog_products.rasgos_identificacion). En pantalla: «NOMBRE · rasgos».",
+    "categoria = solo si cambia la de mapa-familias.json (va por familia y por_ref).",
+    "duda = queda anotada en el informe para que Mario la mire.",
+    "gamas_nuevas: gamas que solo existirían entre refs NUEVAS. NO se aplican salvo «aplicar»: true. Si se aplican, todas las refs pasan a llamarse «modelo» y llevan los rasgos de la propuesta.",
+    "excluir: refs que NO se cargan (vacío por defecto)."
+  ],
+  "excluir": [
+    "RO1899X06920",
+    "RO1899X6920A"
+  ],
+  "productos": {
+    "AT6925SA": {
+      "nombre": "ATLANTIS",
+      "gama": "AT6925",
+      "rasgos": "25 L · s/Función · Azul"
+    },
+    "AT6925SG": {
+      "nombre": "ATLANTIS",
+      "gama": "AT6925",
+      "rasgos": "25 L · s/Función · Gris"
+    },
+    "DA1140": {
+      "nombre": "Cabinet NOVO",
+      "gama": null,
+      "rasgos": "Sin botella · Alto 17",
+      "duda": "Es el mueble (cabinet) sin botella, no un descalcificador completo: se deja suelto y no en la gama NOVO. ¿Debería ser accesorio?"
+    },
+    "DFL14L": {
+      "nombre": "FLUX 14 L",
+      "gama": null,
+      "rasgos": "Mecánico"
+    },
+    "DFL35L": {
+      "nombre": "FLUX 35 L",
+      "gama": null,
+      "rasgos": "Mecánico"
+    },
+    "DFL60L": {
+      "nombre": "FLUX 60 L",
+      "gama": null,
+      "rasgos": "Mecánico"
+    },
+    "DFL120L": {
+      "nombre": "FLUX 120 L",
+      "gama": null,
+      "rasgos": "Mecánico"
+    },
+    "DFL170L": {
+      "nombre": "FLUX 170 L",
+      "gama": null,
+      "rasgos": "Mecánico"
+    },
+    "DNOVO": {
+      "nombre": "NOVO",
+      "gama": "NO6922",
+      "rasgos": "Sin válvula · 30 L"
+    },
+    "DNOVO2": {
+      "nombre": "NOVO",
+      "gama": "NO6922",
+      "rasgos": "Sin válvula · 20 L"
+    },
+    "DNOVO3": {
+      "nombre": "NOVO",
+      "gama": "NO6922",
+      "rasgos": "Sin válvula · 10 L"
+    },
+    "NOF114": {
+      "nombre": "NOVO",
+      "gama": "NO6922",
+      "rasgos": "Válvula FLUX · 14 L · Contracorriente · 3/4\" · No eléctrica"
+    },
+    "NOF135": {
+      "nombre": "NOVO",
+      "gama": "NO6922",
+      "rasgos": "Válvula FLUX · 35 L · Contracorriente · 3/4\" · No eléctrica"
+    },
+    "GLA020S": {
+      "nombre": "QUANTUM SOFT",
+      "gama": null,
+      "rasgos": "s/Botella · s/Display · s/Función"
+    },
+    "HA0009S": {
+      "nombre": "MIDEA HARMONY IOT 9 L",
+      "gama": null,
+      "rasgos": "3/4\" · s/Función"
+    },
+    "HA0018S": {
+      "nombre": "MIDEA HARMONY IOT 18 L",
+      "gama": null,
+      "rasgos": "1\" · s/Función"
+    },
+    "HA0026S": {
+      "nombre": "MIDEA HARMONY IOT 26 L",
+      "gama": null,
+      "rasgos": "1\" · s/Función"
+    },
+    "FRO1003P": {
+      "nombre": "BLUE OCEAN",
+      "gama": "FRO1004",
+      "rasgos": "Inox · s/Bomba · c/Pedal"
+    },
+    "FRO1004P": {
+      "nombre": "BLUE OCEAN",
+      "gama": "FRO1004",
+      "rasgos": "Inox · c/Bomba · c/Pedal"
+    },
+    "FRO1067": {
+      "nombre": "BLUE SEA 2.0",
+      "gama": "FRO1077",
+      "rasgos": "Sobremesa · Vacío (sin tratamiento)"
+    },
+    "FRO1089": {
+      "nombre": "ICEBERG 2.0",
+      "gama": "FRO1088",
+      "rasgos": "Sobremesa · s/Bomba"
+    },
+    "FRO1097": {
+      "nombre": "BLUE SEA 3.0",
+      "gama": "FRO1090",
+      "rasgos": "Ósmosis inversa · s/Bomba"
+    },
+    "MI0038": {
+      "nombre": "MIDEA ECO 5600",
+      "gama": "MI0040",
+      "rasgos": "Vacío (sin tratamiento) · 2 temperaturas · Blanco"
+    },
+    "RO1082S": {
+      "nombre": "RO MOBI",
+      "gama": "RO1082",
+      "rasgos": "s/Instalación · s/Función"
+    },
+    "HO1012": {
+      "nombre": "ICE 120",
+      "gama": null,
+      "rasgos": "Sobremesa · Electrónico · Banco de hielo · s/Gas"
+    },
+    "HO1017": {
+      "nombre": "ICE 65",
+      "gama": null,
+      "rasgos": "Sobremesa · Electrónico · Banco de hielo · s/Gas"
+    },
+    "HO1019": {
+      "nombre": "ICE 180",
+      "gama": null,
+      "rasgos": "Sobremesa · Electrónico · Banco de hielo · s/Gas"
+    },
+    "HO1077": {
+      "nombre": "ICE 65",
+      "gama": null,
+      "rasgos": "Sobremesa · Electrónico · Banco de hielo · s/Gas · 2 salidas"
+    },
+    "HO1026": {
+      "nombre": "ICE 65 IN",
+      "gama": null,
+      "rasgos": "Bajo encimera · Banco de hielo · Con gas"
+    },
+    "HO106410": {
+      "nombre": "ICE 80 UP",
+      "gama": "HO1064",
+      "rasgos": "Pantalla · 2 grifos · Personalización 1 · Muestra",
+      "duda": "«Personalización 1, Muestra»: parece una unidad de muestra personalizada; ¿debe estar en el catálogo global?"
+    },
+    "HO106510": {
+      "nombre": "ICE G 80 UP",
+      "gama": "HO1064",
+      "rasgos": "Con gas · Pantalla · 2 grifos · Personalización 1 · Muestra",
+      "duda": "«Personalización 1, Muestra»: parece una unidad de muestra personalizada; ¿debe estar en el catálogo global?"
+    },
+    "HO106511": {
+      "nombre": "ICE G 80 UP",
+      "gama": "HO1064",
+      "rasgos": "Con gas · Pantalla · 2 grifos · Personalización 1 · Negro"
+    },
+    "HO110211": {
+      "nombre": "ICE 40 UP",
+      "gama": "HO1102",
+      "rasgos": "Pantalla · 2 grifos · Personalización 1 · Negro mate"
+    },
+    "HO1124": {
+      "nombre": "ICE 110 UP",
+      "gama": "HO1084",
+      "rasgos": "Pantalla · 3 grifos · 110 V 60 Hz"
+    },
+    "HO1125": {
+      "nombre": "ICE 80 UP",
+      "gama": "HO1064",
+      "rasgos": "Pantalla · 3 grifos · 110 V 60 Hz"
+    },
+    "HO1126": {
+      "nombre": "ICE 40 UP",
+      "gama": "HO1102",
+      "rasgos": "Pantalla · 2 grifos · 110 V 60 Hz"
+    },
+    "HY0701": {
+      "nombre": "LH",
+      "gama": null,
+      "rasgos": "Flujo directo · Negro"
+    },
+    "HY0702": {
+      "nombre": "LF",
+      "gama": null,
+      "rasgos": "Flujo directo · Ultrafiltración · Gris"
+    },
+    "HY0703": {
+      "nombre": "H2 SPARK",
+      "gama": "HY0700",
+      "rasgos": "Ultrafiltración"
+    },
+    "MI0003": {
+      "nombre": "MIDEA ECO1000J",
+      "gama": null,
+      "rasgos": "c/Jarra"
+    },
+    "MI0009": {
+      "nombre": "MIDEA ECO6000",
+      "gama": null,
+      "rasgos": "600 GPD · s/Función"
+    },
+    "MI0016": {
+      "nombre": "MIDEA ECO4000",
+      "gama": null,
+      "rasgos": "400 GPD · s/Función"
+    },
+    "MI0032": {
+      "nombre": "MIDEA ULTRASLIM",
+      "gama": null,
+      "rasgos": "600 GPD · s/Función"
+    },
+    "RO1072P": {
+      "nombre": "CUSTOM 500 GPD",
+      "gama": null,
+      "rasgos": null
+    },
+    "RO1891": {
+      "nombre": "TOWER",
+      "gama": null,
+      "rasgos": "800 GPD"
+    },
+    "RO1893S": {
+      "nombre": "IZZY",
+      "gama": null,
+      "rasgos": "s/Función",
+      "duda": "Por la ref parece la versión «s/Función» de RO1893 (IZZY 600 ALKA, cabeza de la gama IZZY), pero la descripción no dice ni 600 ni ALKA: se deja suelto."
+    },
+    "RO1899X06920": {
+      "nombre": "COREX",
+      "gama": null,
+      "rasgos": "Personalización Suministros Gibar",
+      "duda": "Personalización para un cliente concreto (Suministros Gibar): en el catálogo global la verían todas las empresas. ¿Cargarla o meterla en «excluir»?"
+    },
+    "RO1899X6920A": {
+      "nombre": "COREX",
+      "gama": null,
+      "rasgos": "Personalización Suministros Gibar Fongrisan",
+      "duda": "Personalización para un cliente concreto (Suministros Gibar / Fongrisan): en el catálogo global la verían todas las empresas. ¿Cargarla o meterla en «excluir»?"
+    },
+    "MI0006": {
+      "nombre": "MIDEA ECO750",
+      "gama": null,
+      "rasgos": "5 etapas · s/Bomba · s/Función"
+    },
+    "MI0035S": {
+      "nombre": "MIDEA BRO",
+      "gama": null,
+      "rasgos": "s/Función",
+      "duda": "La descripción solo dice «BRO/MIDEA s/Función»: nombre poco claro."
+    },
+    "RO1056": {
+      "nombre": "PURE EVO 2.0",
+      "gama": null,
+      "rasgos": "5 etapas · c/Bomba"
+    },
+    "RO1070": {
+      "nombre": "LITEL UF",
+      "gama": null,
+      "rasgos": "s/Jarra · c/Filtro hidrógeno"
+    },
+    "RO1077": {
+      "nombre": "ALKA PRO UF",
+      "gama": null,
+      "rasgos": "Compacto · Postfiltro alcalino · Grifo estándar"
+    },
+    "RO1142": {
+      "nombre": "PURE PRO 4",
+      "gama": null,
+      "rasgos": "4 etapas · s/Bomba · c/Grifo"
+    },
+    "RO1143": {
+      "nombre": "PURE PRO 4",
+      "gama": null,
+      "rasgos": "4 etapas · c/Bomba · c/Grifo"
+    },
+    "MI0039": {
+      "nombre": "Filtro autolimpiable MIDEA",
+      "gama": null,
+      "rasgos": null
+    },
+    "POL101": {
+      "nombre": "Contenedor transparente 10\"",
+      "gama": null,
+      "rasgos": "Vacío",
+      "duda": "Contenedor vacío: ¿equipo o accesorio? Se carga como equipo porque así lo pide el encargo."
+    },
+    "POL109": {
+      "nombre": "Contenedor transparente 20\"",
+      "gama": null,
+      "rasgos": "Vacío",
+      "duda": "Contenedor vacío: ¿equipo o accesorio? Se carga como equipo porque así lo pide el encargo."
+    },
+    "RO6029": {
+      "nombre": "Portafiltro MAXI 10\"",
+      "gama": null,
+      "rasgos": "3/8\" rosca hembra",
+      "duda": "Portafiltro: ¿equipo o accesorio? Se carga como equipo."
+    },
+    "RO6030": {
+      "nombre": "Portamembrana MAXI",
+      "gama": null,
+      "rasgos": "2812 - 3012",
+      "duda": "Portamembrana: ¿equipo o accesorio? Se carga como equipo."
+    },
+    "VF1016": {
+      "nombre": "Portafiltro 3 piezas 10\"",
+      "gama": null,
+      "rasgos": "3/4\" · Transparente"
+    },
+    "VF1017": {
+      "nombre": "Portafiltro 3 piezas 10\"",
+      "gama": null,
+      "rasgos": "1\" · Transparente"
+    },
+    "VF1051": {
+      "nombre": "Filtro de limpieza manual",
+      "gama": null,
+      "rasgos": "Bajos caudales · 1\"1/2 BSP"
+    },
+    "VF1062": {
+      "nombre": "Portafiltro 10\" PURE EVO/FIVE/SHELL",
+      "gama": null,
+      "rasgos": "1/4\""
+    },
+    "OZ0009": {
+      "nombre": "O3 CONFORT",
+      "gama": null,
+      "rasgos": "Ozono de aire"
+    },
+    "OZ0010": {
+      "nombre": "METAL 10",
+      "gama": null,
+      "rasgos": "Ozono de aire"
+    },
+    "OZ0025": {
+      "nombre": "OXYPLUS",
+      "gama": null,
+      "rasgos": null,
+      "duda": "¿OXYPLUS es lo mismo que OXYGEN PLUS (gama OZ0040E)? El nombre no basta: suelto."
+    },
+    "OZ0039": {
+      "nombre": "PROZONE",
+      "gama": null,
+      "rasgos": "Inox · Solo exportación"
+    },
+    "OZ0041": {
+      "nombre": "PROZONE",
+      "gama": null,
+      "rasgos": "Generador"
+    },
+    "OZ0040": {
+      "nombre": "OXYGEN PLUS",
+      "gama": "OZ0040E",
+      "rasgos": "s/Grifo · Solo exportación"
+    },
+    "OZ0045": {
+      "nombre": "ATLANTYS",
+      "gama": null,
+      "rasgos": "Negro · s/Grifo · Solo exportación"
+    },
+    "OZ0046G": {
+      "nombre": "NEOZONE",
+      "gama": "OZ0046E",
+      "rasgos": "Negro inox · c/Grifo · Solo exportación"
+    },
+    "OZ0052": {
+      "nombre": "OXYON",
+      "gama": "OZ0052E",
+      "rasgos": "Azul · s/Grifo · Solo exportación"
+    },
+    "OZ0052G": {
+      "nombre": "OXYON",
+      "gama": "OZ0052E",
+      "rasgos": "Azul · c/Grifo · Solo exportación"
+    }
+  },
+  "gamas_nuevas": [
+    {
+      "modelo": "FLUX",
+      "cabeza": "DFL35L",
+      "aplicar": false,
+      "motivo": "5 tamaños del mismo descalcificador mecánico",
+      "variantes": [
+        {
+          "ref": "DFL14L",
+          "rasgos": "Mecánico · 14 L"
+        },
+        {
+          "ref": "DFL35L",
+          "rasgos": "Mecánico · 35 L"
+        },
+        {
+          "ref": "DFL60L",
+          "rasgos": "Mecánico · 60 L"
+        },
+        {
+          "ref": "DFL120L",
+          "rasgos": "Mecánico · 120 L"
+        },
+        {
+          "ref": "DFL170L",
+          "rasgos": "Mecánico · 170 L"
+        }
+      ]
+    },
+    {
+      "modelo": "MIDEA HARMONY IOT",
+      "cabeza": "HA0018S",
+      "aplicar": false,
+      "motivo": "3 tamaños del mismo descalcificador",
+      "variantes": [
+        {
+          "ref": "HA0009S",
+          "rasgos": "9 L · 3/4\" · s/Función"
+        },
+        {
+          "ref": "HA0018S",
+          "rasgos": "18 L · 1\" · s/Función"
+        },
+        {
+          "ref": "HA0026S",
+          "rasgos": "26 L · 1\" · s/Función"
+        }
+      ]
+    },
+    {
+      "modelo": "PURE PRO 4",
+      "cabeza": "RO1143",
+      "aplicar": false,
+      "motivo": "con y sin bomba",
+      "variantes": [
+        {
+          "ref": "RO1143",
+          "rasgos": "4 etapas · c/Bomba · c/Grifo"
+        },
+        {
+          "ref": "RO1142",
+          "rasgos": "4 etapas · s/Bomba · c/Grifo"
+        }
+      ]
+    },
+    {
+      "modelo": "ICE 65",
+      "cabeza": "HO1017",
+      "aplicar": false,
+      "motivo": "1 y 2 salidas",
+      "variantes": [
+        {
+          "ref": "HO1017",
+          "rasgos": "Sobremesa · Electrónico · Banco de hielo · s/Gas"
+        },
+        {
+          "ref": "HO1077",
+          "rasgos": "Sobremesa · Electrónico · Banco de hielo · s/Gas · 2 salidas"
+        }
+      ]
+    },
+    {
+      "modelo": "PROZONE",
+      "cabeza": "OZ0041",
+      "aplicar": false,
+      "motivo": "dudosa: un «Generador» y un «Equipo inox (Solo exportación)»",
+      "variantes": [
+        {
+          "ref": "OZ0041",
+          "rasgos": "Generador"
+        },
+        {
+          "ref": "OZ0039",
+          "rasgos": "Inox · Solo exportación"
+        }
+      ]
+    },
+    {
+      "modelo": "Portafiltro 3 piezas 10\"",
+      "cabeza": "VF1016",
+      "aplicar": false,
+      "motivo": "dos roscas",
+      "variantes": [
+        {
+          "ref": "VF1016",
+          "rasgos": "3/4\" · Transparente"
+        },
+        {
+          "ref": "VF1017",
+          "rasgos": "1\" · Transparente"
+        }
+      ]
+    },
+    {
+      "modelo": "COREX",
+      "cabeza": "RO1899X06920",
+      "aplicar": false,
+      "motivo": "dos personalizaciones del mismo equipo",
+      "variantes": [
+        {
+          "ref": "RO1899X06920",
+          "rasgos": "Personalización Suministros Gibar"
+        },
+        {
+          "ref": "RO1899X6920A",
+          "rasgos": "Personalización Suministros Gibar Fongrisan"
+        }
+      ]
+    }
+  ]
+}
