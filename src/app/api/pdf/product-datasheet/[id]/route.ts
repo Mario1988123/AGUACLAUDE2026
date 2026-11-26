@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const admin = createAdminClient() as any;
   const { data: owned } = await admin
     .from("products")
-    .select("id")
+    .select("id, name")
     .eq("id", id)
     .eq("company_id", session.company_id)
     .maybeSingle();
@@ -72,7 +72,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="ficha-tecnica-${id}.pdf"`,
+        // ?descargar=1: se baja como archivo con el nombre del producto (botón «Descargar PDF»).
+        "Content-Disposition": `${url.searchParams.get("descargar") === "1" ? "attachment" : "inline"}; filename="${nombreArchivo((owned as { name?: string | null }).name, id)}"`,
         "Cache-Control": "no-store",
       },
     });
@@ -82,4 +83,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       { status: 500 },
     );
   }
+}
+
+/** «Infinity Basic S (Compact)» → «ficha-tecnica-infinity-basic-s-compact.pdf» (ASCII, para la cabecera). */
+function nombreArchivo(nombre: string | null | undefined, id: string): string {
+  const slug = (nombre ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `ficha-tecnica-${slug || id}.pdf`;
 }

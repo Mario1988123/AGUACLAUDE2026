@@ -44,6 +44,10 @@ export function DatasheetIaguaPanel({
 
   function save() {
     const extra: DatasheetExtra = {};
+    // Las secciones de la ficha nueva (Ficha técnica → secciones) viven en el
+    // mismo jsonb: se conservan al guardar lo de la IAGUA.
+    const secciones = (initial as Record<string, unknown> | null)?.ficha_secciones;
+    if (secciones) (extra as Record<string, unknown>).ficha_secciones = secciones;
     if (titleAccent.trim()) extra.title_accent = titleAccent.trim();
     if (heroHeading.trim()) extra.hero_heading = heroHeading.trim();
     if (heroText.trim()) extra.hero_text = heroText.trim();

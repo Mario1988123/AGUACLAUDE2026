@@ -6,7 +6,10 @@ import {
   bloquesDeFicha,
   cotasDeFicha,
   formatearTelefono,
+  fusionarSeccionesProducto,
+  leerSeccionesProducto,
   rasgosDe,
+  seccionesEfectivas,
   referenciaImprimible,
   sinProveedor,
   textoImprimible,
@@ -143,5 +146,51 @@ describe("utilidades", () => {
     const out = coloresDominantes(new Uint8Array(px));
     expect(out).toHaveLength(2);
     expect(out[0]).toMatch(/^#0[0-9a-f]9/);
+  });
+});
+
+describe("características: visibles y orden", () => {
+  it("salen solo las visibles y en su display_order", () => {
+    const bloques = bloquesDeFicha(
+      [
+        c({ nombre: "Caudal", unidad: "l/h", valorNumero: 30, orden: 3 }),
+        c({ nombre: "Presión", unidad: "bar", valorNumero: 2, orden: 1 }),
+        c({ nombre: "Oculta", unidad: "bar", valorNumero: 9, orden: 2, visible: false }),
+      ],
+      { anchoMm: null, altoMm: null, fondoMm: null, pesoG: null },
+      { conLetras: false, fabricantes: [], limpiar: (t) => t },
+    );
+    const etiquetas = bloques.flatMap((b) => b.filas.map((f) => f.etiqueta));
+    expect(etiquetas).toEqual(["Presión", "Caudal"]);
+  });
+});
+
+describe("secciones por producto", () => {
+  const empresa = { mostrarVentajas: true, mostrarRecambios: false };
+  it("sin anulación manda la empresa; el dibujo, sí", () => {
+    expect(seccionesEfectivas(empresa, leerSeccionesProducto(null))).toEqual({
+      ventajas: true,
+      recambios: false,
+      medidas: true,
+    });
+  });
+  it("el producto manda sobre la empresa", () => {
+    const p = leerSeccionesProducto({ ficha_secciones: { ventajas: false, recambios: true, medidas: false } });
+    expect(seccionesEfectivas(empresa, p)).toEqual({ ventajas: false, recambios: true, medidas: false });
+  });
+  it("ignora valores que no son booleanos", () => {
+    expect(leerSeccionesProducto({ ficha_secciones: { ventajas: "no", medidas: 0 } })).toEqual({
+      ventajas: null,
+      recambios: null,
+      medidas: null,
+    });
+  });
+  it("fusionar conserva lo de la IAGUA y null quita la anulación", () => {
+    const extra = { features: [{ title: "A" }], ficha_secciones: { ventajas: false } };
+    const a = fusionarSeccionesProducto(extra, { medidas: false });
+    expect(a).toEqual({ features: [{ title: "A" }], ficha_secciones: { ventajas: false, medidas: false } });
+    const b = fusionarSeccionesProducto(a, { ventajas: null, medidas: null });
+    expect(b).toEqual({ features: [{ title: "A" }] });
+    expect(extra.ficha_secciones).toEqual({ ventajas: false });
   });
 });

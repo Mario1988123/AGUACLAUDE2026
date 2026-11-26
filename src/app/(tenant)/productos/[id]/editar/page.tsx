@@ -287,6 +287,12 @@ export default async function EditarProductoPage({
             abierta={abierta}
             titulo={`Características (${caract.caracteristicas.length})`}
           >
+            <Link
+              href={`/productos/${product.id}/ficha` as never}
+              className="mb-3 inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline"
+            >
+              Elegir qué sale en el PDF y verlo al momento
+            </Link>
             <CaracteristicasEditor
               productId={product.id}
               caracteristicas={caract.caracteristicas}

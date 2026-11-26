@@ -118,6 +118,68 @@ export function leerOpcionesFicha(v: unknown): OpcionesFicha {
 }
 
 // =============================================================================
+// Secciones por producto (anulan lo de la empresa)
+// =============================================================================
+
+/** Secciones de la ficha que se pueden ocultar producto a producto. */
+export const SECCIONES_FICHA = ["ventajas", "recambios", "medidas"] as const;
+export type SeccionFicha = (typeof SECCIONES_FICHA)[number];
+
+/**
+ * Lo que el producto dice de cada sección: true / false fija; null = lo que
+ * diga la empresa. Vive en products.datasheet_extra.ficha_secciones (jsonb que
+ * ya existe), así no hace falta migración.
+ */
+export type SeccionesProducto = Record<SeccionFicha, boolean | null>;
+
+export const CLAVE_SECCIONES = "ficha_secciones";
+
+export function leerSeccionesProducto(extra: unknown): SeccionesProducto {
+  const e = (extra && typeof extra === "object" ? extra : {}) as Record<string, unknown>;
+  const s = (e[CLAVE_SECCIONES] && typeof e[CLAVE_SECCIONES] === "object" ? e[CLAVE_SECCIONES] : {}) as Record<
+    string,
+    unknown
+  >;
+  const b = (x: unknown) => (typeof x === "boolean" ? x : null);
+  return { ventajas: b(s.ventajas), recambios: b(s.recambios), medidas: b(s.medidas) };
+}
+
+/** Lo que sale de verdad: el producto manda; si no dice nada, la empresa (el dibujo, siempre sí). */
+export function seccionesEfectivas(
+  opciones: Pick<OpcionesFicha, "mostrarVentajas" | "mostrarRecambios">,
+  producto: SeccionesProducto,
+): Record<SeccionFicha, boolean> {
+  return {
+    ventajas: producto.ventajas ?? opciones.mostrarVentajas,
+    recambios: producto.recambios ?? opciones.mostrarRecambios,
+    medidas: producto.medidas ?? true,
+  };
+}
+
+/**
+ * datasheet_extra con las secciones cambiadas, SIN tocar el resto de claves
+ * (features, why, ideal… de la ficha IAGUA). null borra la anulación.
+ */
+export function fusionarSeccionesProducto(
+  extra: unknown,
+  cambios: Partial<SeccionesProducto>,
+): Record<string, unknown> {
+  const base = (extra && typeof extra === "object" && !Array.isArray(extra) ? { ...(extra as object) } : {}) as Record<
+    string,
+    unknown
+  >;
+  const actuales = leerSeccionesProducto(base);
+  const nuevas: Partial<Record<SeccionFicha, boolean>> = {};
+  for (const k of SECCIONES_FICHA) {
+    const v = k in cambios ? cambios[k] : actuales[k];
+    if (typeof v === "boolean") nuevas[k] = v;
+  }
+  if (Object.keys(nuevas).length > 0) base[CLAVE_SECCIONES] = nuevas;
+  else delete base[CLAVE_SECCIONES];
+  return base;
+}
+
+// =============================================================================
 // Texto
 // =============================================================================
 

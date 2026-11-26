@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { FileText, Pencil, Share2 } from "lucide-react";
+import { FileText, Pencil, Share2, SlidersHorizontal } from "lucide-react";
 import { Badge } from "@/shared/ui/badge";
 import { Card, CardContent } from "@/shared/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/ui/tabs";
@@ -209,6 +209,13 @@ export default async function ProductoFichaPage({
             aria-label="Compartir ficha técnica"
           >
             <Share2 className="h-4 w-4" /> <span className="hidden lg:inline">Compartir</span>
+          </Link>
+          <Link
+            href={`/productos/${p.id}/ficha` as never}
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border bg-card text-sm font-semibold hover:bg-muted lg:w-auto lg:px-4"
+            aria-label="Ajustar ficha técnica"
+          >
+            <SlidersHorizontal className="h-4 w-4" /> <span className="hidden lg:inline">Ajustar ficha</span>
           </Link>
           <Link
             href={hrefEditar as never}

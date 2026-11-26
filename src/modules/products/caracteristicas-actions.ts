@@ -72,6 +72,7 @@ async function valorDe(admin: Admin, companyId: string, productId: string, valor
 function revalidar(productId: string) {
   revalidatePath(`/productos/${productId}`);
   revalidatePath(`/productos/${productId}/editar`);
+  revalidatePath(`/productos/${productId}/ficha`);
 }
 
 export async function editarValorCaracteristicaAction(

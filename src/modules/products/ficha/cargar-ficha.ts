@@ -22,7 +22,9 @@ import {
   fechaRevision,
   formatearTelefono,
   leerOpcionesFicha,
+  leerSeccionesProducto,
   rasgosDe,
+  seccionesEfectivas,
   referenciaImprimible,
   sinProveedor,
   textoImprimible,
@@ -235,6 +237,10 @@ export async function cargarFicha(
 
   simular?.({ producto: prod, caracteristicas });
 
+  // Secciones: lo que diga el producto (datasheet_extra.ficha_secciones) manda
+  // sobre lo de la empresa (datasheet_opciones).
+  const secciones = seccionesEfectivas(ajustes.opciones, leerSeccionesProducto(prod.datasheet_extra));
+
   // --- Proveedor: lo que nunca se imprime -----------------------------------
   const fabricantes = Array.from(
     new Set([
@@ -293,7 +299,7 @@ export async function cargarFicha(
   const principal = porTipo("principal") ?? imgs.find((i) => i.is_main);
   const fotoUrl = principal ? urlPublica(principal.storage_path) : (prod.main_image_url ?? null);
   const medidasImg = porTipo("medidas");
-  const medidasUrl = medidasImg ? urlPublica(medidasImg.storage_path) : null;
+  const medidasUrl = medidasImg && secciones.medidas ? urlPublica(medidasImg.storage_path) : null;
 
   const medidas = {
     anchoMm: prod.dim_width_mm,
@@ -303,12 +309,15 @@ export async function cargarFicha(
   };
   const cotas = cotasDeFicha(medidas, caracteristicas);
   const tresCotas = cotas.a != null && cotas.b != null && cotas.c != null;
-  const hayDibujo = !!medidasUrl || tresCotas;
+  // Sin dibujo de medidas (ocultado en el producto) tampoco van letras en la tabla.
+  const hayDibujo = secciones.medidas && (!!medidasUrl || tresCotas);
   // «De la Cota»: la letra de la tabla tiene que estar en el dibujo. El
   // vectorial lleva a, b y c; en un plano del proveedor solo se ponen letras
   // si es de un equipo (los de Osmofilter van con letras) o si un atributo
   // trae la suya («Altura de dispensación (d)»). Los grifos van acotados en mm.
-  const conLetras = medidasUrl
+  const conLetras = !hayDibujo
+    ? false
+    : medidasUrl
     ? prod.kind === "equipment" || caracteristicas.some((c) => c.visible && /\([a-d]\)\s*$/i.test(c.nombre))
     : tresCotas;
 
@@ -446,8 +455,8 @@ export async function cargarFicha(
       fabricantes,
       limpiar,
     }),
-    ventajas: ajustes.opciones.mostrarVentajas ? ventajas : [],
-    recambios: ajustes.opciones.mostrarRecambios ? recambios.slice(0, 12) : [],
+    ventajas: secciones.ventajas ? ventajas : [],
+    recambios: secciones.recambios ? recambios.slice(0, 12) : [],
     empresa: {
       nombre: textoImprimible(nombreEmpresa),
       razonSocial: fi.fiscal_legal_name ? textoImprimible(fi.fiscal_legal_name) : null,

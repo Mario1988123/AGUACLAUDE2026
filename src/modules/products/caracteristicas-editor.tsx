@@ -42,7 +42,7 @@ interface AtributoDisponible {
   unit: string | null;
 }
 
-function valorLegible(c: CaracteristicaEmpresa): string {
+export function valorLegible(c: CaracteristicaEmpresa): string {
   if (c.valorBooleano != null) return c.valorBooleano ? "Sí" : "No";
   if (c.valorNumero != null) {
     const n = formatearNumero(Number(c.valorNumero));
