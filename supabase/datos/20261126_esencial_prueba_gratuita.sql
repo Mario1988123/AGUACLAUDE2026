@@ -1,0 +1,2 @@
+-- Mario (26-11): activar la Esencial (de pie = Infinity Basic, sobremesa = Infinity Basic S Compact) para prueba gratuita en Infinity.
+update public.products set roles = array_append(roles, 'free_trial_role') where company_id='f02d586c-0dc6-49e4-83e5-e0f6e688237c' and deleted_at is null and id in ('f09d4a71-2d9a-4693-8e4f-4134340ecc8b','4a44b563-9443-4678-ac73-1cac9c90baad') and not ('free_trial_role' = any(roles));

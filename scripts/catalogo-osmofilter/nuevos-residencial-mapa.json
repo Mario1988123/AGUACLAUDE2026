@@ -10,6 +10,14 @@
     "excluir: refs que NO se cargan (vacío por defecto)."
   ],
   "excluir": [
+    "HA0009S",
+    "HA0018S",
+    "HA0026S",
+    "MI0006",
+    "MI0009",
+    "MI0016",
+    "MI0032",
+    "MI0035S",
     "RO1899X06920",
     "RO1899X6920A"
   ],
