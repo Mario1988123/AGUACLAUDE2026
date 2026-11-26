@@ -136,7 +136,12 @@ export async function createFreeTrialAction(input: unknown) {
       "El instalador lo asigna el admin o el director técnico al agendar la prueba.",
     );
   }
-  // Solo productos marcados «Disponible en prueba gratuita» (si la empresa
+  // El comercial propone los días de instalación (Mario 2026-11-26): sin
+  // ellos el admin no sabe cuándo llamar. Quien agenda puede no ponerlos.
+  if (!puedeAgendar && !parsed.disponibilidad) {
+    throw new Error("Indica qué días y a qué horas se le puede instalar al cliente.");
+  }
+    // Solo productos marcados «Disponible en prueba gratuita» (si la empresa
   // ya ha marcado alguno; si no, valen todos, igual que en el selector).
   {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -244,6 +249,8 @@ export async function createFreeTrialAction(input: unknown) {
     try {
       const { notifyByRoles } = await import("@/modules/notifications/notifier");
       const quien = session.full_name?.trim() || "Un comercial";
+      const { resumenDisponibilidad } = await import("./disponibilidad");
+      const propone = resumenDisponibilidad(parsed.disponibilidad ?? null).slice(0, 3);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const adminAviso = createAdminClient() as any;
       const { data: dueno } = await adminAviso
@@ -267,10 +274,13 @@ export async function createFreeTrialAction(input: unknown) {
         kind: "free_trial.created",
         category: "alert",
         severity: "info",
-        title: "Prueba gratuita por agendar",
-        body: nombreDueno
-          ? `${quien} ha creado una prueba para ${nombreDueno}. Agenda la instalación.`
-          : `${quien} ha creado una prueba gratuita. Agenda la instalación.`,
+        title: "Nueva prueba gratuita por agendar",
+        body:
+          (nombreDueno
+            ? `${quien} ha pedido una prueba para ${nombreDueno}.`
+            : `${quien} ha pedido una prueba gratuita.`) +
+          (propone.length > 0 ? ` Propone: ${propone.join(" · ")}.` : "") +
+          " Agenda la instalación.",
         subject_type: "free_trial",
         subject_id: id,
         action_url: `/pruebas-gratuitas/${id}#agendar`,

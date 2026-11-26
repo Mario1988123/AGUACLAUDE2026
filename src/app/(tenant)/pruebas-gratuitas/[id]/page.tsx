@@ -97,6 +97,17 @@ export default async function FreeTrialDetailPage({
     // Aparte de getFreeTrial: si la columna faltara, solo se pierde esto.
     sbAdmin.from("free_trials").select("disponibilidad").eq("id", id).maybeSingle(),
   ]);
+  // Quién pidió la prueba, para «Fulano propone: …» en la tarjeta de agendar.
+  const creadorId = (trial as { created_by?: string | null }).created_by ?? null;
+  let quienPropone: string | null = null;
+  if (creadorId && puedeAgendar) {
+    const { data: perfil } = await admAlmacenes
+      .from("user_profiles")
+      .select("full_name")
+      .eq("user_id", creadorId)
+      .maybeSingle();
+    quienPropone = (perfil as { full_name?: string | null } | null)?.full_name?.trim() || null;
+  }
   const nombreInstalador = instaladorAsignado
     ? (installers.find((u) => u.user_id === instaladorAsignado)?.full_name ?? null)
     : null;
@@ -267,6 +278,7 @@ export default async function FreeTrialDetailPage({
                   inicialFecha={trial.scheduled_at}
                   inicialInstalador={instaladorAsignado}
                   disponibilidad={disponibilidad}
+                  quienPropone={quienPropone}
                 />
               </div>
             )}

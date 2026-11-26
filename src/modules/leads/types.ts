@@ -39,6 +39,10 @@ export interface LeadListItem {
   has_active_trial?: boolean;
   /** true si tiene una prueba en borrador o agendada y ninguna instalada. */
   has_pending_trial?: boolean;
+  /** Prueba que se enseña en el chip (la instalada si la hay). */
+  trial_id?: string | null;
+  /** Días que le quedan a la prueba instalada (installed_at + duración). */
+  trial_days_left?: number | null;
   /**
    * true si el lead tiene alguna incidencia ABIERTA (sin resolver) en una
    * de sus pruebas gratuitas. Pinta un badge rojo "🚨 Incidencia" para

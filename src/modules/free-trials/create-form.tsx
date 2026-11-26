@@ -116,6 +116,15 @@ export function FreeTrialCreateForm({
       notify.warning("Duración inválida");
       return;
     }
+    // El comercial propone los días: el admin los ve al agendar y llama al
+    // cliente con ellos (Mario 2026-11-26). Quien agenda puede saltarlo.
+    if (!puedeAsignarInstalador && !disponibilidad) {
+      notify.warning(
+        "Indica qué días y a qué horas se le puede instalar",
+        "El admin los verá al agendar la instalación.",
+      );
+      return;
+    }
     const errorDisponibilidad = validarDisponibilidad(disponibilidad);
     if (errorDisponibilidad) {
       notify.warning(errorDisponibilidad);
@@ -338,9 +347,15 @@ export function FreeTrialCreateForm({
             franja, o días concretos del calendario. */}
         <div className="space-y-2 border-t pt-4">
           <div>
-            <Label className="text-sm font-bold">Disponibilidad del cliente (opcional)</Label>
+            <Label className="text-sm font-bold">
+              {puedeAsignarInstalador
+                ? "Disponibilidad del cliente (opcional)"
+                : "Días propuestos para la instalación"}
+            </Label>
             <p className="text-xs text-muted-foreground">
-              Qué días y a qué horas se le puede instalar. Lo verá quien programe la visita.
+              {puedeAsignarInstalador
+                ? "Qué días y a qué horas se le puede instalar. Lo verá quien programe la visita."
+                : "Qué días y a qué horas le viene bien al cliente. El admin los verá, le llamará y agendará la instalación."}
             </p>
           </div>
           <DisponibilidadEditor inicial={null} onChange={setDisponibilidad} />

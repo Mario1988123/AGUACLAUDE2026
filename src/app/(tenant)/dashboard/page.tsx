@@ -1,4 +1,8 @@
 import { requireSession } from "@/shared/lib/auth/session";
+import Link from "next/link";
+import { Gift } from "lucide-react";
+import { puedeAgendarPrueba } from "@/modules/free-trials/permisos";
+import { contarPruebasPorAgendar } from "@/modules/free-trials/por-agendar";
 import { mesMadrid, rangoMesMadridUtc } from "@/modules/scheduling/fechas-madrid";
 import { madridParts } from "@/shared/lib/format-date";
 import { createClient } from "@/shared/lib/supabase/server";
@@ -381,6 +385,32 @@ async function renderDashboard({
       {await getAyudaFiltrosFuentes()
         .catch(() => null)
         .then((d) => (d ? <AyudaFiltrosFuentesCard data={d} /> : null))}
+
+      {/* Pruebas gratuitas pedidas y sin agendar (Mario 2026-11-26): el
+          contador lleva al bloque de la agenda, donde se agendan. */}
+      {puedeAgendarPrueba(session) &&
+        session.company_id &&
+        (await contarPruebasPorAgendar(session.company_id)
+          .catch(() => 0)
+          .then((n) =>
+            n > 0 ? (
+              <Link
+                href={"/agenda#pruebas-por-agendar" as never}
+                className="flex min-h-12 items-center gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/20"
+              >
+                <Gift className="h-5 w-5 shrink-0 text-emerald-700" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-base font-bold text-emerald-950 dark:text-emerald-100">
+                    {n} prueba{n === 1 ? "" : "s"} gratuita{n === 1 ? "" : "s"} pendiente
+                    {n === 1 ? "" : "s"} de agendar
+                  </span>
+                  <span className="block text-xs text-emerald-900 dark:text-emerald-200">
+                    Llama al cliente con los días que propone el comercial y agéndala →
+                  </span>
+                </span>
+              </Link>
+            ) : null,
+          ))}
 
       {consolidatedAlerts && (
         <ConsolidatedAlertsCard data={consolidatedAlerts} />

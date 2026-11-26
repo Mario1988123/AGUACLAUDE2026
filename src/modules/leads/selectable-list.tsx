@@ -15,8 +15,10 @@ import {
   User,
   Briefcase,
   IdCard,
+  Gift,
 } from "lucide-react";
 import { LeadBulkToolbar } from "./bulk-toolbar";
+import { ChipPruebaLead } from "./chip-prueba-lead";
 import { STATUS_LABEL, ORIGIN_LABEL } from "./schemas";
 import { StatusPill } from "@/shared/components/status-pill";
 import { Button } from "@/shared/ui/button";
@@ -271,15 +273,12 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                           ↻ Reabierto
                         </span>
                       )}
-                      {l.has_active_trial && (
-                        <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700">
-                          🎁 Prueba activa
-                        </span>
-                      )}
-                      {l.has_pending_trial && (
-                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-700">
-                          🎁 Prueba por instalar
-                        </span>
+                      {(l.has_active_trial || l.has_pending_trial) && (
+                        <ChipPruebaLead
+                          activa={!!l.has_active_trial}
+                          diasRestantes={l.trial_days_left}
+                          trialId={l.trial_id}
+                        />
                       )}
                       {l.has_open_incident && (
                         <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700">
@@ -325,6 +324,20 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                     >
                       <MapPin className="h-4 w-4" />
                     </a>
+                  )}
+                  {l.status !== "converted" && (
+                    <Link
+                      href={
+                        (l.trial_id
+                          ? `/pruebas-gratuitas/${l.trial_id}`
+                          : `/pruebas-gratuitas/nueva?lead_id=${l.id}`) as never
+                      }
+                      className="flex h-8 w-8 items-center justify-center rounded-md text-emerald-700 hover:bg-emerald-100"
+                      title={l.trial_id ? "Ver la prueba gratuita" : "Pedir prueba gratuita"}
+                      aria-label={l.trial_id ? "Ver la prueba gratuita" : "Pedir prueba gratuita"}
+                    >
+                      <Gift className="h-4 w-4" />
+                    </Link>
                   )}
                   {l.has_proposals && (
                     <Link
@@ -460,21 +473,12 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                             ↻ Reabierto
                           </span>
                         )}
-                        {l.has_active_trial && (
-                          <span
-                            title="Prueba gratuita instalada"
-                            className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700"
-                          >
-                            🎁 Prueba activa
-                          </span>
-                        )}
-                        {l.has_pending_trial && (
-                          <span
-                            title="Prueba gratuita creada, aún sin instalar"
-                            className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-700"
-                          >
-                            🎁 Prueba por instalar
-                          </span>
+                        {(l.has_active_trial || l.has_pending_trial) && (
+                          <ChipPruebaLead
+                            activa={!!l.has_active_trial}
+                            diasRestantes={l.trial_days_left}
+                            trialId={l.trial_id}
+                          />
                         )}
                         {l.has_open_incident && (
                           <span
@@ -566,6 +570,20 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                           >
                             <MapPin className="h-4 w-4" />
                           </a>
+                        )}
+                        {l.status !== "converted" && (
+                          <Link
+                            href={
+                              (l.trial_id
+                                ? `/pruebas-gratuitas/${l.trial_id}`
+                                : `/pruebas-gratuitas/nueva?lead_id=${l.id}`) as never
+                            }
+                            className="flex h-8 w-8 items-center justify-center rounded-md text-emerald-700 hover:bg-emerald-100"
+                            title={l.trial_id ? "Ver la prueba gratuita" : "Pedir prueba gratuita"}
+                            aria-label={l.trial_id ? "Ver la prueba gratuita" : "Pedir prueba gratuita"}
+                          >
+                            <Gift className="h-4 w-4" />
+                          </Link>
                         )}
                         {l.has_proposals && (
                           <Link

@@ -19,7 +19,7 @@ function normalizePhoneSafe(v: string | null | undefined): string | null {
 }
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { toActionError } from "@/shared/lib/actions/safe-error";
-import { pruebaEstaActiva } from "./prueba-lead";
+import { diasRestantesPrueba, pruebaEstaActiva } from "./prueba-lead";
 import { CAMPOS_EDITABLES_LEAD, elegirCampos } from "@/modules/customers/campos-editables";
 
 export async function listLeads(filters?: {
@@ -193,6 +193,8 @@ export async function listLeads(filters?: {
   const leadsWithProposals = new Set<string>();
   const leadsWithActiveTrial = new Set<string>();
   const leadsWithPendingTrial = new Set<string>();
+  // Prueba que se enseña en el chip: la instalada manda sobre la pendiente.
+  const trialOfLead = new Map<string, { id: string; dias: number | null }>();
   const leadsWithOpenIncident = new Set<string>();
   if (rows.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -210,7 +212,7 @@ export async function listLeads(filters?: {
       // necesitamos para el lookup de incidencias abiertas.
       sb
         .from("free_trials")
-        .select("id, lead_id, status")
+        .select("id, lead_id, status, installed_at, duration_days")
         .in("lead_id", ids)
         .is("deleted_at", null)
         .in("status", ["draft", "scheduled", "installed"]),
@@ -222,6 +224,8 @@ export async function listLeads(filters?: {
       id: string;
       lead_id: string | null;
       status: string;
+      installed_at: string | null;
+      duration_days: number | null;
     }>;
     const trialIdToLead = new Map<string, string>();
     for (const t of trialRows) {
@@ -229,8 +233,16 @@ export async function listLeads(filters?: {
         // «Prueba activa» solo si el equipo está INSTALADO (Mario 2026-11-26).
         // Antes contaban también draft y scheduled, y un lead con la prueba
         // sin instalar salía como «prueba activa».
-        if (pruebaEstaActiva(t.status)) leadsWithActiveTrial.add(t.lead_id);
-        else leadsWithPendingTrial.add(t.lead_id);
+        if (pruebaEstaActiva(t.status)) {
+          leadsWithActiveTrial.add(t.lead_id);
+          trialOfLead.set(t.lead_id, {
+            id: t.id,
+            dias: diasRestantesPrueba(t.installed_at, t.duration_days),
+          });
+        } else {
+          leadsWithPendingTrial.add(t.lead_id);
+          if (!trialOfLead.has(t.lead_id)) trialOfLead.set(t.lead_id, { id: t.id, dias: null });
+        }
         trialIdToLead.set(t.id, t.lead_id);
       }
     }
@@ -318,6 +330,10 @@ export async function listLeads(filters?: {
       has_pending_trial:
         leadsWithPendingTrial.has(r.id) && !leadsWithActiveTrial.has(r.id),
       has_open_incident: leadsWithOpenIncident.has(r.id),
+      trial_id: trialOfLead.get(r.id)?.id ?? null,
+      trial_days_left: leadsWithActiveTrial.has(r.id)
+        ? (trialOfLead.get(r.id)?.dias ?? null)
+        : null,
     };
   });
 }

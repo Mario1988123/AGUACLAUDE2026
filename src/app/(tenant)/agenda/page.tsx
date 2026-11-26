@@ -5,7 +5,11 @@ import {
   listAgendaRange,
   listAgendaRangeFull,
   listTeamMembers,
+  listInstallers,
 } from "@/modules/agenda/actions";
+import { puedeAgendarPrueba } from "@/modules/free-trials/permisos";
+import { listarPruebasPorAgendar } from "@/modules/free-trials/por-agendar";
+import { PruebasPorAgendar } from "@/modules/free-trials/pruebas-por-agendar";
 import { KIND_LABEL } from "@/modules/agenda/constants";
 import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { UninstallFromAgendaButton } from "@/modules/agenda/uninstall-button";
@@ -152,6 +156,16 @@ export default async function AgendaPage({
     countMaintenanceToConfirm(30).catch(() => 0),
   ]);
 
+  // Pruebas gratuitas pedidas por un comercial y sin agendar (Mario
+  // 2026-11-26): solo para quien agenda (admin y director técnico).
+  const puedeAgendarPruebas = puedeAgendarPrueba(session) && !!session.company_id;
+  const [pruebasPorAgendar, instaladoresPrueba] = puedeAgendarPruebas
+    ? await Promise.all([
+        listarPruebasPorAgendar(session.company_id!).catch(() => ({ total: 0, items: [] })),
+        listInstallers().catch(() => []),
+      ])
+    : [{ total: 0, items: [] }, []];
+
   // Búsqueda cliente-side por texto: filtra del array ya cargado para no
   // tener que hacer otra query (la búsqueda full-text en BD es trabajo de
   // otra fase). Match contra title.
@@ -203,6 +217,14 @@ export default async function AgendaPage({
           <CreateAgendaButton teamMembers={team} />
         </div>
       </div>
+
+      {puedeAgendarPruebas && pruebasPorAgendar.total > 0 && (
+        <PruebasPorAgendar
+          total={pruebasPorAgendar.total}
+          items={pruebasPorAgendar.items}
+          installers={instaladoresPrueba}
+        />
+      )}
 
       {pendingMaintenanceCount > 0 && (
         <Link

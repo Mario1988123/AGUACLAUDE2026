@@ -150,3 +150,55 @@ export function encajaEnDisponibilidad(
   const dow = ((new Date(Date.UTC(y!, (m ?? 1) - 1, dd ?? 1)).getUTCDay() + 6) % 7) + 1;
   return d.franjas.some((f) => f.dias.includes(dow) && dentro(f));
 }
+
+export interface OpcionAgenda {
+  /** Valor de <input type="datetime-local"> en hora de Madrid. */
+  valor: string;
+  /** «Lun 30 nov · 16:00–20:00». */
+  etiqueta: string;
+}
+
+function sumarDias(fecha: string, n: number): string {
+  const [y, m, d] = fecha.split("-").map(Number);
+  return new Date(Date.UTC(y!, (m ?? 1) - 1, (d ?? 1) + n)).toISOString().slice(0, 10);
+}
+
+function diaSemanaIso(fecha: string): number {
+  const [y, m, d] = fecha.split("-").map(Number);
+  return ((new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1)).getUTCDay() + 6) % 7) + 1;
+}
+
+/**
+ * Huecos concretos que se pueden elegir con un toque al agendar (Mario
+ * 2026-11-26): cada franja propuesta por el comercial convertida en un día
+ * y la hora de inicio de la franja. Días concretos: los que no han pasado.
+ * Días fijos: las próximas apariciones en las `semanas` siguientes.
+ * `hoy` es la fecha de Madrid "AAAA-MM-DD"; ordenadas por fecha y hora.
+ */
+export function opcionesParaAgendar(
+  d: Disponibilidad | null | undefined,
+  hoy: string,
+  max = 8,
+  semanas = 2,
+): OpcionAgenda[] {
+  if (!d) return [];
+  const huecos: Array<{ fecha: string; desde: string; hasta: string }> = [];
+  if (d.modo === "fechas") {
+    for (const f of d.franjas) if (f.fecha >= hoy) huecos.push(f);
+  } else {
+    for (let i = 0; i < semanas * 7; i++) {
+      const fecha = sumarDias(hoy, i);
+      const dow = diaSemanaIso(fecha);
+      for (const f of d.franjas) {
+        if (f.dias.includes(dow)) huecos.push({ fecha, desde: f.desde, hasta: f.hasta });
+      }
+    }
+  }
+  huecos.sort((a, b) =>
+    a.fecha === b.fecha ? a.desde.localeCompare(b.desde) : a.fecha.localeCompare(b.fecha),
+  );
+  return huecos.slice(0, max).map((h) => ({
+    valor: `${h.fecha}T${h.desde}`,
+    etiqueta: `${capitalizar(fechaCorta(h.fecha))} · ${tramo(h.desde, h.hasta)}`,
+  }));
+}

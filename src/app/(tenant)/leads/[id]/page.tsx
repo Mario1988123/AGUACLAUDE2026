@@ -22,6 +22,8 @@ import { listTeamMembers } from "@/modules/agenda/actions";
 import { CreateAgendaButton } from "@/modules/agenda/create-form";
 import { BackButton } from "@/shared/components/back-button";
 import { getLeadReferrer } from "@/modules/referrals/actions";
+import { ChipPruebaLead } from "@/modules/leads/chip-prueba-lead";
+import { diasRestantesPrueba, pruebaEstaActiva } from "@/modules/leads/prueba-lead";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +72,8 @@ export default async function LeadDetailPage({
 
   let assignedName: string | null = null;
   let lastContactAt: string | null = null;
+  // Prueba gratuita en curso del lead (Mario 2026-11-26): la instalada manda.
+  let pruebaLead: { id: string; activa: boolean; dias: number | null } | null = null;
   {
     const { createClient } = await import("@/shared/lib/supabase/server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -81,6 +85,32 @@ export default async function LeadDetailPage({
         .eq("user_id", lead.assigned_user_id)
         .maybeSingle();
       assignedName = (prof as { full_name: string | null } | null)?.full_name ?? null;
+    }
+    try {
+      const { data: pruebas } = await supabase
+        .from("free_trials")
+        .select("id, status, installed_at, duration_days, created_at")
+        .eq("lead_id", lead.id)
+        .is("deleted_at", null)
+        .in("status", ["draft", "scheduled", "installed"])
+        .order("created_at", { ascending: false });
+      const lista = (pruebas ?? []) as Array<{
+        id: string;
+        status: string;
+        installed_at: string | null;
+        duration_days: number | null;
+      }>;
+      const p = lista.find((t) => pruebaEstaActiva(t.status)) ?? lista[0];
+      if (p) {
+        const activa = pruebaEstaActiva(p.status);
+        pruebaLead = {
+          id: p.id,
+          activa,
+          dias: activa ? diasRestantesPrueba(p.installed_at, p.duration_days) : null,
+        };
+      }
+    } catch {
+      /* el chip es informativo: si falla, no se pinta */
     }
     // Último contacto registrado para el FollowupCard
     try {
@@ -109,6 +139,14 @@ export default async function LeadDetailPage({
           <h1 className="min-w-0 break-words text-2xl font-bold sm:text-3xl">{displayName}</h1>
           <Badge variant={STATUS_VARIANT[lead.status]}>{STATUS_LABEL[lead.status]}</Badge>
         </div>
+        {pruebaLead && (
+          <ChipPruebaLead
+            grande
+            activa={pruebaLead.activa}
+            diasRestantes={pruebaLead.dias}
+            trialId={pruebaLead.id}
+          />
+        )}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
           <span>{lead.party_kind === "company" ? "Empresa" : "Particular"}</span>
           <span aria-hidden="true">·</span>
@@ -161,12 +199,18 @@ export default async function LeadDetailPage({
             >
               📊 Calcular ahorro
             </Link>
+            {/* Con una prueba ya en curso, el botón abre esa prueba en vez
+                de pedir otra. */}
             <Link
-              href={`/pruebas-gratuitas/nueva?lead_id=${lead.id}` as never}
+              href={
+                (pruebaLead
+                  ? `/pruebas-gratuitas/${pruebaLead.id}`
+                  : `/pruebas-gratuitas/nueva?lead_id=${lead.id}`) as never
+              }
               className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-bold text-foreground hover:bg-muted hover:border-primary/40"
-              title="Entregar equipo en prueba sin contrato"
+              title={pruebaLead ? "Ver la prueba gratuita" : "Pedir una prueba gratuita: el admin la agenda"}
             >
-              🎁 Prueba gratuita
+              🎁 {pruebaLead ? "Ver prueba gratuita" : "Prueba gratuita"}
             </Link>
             <LeadStatusActions leadId={lead.id} currentStatus={lead.status} />
             {!hasProposals && <ConvertLeadButton leadId={lead.id} alreadyConverted={false} />}
