@@ -443,7 +443,12 @@ async function resolvePartyNames(supabase: any, rows: Array<
   }
   const trialLeadName = new Map<string, string>();
   if (trialIds.length > 0) {
-    const { data: trials } = await supabase
+    // Admin client (2026-11-26): el instalador puede no tener permiso para
+    // leer leads y la prueba salía como «—». Los ids vienen de instalaciones
+    // que ya ha podido leer, así que no amplía lo que ve.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminNombres = createAdminClient() as any;
+    const { data: trials } = await adminNombres
       .from("free_trials")
       .select("id, lead_id")
       .in("id", trialIds);
@@ -456,7 +461,7 @@ async function resolvePartyNames(supabase: any, rows: Array<
     );
     let leadName = new Map<string, string>();
     if (leadIds.length > 0) {
-      const { data: leads } = await supabase
+      const { data: leads } = await adminNombres
         .from("leads")
         .select("id, party_kind, legal_name, trade_name, first_name, last_name")
         .in("id", leadIds);

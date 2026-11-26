@@ -2103,10 +2103,10 @@ export async function changeAgendaEventKindSafeAction(
 }
 
 /**
- * Al mover o reasignar una cita real de la agenda, copia el cambio a la
- * prueba gratuita de la que sale (Mario 2026-11-26): antes la cita y la
- * prueba se desfasaban y /instalaciones no se enteraba. Las citas de
- * instalaciones normales no se tocan aquí.
+ * Al mover o reasignar una cita real de la agenda, copia el cambio a lo que
+ * la originó (Mario 2026-11-26): la instalación (de cualquier tipo) y, si es
+ * de una prueba gratuita, la prueba. Antes la cita se movía sola y
+ * /instalaciones seguía con la fecha vieja.
  */
 async function sincronizarOrigenDeCita(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2139,11 +2139,12 @@ async function sincronizarOrigenDeCita(
       .eq("company_id", companyId)
       .maybeSingle();
     const i = inst as { kind: string; status: string } | null;
-    if (!i || i.kind !== "free_trial" || i.status === "completed" || i.status === "cancelled") {
-      return;
-    }
+    if (!i || i.status === "completed" || i.status === "cancelled") return;
     const upd: Record<string, unknown> = {};
-    if (cambio.scheduledAt !== undefined) upd.scheduled_at = cambio.scheduledAt;
+    if (cambio.scheduledAt !== undefined) {
+      upd.scheduled_at = cambio.scheduledAt;
+      if (i.status === "unscheduled") upd.status = "scheduled";
+    }
     if (cambio.installerId !== undefined) upd.installer_user_id = cambio.installerId;
     await admin
       .from("installations")
