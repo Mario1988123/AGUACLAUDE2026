@@ -249,3 +249,17 @@ Hoy **no existe**: el único sitio que escribe `catalog_product_id` es la import
 8. **Categorías «Fuente» y «Dispensadores»**: ¿se le propone unificarlas o se deja?
 9. **Infinity 1300** (Ionfilter) como variante de Infinity Indic (Osmofilter): ¿lo dejó así Infinity a propósito?
 10. ¿Montamos la tabla de propuestas y la pantalla de aceptar/rechazar (§8), o se le enseña en una reunión con capturas y se aplica a mano lo que acepte?
+
+---
+
+## Respuestas de Mario (2026-11-25)
+
+1. **Zafiro-S** = BLUE SEA de sobremesa = **FRO1091**. **Infinity Beast** = **RO1073P** (Mario: «creo»; se le enseña
+   la comparación antes de vincular).
+2. **Grifo París ↔ «Grifo Oviedo» (Corsa):** el enlace es CORRECTO. Es el mismo grifo; antes se llamaba Oviedo y
+   ahora París. No se desengancha.
+3. **Zafiro y Zafiro-S son FUENTES** (la categoría «Fuente» está bien; hay que revisar su `tipo_equipo` para que sea
+   fuente). **ECO25 ÉLITE** se queda como accesorio.
+4. **Infinity Direct basic = INFINITY SMART (A-253423).** Hay que poner las medidas correctas (va como propuesta).
+5. **Forma de proponer los cambios: opción a)**, una pantalla de propuestas donde la empresa acepta o rechaza cada
+   cambio viendo el antes y el después. Sirve también para las demás empresas.

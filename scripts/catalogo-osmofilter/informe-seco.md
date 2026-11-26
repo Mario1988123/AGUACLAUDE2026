@@ -1,14 +1,8 @@
 # Informe de la carga de Osmofilter — prueba en seco
 
-Fecha: 2026-11-25T15:05:36.499Z · Estado leído de: api · Solo: todo · Pasos: atributos, productos, gamas, valores, fotos, ventajas, recambios, enlaces, documentos
+Fecha: 2026-11-25T16:26:30.037Z · Estado leído de: api · Solo: todo · Pasos: atributos, productos, gamas, valores, fotos, ventajas, recambios, enlaces, documentos
 
 Generado por `scripts/catalogo-osmofilter/cargar.mjs`. En seco no se ha escrito nada en la base de datos ni en Storage.
-
-> **Migración pendiente.** Faltan columnas de `20261126100000_catalogo_maestro_fase2.sql`. La prueba en seco funciona igual; `--aplicar` se niega a escribir hasta que se aplique.
-> - catalog_products: modelo, familia_proveedor, catalogos_proveedor, descatalogado, origen_carga
-> - product_attributes_global: grupo
-> - catalog_product_photos: thumb_path, etiqueta, width_px, height_px
-> - catalog_product_documents: idioma, apartado
 
 ## 1. Recuentos
 
@@ -25,8 +19,8 @@ Generado por `scripts/catalogo-osmofilter/cargar.mjs`. En seco no se ha escrito 
 | atributos globales reutilizados | 27 |
 | enlaces atributo categoria | 199 |
 | valores atributo | 3441 |
-| gamas con variantes | 42 |
-| variantes a enlazar | 89 |
+| gamas con variantes | 37 |
+| variantes a enlazar | 94 |
 | fotos | 1016 |
 | ventajas | 503 |
 | iconos | 68 |
@@ -189,7 +183,7 @@ Por apartado: ficha_tecnica 310 · certificado 155 · comercial 238 · manual 26
 
 ## 7. Gamas
 
-42 gamas con variantes y 43 productos sueltos. **Revisar** = dudosa, la tiene que mirar Mario.
+37 gamas con variantes y 43 productos sueltos. **Revisar** = dudosa, la tiene que mirar Mario.
 
 | Modelo | Cabeza | Variantes (rasgos) | Revisar | Nota |
 |---|---|---|---|---|
@@ -199,32 +193,27 @@ Por apartado: ficha_tecnica 310 · certificado 155 · comercial 238 · manual 26
 | BLUE SEA 2.0 | FRO1077 | FRO1077 (c/Bomba)<br>FRO1079 (Sobremesa · s/Bomba)<br>FRO1081 (s/Bomba) |  |  |
 | BLUE SEA 3.0 | FRO1090 | FRO1090 (Ósmosis inversa · c/Bomba)<br>FRO1104 (Sobremesa · Ósmosis inversa · c/Bomba)<br>FRO1091 (Sobremesa · Ósmosis inversa · s/Bomba)<br>FRO1094 (Ultrafiltración)<br>FRO1098 (Sobremesa · Ultrafiltración)<br>FRO1095 (Vacío (sin tratamiento)) |  |  |
 | BLUE SPRING | FRO1064 | FRO1073 (Ósmosis inversa · c/Bomba)<br>FRO1065 (Ósmosis inversa · s/Bomba)<br>FRO1064 (Ultrafiltración) |  |  |
-| BLUE STORM | FRO1061 | FRO1062 (Ósmosis inversa · s/Bomba)<br>FRO1117 (Ósmosis inversa · c/Bomba)<br>FRO1061 (Sobremesa · Ósmosis inversa · s/Bomba)<br>FRO1063 (Ultrafiltración) | **Sí** | Osmofilter llama «BLUE STROM» (errata) a FRO1062 y FRO1117; la descripción dice BLUE STORM. Se unen en una gama. |
-| COMPACT600 PH | RO1202 | RO1202 (Flujo directo · Blanco)<br>RO1203 (Flujo directo · Negro)<br>RO1214 (Negro · LED) | **Sí** | Mezcla dos familias de Osmofilter: RO1202 y RO1203 son «Flujo directo» y RO1214 «Ósmosis doméstica» (compacto). ¿Misma gama? |
-| COSMOS | RO1059 | RO1058 (s/Bomba)<br>RO1059 (c/Bomba)<br>RO1065 (Negro · s/Bomba)<br>RO1066 (Negro · c/Bomba) | **Sí** | Osmofilter llama «COSMOS Negro» a RO1065 y RO1066: se unen con COSMOS y el color va en el rasgo. |
-| DANNA | DDANA | DDANA (30 L · Válvula TM68C3 · Azul)<br>DDANAP (30 L · Válvula TM68 PILOT · Azul)<br>DE6835 (35 L · Válvula TM68) | **Sí** | Tres nombres de Osmofilter (DANNA 30 TM68C3, DANNA 30 TM68 PILOT, DANNA TM68). DDANAP se describe como «Custom». |
-| DOLMA | DOL920 | DO6820 (20 L · Válvula TM68 · 1")<br>DOL920 (20 L · Válvula TM69 PILOT · 3/4")<br>DOL930 (30 L · Válvula TM69 PILOT · 3/4") | **Sí** | Válvulas distintas (TM68, TM69 PILOT). Osmofilter llama «DOLMA TM69 LED» a DOL920. |
-| NOVO TM68 | NO6835 | NO6814 (14 L · 1")<br>NO6825 (25 L · 1")<br>NO6835 (35 L · 1") | **Sí** | NOVO partido por válvula. Alternativa: una sola gama NOVO con la válvula en el rasgo. |
-| NOVO TM69 | NO6922 | NO6914 (14 L · 3/4")<br>NO6922 (22 L · 3/4")<br>NO6930 (30 L · 3/4") | **Sí** | NOVO partido por válvula. |
-| NOVO TM69 LED | NOL922 | NOL914 (14 L · 3/4")<br>NOL922 (22 L · 3/4")<br>NOL935 (35 L · 3/4") | **Sí** | Nombre de Osmofilter; la descripción dice «TM69 PILOT». NOL914 se llama «Descalcificador NOVO 14L TM69 PILOT 3/4» en Osmofilter. |
-| NOVO CLACK | NOC135 | NOC114 (14 L · Contracorriente · 1")<br>NOC122 (22 L · Contracorriente · 1")<br>NOC135 (35 L · Contracorriente · 1") | **Sí** | NOVO partido por válvula. |
-| NOVO LOGIX | NO7610 | NO7610 (10 L · 1")<br>NO7631 (ECO · 30 L · s/Boya · s/Chimenea) | **Sí** | NO7631 es «NOVO ECO» (sin boya ni chimenea). ¿Misma gama? |
-| NOVO HYDRO | NOHD10 | NOHD10 (10 L · 1" · Digital)<br>NOHD20 (20 L · 1" · Digital)<br>NOHD30 (30 L · 1" · Digital) | **Sí** | NOVO partido por válvula. |
+| BLUE STORM | FRO1061 | FRO1062 (Ósmosis inversa · s/Bomba)<br>FRO1117 (Ósmosis inversa · c/Bomba)<br>FRO1061 (Sobremesa · Ósmosis inversa · s/Bomba)<br>FRO1063 (Ultrafiltración) |  | Osmofilter llama «BLUE STROM» (errata) a FRO1062 y FRO1117; la descripción dice BLUE STORM. Se unen en una gama. |
+| COMPACT600 PH | RO1202 | RO1202 (Flujo directo · Blanco)<br>RO1203 (Flujo directo · Negro)<br>RO1214 (Negro · LED) |  | Mezcla dos familias de Osmofilter: RO1202 y RO1203 son «Flujo directo» y RO1214 «Ósmosis doméstica» (compacto). ¿Misma gama? |
+| COSMOS | RO1059 | RO1058 (s/Bomba)<br>RO1059 (c/Bomba)<br>RO1065 (Negro · s/Bomba)<br>RO1066 (Negro · c/Bomba) |  | Osmofilter llama «COSMOS Negro» a RO1065 y RO1066: se unen con COSMOS y el color va en el rasgo. |
+| DANNA | DDANA | DDANA (30 L · Válvula TM68C3 · Azul)<br>DDANAP (30 L · Válvula TM68 PILOT · Azul)<br>DE6835 (35 L · Válvula TM68) |  | Tres nombres de Osmofilter (DANNA 30 TM68C3, DANNA 30 TM68 PILOT, DANNA TM68). DDANAP se describe como «Custom». |
+| DOLMA | DOL920 | DO6820 (20 L · Válvula TM68 · 1")<br>DOL920 (20 L · Válvula TM69 PILOT · 3/4")<br>DOL930 (30 L · Válvula TM69 PILOT · 3/4") |  | Válvulas distintas (TM68, TM69 PILOT). Osmofilter llama «DOLMA TM69 LED» a DOL920. |
+| NOVO | NO6922 | NO6814 (Válvula TM68 · 14 L · 1")<br>NO6825 (Válvula TM68 · 25 L · 1")<br>NO6835 (Válvula TM68 · 35 L · 1")<br>NO6914 (Válvula TM69 · 14 L · 3/4")<br>NO6922 (Válvula TM69 · 22 L · 3/4")<br>NO6930 (Válvula TM69 · 30 L · 3/4")<br>NOL914 (Válvula TM69 LED · 14 L · 3/4")<br>NOL922 (Válvula TM69 LED · 22 L · 3/4")<br>NOL935 (Válvula TM69 LED · 35 L · 3/4")<br>NOC114 (Válvula CLACK · 14 L · Contracorriente · 1")<br>NOC122 (Válvula CLACK · 22 L · Contracorriente · 1")<br>NOC135 (Válvula CLACK · 35 L · Contracorriente · 1")<br>NO7610 (Válvula LOGIX · 10 L · 1")<br>NO7631 (Válvula LOGIX · ECO · 30 L · s/Boya · s/Chimenea)<br>NOHD10 (Válvula HYDRO · 10 L · 1" · Digital)<br>NOHD20 (Válvula HYDRO · 20 L · 1" · Digital)<br>NOHD30 (Válvula HYDRO · 30 L · 1" · Digital) |  |  |
 | GLACIAL MECÁNICA | FRO1092 | FRO1092 (Ósmosis inversa · Blanco · c/Bomba)<br>FRO1099 (Ósmosis inversa · Negro · c/Bomba)<br>FRO1096 (Ultrafiltración · Blanco)<br>FRO1101 (Ultrafiltración · Negro) |  |  |
 | GLASSGOW | GLA021 | GLA011 (10 L · 3/4" · Negro)<br>GLA021 (20 L · 3/4" · Negro) |  |  |
 | MIDEA ECO 5600 | MI0040 | MI0045 (Ósmosis inversa · 2 salidas · c/Bomba)<br>MI0040 (Ósmosis inversa · 2 salidas · s/Bomba)<br>MI0041 (Ultrafiltración · 2 temperaturas) |  |  |
-| HORIZON ALKA | HO0001 | HO0001 (s/Bomba)<br>HO0002 (c/Bomba) | **Sí** | Osmofilter llama «HORIZON» a HO0001 y «HORIZON ALKA» a HO0002; las dos descripciones dicen «HORIZON Alka». |
-| ICE 40 UP | HO1102 | HO1102 (Pantalla · 2 grifos)<br>HO1118 (Pantalla · 2 grifos · MIRROR)<br>HO1120 (LED · 2 grifos · Negro)<br>HO1103 (Con gas · Pantalla · 2 grifos)<br>HO1119 (Con gas · Pantalla · 2 grifos · MIRROR)<br>HO1121 (Con gas · LED · 2 grifos · Negro) | **Sí** | La «G» de Osmofilter es «con gas» (comprobado con la característica «Agua con gas»). Se ponen en la misma gama con su nombre propio; alternativa: gama aparte «ICE G 40 UP». |
-| ICE 80 UP | HO1064 | HO1064 (Pantalla · 2 grifos)<br>HO1082 (Pantalla · 3 grifos)<br>HO1116 (Pantalla · 2 grifos · MIRROR)<br>HO2027 (Mecánico · 2 grifos)<br>HO1109 (LED · 2 grifos · Negro)<br>HO1065 (Con gas · Pantalla · 2 grifos)<br>HO1083 (Con gas · Pantalla · 3 grifos)<br>HO1117 (Con gas · Pantalla · 2 grifos · MIRROR)<br>HO2032 (Con gas · Mecánico · 3 grifos)<br>HO1110 (Con gas · LED · 2 grifos · Negro) | **Sí** | Igual que ICE 40 UP: la «G» es con gas. |
-| ICE 80 UNDER | HO1122 | HO1122 (3 salidas)<br>HO1123 (Con gas · 3 salidas) | **Sí** | La «G» es con gas. |
-| ICE 110 UP | HO1084 | HO1084 (Pantalla · 3 grifos)<br>HO1085 (Con gas · Pantalla · 3 grifos) | **Sí** | La «G» es con gas. |
-| ICE 110 UNDER | HO1086 | HO1086 (3 salidas)<br>HO1087 (Con gas · 3 salidas) | **Sí** | La «G» es con gas. |
+| HORIZON ALKA | HO0001 | HO0001 (s/Bomba)<br>HO0002 (c/Bomba) |  | Osmofilter llama «HORIZON» a HO0001 y «HORIZON ALKA» a HO0002; las dos descripciones dicen «HORIZON Alka». |
+| ICE 40 UP | HO1102 | HO1102 (Pantalla · 2 grifos)<br>HO1118 (Pantalla · 2 grifos · MIRROR)<br>HO1120 (LED · 2 grifos · Negro)<br>HO1103 (Con gas · Pantalla · 2 grifos)<br>HO1119 (Con gas · Pantalla · 2 grifos · MIRROR)<br>HO1121 (Con gas · LED · 2 grifos · Negro) |  | La «G» de Osmofilter es «con gas» (comprobado con la característica «Agua con gas»). Se ponen en la misma gama con su nombre propio; alternativa: gama aparte «ICE G 40 UP». |
+| ICE 80 UP | HO1064 | HO1064 (Pantalla · 2 grifos)<br>HO1082 (Pantalla · 3 grifos)<br>HO1116 (Pantalla · 2 grifos · MIRROR)<br>HO2027 (Mecánico · 2 grifos)<br>HO1109 (LED · 2 grifos · Negro)<br>HO1065 (Con gas · Pantalla · 2 grifos)<br>HO1083 (Con gas · Pantalla · 3 grifos)<br>HO1117 (Con gas · Pantalla · 2 grifos · MIRROR)<br>HO2032 (Con gas · Mecánico · 3 grifos)<br>HO1110 (Con gas · LED · 2 grifos · Negro) |  | Igual que ICE 40 UP: la «G» es con gas. |
+| ICE 80 UNDER | HO1122 | HO1122 (3 salidas)<br>HO1123 (Con gas · 3 salidas) |  | La «G» es con gas. |
+| ICE 110 UP | HO1084 | HO1084 (Pantalla · 3 grifos)<br>HO1085 (Con gas · Pantalla · 3 grifos) |  | La «G» es con gas. |
+| ICE 110 UNDER | HO1086 | HO1086 (3 salidas)<br>HO1087 (Con gas · 3 salidas) |  | La «G» es con gas. |
 | ICEBERG 2.0 | FRO1088 | FRO1088 (c/Bomba)<br>FRO1103 (Negro · c/Bomba)<br>FRO1102 (Sobremesa · Negro · s/Bomba) |  |  |
 | LONDRES | RO5062 | RO5062 (Negro)<br>RO5111 (Oro cepillado) |  |  |
 | DUBLÍN 2.0 | RO5071.1 | RO5071.1 (Mate)<br>RO5071.2 (Brillo) |  |  |
 | DURBAN 2.0 | RO5063.1 | RO5063.1 (Mate)<br>RO5113 (Negro) |  | RO5063 es alias de RO5063.1, que ya existe en el maestro (ver alias.json). |
-| PARÍS | RO5102 | RO5102 (Extensible · Mate)<br>RO5066 (Mate)<br>RO5105 (1300 · Mate)<br>RO5021 (Cromo) | **Sí** | Cuatro grifos PARÍS: estándar (cromo), mate, extensible y 1300. ¿Misma gama? |
-| GAMA ALTA | RO5028 | RO5028 (Caño corto · Brillo)<br>RO5096 (Caño corto · Mate)<br>RO5013 (Caño largo · Brillo)<br>RO5026 (Caño largo · Mate inox)<br>RO5085 (Caño largo · Negro mate)<br>RO5031 (2 vías · Agua fría/natural) | **Sí** | Grifos «Gama Alta» de Osmofilter sin nombre de modelo. RO5031 es de 2 vías. |
+| PARÍS | RO5102 | RO5102 (Extensible · Mate)<br>RO5066 (Mate)<br>RO5105 (1300 · Mate)<br>RO5021 (Cromo) |  | Cuatro grifos PARÍS: estándar (cromo), mate, extensible y 1300. ¿Misma gama? |
+| GAMA ALTA | RO5028 | RO5028 (Caño corto · Brillo)<br>RO5096 (Caño corto · Mate)<br>RO5013 (Caño largo · Brillo)<br>RO5026 (Caño largo · Mate inox)<br>RO5085 (Caño largo · Negro mate)<br>RO5031 (2 vías · Agua fría/natural) |  | Grifos «Gama Alta» de Osmofilter sin nombre de modelo. RO5031 es de 2 vías. |
 | SERIE ONE KT001 | RO5114 | RO5114 (Mate)<br>RO5116 (Brillo) |  |  |
 | MAXI 600GPD | RO1086 | RO1087 (Filtros de 10")<br>RO1086 (Filtros de 20" · s/Manómetro) |  |  |
 | MICROTECH UF | RO1078 | RO1069<br>RO1078 (c/Filtro de hidrógeno) |  |  |
@@ -262,23 +251,23 @@ Crear (164):
 - MI0040 · MIDEA ECO 5600 · dispensers/equipment
 - MI0041 · MIDEA ECO 5600 · dispensers/equipment
 - MI0045 · MIDEA ECO 5600 · dispensers/equipment
-- NO6814 · NOVO TM68 · softeners/equipment
-- NO6825 · NOVO TM68 · softeners/equipment
-- NO6835 · NOVO TM68 · softeners/equipment
-- NO6914 · NOVO TM69 · softeners/equipment
-- NO6922 · NOVO TM69 · softeners/equipment
-- NO6930 · NOVO TM69 · softeners/equipment
-- NO7610 · NOVO LOGIX · softeners/equipment
-- NO7631 · NOVO LOGIX · softeners/equipment
-- NOC114 · NOVO CLACK · softeners/equipment
-- NOC122 · NOVO CLACK · softeners/equipment
-- NOC135 · NOVO CLACK · softeners/equipment
-- NOHD10 · NOVO HYDRO · softeners/equipment
-- NOHD20 · NOVO HYDRO · softeners/equipment
-- NOHD30 · NOVO HYDRO · softeners/equipment
-- NOL914 · NOVO TM69 LED · softeners/equipment
-- NOL922 · NOVO TM69 LED · softeners/equipment
-- NOL935 · NOVO TM69 LED · softeners/equipment
+- NO6814 · NOVO · softeners/equipment
+- NO6825 · NOVO · softeners/equipment
+- NO6835 · NOVO · softeners/equipment
+- NO6914 · NOVO · softeners/equipment
+- NO6922 · NOVO · softeners/equipment
+- NO6930 · NOVO · softeners/equipment
+- NO7610 · NOVO · softeners/equipment
+- NO7631 · NOVO · softeners/equipment
+- NOC114 · NOVO · softeners/equipment
+- NOC122 · NOVO · softeners/equipment
+- NOC135 · NOVO · softeners/equipment
+- NOHD10 · NOVO · softeners/equipment
+- NOHD20 · NOVO · softeners/equipment
+- NOHD30 · NOVO · softeners/equipment
+- NOL914 · NOVO · softeners/equipment
+- NOL922 · NOVO · softeners/equipment
+- NOL935 · NOVO · softeners/equipment
 - OZ0040E · OXYGEN PLUS · ozone/equipment
 - OZ0040E.G · OXYGEN PLUS · ozone/equipment
 - RO1020 · O5 · osmosis_5_stages/equipment · descatalogado
