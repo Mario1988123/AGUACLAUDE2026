@@ -1024,7 +1024,7 @@ export async function acceptFreeTrialAction(input: {
       productoNuevo = pn as { id: string; name: string } | null;
       if (!productoNuevo) return { ok: false, error: "Equipo nuevo no encontrado" };
     }
-    if (input.plan_type === "rental" || input.plan_type === "cash") {
+    if (input.plan_type) {
       const { equiposParaQuedarse } = await import("./aceptar-equipo");
       const validos = new Set(
         (await equiposParaQuedarse(admin, session.company_id, input.plan_type)).map((e) => e.id),
@@ -1045,7 +1045,9 @@ export async function acceptFreeTrialAction(input: {
           error:
             input.plan_type === "rental"
               ? "En alquiler solo van los equipos de prueba gratuita (la Esencial de pie o de sobremesa)."
-              : "Ese equipo no tiene precio de venta.",
+              : input.plan_type === "renting"
+                ? "Ese equipo no tiene plan de renting."
+                : "Ese equipo no tiene precio de venta.",
         };
       }
     }
@@ -1964,12 +1966,12 @@ export async function cambiarDiasPruebaSafeAction(
 
 /** Equipos que se puede quedar el cliente según alquiler o compra (aceptar-equipo.ts). */
 export async function equiposParaQuedarseSafeAction(
-  plan: "rental" | "cash",
+  plan: "rental" | "cash" | "renting",
 ): Promise<{ ok: true; equipos: Array<{ id: string; nombre: string }> } | { ok: false; error: string }> {
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
-    const p = z.enum(["rental", "cash"]).parse(plan);
+    const p = z.enum(["rental", "cash", "renting"]).parse(plan);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
     const { equiposParaQuedarse } = await import("./aceptar-equipo");

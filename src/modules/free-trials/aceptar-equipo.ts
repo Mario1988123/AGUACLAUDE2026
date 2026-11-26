@@ -5,6 +5,7 @@
  *    Esencial de pie y la de sobremesa). Si la empresa no ha marcado ninguno,
  *    los que tengan plan de alquiler.
  *  - COMPRA: cualquier equipo con precio de venta (plan contado activo).
+ *  - RENTING (otra forma de venta): cualquier equipo con plan de renting.
  *
  * Y qué pasa con el equipo de prueba que ya está instalado:
  *  - «se_queda»:   se queda como está, definitivo;
@@ -19,7 +20,7 @@ import { ROL_PRUEBA_GRATUITA } from "./productos-prueba";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
 
-export type PlanQuedarse = "rental" | "cash";
+export type PlanQuedarse = "rental" | "cash" | "renting";
 export type DestinoEquipo = "se_queda" | "reinstalar" | "cambiar";
 
 export interface EquipoQuedarse {

@@ -514,18 +514,34 @@ async function enrichTitlesFromSubjects(
     string,
     { label: string; lat: number | null; lng: number | null }
   >();
+  // Dirección COMPLETA, con portal, piso, puerta y código postal (Mario
+  // 2026-11-26: el instalador veía el número pero no el piso).
   const addrLabel = (a: {
     street_type: string | null;
     street: string | null;
     street_number: string | null;
+    portal?: string | null;
+    floor?: string | null;
+    door?: string | null;
+    postal_code?: string | null;
     city: string | null;
-  }) => [a.street_type, a.street, a.street_number, a.city].filter(Boolean).join(" ").trim();
+  }) => {
+    const via = [a.street_type, a.street, a.street_number].filter(Boolean).join(" ").trim();
+    const piso = a.floor
+      ? `${a.floor}${a.door ? ` ${a.door}` : ""}`
+      : a.door
+        ? `puerta ${a.door}`
+        : "";
+    const partes = [via, a.portal ? `portal ${a.portal}` : "", piso].filter(Boolean).join(", ");
+    const lugar = [a.postal_code, a.city].filter(Boolean).join(" ");
+    return [partes, lugar].filter(Boolean).join(" · ").trim();
+  };
   try {
     if (custIds.size > 0) {
       const { data: ca } = await scoped(
         supabase
           .from("addresses")
-          .select("customer_id, street_type, street, street_number, city, latitude, longitude, is_primary")
+          .select("customer_id, street_type, street, street_number, portal, floor, door, postal_code, city, latitude, longitude, is_primary")
           .in("customer_id", Array.from(custIds))
           .is("deleted_at", null)
           .order("is_primary", { ascending: false }),
@@ -535,6 +551,10 @@ async function enrichTitlesFromSubjects(
         street_type: string | null;
         street: string | null;
         street_number: string | null;
+        portal?: string | null;
+        floor?: string | null;
+        door?: string | null;
+        postal_code?: string | null;
         city: string | null;
         latitude: number | null;
         longitude: number | null;
@@ -547,7 +567,7 @@ async function enrichTitlesFromSubjects(
       const { data: la } = await scoped(
         supabase
           .from("addresses")
-          .select("lead_id, street_type, street, street_number, city, latitude, longitude, is_primary")
+          .select("lead_id, street_type, street, street_number, portal, floor, door, postal_code, city, latitude, longitude, is_primary")
           .in("lead_id", Array.from(leadIds))
           .is("deleted_at", null)
           .order("is_primary", { ascending: false }),
@@ -557,6 +577,10 @@ async function enrichTitlesFromSubjects(
         street_type: string | null;
         street: string | null;
         street_number: string | null;
+        portal?: string | null;
+        floor?: string | null;
+        door?: string | null;
+        postal_code?: string | null;
         city: string | null;
         latitude: number | null;
         longitude: number | null;
@@ -620,7 +644,7 @@ async function enrichTitlesFromSubjects(
       const { data: aRows } = await scoped(
         supabase
           .from("addresses")
-          .select("id, street_type, street, street_number, city, latitude, longitude")
+          .select("id, street_type, street, street_number, portal, floor, door, postal_code, city, latitude, longitude")
           .in("id", specificIds)
           .is("deleted_at", null),
       );
@@ -629,6 +653,10 @@ async function enrichTitlesFromSubjects(
         street_type: string | null;
         street: string | null;
         street_number: string | null;
+        portal?: string | null;
+        floor?: string | null;
+        door?: string | null;
+        postal_code?: string | null;
         city: string | null;
         latitude: number | null;
         longitude: number | null;

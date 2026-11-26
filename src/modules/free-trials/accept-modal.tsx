@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Banknote, CalendarClock, Wrench, CheckCheck, Repeat2 } from "lucide-react";
+import { Check, Banknote, CalendarClock, Wrench, CheckCheck, Repeat2, Repeat } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -21,12 +21,13 @@ import {
   type FreeTrialAcceptDefaults,
 } from "./actions";
 
-type Plan = "rental" | "cash";
+type Plan = "rental" | "cash" | "renting";
 type Destino = "se_queda" | "reinstalar";
 
 const PLAN_META: Record<Plan, { label: string; ayuda: string; icon: typeof Banknote }> = {
   rental: { label: "Alquiler", ayuda: "Esencial de pie o de sobremesa", icon: CalendarClock },
-  cash: { label: "Compra", ayuda: "Cualquier equipo con precio de venta", icon: Banknote },
+  cash: { label: "Compra", ayuda: "Al contado, cualquier equipo con precio", icon: Banknote },
+  renting: { label: "Renting", ayuda: "Venta a cuotas", icon: Repeat },
 };
 
 /** Valor del selector para «el mismo equipo de la prueba». */
@@ -34,7 +35,7 @@ const MISMO = "__mismo__";
 
 /**
  * «Se la queda» (Mario 2026-11-26). El comercial elige:
- *  1. alquiler o compra;
+ *  1. alquiler, compra o renting (el renting es otra forma de venta);
  *  2. el equipo: el de la prueba u otro (en alquiler solo los de prueba;
  *     en compra cualquiera con precio de venta);
  *  3. qué pasa con el instalado: se queda como está, se vuelve a fijar, o
@@ -87,8 +88,9 @@ export function AcceptFreeTrialButton({
     if (p === "cash") {
       setTotalCents(d.cash_total_cents);
     } else {
-      setMonthlyCents(d.rental_monthly_cents);
-      if (d.rental_durations.length) setDurationMonths(d.rental_durations[d.rental_durations.length - 1]!);
+      setMonthlyCents(p === "rental" ? d.rental_monthly_cents : d.renting_monthly_cents);
+      const durs = p === "rental" ? d.rental_durations : d.renting_durations;
+      if (durs.length) setDurationMonths(durs[durs.length - 1]!);
     }
   }
 
@@ -153,7 +155,7 @@ export function AcceptFreeTrialButton({
       notify.warning("Indica el precio de venta");
       return;
     }
-    if (plan === "rental" && (!monthlyCents || monthlyCents <= 0)) {
+    if (plan !== "cash" && (!monthlyCents || monthlyCents <= 0)) {
       notify.warning("Indica la cuota mensual");
       return;
     }
@@ -216,8 +218,8 @@ export function AcceptFreeTrialButton({
             <div className="space-y-4">
               {/* 1. Alquiler o compra */}
               <div className="space-y-1.5">
-                <Label>¿Alquiler o compra?</Label>
-                <div className="grid grid-cols-2 gap-2">
+                <Label>¿Cómo se la queda?</Label>
+                <div className="grid grid-cols-3 gap-2">
                   {(Object.keys(PLAN_META) as Plan[]).map((p) => {
                     const Icon = PLAN_META[p].icon;
                     return (
@@ -261,7 +263,7 @@ export function AcceptFreeTrialButton({
                 </select>
                 {!mismoVale && itemsPrueba.length > 0 && (
                   <p className="text-[11px] text-muted-foreground">
-                    {nombrePrueba} no está disponible en {plan === "rental" ? "alquiler" : "compra"}: elige el equipo.
+                    {nombrePrueba} no está disponible en {PLAN_META[plan].label.toLowerCase()}: elige el equipo.
                   </p>
                 )}
               </Field>
@@ -325,9 +327,11 @@ export function AcceptFreeTrialButton({
                       ))}
                     </div>
                   </Field>
-                  <Field label="Fianza (€)">
-                    <MoneyInput valueCents={depositCents} onChangeCents={setDepositCents} />
-                  </Field>
+                  {plan === "rental" && (
+                    <Field label="Fianza (€)">
+                      <MoneyInput valueCents={depositCents} onChangeCents={setDepositCents} />
+                    </Field>
+                  )}
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
