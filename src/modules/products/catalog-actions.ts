@@ -18,7 +18,8 @@ import {
   isProductEditor,
   PRODUCTS_NOT_EDITOR_ERROR,
 } from "./permissions";
-import { sendEmailViaResend } from "@/modules/mailing/resend";
+import { sendViaSmtp } from "@/modules/mailing/smtp";
+import { camposResultadoEnvio } from "@/modules/mailing/registro-envio";
 import type {
   CatalogPricingVisibility,
 } from "./catalog-pdf-v2";
@@ -273,27 +274,54 @@ export async function sendCatalogEmailAction(input: {
         .maybeSingle();
       fromEmail =
         (cs as { fiscal_email: string | null } | null)?.fiscal_email ??
-        process.env.RESEND_DEFAULT_FROM ??
-        "noreply@example.com";
+        session.email ??
+        null;
       fromName =
         (cs as { fiscal_legal_name: string | null } | null)?.fiscal_legal_name ?? null;
     }
 
-    // 5) Enviar (SIN PDF adjunto — decisión usuario 2026-06-04)
-    const result = await sendEmailViaResend({
-      from_email: fromEmail!,
-      from_name: fromName ?? session.full_name ?? "",
-      reply_to: fromEmail!,
+    // 5) Enviar (SIN PDF adjunto — decisión usuario 2026-06-04) por la vía
+    //    común sendViaSmtp: Resend si la empresa lo tiene listo (guarda
+    //    resend_id) o la cascada SMTP. El correo del usuario va como Reply-To.
+    const sendRes = await sendViaSmtp({
+      companyId: session.company_id,
+      senderUserId: session.user_id,
+      to: email,
+      toName: input.recipientName,
+      subject,
+      html: bodyHtml,
+      text: bodyText,
+      sendType: "manual",
+      triggerEvent: "catalog_share",
+      relatedType: input.customerId ? "customer" : input.leadId ? "lead" : undefined,
+      relatedId: input.customerId ?? input.leadId ?? undefined,
+      replyTo: fromEmail ?? undefined,
+    });
+    const campos = camposResultadoEnvio(sendRes);
+    const result = {
+      ok: sendRes.ok,
+      resend_id: campos.resend_id,
+      error_message: campos.error_message,
+    };
+
+    const { error: sendsErr } = await admin.from("email_sends").insert({
+      company_id: session.company_id,
+      user_id: session.user_id,
+      template_key: "catalog_share",
       to_email: email,
-      to_name: input.recipientName,
+      to_name: input.recipientName ?? null,
+      customer_id: input.customerId ?? null,
+      lead_id: input.leadId ?? null,
+      from_email: (sendRes.ok ? sendRes.fromEmail : null) ?? fromEmail ?? "",
+      from_name: (sendRes.ok ? sendRes.fromName : null) ?? fromName ?? session.full_name ?? "",
       subject,
       body_html: bodyHtml,
-      body_text: bodyText,
-      metadata: {
-        share_id: share.id,
-        kind: "catalog",
-      },
+      kind: "transactional",
+      ...campos,
+      send_type: "manual",
+      trigger_event: "catalog_share",
     });
+    if (sendsErr) console.error("[catalog-share] email_sends insert:", sendsErr.message);
 
     // 6) Auditoría
     try {

@@ -1,6 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
-import crypto from "node:crypto";
+import {
+  calcularCambiosEvento,
+  cambiosParaOutbox,
+  verificarFirmaSvix,
+  type EventoResend,
+} from "@/modules/mailing/webhook-resend";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,59 +19,15 @@ export const runtime = "nodejs";
  *  - email.clicked       → clicked_at + clicks_count++
  *  - email.bounced       → bounced_at + status='bounced'
  *  - email.complained    → complained_at (queja spam → no enviar más)
+ *  - email.failed        → status='failed' + motivo
+ *  - email.received      → correo entrante: se acepta y se ignora
+ *
+ * Casa el evento por `resend_id` en email_sends y en email_outbox. La lógica
+ * de cada evento está en src/modules/mailing/webhook-resend.ts (con tests).
  *
  * Configuración: en Resend Dashboard → Webhooks → URL apuntando aquí.
  * Verifica firma con secret RESEND_WEBHOOK_SECRET (Svix-Signature).
  */
-interface ResendEvent {
-  type: string;
-  created_at?: string;
-  data?: {
-    email_id?: string;
-    to?: string[];
-  };
-}
-
-/**
- * Verifica firma Svix (Resend) sin depender de la librería externa.
- *  · Header `svix-id`: id único del mensaje (no se firma).
- *  · Header `svix-timestamp`: epoch UTC de envío.
- *  · Header `svix-signature`: "v1,<base64-hmac> v1,<otra>" (puede haber varias por rotación de secret).
- *  · Firma = HMAC-SHA256( `${id}.${timestamp}.${rawBody}` , decode64(secret_sin_prefijo))
- *
- * El secret de Resend viene con prefijo "whsec_" — lo eliminamos antes
- * de base64-decode. Hacemos timingSafeEqual contra cada firma del header.
- */
-function verifySvixSignature(
-  rawBody: string,
-  svixId: string,
-  svixTimestamp: string,
-  svixSignatureHeader: string,
-  secret: string,
-): boolean {
-  try {
-    const cleanSecret = secret.startsWith("whsec_") ? secret.slice(6) : secret;
-    const keyBytes = Buffer.from(cleanSecret, "base64");
-    const toSign = `${svixId}.${svixTimestamp}.${rawBody}`;
-    const expectedHmac = crypto
-      .createHmac("sha256", keyBytes)
-      .update(toSign)
-      .digest("base64");
-    const sigs = svixSignatureHeader.split(" ");
-    for (const s of sigs) {
-      const [version, val] = s.split(",");
-      if (version !== "v1" || !val) continue;
-      const a = Buffer.from(expectedHmac);
-      const b = Buffer.from(val);
-      if (a.length !== b.length) continue;
-      if (crypto.timingSafeEqual(a, b)) return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(req: NextRequest) {
   // Leemos el body como texto raw ANTES de parsearlo — necesario para
   // verificar HMAC sobre los bytes exactos enviados por Resend.
@@ -91,20 +52,30 @@ export async function POST(req: NextRequest) {
       { status: 401 },
     );
   }
-  // Anti-replay: timestamp dentro de 5min (Svix recomienda)
-  const tsMs = parseInt(svixTs, 10) * 1000;
-  if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > 5 * 60 * 1000) {
-    return NextResponse.json({ error: "timestamp out of window" }, { status: 401 });
-  }
-  if (!verifySvixSignature(rawBody, svixId, svixTs, svixSig, secret)) {
-    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  // Firma Svix + anti-replay (timestamp dentro de 5 min).
+  const firma = verificarFirmaSvix({
+    cuerpo: rawBody,
+    svixId,
+    svixTimestamp: svixTs,
+    svixSignature: svixSig,
+    secreto: secret,
+  });
+  if (!firma.ok) {
+    return NextResponse.json({ error: firma.motivo }, { status: 401 });
   }
 
-  let body: ResendEvent;
+  let body: EventoResend;
   try {
-    body = JSON.parse(rawBody) as ResendEvent;
+    body = JSON.parse(rawBody) as EventoResend;
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+
+  // email.received = correo ENTRANTE (recepción de Resend). No corresponde a
+  // ningún envío nuestro: se acepta (200) para que Resend no lo reintente.
+  if (body.type === "email.received") {
+    console.info("[resend webhook] correo entrante recibido:", body.data?.email_id ?? "sin id");
+    return NextResponse.json({ ok: true, ignored: "email.received (entrante)" });
   }
 
   const emailId = body.data?.email_id;
@@ -114,18 +85,23 @@ export async function POST(req: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
-  const now = new Date().toISOString();
 
-  const { data: row } = await admin
+  const { data: row, error: selErr } = await admin
     .from("email_sends")
     .select(
-      "id, company_id, opens_count, clicks_count, customer_id, lead_id, related_subject_type, related_subject_id, template_key, subject",
+      "id, company_id, status, opens_count, clicks_count, customer_id, lead_id, related_subject_type, related_subject_id, template_key, subject",
     )
     .eq("resend_id", emailId)
     .maybeSingle();
+  if (selErr) {
+    // 500 → Resend reintenta más tarde en vez de perder el evento.
+    console.error("[resend webhook] select email_sends:", selErr.message);
+    return NextResponse.json({ error: "db error" }, { status: 500 });
+  }
   const send = row as {
     id: string;
     company_id: string;
+    status: string | null;
     opens_count: number;
     clicks_count: number;
     customer_id: string | null;
@@ -135,66 +111,66 @@ export async function POST(req: NextRequest) {
     template_key: string | null;
     subject: string;
   } | null;
-  if (!send) {
+
+  // El mismo envío también vive en email_outbox (lo escribe sendViaSmtp).
+  const { data: outbox } = await admin
+    .from("email_outbox")
+    .select("id, opens_count, clicks_count")
+    .eq("resend_id", emailId)
+    .maybeSingle();
+
+  if (!send && !outbox) {
+    // Normal con correos de otros proyectos de la misma cuenta de Resend.
     return NextResponse.json({ ok: true, ignored: "send not found" });
   }
 
-  const update: Record<string, unknown> = { last_event_at: now };
   let timelineKind: string | null = null;
-  switch (body.type) {
-    case "email.delivered":
-      update.delivered_at = now;
-      update.status = "delivered";
-      // No insertamos evento en timeline para delivered (es ruido).
-      break;
-    case "email.opened":
-      update.opened_at = now;
-      update.opens_count = (send.opens_count ?? 0) + 1;
-      // Solo emitimos evento la PRIMERA vez (para no llenar timeline).
-      if ((send.opens_count ?? 0) === 0) timelineKind = "email.opened";
-      break;
-    case "email.clicked":
-      update.clicked_at = now;
-      update.clicks_count = (send.clicks_count ?? 0) + 1;
-      if ((send.clicks_count ?? 0) === 0) timelineKind = "email.clicked";
-      break;
-    case "email.bounced":
-      update.bounced_at = now;
-      update.status = "bounced";
-      timelineKind = "email.bounced";
-      break;
-    case "email.complained":
-      update.complained_at = now;
-      update.status = "complained";
-      timelineKind = "email.complained";
-      break;
-    default:
-      return NextResponse.json({ ok: true, ignored: body.type });
+  const actualizados: string[] = [];
+
+  if (send) {
+    const r = calcularCambiosEvento(body, send);
+    if (r.ignorar) return NextResponse.json({ ok: true, ignored: r.motivo });
+    timelineKind = r.eventoTimeline;
+    const { error: upErr } = await admin.from("email_sends").update(r.cambios).eq("id", send.id);
+    if (upErr) {
+      console.error("[resend webhook] update email_sends:", upErr.message);
+      return NextResponse.json({ error: "db error" }, { status: 500 });
+    }
+    actualizados.push("email_sends");
   }
 
-  await admin.from("email_sends").update(update).eq("id", send.id);
-
-  if (timelineKind) {
-    try {
-      await admin.from("events").insert({
-        company_id: send.company_id,
-        subject_type:
-          send.related_subject_type ??
-          (send.customer_id ? "customer" : send.lead_id ? "lead" : "company"),
-        subject_id:
-          send.related_subject_id ?? send.customer_id ?? send.lead_id ?? send.company_id,
-        kind: timelineKind,
-        payload: {
-          email_send_id: send.id,
-          template_key: send.template_key,
-          subject: send.subject,
-        },
-        actor_user_id: null,
-      });
-    } catch (e) {
-      console.error("[resend webhook] event insert failed:", e);
+  if (outbox) {
+    const r = calcularCambiosEvento(body, { status: "sent", ...outbox });
+    if (r.ignorar) {
+      if (!send) return NextResponse.json({ ok: true, ignored: r.motivo });
+    } else {
+      const { error: upErr } = await admin
+        .from("email_outbox")
+        .update(cambiosParaOutbox(body, r.cambios))
+        .eq("id", outbox.id);
+      if (upErr) console.error("[resend webhook] update email_outbox:", upErr.message);
+      else actualizados.push("email_outbox");
     }
   }
 
-  return NextResponse.json({ ok: true });
+  if (send && timelineKind) {
+    const { error: evErr } = await admin.from("events").insert({
+      company_id: send.company_id,
+      subject_type:
+        send.related_subject_type ??
+        (send.customer_id ? "customer" : send.lead_id ? "lead" : "company"),
+      subject_id:
+        send.related_subject_id ?? send.customer_id ?? send.lead_id ?? send.company_id,
+      kind: timelineKind,
+      payload: {
+        email_send_id: send.id,
+        template_key: send.template_key,
+        subject: send.subject,
+      },
+      actor_user_id: null,
+    });
+    if (evErr) console.error("[resend webhook] event insert failed:", evErr.message);
+  }
+
+  return NextResponse.json({ ok: true, updated: actualizados });
 }

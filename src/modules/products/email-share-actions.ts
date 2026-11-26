@@ -27,7 +27,8 @@ import {
   type ProductShareItem,
 } from "./share-actions";
 import { generateProductDatasheetAuto } from "./datasheet-pick";
-import { sendEmailViaResend } from "@/modules/mailing/resend";
+import { sendViaSmtp } from "@/modules/mailing/smtp";
+import { camposResultadoEnvio } from "@/modules/mailing/registro-envio";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
 // ---------------------------------------------------------------------------
@@ -233,33 +234,64 @@ export async function sendProductDatasheetEmailAction(input: {
 
     // 4) Generar PDF y convertirlo a base64
     const pdfBytes = await generateProductDatasheetAuto(input.productId);
-    const pdfBase64 = Buffer.from(pdfBytes).toString("base64");
 
     // 5) Sender
     const sender = await getSenderInfo();
 
-    // 6) Enviar vía Resend
-    const result = await sendEmailViaResend({
-      from_email: sender.from_email,
-      from_name: sender.from_name,
-      reply_to: sender.reply_to ?? undefined,
-      to_email: email,
-      to_name: input.recipientName,
+    // 6) Enviar por la vía común (sendViaSmtp): Resend si la empresa lo tiene
+    //    con dominio verificado, si no la cascada SMTP. Antes llamaba a Resend
+    //    directamente con el correo del usuario como remitente, que Resend
+    //    rechaza si ese dominio no está verificado, y no dejaba rastro en
+    //    email_sends (el webhook no podía casar sus eventos).
+    const sendRes = await sendViaSmtp({
+      companyId: session.company_id,
+      senderUserId: session.user_id,
+      to: email,
+      toName: input.recipientName,
       subject,
-      body_html: bodyHtml,
-      body_text: bodyText,
+      html: bodyHtml,
+      text: bodyText,
+      sendType: "manual",
+      triggerEvent: "product_datasheet",
+      relatedType: input.customerId ? "customer" : input.leadId ? "lead" : "product",
+      relatedId: input.customerId ?? input.leadId ?? input.productId,
+      replyTo: sender.reply_to ?? sender.from_email ?? undefined,
       attachments: [
         {
           filename: `ficha-tecnica-${productName.replace(/[^a-z0-9-]+/gi, "-").toLowerCase()}.pdf`,
-          content: pdfBase64,
+          // Buffer (no base64 en texto): nodemailer trata un string como texto plano.
+          content: Buffer.from(pdfBytes),
         },
       ],
-      metadata: {
-        product_id: input.productId,
-        share_id: share.id,
-        kind: "product_datasheet",
-      },
     });
+    const campos = camposResultadoEnvio(sendRes);
+    const result = {
+      ok: sendRes.ok,
+      resend_id: campos.resend_id,
+      error_message: campos.error_message,
+    };
+
+    const { error: sendsErr } = await admin.from("email_sends").insert({
+      company_id: session.company_id,
+      user_id: session.user_id,
+      template_key: "product_datasheet",
+      to_email: email,
+      to_name: input.recipientName ?? null,
+      customer_id: input.customerId ?? null,
+      lead_id: input.leadId ?? null,
+      from_email: (sendRes.ok ? sendRes.fromEmail : null) ?? sender.from_email ?? "",
+      from_name: (sendRes.ok ? sendRes.fromName : null) ?? sender.from_name ?? "",
+      subject,
+      body_html: bodyHtml,
+      kind: "transactional",
+      ...campos,
+      attachments_meta: [{ name: "ficha-tecnica.pdf" }],
+      related_subject_type: "product",
+      related_subject_id: input.productId,
+      send_type: "manual",
+      trigger_event: "product_datasheet",
+    });
+    if (sendsErr) console.error("[product-datasheet] email_sends insert:", sendsErr.message);
 
     // 7) Auditoría en product_catalog_emails (defensiva: si la tabla no existe
     // no rompemos el envío).

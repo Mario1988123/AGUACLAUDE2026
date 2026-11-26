@@ -37,7 +37,9 @@ export type TriggerEvent =
   | "manual_send"
   | "campaign_send"
   | "incident_notification"
-  | "gmaps_budget_alert";
+  | "gmaps_budget_alert"
+  | "product_datasheet"
+  | "catalog_share";
 
 export type AccountType =
   | "user"
@@ -102,6 +104,9 @@ export interface SendResult {
   /** Id devuelto por Resend (solo cuando accountType==="resend"). Necesario
    *  para que el webhook /api/webhooks/resend enlace el tracking. */
   resend_id?: string | null;
+  /** Remitente real con el que salió (para guardarlo en email_sends). */
+  fromEmail?: string;
+  fromName?: string;
 }
 
 export interface SendError {
@@ -395,9 +400,21 @@ export async function sendViaSmtp(params: SendEmailParams): Promise<SendResult |
           from_account_type: "resend",
           from_email: resendCfg.fromEmail,
           from_name: resendCfg.fromName,
+          // Sin esto el webhook de Resend no puede casar el evento con la fila.
+          resend_id: r.resend_id,
         })
         .eq("id", outboxId);
-      return { ok: true, outboxId, accountType: "resend", resend_id: r.resend_id };
+      if (!r.resend_id) {
+        console.error("[smtp] Resend aceptó el envío pero no devolvió id; no habrá seguimiento", outboxId);
+      }
+      return {
+        ok: true,
+        outboxId,
+        accountType: "resend",
+        resend_id: r.resend_id,
+        fromEmail: resendCfg.fromEmail,
+        fromName: resendCfg.fromName,
+      };
     }
     // Resend falló: marcamos el fallo y NO caemos a SMTP (la empresa eligió
     // Resend explícitamente; un fallo real debe verse, no enmascararse).
@@ -470,7 +487,14 @@ export async function sendViaSmtp(params: SendEmailParams): Promise<SendResult |
       })
       .eq("id", outboxId);
 
-    return { ok: true, outboxId, accountType: config.accountType };
+    return {
+      ok: true,
+      outboxId,
+      accountType: config.accountType,
+      resend_id: null,
+      fromEmail: config.fromEmail,
+      fromName: config.fromName,
+    };
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : "Error desconocido al enviar";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

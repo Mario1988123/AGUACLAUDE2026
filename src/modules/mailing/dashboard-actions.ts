@@ -521,36 +521,25 @@ export async function resendEmailAction(
     related_subject_id: string | null;
   };
 
-  const { pickSmtpConfig } = await import("./smtp");
-  const cfg = await pickSmtpConfig({
+  // Reenvío por la misma vía que cualquier otro envío (sendViaSmtp): sale por
+  // Resend si la empresa lo tiene listo (y así guarda resend_id para el
+  // webhook) o por la cascada SMTP, y deja su fila en email_outbox.
+  const { sendViaSmtp } = await import("./smtp");
+  const res = await sendViaSmtp({
     companyId,
-    userId: session.user_id,
-    automated: false,
+    senderUserId: session.user_id,
+    to: o.to_email,
+    toName: o.to_name ?? undefined,
+    subject: `${o.subject} (reenvío)`,
+    html: o.body_html,
+    sendType: "manual",
+    triggerEvent: "manual_send",
+    relatedType: o.related_subject_type ?? (o.customer_id ? "customer" : o.lead_id ? "lead" : undefined),
+    relatedId: o.related_subject_id ?? o.customer_id ?? o.lead_id ?? undefined,
+    replyTo: session.email ?? undefined,
   });
-  let sendOk = false;
-  let sendError: string | null = null;
-  if (!cfg) {
-    sendError = "No hay SMTP configurado. Configura en /configuracion/mailing.";
-  } else {
-    try {
-      const { default: nodemailer } = await import("nodemailer");
-      const transporter = nodemailer.createTransport({
-        host: cfg.host,
-        port: cfg.port,
-        secure: cfg.secure,
-        auth: { user: cfg.user, pass: cfg.password },
-      });
-      await transporter.sendMail({
-        from: `"${o.from_name ?? cfg.fromName}" <${o.from_email}>`,
-        to: o.to_name ? `"${o.to_name}" <${o.to_email}>` : o.to_email,
-        subject: `${o.subject} (reenvío)`,
-        html: o.body_html,
-      });
-      sendOk = true;
-    } catch (e) {
-      sendError = e instanceof Error ? e.message : "Error al reenviar";
-    }
-  }
+  const sendOk = res.ok;
+  const sendError = res.ok ? null : res.error;
 
   const { data: newSend } = await admin
     .from("email_sends")
@@ -561,8 +550,8 @@ export async function resendEmailAction(
       template_key: o.template_key,
       to_email: o.to_email,
       to_name: o.to_name,
-      from_email: o.from_email,
-      from_name: o.from_name,
+      from_email: (res.ok ? res.fromEmail : null) ?? o.from_email,
+      from_name: (res.ok ? res.fromName : null) ?? o.from_name,
       subject: `${o.subject} (reenvío)`,
       body_html: o.body_html,
       kind: o.kind,
@@ -576,7 +565,8 @@ export async function resendEmailAction(
       metadata: { resent_from: id },
       send_type: "manual",
       trigger_event: "manual_send",
-      from_account_type: cfg?.accountType ?? null,
+      from_account_type: res.ok ? res.accountType : null,
+      resend_id: res.ok ? res.resend_id ?? null : null,
     })
     .select("id")
     .single();

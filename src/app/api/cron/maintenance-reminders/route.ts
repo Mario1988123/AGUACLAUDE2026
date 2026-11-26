@@ -348,8 +348,12 @@ async function sendMaintenanceReminder(
     to_email: c.email,
     to_name: customerName,
     customer_id: job.customer_id,
-    from_email: (company as { name: string | null } | null)?.name ?? "",
-    from_name: (company as { name: string | null } | null)?.name ?? "Hidromanager",
+    // Antes se guardaba el NOMBRE de la empresa como from_email.
+    from_email: (result.ok ? result.fromEmail : null) ?? "",
+    from_name:
+      (result.ok ? result.fromName : null) ??
+      (company as { name: string | null } | null)?.name ??
+      "Hidromanager",
     subject,
     body_html: fullHtml,
     kind: "transactional",
