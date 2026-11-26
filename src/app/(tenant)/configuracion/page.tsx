@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import * as Icons from "lucide-react";
 import { requireSession } from "@/shared/lib/auth/session";
+import { captacionActiva } from "@/modules/captacion/guard";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,13 @@ export default async function ConfiguracionPage() {
   if (!session.is_superadmin && !session.roles.includes("company_admin")) {
     redirect("/dashboard");
   }
+  // Captación WhatsApp: solo si el módulo está activo de forma explícita.
+  const secciones = (await captacionActiva(session.company_id))
+    ? [
+        ...SECTIONS,
+        { href: "/configuracion/captacion", label: "Captación WhatsApp", icon: "MessageCircle", desc: "Número de WhatsApp, envíos en frío y plantillas" },
+      ]
+    : SECTIONS;
   return (
     <div className="space-y-8">
       <div>
@@ -58,7 +66,7 @@ export default async function ConfiguracionPage() {
       </div>
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {SECTIONS.map((s) => {
+        {secciones.map((s) => {
           const Icon =
             (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[
               s.icon
