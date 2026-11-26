@@ -300,8 +300,8 @@ export function ContractCompleteWizard({
                     <FileText className="h-4 w-4" /> Ver contrato completo
                   </Button>
                   <p className="text-xs text-muted-foreground">
-                    Cuando esté todo listo, cierra este modal y pulsa «Marcar firmado» en
-                    el bloque de Estado.
+                    Cuando esté todo listo, cierra esta ventana y pulsa «Firmar» en el
+                    bloque de Estado.
                   </p>
                 </div>
               )}
