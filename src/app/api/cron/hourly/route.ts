@@ -147,7 +147,23 @@ export async function GET(req: NextRequest) {
     tracker.error("carga-sugerida-tarde", e);
   }
 
+  // Avisos de pruebas gratuitas (2026-11-26): una vez al día, a las 9:00 de
+  // Madrid, para que el push no llegue de noche (el diario va a las 23:00).
+  let avisosPruebas: Record<string, number> | null = null;
+  try {
+    const { madridParts } = await import("@/shared/lib/format-date");
+    const { avisosDiariosPruebas, HORA_AVISOS_PRUEBAS } = await import(
+      "@/modules/free-trials/avisos-diarios"
+    );
+    if (madridParts(new Date()).hour === HORA_AVISOS_PRUEBAS) {
+      avisosPruebas = await avisosDiariosPruebas(admin, enServicio.ids);
+    }
+  } catch (e) {
+    tracker.error("avisos-pruebas", e);
+  }
+
   const stats = {
+    avisos_pruebas: avisosPruebas,
     punches_closed: punchesClosed,
     notified_users: notifiedUsers,
     verifacti_consultados: verifactiConsultados,

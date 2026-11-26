@@ -92,7 +92,7 @@ export default async function LeadDetailPage({
         .select("id, status, installed_at, duration_days, created_at")
         .eq("lead_id", lead.id)
         .is("deleted_at", null)
-        .in("status", ["draft", "scheduled", "installed"])
+        .in("status", ["draft", "scheduled", "installed", "expired"])
         .order("created_at", { ascending: false });
       const lista = (pruebas ?? []) as Array<{
         id: string;

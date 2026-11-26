@@ -18,3 +18,15 @@ export function puedeAgendarPrueba(
 
 /** Roles que reciben el aviso «prueba creada, agéndala». */
 export const ROLES_QUE_AGENDAN_PRUEBA = ["company_admin", "technical_director"];
+
+/**
+ * Quién firma e instala la prueba (Mario 2026-11-26): el instalador
+ * asignado, el admin y el director técnico. El comercial ya no instala por
+ * su cuenta: la prueba pasa antes por el agendado del admin.
+ */
+export function puedeInstalarPrueba(
+  session: Pick<SessionClaims, "is_superadmin" | "roles" | "user_id">,
+  instaladorAsignado: string | null,
+): boolean {
+  return puedeAgendarPrueba(session) || (!!instaladorAsignado && instaladorAsignado === session.user_id);
+}

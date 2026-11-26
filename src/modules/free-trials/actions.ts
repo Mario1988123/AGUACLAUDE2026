@@ -12,7 +12,7 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { disponibilidadSchema } from "./disponibilidad";
-import { puedeAgendarPrueba, ROLES_QUE_AGENDAN_PRUEBA } from "./permisos";
+import { puedeAgendarPrueba, puedeInstalarPrueba, ROLES_QUE_AGENDAN_PRUEBA } from "./permisos";
 import { ROL_PRUEBA_GRATUITA, productosNoPermitidos } from "./productos-prueba";
 import { DEFAULT_FREE_TRIAL_DURATION_DAYS } from "@/modules/config/free-trials/defaults";
 
@@ -322,6 +322,9 @@ export async function installFreeTrialAction(
   if (t.status === "installed" || t.status === "accepted") {
     throw new Error("Ya instalada");
   }
+  if (!puedeInstalarPrueba(session, t.assigned_installer_user_id)) {
+    throw new Error("Solo el instalador asignado, el admin o el director técnico pueden instalar la prueba.");
+  }
   const expires = new Date(now);
   expires.setDate(expires.getDate() + t.duration_days);
 
@@ -547,6 +550,53 @@ export async function installFreeTrialAction(
     },
     actor_user_id: session.user_id,
   });
+  // El lead vuelve al comercial: aviso (push) con la fecha en que termina
+  // la prueba para que llame al cliente (Mario 2026-11-26).
+  try {
+    let comercial: string | null = null;
+    if (t.lead_id) {
+      const { data: l } = await admin
+        .from("leads")
+        .select("assigned_user_id")
+        .eq("id", t.lead_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      comercial = (l as { assigned_user_id: string | null } | null)?.assigned_user_id ?? null;
+    }
+    if (!comercial) {
+      const { data: c } = await admin
+        .from("free_trials")
+        .select("created_by")
+        .eq("id", id)
+        .maybeSingle();
+      comercial = (c as { created_by: string | null } | null)?.created_by ?? null;
+    }
+    if (comercial && comercial !== session.user_id) {
+      const { nombreDePrueba } = await import("./instalacion-prueba");
+      const nombre = (await nombreDePrueba(admin, session.company_id, t)) ?? "tu cliente";
+      const termina = expires.toLocaleDateString("es-ES", {
+        timeZone: "Europe/Madrid",
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+      const { notify } = await import("@/modules/notifications/notifier");
+      await notify({
+        company_id: session.company_id,
+        recipient_user_id: comercial,
+        kind: "free_trial.installed",
+        category: "alert",
+        severity: "info",
+        title: `Prueba instalada · ${nombre}`,
+        body: `Empieza la cuenta atrás: ${t.duration_days} días, termina el ${termina}. Llama al cliente al acabar.`,
+        subject_type: "free_trial",
+        subject_id: id,
+        action_url: `/pruebas-gratuitas/${id}`,
+      });
+    }
+  } catch (e) {
+    console.error("[installFreeTrial] aviso al comercial:", e);
+  }
   // La cita que puso quien agendó (agendar-actions.ts) queda hecha.
   await admin
     .from("agenda_events")
@@ -603,6 +653,22 @@ async function _signAndInstallFreeTrialAction(input: {
   const session = await requireSession();
   if (!session.company_id) throw new Error("Sin empresa");
 
+  {
+    const { data: ftPerm } = await createAdminClient()
+      .from("free_trials")
+      .select("assigned_installer_user_id, status")
+      .eq("id", input.trial_id)
+      .eq("company_id", session.company_id)
+      .maybeSingle();
+    const fp = ftPerm as { assigned_installer_user_id: string | null; status: string } | null;
+    if (!fp) throw new Error("Prueba no encontrada");
+    if (!puedeInstalarPrueba(session, fp.assigned_installer_user_id)) {
+      throw new Error("Solo el instalador asignado, el admin o el director técnico pueden instalar la prueba.");
+    }
+    // Agendar se hace solo desde la tarjeta «Agendar instalación» (crea la
+    // instalación y la cita). Aquí siempre se instala ahora.
+    input = { ...input, scheduled_for: null };
+  }
   if (!input.customer_signer_name?.trim())
     throw new Error("Falta el nombre del firmante");
   if (!input.customer_signature_data_url?.startsWith("data:image/"))
@@ -912,7 +978,9 @@ export async function acceptFreeTrialAction(input: {
         customer_id: trial.customer_id ?? "",
       };
     }
-    if (!["installed", "scheduled", "draft"].includes(trial.status)) {
+    // «expired» = terminó la prueba sin decidir: el cliente aún puede
+    // quedársela (Mario 2026-11-26).
+    if (!["installed", "expired", "scheduled", "draft"].includes(trial.status)) {
       return {
         ok: false,
         error: `No se puede aceptar una prueba en estado "${trial.status}"`,
@@ -1400,6 +1468,9 @@ export async function rejectFreeTrialAction(id: string, reason: string) {
   // no deben seguir en /instalaciones ni en la agenda del instalador.
   const { cancelarInstalacionDePrueba } = await import("./instalacion-prueba");
   await cancelarInstalacionDePrueba(admin, session.company_id, id, `Prueba rechazada: ${reason}`);
+  // Venta perdida: el lead no se queda en «prueba propuesta» para siempre.
+  const { marcarLeadPerdidoPorPrueba } = await import("./instalacion-prueba");
+  await marcarLeadPerdidoPorPrueba(admin, session.company_id, id, reason, session.user_id);
   revalidatePath("/instalaciones");
   revalidatePath(`/pruebas-gratuitas/${id}`);
   revalidatePath("/pruebas-gratuitas");
@@ -1635,6 +1706,88 @@ export async function signAndInstallFreeTrialSafeAction(input: {
   try {
     const r = await signAndInstallFreeTrialAction(input);
     return { ok: true, status: r.status };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+
+/**
+ * Cambia los días de prueba después de crearla (Mario 2026-11-26: 10 por
+ * defecto, pero pueden ser 5, 20, 25…). Recalcula el final si ya está
+ * instalada; si estaba terminada y el nuevo plazo aún no ha pasado, vuelve a
+ * «instalada». Pueden el admin, el director técnico, quien la creó y el
+ * dueño del lead.
+ */
+export async function cambiarDiasPruebaSafeAction(
+  trialId: string,
+  dias: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const session = await requireSession();
+    if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    const id = z.string().uuid().parse(trialId);
+    const n = z
+      .number({ invalid_type_error: "Indica los días" })
+      .int("Los días van sin decimales")
+      .min(1, "Mínimo 1 día")
+      .max(120, "Máximo 120 días")
+      .parse(dias);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = createAdminClient() as any;
+    const { data } = await admin
+      .from("free_trials")
+      .select("id, status, installed_at, created_by, lead_id")
+      .eq("id", id)
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    const t = data as {
+      status: string;
+      installed_at: string | null;
+      created_by: string | null;
+      lead_id: string | null;
+    } | null;
+    if (!t) return { ok: false, error: "Prueba no encontrada" };
+    if (!["draft", "scheduled", "installed", "expired"].includes(t.status)) {
+      return { ok: false, error: "Esta prueba ya está decidida." };
+    }
+    let puede = puedeAgendarPrueba(session) || t.created_by === session.user_id;
+    if (!puede && t.lead_id) {
+      const { data: l } = await admin
+        .from("leads")
+        .select("assigned_user_id")
+        .eq("id", t.lead_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      puede = (l as { assigned_user_id: string | null } | null)?.assigned_user_id === session.user_id;
+    }
+    if (!puede) return { ok: false, error: "No puedes cambiar los días de esta prueba." };
+
+    const cambios: Record<string, unknown> = { duration_days: n };
+    if (t.installed_at) {
+      const fin = new Date(t.installed_at);
+      fin.setDate(fin.getDate() + n);
+      cambios.expires_at = fin.toISOString();
+      if (t.status === "expired" && fin.getTime() > Date.now()) cambios.status = "installed";
+    }
+    const { error } = await admin
+      .from("free_trials")
+      .update(cambios)
+      .eq("id", id)
+      .eq("company_id", session.company_id);
+    if (error) throw error;
+    await admin.from("events").insert({
+      company_id: session.company_id,
+      subject_type: "free_trial",
+      subject_id: id,
+      kind: "free_trial.duration_changed",
+      payload: { duration_days: n },
+      actor_user_id: session.user_id,
+    });
+    revalidatePath(`/pruebas-gratuitas/${id}`);
+    if (t.lead_id) revalidatePath(`/leads/${t.lead_id}`);
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
   }

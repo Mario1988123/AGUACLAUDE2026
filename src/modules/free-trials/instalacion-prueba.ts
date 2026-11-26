@@ -43,7 +43,7 @@ export async function instalacionAbiertaDePrueba(
 }
 
 /** Nombre del cliente o del lead de la prueba, para el título de la cita. */
-async function nombreDePrueba(
+export async function nombreDePrueba(
   admin: Admin,
   companyId: string,
   trial: { customer_id: string | null; lead_id: string | null },
@@ -407,5 +407,49 @@ export async function cancelarInstalacionDePrueba(
       .eq("status", "scheduled");
   } catch (e) {
     console.error("[instalacionPrueba] cancelar:", e);
+  }
+}
+
+/**
+ * La prueba no acaba en venta (rechazada o retirada sin aceptar): su lead
+ * pasa a «perdido» con el motivo. Solo si sigue vivo en «prueba propuesta»
+ * (no toca un lead ya convertido o que el comercial movió a otro estado).
+ */
+export async function marcarLeadPerdidoPorPrueba(
+  admin: Admin,
+  companyId: string,
+  trialId: string,
+  motivo: string,
+  actorId: string | null,
+): Promise<void> {
+  try {
+    const { data: ft } = await admin
+      .from("free_trials")
+      .select("lead_id")
+      .eq("id", trialId)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    const leadId = (ft as { lead_id: string | null } | null)?.lead_id;
+    if (!leadId) return;
+    const lostReason = `Prueba gratuita sin venta: ${motivo}`.slice(0, 500);
+    const { data: upd } = await admin
+      .from("leads")
+      .update({ status: "lost", lost_at: new Date().toISOString(), lost_reason: lostReason })
+      .eq("id", leadId)
+      .eq("company_id", companyId)
+      .eq("status", "free_trial_proposed")
+      .is("deleted_at", null)
+      .select("id");
+    if (!upd?.length) return;
+    await admin.from("events").insert({
+      company_id: companyId,
+      subject_type: "lead",
+      subject_id: leadId,
+      kind: "lead.status_changed",
+      payload: { to: "lost", reason: lostReason, free_trial_id: trialId },
+      actor_user_id: actorId,
+    });
+  } catch (e) {
+    console.error("[pruebas] marcar lead perdido:", e);
   }
 }

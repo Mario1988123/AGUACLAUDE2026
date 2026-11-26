@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { getFreeTrial } from "@/modules/free-trials/actions";
 import { FreeTrialActionsPanel } from "@/modules/free-trials/actions-panel";
 import { DisponibilidadFicha } from "@/modules/free-trials/disponibilidad-ficha";
+import { DiasPruebaEditor } from "@/modules/free-trials/dias-prueba-editor";
 import { AgendarInstalacionPrueba } from "@/modules/free-trials/agendar-instalacion";
-import { puedeAgendarPrueba } from "@/modules/free-trials/permisos";
+import { puedeAgendarPrueba, puedeInstalarPrueba } from "@/modules/free-trials/permisos";
 import { leerDisponibilidad } from "@/modules/free-trials/disponibilidad";
 import { RetiradaPruebaButton } from "@/modules/customers/retirada-prueba-button";
 import { puedeRetirar, pruebaRetirable } from "@/modules/customers/retirada-logica";
@@ -222,8 +223,13 @@ export default async function FreeTrialDetailPage({
                 <strong>Instalada:</strong> {fmt(trial.installed_at)}
               </div>
               <div>
-                <strong>Caduca:</strong> {fmt(trial.expires_at)}
+                <strong>Termina:</strong> {fmt(trial.expires_at)}
               </div>
+              <DiasPruebaEditor
+                trialId={trial.id}
+                dias={(trial as { duration_days?: number | null }).duration_days ?? 10}
+                editable={["draft", "scheduled", "installed", "expired"].includes(trial.status)}
+              />
               <DisponibilidadFicha
                 trialId={trial.id}
                 inicial={disponibilidad}
@@ -294,6 +300,8 @@ export default async function FreeTrialDetailPage({
               warehouses={warehouses}
               installers={puedeAgendar ? installers : []}
               pendingUninstall={pendingUninstall}
+              puedeInstalar={puedeInstalarPrueba(session, instaladorAsignado)}
+              expiresAt={(trial as { expires_at?: string | null }).expires_at ?? null}
             />
             {puedeRetirar(session) && pruebaRetirable(trial.status) && (
               <div className="mt-4 border-t pt-4">

@@ -6,8 +6,10 @@ import {
 } from "./prueba-lead";
 
 describe("prueba activa en el lead", () => {
-  it("solo cuando está instalada", () => {
+  it("solo con el equipo en casa del cliente (instalada o terminada sin decidir)", () => {
     expect(pruebaEstaActiva("installed")).toBe(true);
+    expect(pruebaEstaActiva("expired")).toBe(true);
+    expect(pruebaEstaActiva("rejected")).toBe(false);
     expect(pruebaEstaActiva("draft")).toBe(false);
     expect(pruebaEstaActiva("scheduled")).toBe(false);
   });

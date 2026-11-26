@@ -215,7 +215,7 @@ export async function listLeads(filters?: {
         .select("id, lead_id, status, installed_at, duration_days")
         .in("lead_id", ids)
         .is("deleted_at", null)
-        .in("status", ["draft", "scheduled", "installed"]),
+        .in("status", ["draft", "scheduled", "installed", "expired"]),
     ]);
     for (const p of (propsRes.data ?? []) as { lead_id: string | null }[]) {
       if (p.lead_id) leadsWithProposals.add(p.lead_id);

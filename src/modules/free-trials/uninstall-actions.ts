@@ -273,13 +273,27 @@ export async function processFreeTrialUninstallCompletion(
     .from("free_trials")
     .update({ status: "removed", removed_at: now })
     .eq("id", i.free_trial_id)
-    .eq("company_id", session.company_id);
+    .eq("company_id", session.company_id)
+    // Si se la quedó con otro equipo (cambio), la prueba sigue «aceptada»:
+    // retirar el equipo de prueba no la convierte en venta perdida.
+    .neq("status", "accepted");
   if (upd.error) {
     console.error(
       "[processFreeTrialUninstallCompletion] update free_trials:",
       upd.error.message,
     );
     return;
+  }
+  // Retirada sin venta: el lead no se queda en «prueba propuesta».
+  {
+    const { marcarLeadPerdidoPorPrueba } = await import("./instalacion-prueba");
+    await marcarLeadPerdidoPorPrueba(
+      admin,
+      session.company_id,
+      i.free_trial_id,
+      "equipo de prueba retirado",
+      session.user_id,
+    );
   }
 
   await admin.from("events").insert({

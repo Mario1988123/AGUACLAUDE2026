@@ -38,6 +38,8 @@ export function FreeTrialActionsPanel({
   warehouses,
   installers,
   pendingUninstall,
+  puedeInstalar = false,
+  expiresAt = null,
 }: {
   trialId: string;
   status: string;
@@ -47,6 +49,9 @@ export function FreeTrialActionsPanel({
   warehouses: WarehouseOption[];
   installers: InstallerOption[];
   pendingUninstall: PendingUninstall | null;
+  /** Instalador asignado, admin o director técnico (permisos.ts). */
+  puedeInstalar?: boolean;
+  expiresAt?: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -64,8 +69,8 @@ export function FreeTrialActionsPanel({
         return;
       }
       notify.success(
-        "Marcada como rechazada",
-        "Agenda la desinstalación para retirar el equipo.",
+        "Venta perdida",
+        "El lead pasa a perdido. Ahora agenda la retirada del equipo.",
       );
       router.refresh();
     });
@@ -136,24 +141,43 @@ export function FreeTrialActionsPanel({
         >
           <FileDown className="h-4 w-4" /> Vista previa albarán
         </a>
-        <SignAndInstallButton
-          trialId={trialId}
-          defaultCustomerName={customerName}
-          defaultCustomerTaxId={customerTaxId}
-        />
-        <p className="text-xs text-muted-foreground">
-          El wizard pide cuándo, tipo (provisional/definitiva), datos del
-          firmante y captura las dos firmas (cliente + comercial). Tras
-          confirmar, la prueba queda firmada e instalada (o programada).
-        </p>
+        {puedeInstalar ? (
+          <>
+            <SignAndInstallButton
+              trialId={trialId}
+              defaultCustomerName={customerName}
+              defaultCustomerTaxId={customerTaxId}
+            />
+            <p className="text-xs text-muted-foreground">
+              Se pulsa en casa del cliente al instalar: pide si es provisional o
+              definitiva, los datos del firmante y las dos firmas. Al terminar
+              empieza a contar la prueba y se avisa al comercial.
+            </p>
+          </>
+        ) : (
+          <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+            {status === "draft"
+              ? "Pendiente de que el admin la agende con el cliente."
+              : "Agendada. La instala el instalador asignado el día de la cita."}
+          </p>
+        )}
       </div>
     );
   }
 
-  // ---------- installed: aceptar, rechazar, agendar desinstalación ----------
-  if (status === "installed") {
+  // ---------- installed / expired: decidir ----------
+  // «expired» = terminó la prueba sin decidir: sigue pudiendo quedársela o
+  // retirarse (Mario 2026-11-26). Nunca se queda sin salida.
+  if (status === "installed" || status === "expired") {
+    const terminada =
+      status === "expired" || (!!expiresAt && new Date(expiresAt).getTime() <= Date.now());
     return (
       <div className="space-y-4">
+        {terminada && (
+          <div className="rounded-xl border-2 border-destructive/40 bg-destructive/10 p-3 text-sm font-semibold text-destructive">
+            La prueba ha terminado. Llama al cliente y decide: se la queda o se retira.
+          </div>
+        )}
         {isProvisional && (
           <div className="rounded-xl border-2 border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground">
             <Wrench className="inline h-3.5 w-3.5 -mt-0.5 mr-1" />
@@ -196,7 +220,7 @@ export function FreeTrialActionsPanel({
               onChange={(e) => setReason(e.target.value)}
               rows={2}
               className="w-full rounded-xl border border-input bg-background px-3 py-2 text-base md:text-sm"
-              placeholder="¿Por qué no quiere?"
+              placeholder="¿Por qué no se la queda?"
             />
             <Button
               variant="outline"
@@ -204,11 +228,10 @@ export function FreeTrialActionsPanel({
               disabled={pending}
               className="w-full"
             >
-              <X className="h-4 w-4" /> Marcar rechazada
+              <X className="h-4 w-4" /> No se la queda (venta perdida)
             </Button>
             <p className="text-[11px] text-muted-foreground">
-              Al rechazar, agenda también la desinstalación para retirar el
-              equipo.
+              El lead pasa a perdido y después agendas la retirada del equipo.
             </p>
           </div>
         </div>
@@ -216,15 +239,13 @@ export function FreeTrialActionsPanel({
     );
   }
 
-  // ---------- rejected / expired: agendar desinstalación o ver pendiente ----------
-  if (status === "rejected" || status === "expired") {
+  // ---------- rejected: agendar desinstalación o ver pendiente ----------
+  if (status === "rejected") {
     return (
       <div className="space-y-3">
         <div className="rounded-xl border-2 border-destructive/30 bg-destructive/5 p-3 text-xs">
-          {status === "expired"
-            ? "La prueba ha caducado sin aceptarse."
-            : "El cliente ha rechazado la prueba."}{" "}
-          Para retirar el equipo debes agendar una desinstalación.
+          No se la queda (venta perdida). Para retirar el equipo agenda la
+          desinstalación.
         </div>
         {uninstallPanel()}
         {!pendingUninstall && (
@@ -232,7 +253,7 @@ export function FreeTrialActionsPanel({
             trialId={trialId}
             warehouses={warehouses}
             installers={installers}
-            reason={status === "expired" ? "expired" : "rejected"}
+            reason="rejected"
           />
         )}
       </div>

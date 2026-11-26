@@ -115,7 +115,7 @@ export async function avisarLeadsInactivos(
             .eq("company_id", companyId)
             .in("lead_id", ids)
             .is("deleted_at", null)
-            .in("status", ["draft", "scheduled", "installed"]),
+            .in("status", ["draft", "scheduled", "installed", "expired"]),
         ]);
         for (const r of (ev.data ?? []) as Array<{ subject_id: string }>) conActividad.add(r.subject_id);
         for (const r of (ag.data ?? []) as Array<{ subject_id: string }>) conActividad.add(r.subject_id);

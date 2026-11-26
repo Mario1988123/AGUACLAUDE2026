@@ -8,7 +8,9 @@
  * Sin "use server" ni dependencias: lo usan el servidor y los tests.
  */
 export function pruebaEstaActiva(status: string): boolean {
-  return status === "installed";
+  // «expired» = terminó sin decidir, pero el equipo sigue en casa del
+  // cliente: cuenta como activa (plazo cumplido) hasta que se decida.
+  return status === "installed" || status === "expired";
 }
 
 export const TEXTO_PRUEBA_PENDIENTE = "Instalación pendiente de prueba gratuita";

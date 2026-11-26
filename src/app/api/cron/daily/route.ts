@@ -1136,22 +1136,19 @@ export async function GET(req: NextRequest) {
       assigned_installer_user_id: string | null;
     }>) {
       if (offFreeTrials.has(t.company_id)) continue;
-      if (t.assigned_installer_user_id) {
-        try {
-          await admin.from("notifications").insert({
-            company_id: t.company_id,
-            recipient_user_id: t.assigned_installer_user_id,
-            kind: "free_trial.expired",
-            severity: "warning",
-            title: "Prueba gratuita caducada",
-            body: "Decisión pendiente: contratar o desinstalar.",
-            subject_type: "free_trial",
-            subject_id: t.id,
-            action_url: `/pruebas-gratuitas/${t.id}`,
-          });
-        } catch {
-          /* */
-        }
+      // El aviso al comercial y al admin («terminada sin decidir») lo manda
+      // cada mañana a las 9:00 el cron horario (free-trials/avisos-diarios).
+      // Aquí solo se deja constancia en el historial de la prueba.
+      try {
+        await admin.from("events").insert({
+          company_id: t.company_id,
+          subject_type: "free_trial",
+          subject_id: t.id,
+          kind: "free_trial.expired",
+          payload: {},
+        });
+      } catch {
+        /* */
       }
     }
   } catch (e) {

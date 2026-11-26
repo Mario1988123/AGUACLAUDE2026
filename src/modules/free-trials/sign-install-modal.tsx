@@ -3,8 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Play,
-  Calendar,
   Wrench,
   CheckCheck,
   ArrowLeft,
@@ -24,7 +22,7 @@ import { notify } from "@/shared/hooks/use-toast";
 import { SignaturePad } from "@/shared/components/signature-pad";
 import { signAndInstallFreeTrialSafeAction } from "./actions";
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 2 | 3 | 4 | 5;
 
 interface Props {
   trialId: string;
@@ -33,12 +31,12 @@ interface Props {
 }
 
 /**
- * Modal-wizard pre-instalación para una prueba gratuita:
- *   1. Cuándo: ahora vs día específico.
+ * Modal-wizard de instalación de una prueba gratuita (se instala en el acto;
+ * el día y la hora se fijan antes en «Agendar instalación», Mario 2026-11-26):
  *   2. Tipo: instalación PROVISIONAL (de prueba) o DEFINITIVA.
  *   3. Datos del firmante (cliente).
  *   4. Firma del cliente.
- *   5. Firma del comercial → guarda + instala (o programa).
+ *   5. Firma de quien instala → guarda + instala.
  */
 export function SignAndInstallButton({
   trialId,
@@ -47,11 +45,9 @@ export function SignAndInstallButton({
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(2);
   const [pending, startTransition] = useTransition();
 
-  const [when, setWhen] = useState<"now" | "scheduled">("now");
-  const [scheduledDate, setScheduledDate] = useState("");
   const [isProvisional, setIsProvisional] = useState(true);
   const [signerName, setSignerName] = useState(defaultCustomerName);
   const [signerTaxId, setSignerTaxId] = useState(defaultCustomerTaxId ?? "");
@@ -59,9 +55,7 @@ export function SignAndInstallButton({
   const [repSig, setRepSig] = useState<string | null>(null);
 
   function reset() {
-    setStep(1);
-    setWhen("now");
-    setScheduledDate("");
+    setStep(2);
     setIsProvisional(true);
     setSignerName(defaultCustomerName);
     setSignerTaxId(defaultCustomerTaxId ?? "");
@@ -70,14 +64,6 @@ export function SignAndInstallButton({
   }
 
   function next() {
-    if (step === 1) {
-      if (when === "scheduled" && !scheduledDate) {
-        notify.warning("Indica la fecha");
-        return;
-      }
-      setStep(2);
-      return;
-    }
     if (step === 2) {
       setStep(3);
       return;
@@ -101,7 +87,7 @@ export function SignAndInstallButton({
   }
 
   function back() {
-    if (step > 1) setStep(((step as number) - 1) as Step);
+    if (step > 2) setStep(((step as number) - 1) as Step);
   }
 
   function submit() {
@@ -113,8 +99,7 @@ export function SignAndInstallButton({
       const r = await signAndInstallFreeTrialSafeAction({
         trial_id: trialId,
         is_provisional: isProvisional,
-        scheduled_for:
-          when === "scheduled" ? new Date(`${scheduledDate}T09:00:00`).toISOString() : null,
+        scheduled_for: null,
         customer_signer_name: signerName,
         customer_signer_tax_id: signerTaxId || null,
         customer_signature_data_url: customerSig,
@@ -124,11 +109,7 @@ export function SignAndInstallButton({
         notify.error("Error", r.error);
         return;
       }
-      notify.success(
-        r.status === "installed"
-          ? "Prueba instalada y firmada"
-          : "Prueba programada y firmada",
-      );
+      notify.success("Prueba instalada y firmada", "Empieza a contar la prueba y se avisa al comercial.");
       setOpen(false);
       reset();
       router.refresh();
@@ -160,66 +141,8 @@ export function SignAndInstallButton({
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Albarán de entrega — paso {step} de 5</DialogTitle>
+            <DialogTitle>Albarán de entrega — paso {step - 1} de 4</DialogTitle>
           </DialogHeader>
-
-          {/* Step 1: ¿Cuándo? */}
-          {step === 1 && (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                ¿Cuándo se va a realizar la entrega del equipo?
-              </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setWhen("now")}
-                  className={`flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left ${
-                    when === "now"
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card hover:border-primary/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Play className="h-5 w-5 text-primary" />
-                    <span className="font-bold">Ahora</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    El equipo se entrega/instala ya. Tras firmar quedará en
-                    estado &laquo;instalada&raquo;.
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setWhen("scheduled")}
-                  className={`flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left ${
-                    when === "scheduled"
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-card hover:border-primary/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    <span className="font-bold">Día específico</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    El comercial firma hoy y la entrega se programa para
-                    otro día.
-                  </span>
-                </button>
-              </div>
-              {when === "scheduled" && (
-                <div className="space-y-1.5">
-                  <Label>Fecha prevista de entrega</Label>
-                  <Input
-                    type="date"
-                    value={scheduledDate}
-                    min={new Date().toISOString().slice(0, 10)}
-                    onChange={(e) => setScheduledDate(e.target.value)}
-                  />
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Step 2: Tipo */}
           {step === 2 && (
@@ -352,7 +275,7 @@ export function SignAndInstallButton({
 
           {/* Footer nav */}
           <div className="flex items-center justify-between gap-2 border-t pt-3">
-            <Button variant="ghost" onClick={back} disabled={pending || step === 1}>
+            <Button variant="ghost" onClick={back} disabled={pending || step === 2}>
               <ArrowLeft className="h-4 w-4" /> Atrás
             </Button>
             {step < 5 ? (
@@ -366,11 +289,7 @@ export function SignAndInstallButton({
                 variant="success"
               >
                 <PenLine className="h-4 w-4" />
-                {pending
-                  ? "Guardando..."
-                  : when === "scheduled"
-                    ? "Firmar y programar"
-                    : "Firmar e instalar"}
+                {pending ? "Guardando..." : "Firmar e instalar"}
               </Button>
             )}
           </div>
