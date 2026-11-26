@@ -166,21 +166,25 @@ export function ScheduleUninstallButton({
                   la colocará desde la agenda.
                 </p>
               </div>
-              <div className="space-y-1.5">
-                <Label>Técnico</Label>
-                <select
-                  value={installerId}
-                  onChange={(e) => setInstallerId(e.target.value)}
-                  className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
-                >
-                  <option value="">— Asignar luego —</option>
-                  {installers.map((u) => (
-                    <option key={u.user_id} value={u.user_id}>
-                      {u.full_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Sin lista = quien abre no asigna técnicos (el comercial):
+                  lo hará el admin o el director técnico. */}
+              {installers.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Técnico</Label>
+                  <select
+                    value={installerId}
+                    onChange={(e) => setInstallerId(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-base md:text-sm"
+                  >
+                    <option value="">— Asignar luego —</option>
+                    {installers.map((u) => (
+                      <option key={u.user_id} value={u.user_id}>
+                        {u.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">

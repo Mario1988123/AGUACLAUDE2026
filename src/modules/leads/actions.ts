@@ -19,6 +19,7 @@ function normalizePhoneSafe(v: string | null | undefined): string | null {
 }
 import { awardPoints, getPointsSettings } from "@/modules/points/award";
 import { toActionError } from "@/shared/lib/actions/safe-error";
+import { pruebaEstaActiva } from "./prueba-lead";
 import { CAMPOS_EDITABLES_LEAD, elegirCampos } from "@/modules/customers/campos-editables";
 
 export async function listLeads(filters?: {
@@ -191,6 +192,7 @@ export async function listLeads(filters?: {
   // "eliminar" en la lista de acciones), prueba activa e incidencia abierta.
   const leadsWithProposals = new Set<string>();
   const leadsWithActiveTrial = new Set<string>();
+  const leadsWithPendingTrial = new Set<string>();
   const leadsWithOpenIncident = new Set<string>();
   if (rows.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -224,7 +226,11 @@ export async function listLeads(filters?: {
     const trialIdToLead = new Map<string, string>();
     for (const t of trialRows) {
       if (t.lead_id) {
-        leadsWithActiveTrial.add(t.lead_id);
+        // «Prueba activa» solo si el equipo está INSTALADO (Mario 2026-11-26).
+        // Antes contaban también draft y scheduled, y un lead con la prueba
+        // sin instalar salía como «prueba activa».
+        if (pruebaEstaActiva(t.status)) leadsWithActiveTrial.add(t.lead_id);
+        else leadsWithPendingTrial.add(t.lead_id);
         trialIdToLead.set(t.id, t.lead_id);
       }
     }
@@ -308,6 +314,9 @@ export async function listLeads(filters?: {
       address_lng: addr.lng,
       has_proposals: leadsWithProposals.has(r.id),
       has_active_trial: leadsWithActiveTrial.has(r.id),
+      // Por instalar: solo si no hay otra ya instalada (esa manda).
+      has_pending_trial:
+        leadsWithPendingTrial.has(r.id) && !leadsWithActiveTrial.has(r.id),
       has_open_incident: leadsWithOpenIncident.has(r.id),
     };
   });

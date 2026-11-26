@@ -12,6 +12,9 @@ import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 import { disponibilidadSchema } from "./disponibilidad";
+import { puedeAgendarPrueba, ROLES_QUE_AGENDAN_PRUEBA } from "./permisos";
+import { ROL_PRUEBA_GRATUITA, productosNoPermitidos } from "./productos-prueba";
+import { DEFAULT_FREE_TRIAL_DURATION_DAYS } from "@/modules/config/free-trials/defaults";
 
 const createSchema = z.object({
   customer_id: z.string().uuid().optional(),
@@ -21,7 +24,7 @@ const createSchema = z.object({
   installation_address_id: z
     .string({ required_error: "Falta la dirección de instalación de la prueba" })
     .uuid({ message: "Falta la dirección de instalación de la prueba" }),
-  duration_days: z.number().int().positive().default(30),
+  duration_days: z.number().int().positive().default(DEFAULT_FREE_TRIAL_DURATION_DAYS),
   conditions_text: z.string().optional(),
   scheduled_at: z.string().optional(),
   assigned_installer_user_id: z.string().uuid().optional(),
@@ -125,6 +128,42 @@ export async function createFreeTrialAction(input: unknown) {
   if (parsed.customer_id && parsed.lead_id) {
     throw new Error("Solo cliente o lead, no ambos");
   }
+  // El comercial no asigna instalador (Mario 2026-11-26): lo hace quien
+  // agenda. Se comprueba aquí y no solo ocultando el campo.
+  const puedeAgendar = puedeAgendarPrueba(session);
+  if (parsed.assigned_installer_user_id && !puedeAgendar) {
+    throw new Error(
+      "El instalador lo asigna el admin o el director técnico al agendar la prueba.",
+    );
+  }
+  // Solo productos marcados «Disponible en prueba gratuita» (si la empresa
+  // ya ha marcado alguno; si no, valen todos, igual que en el selector).
+  {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adminLectura = createAdminClient() as any;
+    const { data: marcadosData, error: marcadosErr } = await adminLectura
+      .from("products")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .contains("roles", [ROL_PRUEBA_GRATUITA]);
+    if (marcadosErr) throw marcadosErr;
+    const marcados = new Set(
+      ((marcadosData ?? []) as Array<{ id: string }>).map((r) => r.id),
+    );
+    const noValen = productosNoPermitidos(
+      parsed.items.map((it) => it.product_id),
+      marcados,
+    );
+    if (noValen.length > 0) {
+      const nombres = parsed.items
+        .filter((it) => noValen.includes(it.product_id))
+        .map((it) => it.product_name_snapshot);
+      throw new Error(
+        `No está disponible en prueba gratuita: ${Array.from(new Set(nombres)).join(", ")}`,
+      );
+    }
+  }
   // La fecha viene de un <input type="datetime-local"> = hora de pared Madrid.
   // La convertimos al instante UTC correcto (si no, se guarda 1-2 h adelantada).
   const scheduledIso = parsed.scheduled_at
@@ -195,6 +234,49 @@ export async function createFreeTrialAction(input: unknown) {
       await bumpLeadStatus(parsed.lead_id, "free_trial_proposed");
     } catch (e) {
       console.error("[createFreeTrial] no se pudo subir el estado del lead:", e);
+    }
+  }
+
+  // Aviso a quien agenda (Mario 2026-11-26): el comercial crea la prueba y
+  // el admin / director técnico la agenda desde el enlace. Si la crea alguien
+  // que ya puede agendar, no se le avisa a sí mismo ni a los demás.
+  if (!puedeAgendar) {
+    try {
+      const { notifyByRoles } = await import("@/modules/notifications/notifier");
+      const quien = session.full_name?.trim() || "Un comercial";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const adminAviso = createAdminClient() as any;
+      const { data: dueno } = await adminAviso
+        .from(parsed.lead_id ? "leads" : "customers")
+        .select("party_kind, legal_name, trade_name, first_name, last_name")
+        .eq("id", parsed.lead_id ?? parsed.customer_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      const d = (dueno ?? {}) as {
+        party_kind?: string;
+        legal_name?: string | null;
+        trade_name?: string | null;
+        first_name?: string | null;
+        last_name?: string | null;
+      };
+      const nombreDueno =
+        (d.party_kind === "company"
+          ? d.trade_name || d.legal_name
+          : `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim()) || null;
+      await notifyByRoles(session.company_id, ROLES_QUE_AGENDAN_PRUEBA, {
+        kind: "free_trial.created",
+        category: "alert",
+        severity: "info",
+        title: "Prueba gratuita por agendar",
+        body: nombreDueno
+          ? `${quien} ha creado una prueba para ${nombreDueno}. Agenda la instalación.`
+          : `${quien} ha creado una prueba gratuita. Agenda la instalación.`,
+        subject_type: "free_trial",
+        subject_id: id,
+        action_url: `/pruebas-gratuitas/${id}#agendar`,
+      });
+    } catch (e) {
+      console.error("[createFreeTrial] no se pudo avisar para agendar:", e);
     }
   }
 
@@ -408,6 +490,14 @@ export async function installFreeTrialAction(
     },
     actor_user_id: session.user_id,
   });
+  // La cita que puso quien agendó (agendar-actions.ts) queda hecha.
+  await admin
+    .from("agenda_events")
+    .update({ status: "completed" })
+    .eq("company_id", session.company_id)
+    .eq("subject_type", "free_trial")
+    .eq("subject_id", id)
+    .eq("status", "scheduled");
   revalidatePath(`/pruebas-gratuitas/${id}`);
   revalidatePath("/pruebas-gratuitas");
   if (t.customer_id) revalidatePath(`/clientes/${t.customer_id}`);

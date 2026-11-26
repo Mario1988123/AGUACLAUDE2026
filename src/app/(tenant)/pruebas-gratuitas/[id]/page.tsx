@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { getFreeTrial } from "@/modules/free-trials/actions";
 import { FreeTrialActionsPanel } from "@/modules/free-trials/actions-panel";
 import { DisponibilidadFicha } from "@/modules/free-trials/disponibilidad-ficha";
+import { AgendarInstalacionPrueba } from "@/modules/free-trials/agendar-instalacion";
+import { puedeAgendarPrueba } from "@/modules/free-trials/permisos";
 import { leerDisponibilidad } from "@/modules/free-trials/disponibilidad";
 import { RetiradaPruebaButton } from "@/modules/customers/retirada-prueba-button";
 import { puedeRetirar, pruebaRetirable } from "@/modules/customers/retirada-logica";
@@ -54,6 +56,12 @@ export default async function FreeTrialDetailPage({
     notFound();
   }
 
+  // Agendar y asignar instalador: solo admin / director técnico (Mario
+  // 2026-11-26). El comercial tampoco elige técnico en la desinstalación.
+  const puedeAgendar = puedeAgendarPrueba(session);
+  const instaladorAsignado =
+    (trial as { assigned_installer_user_id?: string | null }).assigned_installer_user_id ?? null;
+
   const ownerLink = trial.customer_id
     ? { href: `/clientes/${trial.customer_id}`, label: "cliente" }
     : trial.lead_id
@@ -89,6 +97,9 @@ export default async function FreeTrialDetailPage({
     // Aparte de getFreeTrial: si la columna faltara, solo se pierde esto.
     sbAdmin.from("free_trials").select("disponibilidad").eq("id", id).maybeSingle(),
   ]);
+  const nombreInstalador = instaladorAsignado
+    ? (installers.find((u) => u.user_id === instaladorAsignado)?.full_name ?? null)
+    : null;
   const disponibilidad = leerDisponibilidad(
     (dispRes.data as { disponibilidad?: unknown } | null)?.disponibilidad,
   );
@@ -191,6 +202,11 @@ export default async function FreeTrialDetailPage({
               <div>
                 <strong>Programada:</strong> {fmt(trial.scheduled_at)}
               </div>
+              {nombreInstalador && (
+                <div>
+                  <strong>Instalador:</strong> {nombreInstalador}
+                </div>
+              )}
               <div>
                 <strong>Instalada:</strong> {fmt(trial.installed_at)}
               </div>
@@ -243,6 +259,17 @@ export default async function FreeTrialDetailPage({
             <CardTitle>Acciones</CardTitle>
           </CardHeader>
           <CardContent>
+            {puedeAgendar && (trial.status === "draft" || trial.status === "scheduled") && (
+              <div className="mb-4">
+                <AgendarInstalacionPrueba
+                  trialId={trial.id}
+                  installers={installers}
+                  inicialFecha={trial.scheduled_at}
+                  inicialInstalador={instaladorAsignado}
+                  disponibilidad={disponibilidad}
+                />
+              </div>
+            )}
             <FreeTrialActionsPanel
               trialId={trial.id}
               status={trial.status}
@@ -253,7 +280,7 @@ export default async function FreeTrialDetailPage({
               customerName={ownerName}
               customerTaxId={ownerTaxId}
               warehouses={warehouses}
-              installers={installers}
+              installers={puedeAgendar ? installers : []}
               pendingUninstall={pendingUninstall}
             />
             {puedeRetirar(session) && pruebaRetirable(trial.status) && (

@@ -16,6 +16,7 @@ import { getProductCatalogStatus } from "@/modules/products/catalog-update-actio
 import { CatalogUpdateBanner } from "@/modules/products/catalog-update-banner";
 import { getCriticalAttributesState } from "@/modules/products/critical-attrs-actions";
 import { CriticalAttributesBanner } from "@/modules/products/critical-attrs-banner";
+import { InterruptorPruebaGratuita } from "@/modules/products/interruptor-prueba-gratuita-servidor";
 import { KIND_LABEL } from "@/modules/products/schemas";
 import { formatearNumero } from "@/modules/superadmin/catalogo/catalogo-etiquetas";
 import { FichaGaleria } from "@/modules/superadmin/catalogo/ficha-galeria";
@@ -267,6 +268,9 @@ export default async function ProductoFichaPage({
               </p>
             )}
           </header>
+
+          {/* Un clic, sin entrar en Editar (Mario 2026-11-26). */}
+          {canEdit && <InterruptorPruebaGratuita productId={p.id} />}
 
           {p.fotos.length > 0 ? (
             <FichaGaleria fotos={reparto.portada} nombre={p.nombre} />

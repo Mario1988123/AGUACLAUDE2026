@@ -3,9 +3,17 @@ import { listProducts } from "@/modules/products/actions";
 import { listAddresses } from "@/modules/addresses/actions";
 import { listInstallers } from "@/modules/agenda/actions";
 import { getCustomer } from "@/modules/customers/actions";
-import { getFreeTrialsConfig } from "@/modules/config/free-trials/actions";
+import { getFreeTrialsConfigParaAlta } from "@/modules/config/free-trials/actions";
+import { DEFAULT_FREE_TRIAL_DURATION_DAYS } from "@/modules/config/free-trials/defaults";
 import { FreeTrialCreateForm } from "@/modules/free-trials/create-form";
+import { puedeAgendarPrueba } from "@/modules/free-trials/permisos";
+import {
+  ROL_PRUEBA_GRATUITA,
+  productosParaPrueba,
+} from "@/modules/free-trials/productos-prueba";
 import { createClient } from "@/shared/lib/supabase/server";
+import { createAdminClient } from "@/shared/lib/supabase/admin";
+import { requireSession } from "@/shared/lib/auth/session";
 
 export const dynamic = "force-dynamic";
 
@@ -59,20 +67,41 @@ export default async function NuevaPruebaGratuitaPage({
     ownerName = customerName(lead as never);
   }
 
-  const [products, addresses, installers, config] = await Promise.all([
+  const session = await requireSession();
+  // El comercial no asigna instalador: lo hace quien agenda (admin o
+  // director técnico) desde la ficha de la prueba.
+  const puedeAgendar = puedeAgendarPrueba(session);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any;
+
+  const [products, addresses, installers, config, marcadosRes] = await Promise.all([
     listProducts({ active_only: true }).catch(() => []),
     listAddresses(
       ownerKind === "customer" ? { customer_id: ownerId } : { lead_id: ownerId },
     ).catch(() => []),
-    listInstallers().catch(() => []),
-    getFreeTrialsConfig().catch(() => ({
-      duration_days: 30,
+    puedeAgendar ? listInstallers().catch(() => []) : Promise.resolve([]),
+    getFreeTrialsConfigParaAlta().catch(() => ({
+      duration_days: DEFAULT_FREE_TRIAL_DURATION_DAYS,
       conditions_text: "",
       default_renting_quote_months: 48,
     })),
+    // Productos marcados «Disponible en prueba gratuita» en su ficha.
+    admin
+      .from("products")
+      .select("id")
+      .eq("company_id", session.company_id)
+      .is("deleted_at", null)
+      .contains("roles", [ROL_PRUEBA_GRATUITA]),
   ]);
 
-  const productOptions = products.map((p) => ({ id: p.id, name: p.name }));
+  const marcados = new Set(
+    ((marcadosRes.data ?? []) as Array<{ id: string }>).map((r) => r.id),
+  );
+  const { productos: productosPrueba, hayMarcados } = productosParaPrueba(
+    products,
+    marcados,
+  );
+  const productOptions = productosPrueba.map((p) => ({ id: p.id, name: p.name }));
   const addressOptions = addresses.map((a) => ({
     id: a.id,
     label:
@@ -99,6 +128,8 @@ export default async function NuevaPruebaGratuitaPage({
         products={productOptions}
         addresses={addressOptions}
         installers={installers}
+        puedeAsignarInstalador={puedeAgendar}
+        productosSinMarcar={!hayMarcados}
       />
     </div>
   );

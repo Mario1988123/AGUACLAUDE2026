@@ -276,6 +276,11 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                           🎁 Prueba activa
                         </span>
                       )}
+                      {l.has_pending_trial && (
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-700">
+                          🎁 Prueba por instalar
+                        </span>
+                      )}
                       {l.has_open_incident && (
                         <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-700">
                           🚨 Incidencia
@@ -457,10 +462,18 @@ export function SelectableLeadsTable({ leads, team, canBulkReassign }: Props) {
                         )}
                         {l.has_active_trial && (
                           <span
-                            title="Prueba gratuita activa"
+                            title="Prueba gratuita instalada"
                             className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700"
                           >
                             🎁 Prueba activa
+                          </span>
+                        )}
+                        {l.has_pending_trial && (
+                          <span
+                            title="Prueba gratuita creada, aún sin instalar"
+                            className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-slate-700"
+                          >
+                            🎁 Prueba por instalar
                           </span>
                         )}
                         {l.has_open_incident && (

@@ -20,6 +20,9 @@ export const PRODUCT_ROLES = [
   "configurator_extra",
   "spare_part_role",
   "accessory_role",
+  // Se puede elegir en una prueba gratuita (Mario 2026-11-26). Se cambia con
+  // un clic desde la ficha del producto. Ver free-trials/productos-prueba.ts.
+  "free_trial_role",
 ] as const;
 export type ProductRole = (typeof PRODUCT_ROLES)[number];
 export const ROLE_LABEL: Record<ProductRole, string> = {
@@ -27,12 +30,14 @@ export const ROLE_LABEL: Record<ProductRole, string> = {
   configurator_extra: "Extra del configurador",
   spare_part_role: "También es recambio",
   accessory_role: "Es un accesorio",
+  free_trial_role: "Disponible en prueba gratuita",
 };
 export const ROLE_HELP: Record<ProductRole, string> = {
   sellable_standalone: "Aparece en el catálogo y se puede añadir a propuestas por sí mismo.",
   configurator_extra: "Se puede ofrecer como extra al configurar otro equipo (ej. grifería de una ósmosis).",
   spare_part_role: "Sirve como recambio compatible con uno o varios equipos.",
   accessory_role: "Complemento de otro producto.",
+  free_trial_role: "Se puede elegir al crear una prueba gratuita.",
 };
 
 export const productCreateSchema = z.object({

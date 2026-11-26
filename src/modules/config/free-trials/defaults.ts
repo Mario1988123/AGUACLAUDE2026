@@ -1,3 +1,6 @@
+/** Días de prueba gratuita si la empresa no ha configurado otros (Mario 2026-11-26: 10). */
+export const DEFAULT_FREE_TRIAL_DURATION_DAYS = 10;
+
 /**
  * Plantilla por defecto del albarán de entrega de equipos en prueba.
  * Placeholders disponibles (se sustituyen al firmar):

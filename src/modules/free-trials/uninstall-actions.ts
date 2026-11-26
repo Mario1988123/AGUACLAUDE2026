@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/shared/lib/supabase/admin";
 import { requireSession } from "@/shared/lib/auth/session";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
+import { puedeAgendarPrueba } from "./permisos";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface ScheduleFreeTrialUninstallInput {
@@ -43,6 +44,13 @@ export async function scheduleFreeTrialUninstallAction(
   try {
     const session = await requireSession();
     if (!session.company_id) return { ok: false, error: "Sin empresa" };
+    // El comercial no asigna técnico (Mario 2026-11-26).
+    if (input.installer_user_id && !puedeAgendarPrueba(session)) {
+      return {
+        ok: false,
+        error: "El técnico lo asigna el admin o el director técnico.",
+      };
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const admin = createAdminClient() as any;
 

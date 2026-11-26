@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/shared/lib/supabase/server";
 import { requireSession } from "@/shared/lib/auth/session";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
-import { DEFAULT_FREE_TRIAL_CONDITIONS } from "./defaults";
+import { DEFAULT_FREE_TRIAL_CONDITIONS, DEFAULT_FREE_TRIAL_DURATION_DAYS } from "./defaults";
 import { toActionError } from "@/shared/lib/actions/safe-error";
 
 export interface FreeTrialsConfig {
@@ -29,17 +29,32 @@ async function ensureAdmin() {
 
 export async function getFreeTrialsConfig(): Promise<FreeTrialsConfig> {
   const session = await ensureAdmin();
+  return leerConfigPruebas(session.company_id!);
+}
+
+/**
+ * Lo mismo, pero para el alta de una prueba: la crea el comercial, que no es
+ * admin. Antes la pantalla usaba getFreeTrialsConfig, que le lanzaba «Solo
+ * admin», y caía al respaldo (30 días y condiciones VACÍAS).
+ */
+export async function getFreeTrialsConfigParaAlta(): Promise<FreeTrialsConfig> {
+  const session = await requireSession();
+  if (!session.company_id) throw new Error("Sin empresa");
+  return leerConfigPruebas(session.company_id);
+}
+
+async function leerConfigPruebas(companyId: string): Promise<FreeTrialsConfig> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await createClient()) as any;
   const { data } = await supabase
     .from("company_settings")
     .select("extra")
-    .eq("company_id", session.company_id!)
+    .eq("company_id", companyId)
     .maybeSingle();
   const extra = (data?.extra as Record<string, unknown> | null) ?? {};
   const ft = (extra.free_trials as Record<string, unknown> | undefined) ?? {};
   return {
-    duration_days: (ft.duration_days as number | undefined) ?? 30,
+    duration_days: (ft.duration_days as number | undefined) ?? DEFAULT_FREE_TRIAL_DURATION_DAYS,
     conditions_text:
       (ft.conditions_text as string | undefined) || DEFAULT_FREE_TRIAL_CONDITIONS,
     default_renting_quote_months:

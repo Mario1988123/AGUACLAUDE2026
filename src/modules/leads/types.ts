@@ -33,11 +33,12 @@ export interface LeadListItem {
   /** true si el lead tiene al menos 1 propuesta asociada (no eliminada) */
   has_proposals?: boolean;
   /**
-   * true si el lead tiene una prueba gratuita en curso (draft, scheduled,
-   * installed). Útil para identificar visualmente leads con prueba activa
-   * en la tabla.
+   * true si el lead tiene una prueba gratuita ACTIVA = instalada (Mario
+   * 2026-11-26). Borrador y agendada no cuentan: van en has_pending_trial.
    */
   has_active_trial?: boolean;
+  /** true si tiene una prueba en borrador o agendada y ninguna instalada. */
+  has_pending_trial?: boolean;
   /**
    * true si el lead tiene alguna incidencia ABIERTA (sin resolver) en una
    * de sus pruebas gratuitas. Pinta un badge rojo "🚨 Incidencia" para
