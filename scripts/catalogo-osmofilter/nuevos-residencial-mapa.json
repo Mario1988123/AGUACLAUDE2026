@@ -412,7 +412,7 @@
     {
       "modelo": "FLUX",
       "cabeza": "DFL35L",
-      "aplicar": false,
+      "aplicar": true,
       "motivo": "5 tamaños del mismo descalcificador mecánico",
       "variantes": [
         {
@@ -460,7 +460,7 @@
     {
       "modelo": "PURE PRO 4",
       "cabeza": "RO1143",
-      "aplicar": false,
+      "aplicar": true,
       "motivo": "con y sin bomba",
       "variantes": [
         {
@@ -476,7 +476,7 @@
     {
       "modelo": "ICE 65",
       "cabeza": "HO1017",
-      "aplicar": false,
+      "aplicar": true,
       "motivo": "1 y 2 salidas",
       "variantes": [
         {
@@ -492,7 +492,7 @@
     {
       "modelo": "PROZONE",
       "cabeza": "OZ0041",
-      "aplicar": false,
+      "aplicar": true,
       "motivo": "dudosa: un «Generador» y un «Equipo inox (Solo exportación)»",
       "variantes": [
         {
@@ -508,7 +508,7 @@
     {
       "modelo": "Portafiltro 3 piezas 10\"",
       "cabeza": "VF1016",
-      "aplicar": false,
+      "aplicar": true,
       "motivo": "dos roscas",
       "variantes": [
         {
