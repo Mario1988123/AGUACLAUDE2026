@@ -1595,6 +1595,9 @@ async function rescheduleAgendaEventInternal(
     })
     .eq("id", eventId)
     .eq("company_id", session.company_id);
+  await sincronizarOrigenDeCita(admin, session.company_id, eventId, {
+    scheduledAt: newStart.toISOString(),
+  });
 
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -1712,6 +1715,14 @@ export async function reassignAgendaEventAction(
       })
       .eq("id", realId)
       .eq("company_id", session.company_id);
+    {
+      const { copiarCambioAPrueba } = await import("@/modules/free-trials/instalacion-prueba");
+      await copiarCambioAPrueba(admin2, {
+        companyId: session.company_id,
+        installationId: realId,
+        installerId: newUserId || null,
+      });
+    }
     revalidatePath("/agenda");
     revalidatePath(`/instalaciones/${realId}`);
     return;
@@ -1764,6 +1775,9 @@ export async function reassignAgendaEventAction(
     .eq("id", eventId)
     .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
+  await sincronizarOrigenDeCita(admin, session.company_id, eventId, {
+    installerId: newUserId || null,
+  });
 
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -1831,6 +1845,14 @@ async function rescheduleInstallationFromAgenda(
       status: "scheduled",
     })
     .eq("id", installationId);
+  {
+    const { copiarCambioAPrueba } = await import("@/modules/free-trials/instalacion-prueba");
+    await copiarCambioAPrueba(admin, {
+      companyId: session.company_id,
+      installationId,
+      scheduledAt: new Date(newStartsAtIso).toISOString(),
+    });
+  }
   revalidatePath("/agenda");
   revalidatePath("/instalaciones");
   revalidatePath(`/instalaciones/${installationId}`);
@@ -2049,5 +2071,66 @@ export async function changeAgendaEventKindSafeAction(
     return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };
+  }
+}
+
+/**
+ * Al mover o reasignar una cita real de la agenda, copia el cambio a la
+ * prueba gratuita de la que sale (Mario 2026-11-26): antes la cita y la
+ * prueba se desfasaban y /instalaciones no se enteraba. Las citas de
+ * instalaciones normales no se tocan aquí.
+ */
+async function sincronizarOrigenDeCita(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  companyId: string,
+  eventId: string,
+  cambio: { scheduledAt?: string; installerId?: string | null },
+): Promise<void> {
+  try {
+    const { data } = await admin
+      .from("agenda_events")
+      .select("subject_type, subject_id")
+      .eq("id", eventId)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    const ev = data as { subject_type: string | null; subject_id: string | null } | null;
+    if (!ev?.subject_id) return;
+    const mod = await import("@/modules/free-trials/instalacion-prueba");
+    if (ev.subject_type === "free_trial") {
+      await mod.copiarCitaAPrueba(admin, { companyId, trialId: ev.subject_id, ...cambio });
+      revalidatePath(`/pruebas-gratuitas/${ev.subject_id}`);
+      revalidatePath("/instalaciones");
+      return;
+    }
+    if (ev.subject_type !== "installation") return;
+    const { data: inst } = await admin
+      .from("installations")
+      .select("kind, status")
+      .eq("id", ev.subject_id)
+      .eq("company_id", companyId)
+      .maybeSingle();
+    const i = inst as { kind: string; status: string } | null;
+    if (!i || i.kind !== "free_trial" || i.status === "completed" || i.status === "cancelled") {
+      return;
+    }
+    const upd: Record<string, unknown> = {};
+    if (cambio.scheduledAt !== undefined) upd.scheduled_at = cambio.scheduledAt;
+    if (cambio.installerId !== undefined) upd.installer_user_id = cambio.installerId;
+    await admin
+      .from("installations")
+      .update(upd)
+      .eq("id", ev.subject_id)
+      .eq("company_id", companyId);
+    await mod.copiarCambioAPrueba(admin, {
+      companyId,
+      installationId: ev.subject_id,
+      ...(cambio.scheduledAt !== undefined ? { scheduledAt: cambio.scheduledAt } : {}),
+      ...(cambio.installerId !== undefined ? { installerId: cambio.installerId } : {}),
+    });
+    revalidatePath("/instalaciones");
+    revalidatePath(`/instalaciones/${ev.subject_id}`);
+  } catch (e) {
+    console.error("[agenda] sincronizarOrigenDeCita:", e);
   }
 }

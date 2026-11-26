@@ -415,34 +415,81 @@ export async function installFreeTrialAction(
     if (!installationsModuleActive) {
       throw new Error("__skip__"); // saltar bloque
     }
-    // Numeración con contador atómico (auditoría 2026-10-01, I25: antes
-    // max()+1 sin bloqueo, orden de texto y año UTC).
-    const refCode = await siguienteReferencia(
-      admin,
-      session.company_id,
-      "installations",
-      "I",
-    );
-    const { data: inst, error: instErr } = await admin
-      .from("installations")
-      .insert({
-        company_id: session.company_id,
-        kind: "free_trial",
-        status: "completed",
-        reference_code: refCode,
-        customer_id: t.customer_id,
-        free_trial_id: id,
-        address_id: t.installation_address_id,
-        installer_user_id: installerId,
-        scheduled_at: now.toISOString(),
-        started_at: now.toISOString(),
-        completed_at: now.toISOString(),
-        notes: "Instalación de prueba gratuita",
-      })
-      .select("id")
-      .single();
+    // Si se agendó, ya hay una instalación «scheduled» de esta prueba (sale en
+    // /instalaciones): se cierra esa en vez de crear otra (Mario 2026-11-26).
+    const { instalacionAbiertaDePrueba } = await import("./instalacion-prueba");
+    const abierta = await instalacionAbiertaDePrueba(admin, session.company_id, id);
+    let inst: { id: string } | null = null;
+    let instErr: unknown = null;
+    let reutilizada = false;
+    if (abierta) {
+      const r = await admin
+        .from("installations")
+        .update({
+          status: "completed",
+          customer_id: t.customer_id,
+          address_id: t.installation_address_id,
+          installer_user_id: installerId,
+          started_at: now.toISOString(),
+          completed_at: now.toISOString(),
+        })
+        .eq("id", abierta.id)
+        .eq("company_id", session.company_id)
+        .select("id")
+        .single();
+      inst = r.data as { id: string } | null;
+      instErr = r.error;
+      reutilizada = true;
+    } else {
+      // Numeración con contador atómico (auditoría 2026-10-01, I25: antes
+      // max()+1 sin bloqueo, orden de texto y año UTC).
+      const refCode = await siguienteReferencia(
+        admin,
+        session.company_id,
+        "installations",
+        "I",
+      );
+      const r = await admin
+        .from("installations")
+        .insert({
+          company_id: session.company_id,
+          kind: "free_trial",
+          status: "completed",
+          reference_code: refCode,
+          customer_id: t.customer_id,
+          free_trial_id: id,
+          address_id: t.installation_address_id,
+          installer_user_id: installerId,
+          scheduled_at: now.toISOString(),
+          started_at: now.toISOString(),
+          completed_at: now.toISOString(),
+          notes: "Instalación de prueba gratuita",
+        })
+        .select("id")
+        .single();
+      inst = r.data as { id: string } | null;
+      instErr = r.error;
+    }
     if (!instErr && inst) {
-      createdInstallationId = (inst as { id: string }).id;
+      createdInstallationId = inst.id;
+      // La cita de la instalación agendada queda hecha.
+      await admin
+        .from("agenda_events")
+        .update({ status: "completed" })
+        .eq("company_id", session.company_id)
+        .eq("subject_type", "installation")
+        .eq("subject_id", inst.id)
+        .eq("status", "scheduled");
+      // Una instalación reutilizada no debería tener líneas, pero por si acaso
+      // no se duplican.
+      let yaTieneLineas = false;
+      if (reutilizada) {
+        const { count } = await admin
+          .from("installation_items")
+          .select("id", { count: "exact", head: true })
+          .eq("installation_id", inst.id);
+        yaTieneLineas = (count ?? 0) > 0;
+      }
       // installation_items
       const { data: ftItems } = await admin
         .from("free_trial_items")
@@ -453,7 +500,7 @@ export async function installFreeTrialAction(
         quantity: number;
         serial_number: string | null;
       }>);
-      if (ftList.length > 0) {
+      if (ftList.length > 0 && !yaTieneLineas) {
         await admin.from("installation_items").insert(
           ftList.map((it) => ({
             installation_id: createdInstallationId,
@@ -1238,6 +1285,12 @@ export async function acceptFreeTrialAction(input: {
           .from("installations")
           .select("id, address_id")
           .eq("free_trial_id", trial.id)
+          // Puede haber también la desinstalación o una cancelada: solo la
+          // instalación hecha de la prueba (antes maybeSingle fallaba).
+          .eq("kind", "free_trial")
+          .eq("status", "completed")
+          .order("completed_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
         const inst = instRow as { id: string; address_id: string | null } | null;
         if (inst) {
@@ -1343,6 +1396,11 @@ export async function rejectFreeTrialAction(id: string, reason: string) {
     payload: { reason },
     actor_user_id: session.user_id,
   });
+  // Si se rechaza antes de instalarla, su instalación agendada y su cita
+  // no deben seguir en /instalaciones ni en la agenda del instalador.
+  const { cancelarInstalacionDePrueba } = await import("./instalacion-prueba");
+  await cancelarInstalacionDePrueba(admin, session.company_id, id, `Prueba rechazada: ${reason}`);
+  revalidatePath("/instalaciones");
   revalidatePath(`/pruebas-gratuitas/${id}`);
   revalidatePath("/pruebas-gratuitas");
 }

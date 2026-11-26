@@ -8,6 +8,7 @@ import { toActionError } from "@/shared/lib/actions/safe-error";
 import { parseOrFriendly } from "@/shared/lib/zod-friendly";
 import { madridLocalToUtcISO } from "@/shared/lib/format-date";
 import { puedeAgendarPrueba } from "./permisos";
+import { agendarInstalacionDePrueba } from "./instalacion-prueba";
 
 const agendarSchema = z.object({
   trial_id: z.string().uuid(),
@@ -26,9 +27,9 @@ const ROLES_INSTALADOR = ["installer", "technical_director", "company_admin"];
  * (Mario 2026-11-26). Solo admin o director técnico; el comercial crea la
  * prueba y le llega a ellos el aviso con el enlace a esta tarjeta.
  *
- * Deja la prueba en «Agendada», pone la cita en la agenda del instalador
- * (kind installation, subject free_trial; si ya había una, la mueve) y le
- * avisa. La instalación de verdad la sigue marcando el wizard de firma.
+ * Deja la prueba en «Agendada», crea o mueve su instalación en
+ * /instalaciones y su cita en la agenda del instalador, y le avisa. La
+ * instalación de verdad la sigue marcando el wizard de firma de la prueba.
  */
 export async function agendarInstalacionPruebaSafeAction(
   input: unknown,
@@ -100,44 +101,24 @@ export async function agendarInstalacionPruebaSafeAction(
     if (uErr) throw uErr;
     if (!upd?.length) return { ok: false, error: "No se pudo agendar: la prueba ha cambiado de estado." };
 
-    // Cita en la agenda del instalador. Si ya había una abierta, se mueve.
-    const titulo = `Instalación prueba gratuita${trial.reference_code ? ` ${trial.reference_code}` : ""}`;
-    const { data: citaPrevia } = await admin
-      .from("agenda_events")
-      .select("id")
-      .eq("company_id", session.company_id)
-      .eq("subject_type", "free_trial")
-      .eq("subject_id", trial.id)
-      .eq("kind", "installation")
-      .eq("status", "scheduled")
-      .is("deleted_at", null)
-      .limit(1)
-      .maybeSingle();
-    const cita = {
-      starts_at: iso,
-      ends_at: null,
-      assigned_user_id: parsed.installer_user_id,
-      title: titulo,
-      address_id: trial.installation_address_id,
-    };
-    const rCita = citaPrevia
-      ? await admin
-          .from("agenda_events")
-          .update(cita)
-          .eq("id", (citaPrevia as { id: string }).id)
-          .eq("company_id", session.company_id)
-      : await admin.from("agenda_events").insert({
-          ...cita,
-          company_id: session.company_id,
-          kind: "installation",
-          status: "scheduled",
-          subject_type: "free_trial",
-          subject_id: trial.id,
-          created_by: session.user_id,
-        });
-    if (rCita.error) {
-      // La prueba ya está agendada; la cita es un añadido.
-      console.error("[agendarPrueba] cita de agenda:", rCita.error.message);
+    // Ficha en /instalaciones (scheduled) + una sola cita en la agenda del
+    // instalador; si ya había, se mueven (ver ./instalacion-prueba.ts).
+    try {
+      await agendarInstalacionDePrueba(admin, {
+        companyId: session.company_id,
+        trialId: trial.id,
+        startsAt: iso,
+        installerId: parsed.installer_user_id,
+        actorId: session.user_id,
+      });
+    } catch (e) {
+      // La prueba ya está agendada; que el admin sepa que falta la ficha.
+      console.error("[agendarPrueba] instalación/cita:", e);
+      return {
+        ok: false,
+        error:
+          "La prueba ha quedado agendada, pero no se pudo crear su instalación. Vuelve a darle a Agendar.",
+      };
     }
 
     await admin.from("events").insert({
@@ -179,6 +160,8 @@ export async function agendarInstalacionPruebaSafeAction(
 
     revalidatePath(`/pruebas-gratuitas/${trial.id}`);
     revalidatePath("/pruebas-gratuitas");
+    revalidatePath("/instalaciones");
+    revalidatePath("/agenda");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

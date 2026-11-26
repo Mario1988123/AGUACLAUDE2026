@@ -64,6 +64,7 @@ export default async function InstallationDetailPage({
     contract_id: string | null;
     installer_user_id: string | null;
     address_id: string | null;
+    free_trial_id?: string | null;
     customer_confirm_sent_at?: string | null;
   };
 
@@ -279,6 +280,39 @@ export default async function InstallationDetailPage({
       console.error("[install/page] customer phone/email load:", e);
     }
   }
+  // Prueba gratuita a un lead (aún sin cliente ni contrato): nombre y
+  // contacto salen del lead de la prueba (Mario 2026-11-26).
+  if (!customerId && i.kind === "free_trial" && i.free_trial_id) {
+    try {
+      const { data: ft } = await admContacto
+        .from("free_trials")
+        .select("lead_id")
+        .eq("id", i.free_trial_id)
+        .eq("company_id", session.company_id)
+        .maybeSingle();
+      const leadId = (ft as { lead_id: string | null } | null)?.lead_id;
+      if (leadId) {
+        const { data: l } = await admContacto
+          .from("leads")
+          .select("party_kind, legal_name, trade_name, first_name, last_name, email, phone_primary")
+          .eq("id", leadId)
+          .eq("company_id", session.company_id)
+          .maybeSingle();
+        const lead = l as Record<string, string | null> | null;
+        if (lead) {
+          const nombre =
+            lead.party_kind === "company"
+              ? lead.trade_name || lead.legal_name
+              : `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim();
+          if (nombre) customerName = nombre;
+          customerPhone = lead.phone_primary ?? null;
+          customerEmail = lead.email ?? null;
+        }
+      }
+    } catch (e) {
+      console.error("[install/page] lead de la prueba:", e);
+    }
+  }
   if (i.address_id) {
     try {
       const { data: a } = await admContacto
@@ -395,8 +429,19 @@ export default async function InstallationDetailPage({
               installers={installers}
             />
           )}
+          {/* Prueba gratuita: se instala desde su ficha (firma, stock y días
+              de prueba), no con el parte normal (Mario 2026-11-26). */}
+          {i.kind === "free_trial" && i.free_trial_id && (
+            <Link
+              href={`/pruebas-gratuitas/${i.free_trial_id}`}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground hover:opacity-90"
+            >
+              {i.status === "completed" ? "Ver la prueba gratuita" : "Ir a la prueba para instalar"}
+            </Link>
+          )}
           {i.status !== "completed" &&
             i.status !== "cancelled" &&
+            i.kind !== "free_trial" &&
             i.scheduled_at && (
               <InstallationConfirmSendButton
                 installationId={i.id}
@@ -422,7 +467,10 @@ export default async function InstallationDetailPage({
               canEdit={techPrep.canEdit}
             />
           )}
-          {i.status !== "completed" && i.status !== "cancelled" && i.kind !== "uninstall" && (
+          {i.status !== "completed" &&
+            i.status !== "cancelled" &&
+            i.kind !== "uninstall" &&
+            i.kind !== "free_trial" && (
             <InstallationWizard
               installationId={i.id}
               status={i.status}

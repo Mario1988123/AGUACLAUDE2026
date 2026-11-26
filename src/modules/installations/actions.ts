@@ -51,6 +51,17 @@ export async function reassignInstallationAction(
     .eq("id", installationId)
     .eq("company_id", session.company_id);
   if (r.error) throw new Error(r.error.message);
+  // Si es la instalación de una prueba gratuita, la prueba y su cita
+  // cambian de instalador con ella (Mario 2026-11-26).
+  {
+    const { copiarCambioAPrueba } = await import("@/modules/free-trials/instalacion-prueba");
+    await copiarCambioAPrueba(admin, {
+      companyId: session.company_id,
+      installationId,
+      installerId: installerUserId,
+      moverCita: true,
+    });
+  }
 
   await admin.from("events").insert({
     company_id: session.company_id,
@@ -952,6 +963,23 @@ export async function updateInstallationAction(input: unknown) {
     );
   }
 
+  // Instalación de una prueba gratuita: la prueba se queda con la misma
+  // fecha e instalador, y la cita se mueve aunque solo cambie el instalador.
+  {
+    const { copiarCambioAPrueba } = await import("@/modules/free-trials/instalacion-prueba");
+    await copiarCambioAPrueba(admin, {
+      companyId: session.company_id,
+      installationId: parsed.id,
+      ...(update.scheduled_at !== undefined
+        ? { scheduledAt: (update.scheduled_at as string | null) ?? null }
+        : {}),
+      ...(update.installer_user_id !== undefined
+        ? { installerId: (update.installer_user_id as string | null) ?? null }
+        : {}),
+      moverCita: update.status !== "scheduled",
+    });
+  }
+
   revalidatePath(`/instalaciones/${parsed.id}`);
 }
 
@@ -1523,6 +1551,14 @@ export async function completeInstallation(input: unknown) {
     (inst as { installer_user_id: string | null }).installer_user_id,
     "instalación",
   );
+  // La prueba gratuita se instala desde su ficha (firma, stock de la
+  // furgoneta, días de prueba). Cerrarla aquí descontaría el stock dos veces
+  // y la prueba no se enteraría (Mario 2026-11-26).
+  if ((inst as { kind: string }).kind === "free_trial") {
+    throw new Error(
+      "Esta instalación es de una prueba gratuita: márcala como instalada desde la ficha de la prueba.",
+    );
+  }
   const startTs = (inst as { started_at: string | null })?.started_at;
   const durationSec = startTs
     ? Math.floor((now.getTime() - new Date(startTs).getTime()) / 1000)
