@@ -163,8 +163,11 @@ export function AgendarInstalacionPrueba({
           onChange={(e) => setFecha(e.target.value)}
         />
         {fueraDeDisponibilidad && (
-          <p className="rounded-lg bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
-            Esa fecha y hora no están dentro de la disponibilidad del cliente.
+          // Solo informa: manda la fecha que agendamos, porque ya se ha
+          // hablado con el cliente y puede haber cambiado (Mario 2026-11-26).
+          <p className="rounded-lg bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+            No coincide con lo que propuso el comercial. Puedes agendarla igual: se
+            queda la fecha y la hora que pongas aquí.
           </p>
         )}
       </div>
