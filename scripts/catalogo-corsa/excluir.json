@@ -1,0 +1,17 @@
+{
+  "_leeme": [
+    "Equipos del PDF que NO se cargan (respuesta de Mario del 2026-11-26: nada industrial).",
+    "construir.py no les crea carpeta (si existía, la mueve a D:\\CORSA\\catalogo\\_descartados_industrial) y los pasa a descartados.json con el motivo.",
+    "Regla: capitulo (+ subfamilia / modelos) o refs sueltas."
+  ],
+  "reglas": [
+    { "capitulo": "Portacartuchos", "motivo": "industrial" },
+    { "capitulo": "Filtros de lecho", "motivo": "industrial" },
+    { "capitulo": "Descalcificación y desnitrificación industrial", "motivo": "industrial" },
+    { "capitulo": "Osmosis semi-industrial e industrial", "motivo": "industrial" },
+    { "capitulo": "Filtros especiales resinas", "modelos": ["Desmineralizador lechos separados", "Desmineralizador lecho mixto recambiable", "Remineralizador gama estándar", "Remineralizador gama industrial"], "motivo": "industrial" },
+    { "capitulo": "Desinfección ultravioleta y ozono", "modelos": ["Amalgama"], "motivo": "industrial (UV de 100 a 400 m³/h)" },
+    { "refs": ["A-807001", "A-807002", "A-807003", "A-811001", "A-803011", "A-803012"], "motivo": "industrial (Sterilux ET de 5 a 80 m³/h)" },
+    { "refs": ["A-330038", "A-330039", "A-330040"], "motivo": "industrial (Sterilux STP de 5 y 8 m³/h)" }
+  ]
+}

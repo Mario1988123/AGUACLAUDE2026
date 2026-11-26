@@ -1,0 +1,989 @@
+{
+  "_leeme": [
+    "Gamas de Corsa para el maestro. Lo genera generar_mapas.py (borrador) y ESTE fichero manda: se puede editar.",
+    "modelo = nombre de la página del catálogo; va en catalog_products.name y .modelo de todas las variantes (salvo «nombre» propio en la variante).",
+    "rasgos = lo que distingue a la variante (catalog_products.rasgos_identificacion).",
+    "cabeza = ref que hace de cabeza (gama_id null). Una gama de una sola ref = producto suelto.",
+    "revisar = true: el extractor dejó una duda; Mario la tiene que mirar."
+  ],
+  "total_refs": 101,
+  "total_gamas": 47,
+  "gamas_con_variantes": 23,
+  "gamas": [
+    {
+      "modelo": "Fiord / Fiord-S",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Fuentes",
+      "cabeza": "A-904004",
+      "revisar": true,
+      "nota": "Fiord (columna) y Fiord-S (sobremesa) comparten ficha y página; se han puesto como una gama con variantes y foto propia por variante. Si Mario las quiere como gamas separadas, se parte por el rasgo «Fiord / Fiord-S».",
+      "variantes": [
+        {
+          "ref": "A-904004",
+          "rasgos": "Fiord · Filtración · sin bomba · sin UV",
+          "nombre_corsa": "FIORD FILTRACIÓN S/B S/UV"
+        },
+        {
+          "ref": "A-904002",
+          "rasgos": "Fiord · Ósmosis · sin bomba · sin UV",
+          "nombre_corsa": "FIORD Osmosis S/B S/UV"
+        },
+        {
+          "ref": "A-904010",
+          "rasgos": "Fiord-S (sobremesa) · Ósmosis · sin bomba · sin UV",
+          "nombre_corsa": "FIORD-S Osmosis S/B S/UV"
+        },
+        {
+          "ref": "A-904016",
+          "rasgos": "Fiord · Filtración · sin bomba · con UV frontal",
+          "nombre_corsa": "FIORD FILTRACIÓN S/B C/UV"
+        },
+        {
+          "ref": "A-904013",
+          "rasgos": "Fiord · Ósmosis · sin bomba · con UV frontal",
+          "nombre_corsa": "FIORD Osmosis S/B C/UV"
+        },
+        {
+          "ref": "A-904015",
+          "rasgos": "Fiord-S (sobremesa) · Ósmosis · sin bomba · con UV frontal",
+          "nombre_corsa": "FIORD-S Osmosis S/B C/UV"
+        }
+      ]
+    },
+    {
+      "modelo": "Fiord Plus",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Fuentes",
+      "cabeza": "A-904022",
+      "revisar": true,
+      "nota": "La leyenda solo explica S/B; «C/B» se ha leído como «con bomba» por analogía con Poseidon y Estel.",
+      "variantes": [
+        {
+          "ref": "A-904022",
+          "rasgos": "Filtración · sin bomba · sin UV",
+          "nombre_corsa": "FIORD PLUS FILTRACIÓN S/B S/UV"
+        },
+        {
+          "ref": "A-904020",
+          "rasgos": "Ósmosis 150 GPD · sin bomba · sin UV",
+          "nombre_corsa": "FIORD PLUS Osmosis 150 GPD S/B S/UV"
+        },
+        {
+          "ref": "A-904026",
+          "rasgos": "Ósmosis 150 GPD · con bomba · sin UV",
+          "nombre_corsa": "FIORD PLUS Osmosis 150 GPD C/B S/UV"
+        },
+        {
+          "ref": "A-904038",
+          "rasgos": "Filtración · sin bomba · con UV frontal",
+          "nombre_corsa": "FIORD PLUS FILTRACIÓN S/B C/UV"
+        },
+        {
+          "ref": "A-904017",
+          "rasgos": "Ósmosis 150 GPD · sin bomba · con UV frontal",
+          "nombre_corsa": "FIORD PLUS Osmosis 150 GPD S/B C/UV"
+        },
+        {
+          "ref": "A-904018",
+          "rasgos": "Ósmosis 150 GPD · con bomba · con UV frontal",
+          "nombre_corsa": "FIORD PLUS Osmosis 150 GPD C/B C/UV"
+        }
+      ]
+    },
+    {
+      "modelo": "Fiord Tech",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Fuentes",
+      "cabeza": "A-904061",
+      "revisar": true,
+      "nota": "A-904064 no trae unidades por palet en la tabla. «C/U» de la tabla se entiende como «con UV» (el UV de cortina va en la ficha común); A-904065 no lleva C/U en el nombre: no se sabe si cambia algo. La foto no tiene transparencia.",
+      "variantes": [
+        {
+          "ref": "A-904061",
+          "rasgos": "Filtración · sin bomba",
+          "nombre_corsa": "FIORD TECH FILTRACIÓN S/B C/U"
+        },
+        {
+          "ref": "A-904062",
+          "rasgos": "Ósmosis · sin bomba",
+          "nombre_corsa": "FIORD TECH OSMOSIS S/B C/U"
+        },
+        {
+          "ref": "A-904063",
+          "rasgos": "Filtración · con bomba",
+          "nombre_corsa": "FIORD TECH FILTRACIÓN C/B C/U"
+        },
+        {
+          "ref": "A-904064",
+          "rasgos": "Ósmosis · con bomba",
+          "nombre_corsa": "FIORD TECH OSMOSIS C/B C/U"
+        },
+        {
+          "ref": "A-904065",
+          "rasgos": "Ultrafiltración · sin bomba",
+          "nombre_corsa": "FIORD TECH ULTRAFILTRACIÓN S/B"
+        }
+      ]
+    },
+    {
+      "modelo": "Poseidon",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Fuentes",
+      "cabeza": "A-900530",
+      "revisar": false,
+      "nota": null,
+      "variantes": [
+        {
+          "ref": "A-900530",
+          "rasgos": "Ósmosis 150 GPD · con bomba",
+          "nombre_corsa": "POSEIDON 150 GPD C/B"
+        }
+      ]
+    },
+    {
+      "modelo": "Estel",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Fuentes",
+      "cabeza": "A-900065",
+      "revisar": true,
+      "nota": "Guías de medidas de Poseidon y Estel no revisadas a ojo: A/B/C se han leído como Alto/Ancho/Fondo igual que en Fiord.",
+      "variantes": [
+        {
+          "ref": "A-900065",
+          "rasgos": "Ultrafiltración",
+          "nombre_corsa": "ESTEL ULTRAFILTRACIÓN"
+        },
+        {
+          "ref": "A-900077",
+          "rasgos": "Ósmosis presurizada 150 GPD · con bomba",
+          "nombre_corsa": "ESTEL Osmosis PRESURIZADA 150GPD C/B"
+        },
+        {
+          "ref": "A-900016",
+          "rasgos": "Decloración",
+          "nombre_corsa": "ESTEL DECLORACIÓN"
+        }
+      ]
+    },
+    {
+      "modelo": "Victoria Gold",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Generador frío/gas con tirador incorporado",
+      "cabeza": "A-280125",
+      "revisar": true,
+      "nota": "Foto sin transparencia. Medidas con bandeja según el catálogo. Se cargará como enfriador/dispensador.",
+      "variantes": [
+        {
+          "ref": "A-280125",
+          "rasgos": null,
+          "nombre_corsa": "Victoria Gold"
+        }
+      ]
+    },
+    {
+      "modelo": "Victoria Bronze",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Generador frío/gas con tirador incorporado",
+      "cabeza": "A-280120",
+      "revisar": true,
+      "nota": "Foto sin transparencia. Medidas con bandeja según el catálogo. Se cargará como enfriador/dispensador.",
+      "variantes": [
+        {
+          "ref": "A-280120",
+          "rasgos": null,
+          "nombre_corsa": "Victoria Bronze"
+        }
+      ]
+    },
+    {
+      "modelo": "Box 80",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Generador frío/gas con tirador externo",
+      "cabeza": "A-280150",
+      "revisar": true,
+      "nota": "Capacidad de banco de hielo «-» en la tabla (refrigera por fusión en aluminio). La tabla dice «Medidas con bandeja» aunque el equipo va oculto. Foto sin transparencia. Se cargará como enfriador/dispensador.",
+      "variantes": [
+        {
+          "ref": "A-280150",
+          "rasgos": null,
+          "nombre_corsa": "Box 80"
+        }
+      ]
+    },
+    {
+      "modelo": "Box 30",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Generador frío/gas con tirador externo",
+      "cabeza": "A-280165",
+      "revisar": true,
+      "nota": "Capacidad de banco de hielo «-» en la tabla. Foto sin transparencia. Se cargará como enfriador/dispensador.",
+      "variantes": [
+        {
+          "ref": "A-280165",
+          "rasgos": null,
+          "nombre_corsa": "Box 30"
+        }
+      ]
+    },
+    {
+      "modelo": "Top control",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Columnas dispensadoras",
+      "cabeza": "A-280166",
+      "revisar": true,
+      "nota": "Columna sin frío propio: se combina con un generador de tirador externo (Box). Se cargará como dispensador. Medidas «con bandeja». Foto sin transparencia.",
+      "variantes": [
+        {
+          "ref": "A-280166",
+          "rasgos": null,
+          "nombre_corsa": "COLUMNA TOP CONTROL"
+        }
+      ]
+    },
+    {
+      "modelo": "C-3 Vías",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Columnas dispensadoras",
+      "cabeza": "A-280167",
+      "revisar": true,
+      "nota": "Columna sin frío propio: se combina con un generador de tirador externo (Box). Se cargará como dispensador. Foto sin transparencia.",
+      "variantes": [
+        {
+          "ref": "A-280167",
+          "rasgos": null,
+          "nombre_corsa": "COLUMNA C-3 VÍAS"
+        }
+      ]
+    },
+    {
+      "modelo": "Decofiltro",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Tratamientos para dispensadores Horeca",
+      "cabeza": "A-197130",
+      "revisar": true,
+      "nota": "Título de la página: «Filtración y decloración»; se usa «Decofiltro» (columna Modelo) como gama.",
+      "variantes": [
+        {
+          "ref": "A-197130",
+          "rasgos": null,
+          "nombre_corsa": "Decofiltro"
+        }
+      ]
+    },
+    {
+      "modelo": "Essential Pro / Essential Plus",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Tratamientos para dispensadores Horeca",
+      "cabeza": "A-253120",
+      "revisar": true,
+      "nota": "Título de página genérico («Osmosis inversa presurizada»). La cota C (180) no aparece en la guía: se ha tomado como Fondo, como en el Essential residencial. Ojo: referencias distintas del Essential residencial (A-253106).",
+      "variantes": [
+        {
+          "ref": "A-253120",
+          "rasgos": "1000 L/día · depósito 30 L",
+          "nombre_corsa": "ESSENTIAL PRO"
+        },
+        {
+          "ref": "A-253121",
+          "rasgos": "2000 L/día · depósito 40 L",
+          "nombre_corsa": "ESSENTIAL PLUS"
+        }
+      ]
+    },
+    {
+      "modelo": "Flipper Compact Horeca",
+      "capitulo": "Dispensadores de agua",
+      "subfamilia": "Tratamientos para dispensadores Horeca",
+      "cabeza": "A-271006",
+      "revisar": true,
+      "nota": "La foto 2326 (INOX) no tiene transparencia.",
+      "variantes": [
+        {
+          "ref": "A-271006",
+          "rasgos": "Estándar",
+          "nombre_corsa": "FLIPPER COMPACT HORECA"
+        },
+        {
+          "ref": "A-271008",
+          "rasgos": "INOX en base",
+          "nombre_corsa": "FLIPPER COMPACT HORECA INOX"
+        }
+      ]
+    },
+    {
+      "modelo": "Mini",
+      "capitulo": "Desinfección ultravioleta y ozono",
+      "subfamilia": "Desinfección doméstica por ultravioleta",
+      "cabeza": "A-803023",
+      "revisar": true,
+      "nota": "Guía de medidas: A = largo del cuerpo, B = diámetro. La foto no tiene transparencia.",
+      "variantes": [
+        {
+          "ref": "A-803023",
+          "rasgos": "0,5 m³/h",
+          "nombre_corsa": "500 230 Vac"
+        },
+        {
+          "ref": "A-803024",
+          "rasgos": "1 m³/h",
+          "nombre_corsa": "1.000 230 Vac"
+        },
+        {
+          "ref": "A-803025",
+          "rasgos": "2,5 m³/h",
+          "nombre_corsa": "2.500 230 Vac"
+        }
+      ]
+    },
+    {
+      "modelo": "Sterilux ET",
+      "capitulo": "Desinfección ultravioleta y ozono",
+      "subfamilia": "Desinfección industrial por ultravioleta",
+      "cabeza": "A-803004",
+      "revisar": true,
+      "nota": "A = largo, B = diámetro (mismo esquema que Mini; guía no revisada a ojo). La cabecera de la página 202 dice «doméstica» pero es la gama industrial.",
+      "variantes": [
+        {
+          "ref": "A-803004",
+          "rasgos": "2,5 m³/h",
+          "nombre_corsa": "ET-2.500 SS316"
+        }
+      ]
+    },
+    {
+      "modelo": "Sterilux STP",
+      "capitulo": "Desinfección ultravioleta y ozono",
+      "subfamilia": "Desinfección industrial por ultravioleta",
+      "cabeza": "A-330000",
+      "revisar": true,
+      "nota": "La tabla pone «A x B mm» pero da tres cotas; según la guía se han leído como A = Alto, B = Fondo, C = Ancho (C crece con la lámpara). La foto no tiene transparencia. El texto dice «sensor a partir de modelo ET 5.000» en la página del STP (posible errata). No se dice qué significa «2C».",
+      "variantes": [
+        {
+          "ref": "A-330000",
+          "rasgos": "0,5 m³/h",
+          "nombre_corsa": "STP-500 230Vac"
+        },
+        {
+          "ref": "A-330001",
+          "rasgos": "1 m³/h",
+          "nombre_corsa": "STP-1.000 230Vac"
+        },
+        {
+          "ref": "A-330002",
+          "rasgos": "2,5 m³/h",
+          "nombre_corsa": "STP-2.500 230Vac"
+        }
+      ]
+    },
+    {
+      "modelo": "Oh!Zono",
+      "capitulo": "Desinfección ultravioleta y ozono",
+      "subfamilia": "Desinfección por ozono",
+      "cabeza": "A-252135",
+      "revisar": true,
+      "nota": "Comparte página con Avatar; se separan por ser equipos distintos. ¿Encaja en el CRM (es limpieza por ozono, no tratamiento de agua de bebida)?",
+      "variantes": [
+        {
+          "ref": "A-252135",
+          "rasgos": null,
+          "nombre_corsa": "OH!ZONO"
+        }
+      ]
+    },
+    {
+      "modelo": "Avatar",
+      "capitulo": "Desinfección ultravioleta y ozono",
+      "subfamilia": "Desinfección por ozono",
+      "cabeza": "A-252132",
+      "revisar": true,
+      "nota": "Comparte página con Oh!Zono; se separan por ser equipos distintos. ¿Encaja en el CRM?",
+      "variantes": [
+        {
+          "ref": "A-252132",
+          "rasgos": null,
+          "nombre_corsa": "AVATAR"
+        }
+      ]
+    },
+    {
+      "modelo": "Manual (FCE)",
+      "capitulo": "Dosificación",
+      "subfamilia": "Bombas dosificación",
+      "cabeza": "D-000197",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Medidas como A/B/C: la guía pone A alto, B ancho, C fondo, pero B = 62 mm no cuadra con la foto. «3 L/h-5 bar» se ha partido en caudal y contrapresión.",
+      "variantes": [
+        {
+          "ref": "D-000197",
+          "rasgos": "Ácido",
+          "nombre_corsa": "Bomba dosificadora constante FCE 05,03 V"
+        },
+        {
+          "ref": "D-400000",
+          "rasgos": "Alcalino",
+          "nombre_corsa": "Bomba dosificadora constante FCE 05,03 D"
+        }
+      ]
+    },
+    {
+      "modelo": "ME1-C",
+      "capitulo": "Dosificación",
+      "subfamilia": "Bombas dosificación",
+      "cabeza": "C-200554",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Guía: A = ancho, B = alto, C = fondo. Referencias con prefijo C- (como recambios).",
+      "variantes": [
+        {
+          "ref": "C-200554",
+          "rasgos": "Junta FPM (Vitón)",
+          "nombre_corsa": "ME1-C FPM"
+        },
+        {
+          "ref": "C-200574",
+          "rasgos": "Junta EPDM (Dutral)",
+          "nombre_corsa": "ME1-C EPDM"
+        }
+      ]
+    },
+    {
+      "modelo": "ME1-I",
+      "capitulo": "Dosificación",
+      "subfamilia": "Bombas dosificación",
+      "cabeza": "C-200575",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Guía: A = ancho, B = alto, C = fondo (como ME1-C). El índice la llama «ME1-1».",
+      "variantes": [
+        {
+          "ref": "C-200575",
+          "rasgos": null,
+          "nombre_corsa": "ME1-I"
+        }
+      ]
+    },
+    {
+      "modelo": "ME1-mA",
+      "capitulo": "Dosificación",
+      "subfamilia": "Bombas dosificación",
+      "cabeza": "C-200569",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Guía: A = ancho, B = alto, C = fondo.",
+      "variantes": [
+        {
+          "ref": "C-200569",
+          "rasgos": null,
+          "nombre_corsa": "ME1-mA"
+        }
+      ]
+    },
+    {
+      "modelo": "ME1-pH/Redox",
+      "capitulo": "Dosificación",
+      "subfamilia": "Bombas dosificación",
+      "cabeza": "C-200577",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Guía: A = ancho, B = alto, C = fondo. La sonda se vende aparte (C-200578 / C-200584, en descartados).",
+      "variantes": [
+        {
+          "ref": "C-200577",
+          "rasgos": "pH · junta EPDM (Dutral)",
+          "nombre_corsa": "ME1-pH"
+        },
+        {
+          "ref": "C-200583",
+          "rasgos": "Redox · junta FPM (Vitón)",
+          "nombre_corsa": "ME1-Rx"
+        }
+      ]
+    },
+    {
+      "modelo": "Single panel CL2-CG3",
+      "capitulo": "Dosificación",
+      "subfamilia": "Paneles cloradores",
+      "cabeza": "D-714061",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Medidas A/B/C (160 x 192 x 103) sin asignar a alto/ancho/fondo: el dibujo es ambiguo y parecen pequeñas para el panel de la foto. Foto sin transparencia.",
+      "variantes": [
+        {
+          "ref": "D-714061",
+          "rasgos": null,
+          "nombre_corsa": "SINGLE PANEL CL2-CG3"
+        }
+      ]
+    },
+    {
+      "modelo": "Gold PH/CL2",
+      "capitulo": "Dosificación",
+      "subfamilia": "Paneles cloradores",
+      "cabeza": "D-714063",
+      "revisar": true,
+      "nota": "¿Mario la quiere en el CRM? (dosificación: extraída como equipo por si acaso). Medidas A/B/C sin asignar (dibujo ambiguo). La foto muestra dos bombas aunque el texto cita una ME3-mA. Foto sin transparencia.",
+      "variantes": [
+        {
+          "ref": "D-714063",
+          "rasgos": null,
+          "nombre_corsa": "GOLD PH/CL2"
+        }
+      ]
+    },
+    {
+      "modelo": "Shower",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Filtración y decloración",
+      "cabeza": "A-115001",
+      "revisar": true,
+      "nota": "Medidas A x B: la guía marca A como alto y B como ancho (diámetro del cuerpo); se ha puesto Alto/Ancho. Las fotos de cada color son propias de la variante.",
+      "variantes": [
+        {
+          "ref": "A-115001",
+          "rasgos": "Blanco",
+          "nombre_corsa": "Shower blanco"
+        },
+        {
+          "ref": "A-115002",
+          "rasgos": "Cromado",
+          "nombre_corsa": "Shower cromado"
+        }
+      ]
+    },
+    {
+      "modelo": "Fontanilla sobre fregadera (SF)",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Filtración y decloración",
+      "cabeza": "A-100028",
+      "revisar": true,
+      "nota": "Medidas «A x B» (305 x 250): la guía solo acota A (alto); B no aparece en el dibujo, se deja como «Medida B».",
+      "variantes": [
+        {
+          "ref": "A-100028",
+          "rasgos": "F1 · 100 % decloración",
+          "nombre_corsa": "F1"
+        },
+        {
+          "ref": "A-100029",
+          "rasgos": "F2 · 30 % decloración, 70 % descalcificación",
+          "nombre_corsa": "F2"
+        },
+        {
+          "ref": "A-100030",
+          "rasgos": "F3 · 50 % decloración, 50 % descalcificación",
+          "nombre_corsa": "F3"
+        }
+      ]
+    },
+    {
+      "modelo": "Fontanilla bajo fregadera (BF)",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Filtración y decloración",
+      "cabeza": "A-195100",
+      "revisar": false,
+      "nota": null,
+      "variantes": [
+        {
+          "ref": "A-195100",
+          "rasgos": "Con kit de conexión (grifo dispensador y accesorios)",
+          "nombre_corsa": "BF C/ KIT Conexión"
+        },
+        {
+          "ref": "A-195101",
+          "rasgos": "Sin kit de conexión",
+          "nombre_corsa": "BF S/ KIT Conexion"
+        }
+      ]
+    },
+    {
+      "modelo": "Aquasana bajo fregadera (BF)",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Filtración y decloración",
+      "cabeza": "A-190025",
+      "revisar": true,
+      "nota": "La foto muestra el grifo de 3 vías (variante G3V); no hay foto propia del grifo presurizado.",
+      "variantes": [
+        {
+          "ref": "A-190025",
+          "rasgos": "Sedimento + carbón bacteriostático + ultrafiltración · grifo de 3 vías",
+          "nombre_corsa": "Aquasana S + CAg + UF + G3V"
+        },
+        {
+          "ref": "A-190030",
+          "rasgos": "Sedimento + carbón bacteriostático + ultrafiltración · regulador 3,5 bar · grifo presurizado",
+          "nombre_corsa": "Aquasana S + CAg + UF + Reg. Pres. 3,5 bares + GP"
+        },
+        {
+          "ref": "A-190014",
+          "rasgos": "Sedimento + carbón activo + carbón KDF · regulador 3,5 bar · grifo presurizado",
+          "nombre_corsa": "Aquasana S + CA + Ckdf + Reg. Pres. 3,5 bares + GP"
+        },
+        {
+          "ref": "A-190016",
+          "rasgos": "Vending · sedimento + carbón con silicofosfatos + carbón activo · regulador 3,5 bar · grifo presurizado",
+          "nombre_corsa": "Aquasana vending S + CSPH + CA + Reg.Pres. 3,5 bares + GP"
+        }
+      ]
+    },
+    {
+      "modelo": "Essential",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Osmosis inversa presurizada",
+      "cabeza": "A-253106",
+      "revisar": true,
+      "nota": "La guía de medidas acota A (alto), B (ancho) y D (diámetro del depósito); C no se ve acotada y se ha tomado como fondo.",
+      "variantes": [
+        {
+          "ref": "A-253106",
+          "rasgos": "Sin bomba",
+          "nombre_corsa": "Essential"
+        },
+        {
+          "ref": "A-253107",
+          "rasgos": "Con bomba",
+          "nombre_corsa": "Essential con bomba"
+        }
+      ]
+    },
+    {
+      "modelo": "Colours",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Osmosis inversa presurizada",
+      "cabeza": "A-253108",
+      "revisar": false,
+      "nota": null,
+      "variantes": [
+        {
+          "ref": "A-253108",
+          "rasgos": null,
+          "nombre_corsa": "Colours"
+        }
+      ]
+    },
+    {
+      "modelo": "Nertus",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Osmosis inversa presurizada",
+      "cabeza": "A-253301",
+      "revisar": false,
+      "nota": null,
+      "variantes": [
+        {
+          "ref": "A-253301",
+          "rasgos": "Sin bomba",
+          "nombre_corsa": "Nertus sin bomba"
+        },
+        {
+          "ref": "A-253302",
+          "rasgos": "Con bomba",
+          "nombre_corsa": "Nertus con bomba"
+        }
+      ]
+    },
+    {
+      "modelo": "Nertus Direct",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Osmosis inversa directa",
+      "cabeza": "A-253300",
+      "revisar": true,
+      "nota": "La guía de medidas no muestra letras legibles; se ha aplicado Alto/Ancho/Fondo como en Nertus (mismas medidas). El grifo y el display son las mismas imágenes (xref 2857, 2855) que en Nertus.",
+      "variantes": [
+        {
+          "ref": "A-253300",
+          "rasgos": "Postfiltro carbón activo",
+          "nombre_corsa": "Nertus direct postfiltro CA"
+        }
+      ]
+    },
+    {
+      "modelo": "Sindu",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Osmosis inversa directa",
+      "cabeza": "A-253401",
+      "revisar": true,
+      "nota": "Grifo incluido según el icono, pero no sale foto del grifo. Medidas: la guía marca B en el frente estrecho y C en el lateral largo (Ancho 150, Fondo 420).",
+      "variantes": [
+        {
+          "ref": "A-253401",
+          "rasgos": null,
+          "nombre_corsa": "Sindu"
+        }
+      ]
+    },
+    {
+      "modelo": "Grifo para Osmosor",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Grifos",
+      "cabeza": "C-190018",
+      "revisar": true,
+      "nota": "El mismo código C-190018 aparece en la pág. 79 como «Grifo presurizado» (recambio de Aquasana); no se ha duplicado en descartados.",
+      "variantes": [
+        {
+          "ref": "C-190018",
+          "rasgos": null,
+          "nombre_corsa": "Grifo para Osmosor"
+        }
+      ]
+    },
+    {
+      "modelo": "Grifo de 3 vías eléctrico sin logo",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Grifos",
+      "cabeza": "A-254059",
+      "revisar": true,
+      "nota": "La foto está rotulada «Grifo de 3 vías eléctrico» (no dice si es la versión sin logo).",
+      "variantes": [
+        {
+          "ref": "A-254059",
+          "rasgos": null,
+          "nombre_corsa": "Grifo de 3 vías eléctrico sin logo"
+        }
+      ]
+    },
+    {
+      "modelo": "Grifo de 3 vías presurizado",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Grifos",
+      "cabeza": "A-254054",
+      "revisar": true,
+      "nota": "Sin foto propia en el catálogo.",
+      "variantes": [
+        {
+          "ref": "A-254054",
+          "rasgos": null,
+          "nombre_corsa": "Grifo de 3 vías presurizado"
+        }
+      ]
+    },
+    {
+      "modelo": "Grifo 3 vías Aquasana",
+      "capitulo": "Purificación residencial",
+      "subfamilia": "Grifos",
+      "cabeza": "C-190010",
+      "revisar": true,
+      "nota": "Sale en «Consumibles y recambios / Aquasana» (pág. 79), no en la pág. 91. Se extrae como grifo por la regla de INSTRUCCIONES (grifos sueltos = accesorio); si se quiere solo lo de la pág. 91, pasarlo a descartados. Sin foto ni conexión indicada.",
+      "variantes": [
+        {
+          "ref": "C-190010",
+          "rasgos": null,
+          "nombre_corsa": "Grifo 3 vías Aquasana"
+        }
+      ]
+    },
+    {
+      "modelo": "Medea Black",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-400900",
+      "revisar": true,
+      "nota": "Subfamilia: la cabecera de página solo dice «Descalcificación residencial / Medea Black»; se ha puesto «Descalcificadores». Los rasgos de display de la pág. 95 (LCD) se han aplicado a la gama. «110 V/240 V/370 V» en el nombre parece el volumen, no la tensión; no se interpreta. El xref 1178 es el detalle circular de la tapa: comprobar el recorte al extraerlo.",
+      "variantes": [
+        {
+          "ref": "A-400900",
+          "rasgos": "10 L resina HF · K105H · ¾” · formato bajo",
+          "nombre_corsa": "LCD UF HF 110 V 3/4\""
+        },
+        {
+          "ref": "A-400901",
+          "rasgos": "24 L resina HF · K105H · ¾”",
+          "nombre_corsa": "LCD UF HF 240 V 3/4\""
+        },
+        {
+          "ref": "A-400902",
+          "rasgos": "37 L resina HF · K105H · ¾”",
+          "nombre_corsa": "LCD UF HF 370 V 3/4\""
+        }
+      ]
+    },
+    {
+      "modelo": "Ura",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-400720",
+      "revisar": true,
+      "nota": "Subfamilia «Descalcificadores» puesta por mí (la cabecera no trae subfamilia).",
+      "variantes": [
+        {
+          "ref": "A-400720",
+          "rasgos": "9 L resina HF · K69D3H · formato bajo · caja neutra",
+          "nombre_corsa": "LCD 100 V HF UF GRIS CAJA NEUTRA"
+        },
+        {
+          "ref": "A-400742",
+          "rasgos": "24 L resina · K69D3H",
+          "nombre_corsa": "LCD 250 V UF GRIS"
+        }
+      ]
+    },
+    {
+      "modelo": "Nasser",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-400500",
+      "revisar": true,
+      "nota": "La foto pequeña (xref 1202) es el formato bajo (160: A-400500/A-400503) y va en esas variantes; la grande (1206) es la principal de la gama. La foto del display de la página es LCD; los rasgos de display (LCD o pilotos LED) salen de la pág. 95 y van por variante. «WPB» en A-400505 parece errata de «WBP».",
+      "variantes": [
+        {
+          "ref": "A-400500",
+          "rasgos": "Pilotos LED · 15 L resina HF · K69P3H · ¾”",
+          "nombre_corsa": "PILOTOS LED HF UF 160V 3/4”"
+        },
+        {
+          "ref": "A-400501",
+          "rasgos": "Pilotos LED · 24 L resina · K69P3H · ¾”",
+          "nombre_corsa": "PILOTOS LED UF 250V 3/4”"
+        },
+        {
+          "ref": "A-400502",
+          "rasgos": "Pilotos LED · 37 L resina · K69P3H · ¾”",
+          "nombre_corsa": "PILOTOS LED UF 380V 3/4”"
+        },
+        {
+          "ref": "A-400535",
+          "rasgos": "Pilotos LED · 37 L resina · K68P3H · 1”",
+          "nombre_corsa": "PILOTOS LED UF 380V 1\""
+        },
+        {
+          "ref": "A-400503",
+          "rasgos": "LCD · 15 L resina HF · K69D3H · ¾”",
+          "nombre_corsa": "LCD HF UF WBP 160V 3/4”"
+        },
+        {
+          "ref": "A-400504",
+          "rasgos": "LCD · 24 L resina · K69D3H · ¾”",
+          "nombre_corsa": "LCD UF WBP 250V 3/4”"
+        },
+        {
+          "ref": "A-400505",
+          "rasgos": "LCD · 37 L resina · K69D3H · ¾”",
+          "nombre_corsa": "LCD UF WPB 380V 3/4”"
+        },
+        {
+          "ref": "A-400536",
+          "rasgos": "LCD · 37 L resina · K68D3H · 1”",
+          "nombre_corsa": "LCD UF WBP 380V 1\""
+        }
+      ]
+    },
+    {
+      "modelo": "Nilo",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-400520",
+      "revisar": true,
+      "nota": "Foto baja (xref 1219) asignada a las variantes 160 (A-400520/A-400526). Rasgos de display de la pág. 95 por variante. La guía de medidas de Nilo es muy pequeña; A alto, B ancho, C fondo.",
+      "variantes": [
+        {
+          "ref": "A-400520",
+          "rasgos": "Pilotos LED · 15 L resina HF · K69P3 · ¾”",
+          "nombre_corsa": "PILOTOS LED UF HF 160V 3/4\""
+        },
+        {
+          "ref": "A-400521",
+          "rasgos": "Pilotos LED · 24 L resina · K69P3 · ¾”",
+          "nombre_corsa": "PILOTOS LED UF 250V 3/4\""
+        },
+        {
+          "ref": "A-400522",
+          "rasgos": "Pilotos LED · 37 L resina · K69P3 · ¾”",
+          "nombre_corsa": "PILOTOS LED UF 380V 3/4\""
+        },
+        {
+          "ref": "A-400530",
+          "rasgos": "Pilotos LED · 37 L resina · K68P3 · 1”",
+          "nombre_corsa": "PILOTOS LED UF 380V 1”"
+        },
+        {
+          "ref": "A-400526",
+          "rasgos": "LCD · 15 L resina HF · K69D3 · ¾”",
+          "nombre_corsa": "LCD UF HF 160V 3/4\""
+        },
+        {
+          "ref": "A-400527",
+          "rasgos": "LCD · 24 L resina · K69D3 · ¾”",
+          "nombre_corsa": "LCD UF 250V 3/4\""
+        },
+        {
+          "ref": "A-400528",
+          "rasgos": "LCD · 37 L resina · K69D3 · ¾”",
+          "nombre_corsa": "LCD UF 380V 3/4\""
+        }
+      ]
+    },
+    {
+      "modelo": "Orion RL 50",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-400860",
+      "revisar": true,
+      "nota": "La cabecera de la página dice «Oriol RL 50» pero el título y la tabla «Orion RL 50»; se usa Orion. La guía acota A (alto) y B (ancho); C (fondo) no lleva letra.",
+      "variantes": [
+        {
+          "ref": "A-400860",
+          "rasgos": null,
+          "nombre_corsa": "ORION RL50"
+        }
+      ]
+    },
+    {
+      "modelo": "Micro",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-450000",
+      "revisar": true,
+      "nota": "Display: la página dice «Display LED»; se han aplicado los rasgos LED de la pág. 95, aunque la válvula K69P3 de las variantes «S» suele llevar pilotos LED (no verificado en el catálogo). «C/V» y «S» no se explican; la diferencia visible es la válvula (K79A3 vs K69P3). La foto principal muestra un cabezal tipo K79A3.",
+      "variantes": [
+        {
+          "ref": "A-450000",
+          "rasgos": "4,5 L resina HF + KDF · K79A3",
+          "nombre_corsa": "045 C/V UF HF KDF"
+        },
+        {
+          "ref": "A-450001",
+          "rasgos": "5,5 L resina HF · K79A3",
+          "nombre_corsa": "055 C/V UF HF"
+        },
+        {
+          "ref": "A-450005",
+          "rasgos": "4,5 L resina HF + KDF · K69P3",
+          "nombre_corsa": "S 045V UF HF KDF"
+        },
+        {
+          "ref": "A-450006",
+          "rasgos": "5,5 L resina HF · K69P3",
+          "nombre_corsa": "S 055V UF HF"
+        }
+      ]
+    },
+    {
+      "modelo": "Tigris M8A",
+      "capitulo": "Descalcificación residencial",
+      "subfamilia": "Descalcificadores",
+      "cabeza": "A-400575",
+      "revisar": true,
+      "nota": "Contradicción en el catálogo: el icono dice temperatura del agua 5–70 ºC y el texto «funciona hasta temperatura de 50 ºC»; se ha puesto 5–70 en la característica y el texto en ventajas. D1/D2 no se explican (¿modos/durezas?). No se aplican los rasgos LCD de la pág. 95 (su pantalla es distinta). Sin modelo de válvula. «Detector de cambio de resina» sale repetido en el catálogo.",
+      "variantes": [
+        {
+          "ref": "A-400575",
+          "rasgos": null,
+          "nombre_corsa": "TIGRIS M8A 1/2\""
+        }
+      ]
+    },
+    {
+      "modelo": "Remineralizador gama pequeña",
+      "capitulo": "Filtros especiales resinas",
+      "subfamilia": "Remineralización",
+      "cabeza": "A-850606",
+      "revisar": true,
+      "nota": "Medidas botella «A x B»: A = alto, B = diámetro (por analogía con las otras guías; no se ha mirado la imagen de la página 123).",
+      "variantes": [
+        {
+          "ref": "A-850606",
+          "rasgos": "0,15 m³/h · conexión 1”",
+          "nombre_corsa": "MINI-R"
+        },
+        {
+          "ref": "A-850607",
+          "rasgos": "0,65 m³/h · conexión 1 ½”",
+          "nombre_corsa": "BIG-R"
+        }
+      ]
+    }
+  ]
+}

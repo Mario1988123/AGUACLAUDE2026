@@ -1,0 +1,114 @@
+{
+  "_leeme": [
+    "Familia de Corsa -> categoría global y kind del maestro. Clave: «capítulo / subfamilia» (cabecera de la página) o solo «capítulo».",
+    "Manda por_ref sobre por_modelo, y por_modelo sobre familias. Las refs que ya existen en el maestro NO cambian de categoría ni de kind.",
+    "«categorias_nuevas» las crea el cargador en el paso «categorias» (solo con --aplicar; en seco se dan por creadas). Si «categoria» no existe ni está en categorias_nuevas, el producto se salta.",
+    "[decide] = elegido por ser obvio; el resto de dudas van en las preguntas para Mario."
+  ],
+  "familias": {
+    "Purificación residencial / Filtración y decloración": {
+      "categoria": "filters",
+      "kind": "equipment"
+    },
+    "Purificación residencial / Osmosis inversa presurizada": {
+      "categoria": "osmosis",
+      "kind": "equipment"
+    },
+    "Purificación residencial / Osmosis inversa directa": {
+      "categoria": "osmosis_direct_flow",
+      "kind": "equipment"
+    },
+    "Purificación residencial / Grifos": {
+      "categoria": "Grifos",
+      "kind": "accessory"
+    },
+    "Descalcificación residencial": {
+      "categoria": "softeners",
+      "kind": "equipment"
+    },
+    "Filtros especiales resinas": {
+      "categoria": "filters",
+      "kind": "equipment",
+      "nota": "solo queda el remineralizador pequeño (MINI-R y BIG-R); lo industrial está en excluir.json"
+    },
+    "Dispensadores de agua / Fuentes": {
+      "categoria": "dispensers",
+      "kind": "equipment"
+    },
+    "Dispensadores de agua / Generador frío/gas con tirador incorporado": {
+      "categoria": "horeca",
+      "kind": "equipment",
+      "nota": "Victoria: enfriador con su propio grifo, equipo completo de Horeca"
+    },
+    "Dispensadores de agua / Generador frío/gas con tirador externo": {
+      "categoria": "Enfriador",
+      "kind": "accessory",
+      "nota": "Box 80 / Box 30: enfriador bajo barra que necesita columna aparte"
+    },
+    "Dispensadores de agua / Columnas dispensadoras": {
+      "categoria": "Grifos",
+      "kind": "accessory",
+      "nota": "columna/tirador para el Box: Grifos accesorio (Mario, 26-11)"
+    },
+    "Dispensadores de agua / Tratamientos para dispensadores Horeca": {
+      "categoria": "filters",
+      "kind": "equipment"
+    },
+    "Desinfección ultravioleta y ozono": {
+      "categoria": "uv",
+      "kind": "equipment",
+      "nota": "subcategoría nueva «uv» bajo filters (aprobada por Mario el 26-11)"
+    },
+    "Desinfección ultravioleta y ozono / Desinfección por ozono": {
+      "categoria": "ozone",
+      "kind": "equipment"
+    },
+    "Dosificación": {
+      "categoria": "dosing",
+      "kind": "equipment",
+      "nota": "categoría nueva «dosing» (aprobada por Mario el 26-11)"
+    }
+  },
+  "por_modelo": {
+    "_nota": "[decide] Ósmosis residencial: Essential (5 etapas) -> osmosis_5_stages; Nertus (compacto presurizado) -> osmosis_compact; Colours (4 etapas) se queda en osmosis. Horeca: Essential Pro/Plus y Flipper Compact Horeca son ósmosis.",
+    "Essential": {
+      "categoria": "osmosis_5_stages",
+      "kind": "equipment"
+    },
+    "Nertus": {
+      "categoria": "osmosis_compact",
+      "kind": "equipment"
+    },
+    "Essential Pro / Essential Plus": {
+      "categoria": "osmosis_5_stages",
+      "kind": "equipment"
+    },
+    "Flipper Compact Horeca": {
+      "categoria": "osmosis",
+      "kind": "equipment"
+    }
+  },
+  "por_ref": {},
+  "categorias_nuevas": [
+    {
+      "key": "dosing",
+      "name_es": "Dosificación",
+      "parent_key": null,
+      "default_kind": "equipment",
+      "description_es": "Bombas dosificadoras y paneles de medición y control (cloro, pH, redox).",
+      "icon": "gauge",
+      "sort_order": 80,
+      "enlazar_atributos": []
+    },
+    {
+      "key": "uv",
+      "name_es": "UV",
+      "parent_key": "filters",
+      "default_kind": "equipment",
+      "description_es": "Esterilizadores de agua por luz ultravioleta.",
+      "icon": "sun",
+      "sort_order": 61,
+      "enlazar_atributos": "uv_*"
+    }
+  ]
+}

@@ -1,0 +1,2231 @@
+{
+ "_leeme": [
+  "Emparejamiento de las características de Corsa (ficha.json grupos_ft[].items[].atributo) con product_attributes_global.",
+  "destino: clave global, o por categoría: clave exacta, «osmosis*» (osmosis y subcategorías) o «*».",
+  "transformacion: numero | rango («a–b» -> [min, max]; uno_es: max|min si viene un solo número) | texto (valores: tabla de traducción; sin_unidad: no añade la unidad) | booleano (Sí/No) | presente (texto libre -> true salvo que empiece por «No») | enum (valores) | ventaja (pasa a catalog_product_highlights como texto; «No» no se añade).",
+  "por_unidad: elige la entrada según la unidad (con factor de conversión exacta de unidades). por_valor: según el valor (clave exacta o /regex/).",
+  "columnas: van a catalog_products (dim_*_mm, weight_grams) con el factor de cada unidad.",
+  "ignorar: no se cargan (logística o remisiones a otro capítulo). Atributo sin entrada = la prueba en seco lo lista como «sin emparejar».",
+  "nuevos: claves que NO existen en el maestro; son PROPUESTAS y solo se crean con --aplicar.",
+  "2026-11-26 (Mario): las características sueltas o de sí/no van como ATRIBUTOS globales (booleanos o de texto, con su grupo), no como ventajas. En ventajas solo quedan las viñetas comerciales del catálogo. Las entradas «ventaja» que quedan en este mapa solo las usaban equipos industriales ya excluidos."
+ ],
+ "grupos": {
+  "Características físicas": "fisicas",
+  "Características eléctricas": "electricas",
+  "Características técnicas": "tecnicas",
+  "Características extra": "extra"
+ },
+ "orden_grupos": {
+  "fisicas": 20,
+  "electricas": 30,
+  "tecnicas": 40,
+  "extra": 60
+ },
+ "columnas": {
+  "Alto": {
+   "columna": "dim_height_mm",
+   "unidades": {
+    "mm": 1,
+    "cm": 10,
+    "m": 1000
+   }
+  },
+  "Ancho": {
+   "columna": "dim_width_mm",
+   "unidades": {
+    "mm": 1,
+    "cm": 10,
+    "m": 1000
+   }
+  },
+  "Largo": {
+   "columna": "dim_width_mm",
+   "unidades": {
+    "mm": 1,
+    "cm": 10,
+    "m": 1000
+   }
+  },
+  "Fondo": {
+   "columna": "dim_depth_mm",
+   "unidades": {
+    "mm": 1,
+    "cm": 10,
+    "m": 1000
+   }
+  },
+  "Peso": {
+   "columna": "weight_grams",
+   "unidades": {
+    "kg": 1000,
+    "g": 1
+   }
+  }
+ },
+ "ignorar": [
+  "Unidades por caja",
+  "Unidades por pallet",
+  "Características de la válvula",
+  "Modo UF",
+  "Nota de medidas",
+  "Novedad",
+  "Plazo de entrega"
+ ],
+ "atributos": {
+  "Temperatura del agua": {
+   "transformacion": "rango",
+   "uno_es": "max",
+   "destino": {
+    "softeners": [
+     "softener_temp_min_c",
+     "softener_temp_max_c"
+    ],
+    "osmosis*": [
+     "osmosis_temp_min_c",
+     "osmosis_temp_max_c"
+    ],
+    "*": [
+     "common_inlet_temp_min_c",
+     "common_inlet_temp_max_c"
+    ]
+   }
+  },
+  "Temperatura de trabajo": {
+   "transformacion": "rango",
+   "uno_es": "max",
+   "destino": {
+    "softeners": [
+     "softener_temp_min_c",
+     "softener_temp_max_c"
+    ],
+    "osmosis*": [
+     "osmosis_temp_min_c",
+     "osmosis_temp_max_c"
+    ],
+    "*": [
+     "common_inlet_temp_min_c",
+     "common_inlet_temp_max_c"
+    ]
+   }
+  },
+  "Temperatura máxima del agua": {
+   "transformacion": "numero",
+   "destino": {
+    "softeners": "softener_temp_max_c",
+    "osmosis*": "osmosis_temp_max_c",
+    "*": "common_inlet_temp_max_c"
+   }
+  },
+  "Alimentación eléctrica": {
+   "transformacion": "texto",
+   "destino": "common_power_supply"
+  },
+  "Modelo de válvula": {
+   "transformacion": "texto",
+   "destino": "softener_valve_brand_model"
+  },
+  "Válvulas": {
+   "transformacion": "ventaja"
+  },
+  "Botella (medida)": {
+   "transformacion": "texto",
+   "sin_unidad": true,
+   "destino": "common_bottle_size"
+  },
+  "Tipo de regeneración": {
+   "por_valor": {
+    "Volumétrica": {
+     "transformacion": "enum",
+     "valores": {
+      "Volumétrica": "volumétrica"
+     },
+     "destino": "softener_regen_type"
+    },
+    "Contracorriente": {
+     "transformacion": "enum",
+     "valores": {
+      "Contracorriente": "contracorriente"
+     },
+     "destino": "softener_regen_type"
+    },
+    "/^(autom[aá]tic[oa]|manual)$/": {
+     "transformacion": "texto",
+     "valores": {
+      "Automática": "Automático"
+     },
+     "destino": "common_operation_mode"
+    },
+    "*": {
+     "transformacion": "texto",
+     "destino": "softener_flow_direction"
+    }
+   }
+  },
+  "Accionamiento": {
+   "transformacion": "texto",
+   "destino": "common_operation_mode"
+  },
+  "Modo de regeneración": {
+   "transformacion": "texto",
+   "valores": {
+    "UF": "Contracorriente (UF)",
+    "DF": "Cocorriente (DF)"
+   },
+   "destino": "softener_flow_direction"
+  },
+  "Sentido de regeneración": {
+   "transformacion": "ventaja"
+  },
+  "Material": {
+   "transformacion": "texto",
+   "destino": {
+    "filters": "filter_body_material",
+    "*": "common_material"
+   }
+  },
+  "Caudal máximo": {
+   "transformacion": "numero",
+   "destino": {
+    "softeners": "softener_peak_flow_m3h",
+    "osmosis*": "common_flow_max_m3h",
+    "*": "filter_max_flow_lmin"
+   },
+   "por_unidad": {
+    "m³/h": {
+     "factor": {
+      "filter_max_flow_lmin": "1000/60"
+     }
+    },
+    "L/h": {
+     "factor": {
+      "softener_peak_flow_m3h": "1/1000",
+      "common_flow_max_m3h": "1/1000",
+      "filter_max_flow_lmin": "1/60"
+     }
+    }
+   }
+  },
+  "Caudal máximo de la válvula": {
+   "transformacion": "numero",
+   "destino": "softener_valve_max_flow_m3h"
+  },
+  "Caudal": {
+   "transformacion": "texto",
+   "destino": {
+    "softeners": "softener_service_flow_text",
+    "*": "common_service_flow"
+   }
+  },
+  "Caudal de servicio": {
+   "transformacion": "texto",
+   "destino": {
+    "softeners": "softener_service_flow_text",
+    "*": "common_service_flow"
+   }
+  },
+  "Conexión": {
+   "transformacion": "texto",
+   "destino": {
+    "softeners": "softener_inlet_outlet_inches",
+    "filters": "filter_connection_inches",
+    "Grifos": "common_connections",
+    "*": "common_inlet_connection"
+   }
+  },
+  "Conexiones E/S": {
+   "transformacion": "texto",
+   "destino": "softener_conexiones_e_s"
+  },
+  "Conexión de entrada": {
+   "transformacion": "texto",
+   "destino": "common_inlet_connection"
+  },
+  "Conexión de salida": {
+   "transformacion": "texto",
+   "destino": "common_outlet_connection"
+  },
+  "Conexión de desagüe": {
+   "transformacion": "texto",
+   "destino": "common_reject_connection"
+  },
+  "Presión de trabajo": {
+   "transformacion": "rango",
+   "uno_es": "max",
+   "destino": {
+    "softeners": [
+     "softener_working_pressure_min_bar",
+     "softener_working_pressure_max_bar"
+    ],
+    "osmosis*": [
+     "osmosis_pressure_min_bar",
+     "osmosis_pressure_max_bar"
+    ],
+    "*": [
+     "common_pressure_min_bar",
+     "common_pressure_max_bar"
+    ]
+   }
+  },
+  "Presión máxima de trabajo": {
+   "transformacion": "rango",
+   "uno_es": "max",
+   "destino": {
+    "softeners": [
+     "softener_working_pressure_min_bar",
+     "softener_working_pressure_max_bar"
+    ],
+    "osmosis*": [
+     "osmosis_pressure_min_bar",
+     "osmosis_pressure_max_bar"
+    ],
+    "*": [
+     "common_pressure_min_bar",
+     "common_pressure_max_bar"
+    ]
+   }
+  },
+  "Presión de entrada": {
+   "transformacion": "rango",
+   "uno_es": "min",
+   "destino": {
+    "softeners": [
+     "softener_working_pressure_min_bar",
+     "softener_working_pressure_max_bar"
+    ],
+    "osmosis*": [
+     "osmosis_pressure_min_bar",
+     "osmosis_pressure_max_bar"
+    ],
+    "*": [
+     "common_pressure_min_bar",
+     "common_pressure_max_bar"
+    ]
+   }
+  },
+  "Presión de entrada mínima": {
+   "transformacion": "numero",
+   "destino": {
+    "osmosis*": "osmosis_pressure_min_bar",
+    "*": "common_pressure_min_bar"
+   }
+  },
+  "Presión máxima": {
+   "transformacion": "numero",
+   "destino": {
+    "filters": "filter_max_pressure_bar",
+    "softeners": "softener_working_pressure_max_bar",
+    "osmosis*": "osmosis_pressure_max_bar",
+    "*": "common_pressure_max_bar"
+   }
+  },
+  "Presión de entrada con bomba": {
+   "transformacion": "texto",
+   "destino": "osmosis_presion_entrada_bomba"
+  },
+  "Presión de entrada sin bomba": {
+   "transformacion": "texto",
+   "destino": "osmosis_presion_entrada_sin_bomba"
+  },
+  "Diámetro": {
+   "transformacion": "numero",
+   "destino": "common_diameter_mm"
+  },
+  "Diámetro del depósito": {
+   "transformacion": "numero",
+   "destino": {
+    "osmosis*": "osmosis_tank_diameter_mm",
+    "dispensers": "osmosis_tank_diameter_mm",
+    "horeca": "osmosis_tank_diameter_mm",
+    "*": "common_diameter_mm"
+   }
+  },
+  "Alto de la botella": {
+   "transformacion": "numero",
+   "destino": "common_bottle_height_mm"
+  },
+  "Consumo de sal por regeneración": {
+   "transformacion": "numero",
+   "destino": "softener_salt_per_regen_kg",
+   "por_unidad": {
+    "kg": {
+     "factor": 1
+    },
+    "g": {
+     "factor": 0.001
+    }
+   }
+  },
+  "Medio filtrante": {
+   "transformacion": "texto",
+   "destino": "common_filter_media"
+  },
+  "Potencia": {
+   "transformacion": "numero",
+   "destino": {
+    "dispensers": "dispenser_power_total_w",
+    "horeca": "dispenser_power_total_w",
+    "Enfriador": "dispenser_power_total_w",
+    "filters": "uv_power_total_w",
+    "ozone": "ozone_power_w",
+    "softeners": "softener_power_w",
+    "*": "common_power_total_w"
+   },
+   "por_unidad": {
+    "W": {
+     "factor": 1
+    },
+    "kW": {
+     "factor": 1000
+    }
+   }
+  },
+  "Potencia de refrigeración": {
+   "transformacion": "numero",
+   "destino": "dispenser_cooling_power_w"
+  },
+  "Tensión": {
+   "transformacion": "numero",
+   "destino": {
+    "dispensers": "dispenser_voltage_v",
+    "filters": "uv_voltage_v",
+    "ozone": "ozone_voltage_v",
+    "softeners": "softener_voltage_v",
+    "*": "common_voltage_v"
+   }
+  },
+  "Clase de seguridad eléctrica": {
+   "transformacion": "texto",
+   "destino": "common_electrical_class"
+  },
+  "Necesita electricidad": {
+   "transformacion": "presente",
+   "destino": "common_needs_power"
+  },
+  "Superficie de filtración": {
+   "transformacion": "numero",
+   "destino": "filter_surface_m2"
+  },
+  "Carga incluida": {
+   "transformacion": "texto",
+   "destino": "filter_media_included"
+  },
+  "Capacidad de intercambio": {
+   "transformacion": "numero",
+   "destino": "softener_cycle_capacity_fm3"
+  },
+  "Volumen de resina": {
+   "transformacion": "numero",
+   "destino": "softener_resin_volume_l"
+  },
+  "Volumen de resina por botella": {
+   "transformacion": "numero",
+   "destino": "softener_resin_per_bottle_l"
+  },
+  "By-pass": {
+   "transformacion": "texto",
+   "destino": "softener_bypass_text"
+  },
+  "Mixing": {
+   "transformacion": "texto",
+   "destino": "softener_hardness_mixer"
+  },
+  "Depósito de sal": {
+   "transformacion": "numero",
+   "destino": "softener_salt_tank_l"
+  },
+  "Depósitos de sal": {
+   "transformacion": "numero",
+   "destino": "softener_salt_tanks_count"
+  },
+  "Botellas": {
+   "transformacion": "numero",
+   "destino": "common_bottles_count"
+  },
+  "Suministro de agua dura en regeneración": {
+   "transformacion": "presente",
+   "destino": "softener_service_during_regen"
+  },
+  "Suministro de agua dura durante la regeneración": {
+   "transformacion": "presente",
+   "destino": "softener_service_during_regen"
+  },
+  "App multiidioma (iOS y Android)": {
+   "transformacion": "presente",
+   "destino": "softener_wifi_app"
+  },
+  "Detector de falta de sal": {
+   "transformacion": "presente",
+   "destino": "softener_salt_sensor"
+  },
+  "Salinidad máxima (TDS)": {
+   "transformacion": "numero",
+   "destino": "osmosis_max_tds_in_ppm"
+  },
+  "Producción": {
+   "transformacion": "numero",
+   "por_unidad": {
+    "L/día": {
+     "destino": "osmosis_production_lday",
+     "factor": 1
+    },
+    "m³/día": {
+     "destino": "osmosis_production_lday",
+     "factor": 1000
+    },
+    "L/h": {
+     "destino": "common_production_lh",
+     "factor": 1
+    }
+   }
+  },
+  "Producción máxima": {
+   "transformacion": "numero",
+   "destino": "osmosis_production_lday"
+  },
+  "Membrana": {
+   "por_unidad": {
+    "GPD": {
+     "transformacion": "numero",
+     "destino": "osmosis_production_gpd"
+    },
+    "*": {
+     "transformacion": "texto",
+     "destino": "osmosis_membrane_size"
+    }
+   }
+  },
+  "Número de membranas": {
+   "transformacion": "numero",
+   "destino": "osmosis_membranes_count"
+  },
+  "Nivel máximo de cloro en la entrada": {
+   "transformacion": "numero",
+   "destino": "osmosis_free_chlorine_max_ppm"
+  },
+  "Rechazo de sales": {
+   "transformacion": "numero",
+   "destino": "osmosis_tds_rejection_pct"
+  },
+  "Rango de pH": {
+   "transformacion": "rango",
+   "destino": [
+    "osmosis_ph_min",
+    "osmosis_ph_max"
+   ]
+  },
+  "Turbidez máxima": {
+   "transformacion": "numero",
+   "destino": "osmosis_turbidity_max_ntu"
+  },
+  "Microfiltración de seguridad": {
+   "transformacion": "numero",
+   "destino": "osmosis_safety_microfilter_um"
+  },
+  "Etapas": {
+   "transformacion": "numero",
+   "destino": "osmosis_stages"
+  },
+  "Capacidad del depósito": {
+   "transformacion": "numero",
+   "por_unidad": {
+    "L": {
+     "destino": {
+      "dispensers": "dispenser_total_storage_l",
+      "horeca": "dispenser_total_storage_l",
+      "*": "osmosis_tank_capacity_l"
+     }
+    },
+    "G": {
+     "destino": "osmosis_pressurized_tank_gal"
+    }
+   }
+  },
+  "Bomba": {
+   "transformacion": "booleano",
+   "destino": "osmosis_booster_pump"
+  },
+  "Certificación": {
+   "transformacion": "texto",
+   "destino": "common_certification"
+  },
+  "Caudal a 10 m/h": {
+   "transformacion": "numero",
+   "destino": "filter_flow_v10_m3h"
+  },
+  "Caudal a 15 m/h": {
+   "transformacion": "numero",
+   "destino": "filter_flow_v15_m3h"
+  },
+  "Caudal a 20 m/h": {
+   "transformacion": "numero",
+   "destino": "filter_flow_v20_m3h"
+  },
+  "Caudal a 25 m/h": {
+   "transformacion": "numero",
+   "destino": "filter_flow_v25_m3h"
+  },
+  "Caudal a 48 m/h": {
+   "transformacion": "numero",
+   "destino": "filter_flow_v48_m3h"
+  },
+  "Caudal mínimo recomendado": {
+   "transformacion": "numero",
+   "destino": "filter_min_flow_m3h"
+  },
+  "Tamaño del cartucho": {
+   "transformacion": "texto",
+   "sin_unidad": true,
+   "destino": "filter_cartridge_size"
+  },
+  "Número de cartuchos": {
+   "transformacion": "numero",
+   "destino": "filter_cartridges_count"
+  },
+  "Volumen de medio filtrante": {
+   "transformacion": "numero",
+   "destino": "filter_media_volume_l"
+  },
+  "Carga de medio filtrante": {
+   "transformacion": "numero",
+   "destino": "filter_media_load_kg"
+  },
+  "Grado de filtración (micras)": {
+   "transformacion": "numero",
+   "destino": "filter_micron_nominal",
+   "por_valor": {
+    "/[–-]/": {
+     "transformacion": "ventaja",
+     "titulo": "Grado de filtración"
+    },
+    "*": {}
+   }
+  },
+  "Vaso": {
+   "transformacion": "texto",
+   "destino": "filter_bowl"
+  },
+  "Hierro máximo": {
+   "transformacion": "numero",
+   "destino": "filter_iron_max_mgl"
+  },
+  "Manganeso máximo": {
+   "transformacion": "numero",
+   "destino": "filter_manganese_max_mgl"
+  },
+  "Arsénico máximo a la entrada": {
+   "transformacion": "numero",
+   "destino": "filter_arsenic_in_max_ppb"
+  },
+  "Reducción de nitratos": {
+   "transformacion": "numero",
+   "destino": "nitrate_reduction_pct"
+  },
+  "Capacidad de intercambio (nitratos)": {
+   "transformacion": "numero",
+   "destino": "nitrate_capacity_fm3"
+  },
+  "Display": {
+   "transformacion": "texto",
+   "destino": "common_display"
+  },
+  "Agua fría": {
+   "transformacion": "booleano",
+   "destino": "dispenser_cold_water"
+  },
+  "Agua caliente": {
+   "transformacion": "booleano",
+   "destino": "dispenser_hot_water"
+  },
+  "Agua natural": {
+   "transformacion": "booleano",
+   "destino": "dispenser_ambient_water"
+  },
+  "Agua con gas": {
+   "transformacion": "booleano",
+   "destino": "dispenser_sparkling_water"
+  },
+  "Refrigerante": {
+   "transformacion": "enum",
+   "valores": {
+    "R-134a (ecológico)": "R134a",
+    "HC R290 (ecológico)": "R290"
+   },
+   "destino": "dispenser_refrigerant"
+  },
+  "Capacidad depósito frío": {
+   "transformacion": "numero",
+   "destino": "dispenser_cold_tank_l"
+  },
+  "Capacidad depósito caliente": {
+   "transformacion": "numero",
+   "destino": "dispenser_hot_tank_l"
+  },
+  "Capacidad depósito ambiente": {
+   "transformacion": "numero",
+   "destino": "dispenser_ambient_tank_l"
+  },
+  "Producción de agua fría": {
+   "transformacion": "numero",
+   "destino": "dispenser_cold_prod_lh"
+  },
+  "Temperatura agua fría": {
+   "transformacion": "numero",
+   "destino": "dispenser_cold_temp_c",
+   "por_valor": {
+    "/[–-]/": {
+     "transformacion": "texto",
+     "sin_unidad": true,
+     "destino": "dispenser_cold_temp_range"
+    },
+    "*": {}
+   }
+  },
+  "Temperatura agua caliente": {
+   "transformacion": "numero",
+   "destino": "dispenser_hot_temp_c"
+  },
+  "Capacidad banco de hielo": {
+   "transformacion": "numero",
+   "destino": "horeca_ice_bank_l"
+  },
+  "Número de tiradores": {
+   "transformacion": "numero",
+   "destino": "dispenser_outlets"
+  },
+  "Lámpara UV": {
+   "transformacion": "presente",
+   "destino": "common_uv"
+  },
+  "Aquastop": {
+   "transformacion": "texto",
+   "destino": "common_leak_protection"
+  },
+  "Avisador de mantenimiento": {
+   "transformacion": "texto",
+   "destino": "common_maintenance_alert"
+  },
+  "Tratamiento": {
+   "transformacion": "texto",
+   "destino": "common_treatment_type"
+  },
+  "Grifo incluido": {
+   "transformacion": "presente",
+   "destino": "common_tap_included"
+  },
+  "Color": {
+   "transformacion": "texto",
+   "destino": "common_color"
+  },
+  "Garantía": {
+   "transformacion": "texto",
+   "destino": "common_warranty"
+  },
+  "Vida de la lámpara": {
+   "transformacion": "numero",
+   "destino": "uv_lamp_life_hours"
+  },
+  "Dosis UV": {
+   "transformacion": "numero",
+   "destino": "uv_dose_mjcm2"
+  },
+  "Caudal UV": {
+   "transformacion": "numero",
+   "factor": "1000/60",
+   "destino": "uv_flow_at_dose_lmin"
+  },
+  "Lámpara": {
+   "transformacion": "texto",
+   "destino": "uv_lamp"
+  },
+  "Prefiltración necesaria": {
+   "transformacion": "numero",
+   "destino": "uv_prefiltration_um"
+  },
+  "Producción de ozono": {
+   "transformacion": "texto",
+   "destino": "ozone_output_mgl"
+  },
+  "Caudal de dosificación": {
+   "transformacion": "numero",
+   "destino": "dosing_flow_lh"
+  },
+  "Contrapresión máxima": {
+   "transformacion": "numero",
+   "destino": "dosing_backpressure_max_bar"
+  },
+  "Manómetros de glicerina": {
+   "transformacion": "ventaja"
+  },
+  "Caudalímetros": {
+   "transformacion": "ventaja"
+  },
+  "PLC": {
+   "transformacion": "ventaja"
+  },
+  "Modo UF (economiza agua y sal)": {
+   "transformacion": "booleano",
+   "destino": "softener_modo_uf"
+  },
+  "Bloqueo de pantalla automático": {
+   "transformacion": "booleano",
+   "destino": "softener_bloqueo_pantalla_automatico"
+  },
+  "Indicadores en pantalla": {
+   "transformacion": "texto",
+   "destino": "softener_indicadores_pantalla"
+  },
+  "Resina de alto flujo (HF)": {
+   "transformacion": "booleano",
+   "destino": "softener_resina_alto_flujo"
+  },
+  "Botella de resina dentro del cabinet": {
+   "transformacion": "booleano",
+   "destino": "softener_botella_resina_dentro_cabinet"
+  },
+  "Botellas de resina dentro del cabinet": {
+   "transformacion": "texto",
+   "destino": "softener_botellas_resina_dentro_cabinet"
+  },
+  "Pantalla alfanumérica": {
+   "transformacion": "booleano",
+   "destino": "softener_pantalla_alfanumerica"
+  },
+  "Pantalla retroiluminada": {
+   "transformacion": "booleano",
+   "destino": "softener_pantalla_retroiluminada"
+  },
+  "Programación en varios idiomas": {
+   "transformacion": "booleano",
+   "destino": "softener_programacion_varios_idiomas"
+  },
+  "Pantalla numérica": {
+   "transformacion": "booleano",
+   "destino": "softener_pantalla_numerica"
+  },
+  "Dígitos de pantalla": {
+   "transformacion": "texto",
+   "destino": "softener_digitos_pantalla"
+  },
+  "Programación": {
+   "transformacion": "texto",
+   "destino": "softener_programacion"
+  },
+  "Pilotos indicadores del estado del equipo": {
+   "transformacion": "booleano",
+   "destino": "softener_pilotos_indicadores_estado_equipo"
+  },
+  "Iconos indicadores del estado del equipo": {
+   "transformacion": "booleano",
+   "destino": "softener_iconos_indicadores_estado_equipo"
+  },
+  "Regeneración en tanque seco": {
+   "transformacion": "booleano",
+   "destino": "softener_regeneracion_tanque_seco"
+  },
+  "Avisador acústico/visual de falta de sal y estado de válvula": {
+   "transformacion": "booleano",
+   "destino": "softener_avisador_falta_sal_estado_valvula"
+  },
+  "Efecto bacteriostático": {
+   "transformacion": "booleano",
+   "destino": "softener_efecto_bacteriostatico"
+  },
+  "Avisador de cambio de resina": {
+   "transformacion": "booleano",
+   "destino": "softener_avisador_cambio_resina"
+  },
+  "Corte del paso del agua por rotura de tubería": {
+   "transformacion": "booleano",
+   "destino": "softener_corte_paso_agua_rotura_tuberia"
+  },
+  "Regeneración proporcional (inteligente)": {
+   "transformacion": "booleano",
+   "destino": "softener_regeneracion_proporcional"
+  },
+  "Caja neutra": {
+   "transformacion": "booleano",
+   "destino": "softener_caja_neutra"
+  },
+  "Teclado táctil multiidioma": {
+   "transformacion": "booleano",
+   "destino": "softener_teclado_tactil_multiidioma"
+  },
+  "Regeneración con agua descalcificada": {
+   "transformacion": "booleano",
+   "destino": "softener_regeneracion_agua_descalcificada"
+  },
+  "Tanque de salmuera seco": {
+   "transformacion": "booleano",
+   "destino": "softener_tanque_salmuera_seco"
+  },
+  "Detector de fugas": {
+   "transformacion": "booleano",
+   "destino": "softener_detector_fugas"
+  },
+  "Detector de cambio de resina": {
+   "transformacion": "booleano",
+   "destino": "softener_detector_cambio_resina"
+  },
+  "Ajuste automático de dureza de entrada": {
+   "transformacion": "texto",
+   "destino": "softener_ajuste_automatico_dureza_entrada"
+  },
+  "Instalación en suelo o pared": {
+   "transformacion": "booleano",
+   "destino": "softener_instalacion_suelo_pared"
+  },
+  "Dureza máxima (recomendado)": {
+   "transformacion": "texto",
+   "destino": "softener_dureza_maxima"
+  },
+  "Capacidad máxima (con 200 mg/l)": {
+   "transformacion": "texto",
+   "destino": "softener_capacidad_maxima"
+  },
+  "Sonda de conductividad de entrada y permeado": {
+   "transformacion": "ventaja"
+  },
+  "Sonda de conductividad de permeado": {
+   "transformacion": "ventaja"
+  },
+  "Flushing con agua de permeado": {
+   "transformacion": "ventaja"
+  },
+  "Tomas de muestra de permeado": {
+   "transformacion": "ventaja"
+  },
+  "Alarma de presión máxima de trabajo": {
+   "transformacion": "ventaja"
+  },
+  "Controlador de flujo de rechazo": {
+   "transformacion": "ventaja"
+  },
+  "Controlador de flujo de rechazo y recirculación": {
+   "transformacion": "ventaja"
+  },
+  "Control de nivel máximo de depósito de producto": {
+   "transformacion": "ventaja"
+  },
+  "Control automático de periféricos": {
+   "transformacion": "ventaja"
+  },
+  "Conductivímetro de permeado": {
+   "transformacion": "ventaja"
+  },
+  "Conductivímetro": {
+   "transformacion": "ventaja"
+  },
+  "Conector a sonda de nivel externa": {
+   "transformacion": "ventaja"
+  },
+  "Auto flushing de membranas": {
+   "transformacion": "ventaja"
+  },
+  "Conexión a bomba auxiliar": {
+   "transformacion": "ventaja"
+  },
+  "Pretratamiento necesario": {
+   "transformacion": "ventaja"
+  },
+  "Tipo de bomba": {
+   "transformacion": "ventaja"
+  },
+  "Pasos de ósmosis": {
+   "transformacion": "ventaja"
+  },
+  "Reactancias": {
+   "transformacion": "texto",
+   "destino": "uv_reactancias"
+  },
+  "Alarma acústica y relé de alarma": {
+   "transformacion": "booleano",
+   "destino": "uv_alarma_acustica_rele_alarma"
+  },
+  "Contador horario": {
+   "transformacion": "booleano",
+   "destino": "uv_contador_horario"
+  },
+  "Sensor de radiación": {
+   "transformacion": "texto",
+   "destino": "uv_sensor_radiacion"
+  },
+  "Sonda UVC y sensor de radiación": {
+   "transformacion": "ventaja"
+  },
+  "Prefiltración incorporada": {
+   "transformacion": "texto",
+   "destino": "uv_prefiltracion_incorporada"
+  },
+  "Salida auxiliar para electroválvula de seguridad": {
+   "transformacion": "booleano",
+   "destino": "uv_salida_auxiliar_electrovalvula_seguridad"
+  },
+  "Cartucho de carbón GAC": {
+   "transformacion": "ventaja"
+  },
+  "Prefiltro de carbón incluido": {
+   "transformacion": "booleano",
+   "destino": "ozone_prefiltro_carbon_incluido"
+  },
+  "Niveles de ozono": {
+   "transformacion": "texto",
+   "destino": "ozone_niveles_ozono"
+  },
+  "Uso": {
+   "transformacion": "texto",
+   "destino": "ozone_uso"
+  },
+  "Ahorro energético": {
+   "transformacion": "booleano",
+   "destino": "ozone_ahorro_energetico"
+  },
+  "Salidas de agua": {
+   "transformacion": "texto",
+   "destino": "common_salidas_agua"
+  },
+  "Seguridad para niños en grifo de agua caliente": {
+   "transformacion": "booleano",
+   "destino": "dispenser_seguridad_ninos_grifo_agua_caliente"
+  },
+  "Acceso frontal al compartimento de filtración": {
+   "transformacion": "booleano",
+   "destino": "dispenser_acceso_frontal_filtracion"
+  },
+  "Válvula de dispensación mecánica antigoteo": {
+   "transformacion": "booleano",
+   "destino": "dispenser_valvula_dispensacion_mecanica_antigoteo"
+  },
+  "Regulador de presión": {
+   "transformacion": "texto",
+   "destino": "common_regulador_presion"
+  },
+  "Teclado táctil": {
+   "transformacion": "booleano",
+   "destino": "dispenser_teclado_tactil"
+  },
+  "Dispensación eléctrica por pulsador o pedal": {
+   "transformacion": "booleano",
+   "destino": "dispenser_dispensacion_electrica_pulsador_pedal"
+  },
+  "UV de cortina en la zona dispensadora": {
+   "transformacion": "booleano",
+   "destino": "dispenser_uv_cortina_zona_dispensadora"
+  },
+  "Regulación de temperatura fría y caliente desde el programador": {
+   "transformacion": "booleano",
+   "destino": "dispenser_regulacion_temperatura_programador"
+  },
+  "Programas de ahorro de energía": {
+   "transformacion": "texto",
+   "destino": "dispenser_programas_ahorro_energia"
+  },
+  "Sistema de refrigeración": {
+   "transformacion": "texto",
+   "destino": "dispenser_sistema_refrigeracion"
+  },
+  "Termostato regulable": {
+   "transformacion": "booleano",
+   "destino": "dispenser_termostato_regulable"
+  },
+  "Bombona de CO2 incluida": {
+   "transformacion": "booleano",
+   "destino": "dispenser_bombona_co2_incluida"
+  },
+  "Control de dosis automática": {
+   "transformacion": "texto",
+   "destino": "common_control_dosis_automatica"
+  },
+  "Control de dosis": {
+   "transformacion": "texto",
+   "destino": "tap_control_dosis"
+  },
+  "Postfiltro remineralizador": {
+   "transformacion": "booleano",
+   "destino": "common_postfiltro_remineralizador"
+  },
+  "Surtidor y grifo": {
+   "transformacion": "booleano",
+   "destino": "dispenser_surtidor_grifo"
+  },
+  "Tirador externo (columna aparte)": {
+   "transformacion": "booleano",
+   "destino": "dispenser_tirador_externo"
+  },
+  "Diseño compacto": {
+   "transformacion": "booleano",
+   "destino": "dispenser_diseno_compacto"
+  },
+  "Interior fácilmente accesible": {
+   "transformacion": "booleano",
+   "destino": "dispenser_interior_facilmente_accesible"
+  },
+  "Bombas": {
+   "transformacion": "texto",
+   "destino": "osmosis_bombas"
+  },
+  "Autoflushing": {
+   "transformacion": "booleano",
+   "destino": "osmosis_autoflushing"
+  },
+  "Presostato de mínima": {
+   "transformacion": "booleano",
+   "destino": "osmosis_presostato_minima"
+  },
+  "Certificado UNE 149101": {
+   "transformacion": "booleano",
+   "destino": "osmosis_certificado_une_149101"
+  },
+  "Protector BIMETAL rearmable": {
+   "transformacion": "booleano",
+   "destino": "dispenser_protector_bimetal_rearmable"
+  },
+  "Bloqueo anti-inundación": {
+   "transformacion": "booleano",
+   "destino": "dispenser_bloqueo_anti_inundacion"
+  },
+  "Bandeja regulable": {
+   "transformacion": "texto",
+   "destino": "dispenser_bandeja_regulable"
+  },
+  "Botones táctiles": {
+   "transformacion": "booleano",
+   "destino": "tap_botones_tactiles"
+  },
+  "Consume energía": {
+   "transformacion": "booleano",
+   "destino": "tap_consume_energia"
+  },
+  "Depósito presurizado": {
+   "transformacion": "texto",
+   "destino": "osmosis_deposito_presurizado"
+  },
+  "Recuperación": {
+   "transformacion": "texto",
+   "destino": "osmosis_recuperacion"
+  },
+  "Anilla de seguridad de filtros": {
+   "transformacion": "booleano",
+   "destino": "osmosis_anilla_seguridad_filtros"
+  },
+  "Alimentación del display": {
+   "transformacion": "texto",
+   "destino": "osmosis_alimentacion_display"
+  },
+  "Filtros con conexión a bayoneta": {
+   "transformacion": "booleano",
+   "destino": "osmosis_filtros_conexion_bayoneta"
+  },
+  "Composición": {
+   "transformacion": "texto",
+   "destino": "filter_composicion"
+  },
+  "Función": {
+   "transformacion": "texto",
+   "destino": "filter_funcion"
+  },
+  "Llave de mantenimiento incluida": {
+   "transformacion": "booleano",
+   "destino": "filter_llave_mantenimiento_incluida"
+  },
+  "Kit de instalación incluido": {
+   "transformacion": "booleano",
+   "destino": "osmosis_kit_instalacion_incluido"
+  },
+  "Kit de conexión": {
+   "transformacion": "booleano",
+   "destino": "filter_kit_conexion"
+  },
+  "Llave de vaso y soporte de pared incluidos": {
+   "transformacion": "ventaja"
+  },
+  "Válvula de purga manual": {
+   "transformacion": "ventaja"
+  },
+  "Cartuchos incluidos": {
+   "transformacion": "ventaja",
+   "titulo_no": "Cartuchos no incluidos"
+  },
+  "Cierre": {
+   "transformacion": "ventaja"
+  },
+  "Abrazadera de sujeción": {
+   "transformacion": "ventaja"
+  },
+  "Soporte de pared": {
+   "transformacion": "ventaja"
+  },
+  "Cartucho lavable": {
+   "transformacion": "ventaja"
+  },
+  "Válvula de bola de descarga incluida": {
+   "transformacion": "ventaja"
+  },
+  "Soporte y llave incluidos": {
+   "transformacion": "booleano",
+   "destino": "filter_soporte_llave_incluidos"
+  },
+  "Juntas": {
+   "transformacion": "ventaja"
+  },
+  "Manómetros de entrada y salida": {
+   "transformacion": "ventaja"
+  },
+  "Conexión con bridas": {
+   "transformacion": "ventaja"
+  },
+  "Tipo de limpieza": {
+   "transformacion": "ventaja"
+  },
+  "Soporte de pared incorporado": {
+   "transformacion": "ventaja"
+  },
+  "Mecanismo de cierre y soporte vertical en acero inox. AISI 304": {
+   "transformacion": "ventaja"
+  },
+  "Válvula antirretorno a la salida": {
+   "transformacion": "ventaja"
+  },
+  "LED de estado": {
+   "transformacion": "ventaja"
+  },
+  "Corrector para sensor de humedades": {
+   "transformacion": "ventaja"
+  },
+  "Posibilidad de sujeción a pared": {
+   "transformacion": "ventaja"
+  },
+  "Presión diferencial máxima": {
+   "transformacion": "ventaja"
+  },
+  "pH óptimo": {
+   "transformacion": "ventaja"
+  },
+  "Arsénico a la salida": {
+   "transformacion": "ventaja"
+  },
+  "Otros contaminantes reducidos": {
+   "transformacion": "ventaja"
+  },
+  "Retención de arsénico": {
+   "transformacion": "ventaja"
+  },
+  "Capacidad de adsorción": {
+   "transformacion": "ventaja"
+  },
+  "Necesita regeneración": {
+   "transformacion": "ventaja",
+   "titulo_no": "Sin regeneración"
+  },
+  "Necesita regenerante": {
+   "transformacion": "ventaja",
+   "titulo_no": "Sin regenerante"
+  },
+  "pH ideal para eliminar Mn": {
+   "transformacion": "ventaja"
+  },
+  "pH mínimo": {
+   "transformacion": "ventaja"
+  },
+  "pH con hierro elevado": {
+   "transformacion": "ventaja"
+  },
+  "Colector interior": {
+   "transformacion": "ventaja"
+  },
+  "Elementos hidráulicos interiores": {
+   "transformacion": "ventaja"
+  },
+  "Boca de inspección": {
+   "transformacion": "ventaja"
+  },
+  "Mirilla": {
+   "transformacion": "ventaja"
+  },
+  "Manómetro": {
+   "transformacion": "ventaja"
+  },
+  "Purga de aire": {
+   "transformacion": "ventaja"
+  },
+  "Recarga": {
+   "transformacion": "ventaja"
+  },
+  "Construcción": {
+   "transformacion": "ventaja"
+  },
+  "Consumo de Kalaphos Rem": {
+   "transformacion": "texto",
+   "destino": "filter_consumo_kalaphos_rem"
+  },
+  "Resina catiónica por botella": {
+   "transformacion": "ventaja"
+  },
+  "Resina aniónica por botella": {
+   "transformacion": "ventaja"
+  },
+  "Conductividad máxima de entrada": {
+   "transformacion": "ventaja"
+  },
+  "Modo de dosificación": {
+   "transformacion": "texto",
+   "destino": "dosing_modo_dosificacion"
+  },
+  "Interruptor ON/OFF con LED de estado": {
+   "transformacion": "booleano",
+   "destino": "dosing_interruptor_on_off_led_estado"
+  },
+  "Protección": {
+   "transformacion": "texto",
+   "destino": "dosing_proteccion"
+  },
+  "Junta": {
+   "transformacion": "texto",
+   "destino": "dosing_junta"
+  },
+  "Conexión sonda de nivel": {
+   "transformacion": "booleano",
+   "destino": "dosing_conexion_sonda_nivel"
+  },
+  "Producto a dosificar": {
+   "transformacion": "texto",
+   "destino": "dosing_producto_dosificar"
+  },
+  "Frecuencia de impulsos": {
+   "transformacion": "texto",
+   "destino": "dosing_frecuencia_impulsos"
+  },
+  "Control": {
+   "transformacion": "texto",
+   "destino": "dosing_control"
+  },
+  "Controlador": {
+   "transformacion": "texto",
+   "destino": "dosing_controlador"
+  },
+  "Bomba dosificadora": {
+   "transformacion": "texto",
+   "destino": "dosing_bomba_dosificadora"
+  },
+  "Filtro de partículas": {
+   "transformacion": "texto",
+   "destino": "dosing_filtro_particulas"
+  },
+  "Sonda": {
+   "transformacion": "texto",
+   "destino": "dosing_sonda"
+  },
+  "Parámetros": {
+   "transformacion": "texto",
+   "destino": "dosing_parametros"
+  },
+  "Sensor de flujo SF integrado en el soporte de la sonda": {
+   "transformacion": "booleano",
+   "destino": "dosing_sensor_flujo_sf_integrado_soporte_sonda"
+  },
+  "Clorador": {
+   "transformacion": "booleano",
+   "destino": "dosing_clorador"
+  },
+  "Sonda de nivel": {
+   "transformacion": "booleano",
+   "destino": "dosing_sonda_nivel"
+  }
+ },
+ "nuevos": {
+  "_nota": "PROPUESTAS de atributos globales nuevos (no existen en el maestro). Se crean solo con --aplicar, si algún producto los usa.",
+  "common_bottle_size": {
+   "name_es": "Botella (medida)",
+   "data_type": "text",
+   "unit": "pulgadas",
+   "grupo": "tecnicas"
+  },
+  "common_bottle_height_mm": {
+   "name_es": "Alto de la botella",
+   "data_type": "number",
+   "unit": "mm",
+   "grupo": "fisicas"
+  },
+  "common_bottles_count": {
+   "name_es": "Número de botellas",
+   "data_type": "number",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "common_diameter_mm": {
+   "name_es": "Diámetro",
+   "data_type": "number",
+   "unit": "mm",
+   "grupo": "fisicas"
+  },
+  "common_operation_mode": {
+   "name_es": "Accionamiento",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "common_material": {
+   "name_es": "Material",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "fisicas"
+  },
+  "common_flow_max_m3h": {
+   "name_es": "Caudal máximo",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "common_service_flow": {
+   "name_es": "Caudal de servicio",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "softener_service_flow_text": {
+   "name_es": "Caudal de servicio",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "common_outlet_connection": {
+   "name_es": "Conexión agua de salida",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "common_filter_media": {
+   "name_es": "Medio filtrante",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "common_voltage_v": {
+   "name_es": "Tensión",
+   "data_type": "number",
+   "unit": "V",
+   "grupo": "electricas"
+  },
+  "common_electrical_class": {
+   "name_es": "Clase de seguridad eléctrica",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "electricas"
+  },
+  "common_needs_power": {
+   "name_es": "Necesita electricidad",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "electricas"
+  },
+  "common_production_lh": {
+   "name_es": "Producción",
+   "data_type": "number",
+   "unit": "L/h",
+   "grupo": "tecnicas"
+  },
+  "common_certification": {
+   "name_es": "Certificación",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_display": {
+   "name_es": "Pantalla",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_tap_included": {
+   "name_es": "Grifo incluido",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_warranty": {
+   "name_es": "Garantía",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_bypass_text": {
+   "name_es": "By-pass",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_salt_tank_l": {
+   "name_es": "Depósito de sal",
+   "data_type": "number",
+   "unit": "L",
+   "grupo": "tecnicas"
+  },
+  "softener_salt_tanks_count": {
+   "name_es": "Número de depósitos de sal",
+   "data_type": "number",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "softener_resin_per_bottle_l": {
+   "name_es": "Volumen de resina por botella",
+   "data_type": "number",
+   "unit": "L",
+   "grupo": "tecnicas"
+  },
+  "osmosis_membranes_count": {
+   "name_es": "Número de membranas",
+   "data_type": "number",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "osmosis_turbidity_max_ntu": {
+   "name_es": "Turbidez máxima",
+   "data_type": "number",
+   "unit": "NTU",
+   "grupo": "tecnicas"
+  },
+  "osmosis_safety_microfilter_um": {
+   "name_es": "Microfiltración de seguridad",
+   "data_type": "number",
+   "unit": "µm",
+   "grupo": "tecnicas"
+  },
+  "filter_surface_m2": {
+   "name_es": "Superficie de filtración",
+   "data_type": "number",
+   "unit": "m²",
+   "grupo": "tecnicas"
+  },
+  "filter_media_included": {
+   "name_es": "Carga incluida",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "filter_media_volume_l": {
+   "name_es": "Volumen de medio filtrante",
+   "data_type": "number",
+   "unit": "L",
+   "grupo": "tecnicas"
+  },
+  "filter_media_load_kg": {
+   "name_es": "Carga de medio filtrante",
+   "data_type": "number",
+   "unit": "kg",
+   "grupo": "tecnicas"
+  },
+  "filter_flow_v10_m3h": {
+   "name_es": "Caudal a 10 m/h",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "filter_flow_v15_m3h": {
+   "name_es": "Caudal a 15 m/h",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "filter_flow_v20_m3h": {
+   "name_es": "Caudal a 20 m/h",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "filter_flow_v25_m3h": {
+   "name_es": "Caudal a 25 m/h",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "filter_flow_v48_m3h": {
+   "name_es": "Caudal a 48 m/h",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "filter_min_flow_m3h": {
+   "name_es": "Caudal mínimo recomendado",
+   "data_type": "number",
+   "unit": "m³/h",
+   "grupo": "tecnicas"
+  },
+  "filter_cartridge_size": {
+   "name_es": "Tamaño del cartucho",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "filter_cartridges_count": {
+   "name_es": "Número de cartuchos",
+   "data_type": "number",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "filter_bowl": {
+   "name_es": "Vaso",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "fisicas"
+  },
+  "filter_iron_max_mgl": {
+   "name_es": "Hierro máximo",
+   "data_type": "number",
+   "unit": "mg/l",
+   "grupo": "tecnicas"
+  },
+  "filter_manganese_max_mgl": {
+   "name_es": "Manganeso máximo",
+   "data_type": "number",
+   "unit": "mg/l",
+   "grupo": "tecnicas"
+  },
+  "filter_arsenic_in_max_ppb": {
+   "name_es": "Arsénico máximo a la entrada",
+   "data_type": "number",
+   "unit": "ppb",
+   "grupo": "tecnicas"
+  },
+  "nitrate_reduction_pct": {
+   "name_es": "Reducción de nitratos",
+   "data_type": "number",
+   "unit": "%",
+   "grupo": "tecnicas"
+  },
+  "nitrate_capacity_fm3": {
+   "name_es": "Capacidad de intercambio (nitratos)",
+   "data_type": "number",
+   "unit": "ºHf x m³",
+   "grupo": "tecnicas"
+  },
+  "uv_lamp": {
+   "name_es": "Lámpara",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "uv_prefiltration_um": {
+   "name_es": "Prefiltración necesaria",
+   "data_type": "number",
+   "unit": "µm",
+   "grupo": "tecnicas"
+  },
+  "dosing_flow_lh": {
+   "name_es": "Caudal de dosificación",
+   "data_type": "number",
+   "unit": "L/h",
+   "grupo": "tecnicas"
+  },
+  "dosing_backpressure_max_bar": {
+   "name_es": "Contrapresión máxima",
+   "data_type": "number",
+   "unit": "bar",
+   "grupo": "tecnicas"
+  },
+  "softener_conexiones_e_s": {
+   "name_es": "Conexiones E/S",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "osmosis_presion_entrada_bomba": {
+   "name_es": "Presión de entrada con bomba",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "osmosis_presion_entrada_sin_bomba": {
+   "name_es": "Presión de entrada sin bomba",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "softener_modo_uf": {
+   "name_es": "Modo UF (economiza agua y sal)",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_bloqueo_pantalla_automatico": {
+   "name_es": "Bloqueo de pantalla automático",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_indicadores_pantalla": {
+   "name_es": "Indicadores en pantalla",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_resina_alto_flujo": {
+   "name_es": "Resina de alto flujo (HF)",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_botella_resina_dentro_cabinet": {
+   "name_es": "Botella de resina dentro del cabinet",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_botellas_resina_dentro_cabinet": {
+   "name_es": "Botellas de resina dentro del cabinet",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_pantalla_alfanumerica": {
+   "name_es": "Pantalla alfanumérica",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_pantalla_retroiluminada": {
+   "name_es": "Pantalla retroiluminada",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_programacion_varios_idiomas": {
+   "name_es": "Programación en varios idiomas",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_pantalla_numerica": {
+   "name_es": "Pantalla numérica",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_digitos_pantalla": {
+   "name_es": "Dígitos de pantalla",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_programacion": {
+   "name_es": "Programación",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_pilotos_indicadores_estado_equipo": {
+   "name_es": "Pilotos indicadores del estado del equipo",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_iconos_indicadores_estado_equipo": {
+   "name_es": "Iconos indicadores del estado del equipo",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_regeneracion_tanque_seco": {
+   "name_es": "Regeneración en tanque seco",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_efecto_bacteriostatico": {
+   "name_es": "Efecto bacteriostático",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_avisador_cambio_resina": {
+   "name_es": "Avisador de cambio de resina",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_corte_paso_agua_rotura_tuberia": {
+   "name_es": "Corte del paso del agua por rotura de tubería",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_regeneracion_proporcional": {
+   "name_es": "Regeneración proporcional (inteligente)",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_caja_neutra": {
+   "name_es": "Caja neutra",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_teclado_tactil_multiidioma": {
+   "name_es": "Teclado táctil multiidioma",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_regeneracion_agua_descalcificada": {
+   "name_es": "Regeneración con agua descalcificada",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_tanque_salmuera_seco": {
+   "name_es": "Tanque de salmuera seco",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_detector_fugas": {
+   "name_es": "Detector de fugas",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_detector_cambio_resina": {
+   "name_es": "Detector de cambio de resina",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_ajuste_automatico_dureza_entrada": {
+   "name_es": "Ajuste automático de dureza de entrada",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_instalacion_suelo_pared": {
+   "name_es": "Instalación en suelo o pared",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_dureza_maxima": {
+   "name_es": "Dureza máxima (recomendado)",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "softener_capacidad_maxima": {
+   "name_es": "Capacidad máxima (con 200 mg/l)",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "uv_reactancias": {
+   "name_es": "Reactancias",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "electricas"
+  },
+  "uv_alarma_acustica_rele_alarma": {
+   "name_es": "Alarma acústica y relé de alarma",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "uv_contador_horario": {
+   "name_es": "Contador horario",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "uv_sensor_radiacion": {
+   "name_es": "Sensor de radiación",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "uv_prefiltracion_incorporada": {
+   "name_es": "Prefiltración incorporada",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "uv_salida_auxiliar_electrovalvula_seguridad": {
+   "name_es": "Salida auxiliar para electroválvula de seguridad",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "ozone_prefiltro_carbon_incluido": {
+   "name_es": "Prefiltro de carbón incluido",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "ozone_niveles_ozono": {
+   "name_es": "Niveles de ozono",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "ozone_uso": {
+   "name_es": "Uso",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "ozone_ahorro_energetico": {
+   "name_es": "Ahorro energético",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_salidas_agua": {
+   "name_es": "Salidas de agua",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dispenser_seguridad_ninos_grifo_agua_caliente": {
+   "name_es": "Seguridad para niños en grifo de agua caliente",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_valvula_dispensacion_mecanica_antigoteo": {
+   "name_es": "Válvula de dispensación mecánica antigoteo",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_regulador_presion": {
+   "name_es": "Regulador de presión",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_teclado_tactil": {
+   "name_es": "Teclado táctil",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_dispensacion_electrica_pulsador_pedal": {
+   "name_es": "Dispensación eléctrica por pulsador o pedal",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_uv_cortina_zona_dispensadora": {
+   "name_es": "UV de cortina en la zona dispensadora",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_programas_ahorro_energia": {
+   "name_es": "Programas de ahorro de energía",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_sistema_refrigeracion": {
+   "name_es": "Sistema de refrigeración",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dispenser_termostato_regulable": {
+   "name_es": "Termostato regulable",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_bombona_co2_incluida": {
+   "name_es": "Bombona de CO2 incluida",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_control_dosis_automatica": {
+   "name_es": "Control de dosis automática",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "tap_control_dosis": {
+   "name_es": "Control de dosis",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "common_postfiltro_remineralizador": {
+   "name_es": "Postfiltro remineralizador",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_surtidor_grifo": {
+   "name_es": "Surtidor y grifo",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_tirador_externo": {
+   "name_es": "Tirador externo (columna aparte)",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_diseno_compacto": {
+   "name_es": "Diseño compacto",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_interior_facilmente_accesible": {
+   "name_es": "Interior fácilmente accesible",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "osmosis_bombas": {
+   "name_es": "Bombas",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "osmosis_autoflushing": {
+   "name_es": "Autoflushing",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "osmosis_presostato_minima": {
+   "name_es": "Presostato de mínima",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "osmosis_certificado_une_149101": {
+   "name_es": "Certificado UNE 149101",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_protector_bimetal_rearmable": {
+   "name_es": "Protector BIMETAL rearmable",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_bloqueo_anti_inundacion": {
+   "name_es": "Bloqueo anti-inundación",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_bandeja_regulable": {
+   "name_es": "Bandeja regulable",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "tap_botones_tactiles": {
+   "name_es": "Botones táctiles",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "tap_consume_energia": {
+   "name_es": "Consume energía",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "osmosis_deposito_presurizado": {
+   "name_es": "Depósito presurizado",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "osmosis_recuperacion": {
+   "name_es": "Recuperación",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "osmosis_anilla_seguridad_filtros": {
+   "name_es": "Anilla de seguridad de filtros",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "osmosis_alimentacion_display": {
+   "name_es": "Alimentación del display",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "electricas"
+  },
+  "osmosis_filtros_conexion_bayoneta": {
+   "name_es": "Filtros con conexión a bayoneta",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "filter_composicion": {
+   "name_es": "Composición",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "filter_funcion": {
+   "name_es": "Función",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "filter_llave_mantenimiento_incluida": {
+   "name_es": "Llave de mantenimiento incluida",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "osmosis_kit_instalacion_incluido": {
+   "name_es": "Kit de instalación incluido",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "filter_kit_conexion": {
+   "name_es": "Kit de conexión",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "filter_soporte_llave_incluidos": {
+   "name_es": "Soporte y llave incluidos",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "filter_consumo_kalaphos_rem": {
+   "name_es": "Consumo de Kalaphos Rem",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_modo_dosificacion": {
+   "name_es": "Modo de dosificación",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_interruptor_on_off_led_estado": {
+   "name_es": "Interruptor ON/OFF con LED de estado",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dosing_proteccion": {
+   "name_es": "Protección",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_junta": {
+   "name_es": "Junta",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_conexion_sonda_nivel": {
+   "name_es": "Conexión sonda de nivel",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dosing_producto_dosificar": {
+   "name_es": "Producto a dosificar",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_frecuencia_impulsos": {
+   "name_es": "Frecuencia de impulsos",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_control": {
+   "name_es": "Control",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_controlador": {
+   "name_es": "Controlador",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_bomba_dosificadora": {
+   "name_es": "Bomba dosificadora",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_filtro_particulas": {
+   "name_es": "Filtro de partículas",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_sonda": {
+   "name_es": "Sonda",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_parametros": {
+   "name_es": "Parámetros",
+   "data_type": "text",
+   "unit": null,
+   "grupo": "tecnicas"
+  },
+  "dosing_sensor_flujo_sf_integrado_soporte_sonda": {
+   "name_es": "Sensor de flujo SF integrado en el soporte de la sonda",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dosing_clorador": {
+   "name_es": "Clorador",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dosing_sonda_nivel": {
+   "name_es": "Sonda de nivel",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "softener_avisador_falta_sal_estado_valvula": {
+   "name_es": "Avisador acústico/visual de falta de sal y estado de válvula",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_acceso_frontal_filtracion": {
+   "name_es": "Acceso frontal al compartimento de filtración",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_regulacion_temperatura_programador": {
+   "name_es": "Regulación de temperatura fría y caliente desde el programador",
+   "data_type": "boolean",
+   "unit": null,
+   "grupo": "extra"
+  },
+  "dispenser_cold_temp_range": {
+   "name_es": "Rango de temperatura del agua fría",
+   "data_type": "text",
+   "unit": "ºC",
+   "grupo": "tecnicas"
+  }
+ }
+}

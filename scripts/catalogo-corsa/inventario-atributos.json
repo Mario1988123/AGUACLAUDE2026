@@ -1,0 +1,3087 @@
+{
+ "Peso": {
+  "veces": 97,
+  "unidades": {
+   "kg": 97
+  },
+  "grupos": {
+   "Características físicas": 97
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 5,
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Dosificación / Bombas dosificación": 8,
+   "Dosificación / Paneles cloradores": 2,
+   "Purificación residencial / Filtración y decloración": 11,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "21,6 kg @A-904004",
+   "21,6 kg @A-904002",
+   "17,3 kg @A-904010",
+   "21,6 kg @A-904016"
+  ]
+ },
+ "Alto": {
+  "veces": 89,
+  "unidades": {
+   "mm": 89
+  },
+  "grupos": {
+   "Características físicas": 89
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 5,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Dosificación / Bombas dosificación": 6,
+   "Purificación residencial / Filtración y decloración": 11,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "1124 mm @A-904004",
+   "1124 mm @A-904002",
+   "560 mm @A-904010",
+   "1124 mm @A-904016"
+  ]
+ },
+ "Ancho": {
+  "veces": 84,
+  "unidades": {
+   "mm": 84
+  },
+  "grupos": {
+   "Características físicas": 84
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 5,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Dosificación / Bombas dosificación": 6,
+   "Purificación residencial / Filtración y decloración": 8,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "283 mm @A-904004",
+   "283 mm @A-904002",
+   "283 mm @A-904010",
+   "283 mm @A-904016"
+  ]
+ },
+ "Fondo": {
+  "veces": 81,
+  "unidades": {
+   "mm": 81
+  },
+  "grupos": {
+   "Características físicas": 81
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Dosificación / Bombas dosificación": 6,
+   "Purificación residencial / Filtración y decloración": 6,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "390 mm @A-904004",
+   "390 mm @A-904002",
+   "430 mm @A-904010",
+   "390 mm @A-904016"
+  ]
+ },
+ "Alimentación eléctrica": {
+  "veces": 78,
+  "unidades": {
+   "": 78
+  },
+  "grupos": {
+   "Características eléctricas": 78
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Dosificación / Bombas dosificación": 8,
+   "Dosificación / Paneles cloradores": 2,
+   "Purificación residencial / Osmosis inversa presurizada": 2,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "230 V / 50 Hz @A-904004",
+   "100–240 VAC / 50–60 Hz @A-253120",
+   "220 Vac / 50–60 Hz @A-803023",
+   "AC 100–240 V / 50–60 Hz @A-252135"
+  ]
+ },
+ "Temperatura del agua": {
+  "veces": 77,
+  "unidades": {
+   "ºC": 77
+  },
+  "grupos": {
+   "Características técnicas": 77
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Purificación residencial / Filtración y decloración": 11,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "4–38 ºC @A-904004",
+   "4–38 ºC @A-904002",
+   "4–38 ºC @A-904010",
+   "4–38 ºC @A-904016"
+  ]
+ },
+ "Material": {
+  "veces": 65,
+  "unidades": {
+   "": 65
+  },
+  "grupos": {
+   "Características físicas": 65
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 1,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 1,
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4,
+   "Dosificación / Bombas dosificación": 4,
+   "Purificación residencial / Filtración y decloración": 2,
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Depósito de acumulación y tuberías en acero inoxidable @A-904004",
+   "ABS sobre estructura de acero @A-900530",
+   "Acero inoxidable AISI 304 @A-900065",
+   "Acero inoxidable con inserto de plexiglás azul @A-280125"
+  ]
+ },
+ "Unidades por pallet": {
+  "veces": 59,
+  "unidades": {
+   "": 59
+  },
+  "grupos": {
+   "Características extra": 59
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 20,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "5 @A-904004",
+   "12 @A-904010",
+   "4 @A-904022",
+   "6 @A-900065"
+  ]
+ },
+ "Conexión": {
+  "veces": 50,
+  "unidades": {
+   "": 50
+  },
+  "grupos": {
+   "Características técnicas": 50
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2,
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 1,
+   "Dosificación / Bombas dosificación": 8,
+   "Purificación residencial / Filtración y decloración": 5,
+   "Purificación residencial / Grifos": 3,
+   "Descalcificación residencial / Descalcificadores": 26,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "8 mm @A-271006",
+   "1/2” M @A-803023",
+   "3/4” M @A-803024",
+   "1” M @A-803025"
+  ]
+ },
+ "Presión de trabajo": {
+  "veces": 39,
+  "unidades": {
+   "bar": 39
+  },
+  "grupos": {
+   "Características técnicas": 39
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Purificación residencial / Filtración y decloración": 7,
+   "Purificación residencial / Osmosis inversa presurizada": 3,
+   "Purificación residencial / Osmosis inversa directa": 1,
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "2–6 bar @A-252135",
+   "2–6 bar @A-252132",
+   "0,35–6,2 bar @A-115001",
+   "0,35–6,2 bar @A-115002"
+  ]
+ },
+ "Display": {
+  "veces": 31,
+  "unidades": {
+   "": 31
+  },
+  "grupos": {
+   "Características extra": 31
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa presurizada": 3,
+   "Purificación residencial / Osmosis inversa directa": 2,
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "LCD (informa del consumo de filtros) @A-253108",
+   "LED (informa del consumo de filtros) @A-253301",
+   "LCD @A-400900",
+   "Pilotos LED @A-400500"
+  ]
+ },
+ "Caudal máximo": {
+  "veces": 30,
+  "unidades": {
+   "m³/h": 30
+  },
+  "grupos": {
+   "Características técnicas": 30
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 2,
+   "Descalcificación residencial / Descalcificadores": 26,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "0,25 m³/h @A-195100",
+   "0,25 m³/h @A-195101",
+   "2,0 m³/h @A-400900",
+   "1,25 m³/h @A-400901"
+  ]
+ },
+ "Agua fría": {
+  "veces": 26,
+  "unidades": {
+   "": 26
+  },
+  "grupos": {
+   "Características técnicas": 26
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 20,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Agua natural": {
+  "veces": 26,
+  "unidades": {
+   "": 26
+  },
+  "grupos": {
+   "Características técnicas": 26
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 20,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Tipo de regeneración": {
+  "veces": 26,
+  "unidades": {
+   "": 26
+  },
+  "grupos": {
+   "Características técnicas": 26
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "Contracorriente o cocorriente @A-400900",
+   "Contracorriente @A-400720",
+   "Cocorriente o contracorriente @A-400860",
+   "Cocorriente, volumétrica (modos convencional y eco) @A-400575"
+  ]
+ },
+ "Volumen de resina": {
+  "veces": 26,
+  "unidades": {
+   "L": 26
+  },
+  "grupos": {
+   "Características técnicas": 26
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "10 L @A-400900",
+   "24 L @A-400901",
+   "37 L @A-400902",
+   "9 L @A-400720"
+  ]
+ },
+ "Capacidad de intercambio": {
+  "veces": 26,
+  "unidades": {
+   "ºHf x m³": 26
+  },
+  "grupos": {
+   "Características técnicas": 26
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "60 ºHf x m³ @A-400900",
+   "144 ºHf x m³ @A-400901",
+   "222 ºHf x m³ @A-400902",
+   "54 ºHf x m³ @A-400720"
+  ]
+ },
+ "Consumo de sal por regeneración": {
+  "veces": 26,
+  "unidades": {
+   "kg": 25,
+   "g": 1
+  },
+  "grupos": {
+   "Características técnicas": 26
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "1,0 kg @A-400900",
+   "2,4 kg @A-400901",
+   "3,7 kg @A-400902",
+   "0,9 kg @A-400720"
+  ]
+ },
+ "Certificación": {
+  "veces": 26,
+  "unidades": {
+   "": 26
+  },
+  "grupos": {
+   "Características extra": 26
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 26
+  },
+  "ejemplos": [
+   "UNE 149101 · ACS @A-400900",
+   "ACS @A-400575"
+  ]
+ },
+ "Potencia": {
+  "veces": 25,
+  "unidades": {
+   "W": 25
+  },
+  "grupos": {
+   "Características eléctricas": 25
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 18,
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "640 W @A-904004",
+   "640 W @A-904002",
+   "640 W @A-904010",
+   "640 W @A-904016"
+  ]
+ },
+ "Refrigerante": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características técnicas": 25
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "R-134a (ecológico) @A-904004",
+   "HC R290 (ecológico) @A-280125"
+  ]
+ },
+ "Bomba": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características extra": 25
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 19,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2,
+   "Purificación residencial / Osmosis inversa presurizada": 4
+  },
+  "ejemplos": [
+   "No @A-904004",
+   "Sí @A-904026"
+  ]
+ },
+ "Nota de medidas": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características físicas": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Añadir 25 mm en la longitud C (fondo) para el codo rebosadero @A-400900",
+   "En la longitud C (fondo) se incluye el by-pass @A-400500",
+   "En la longitud B (ancho) se incluye el by-pass @A-400860",
+   "En la longitud C (fondo) no se incluye el by-pass @A-450000"
+  ]
+ },
+ "Modelo de válvula": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características técnicas": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "K105H @A-400900",
+   "K69D3H @A-400720",
+   "K69P3H @A-400500",
+   "K68P3H @A-400535"
+  ]
+ },
+ "By-pass": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características extra": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Sí (incluido de serie) @A-400900",
+   "Sí (según modelo) @A-450000"
+  ]
+ },
+ "Mixing": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características extra": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Sí (incluido de serie) @A-400900",
+   "Sí (según modelo) @A-450000"
+  ]
+ },
+ "Bloqueo de pantalla automático": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características extra": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Indicadores en pantalla": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características extra": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Hora actual, volumen restante, hora de regeneración, caudal instantáneo @A-400900"
+  ]
+ },
+ "Resina de alto flujo (HF)": {
+  "veces": 25,
+  "unidades": {
+   "": 25
+  },
+  "grupos": {
+   "Características extra": 25
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 25
+  },
+  "ejemplos": [
+   "Sí @A-400900",
+   "No @A-400742"
+  ]
+ },
+ "Modo UF (economiza agua y sal)": {
+  "veces": 24,
+  "unidades": {
+   "": 24
+  },
+  "grupos": {
+   "Características extra": 24
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 24
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Botella de resina dentro del cabinet": {
+  "veces": 24,
+  "unidades": {
+   "": 24
+  },
+  "grupos": {
+   "Características extra": 24
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 24
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Suministro de agua dura durante la regeneración": {
+  "veces": 22,
+  "unidades": {
+   "": 22
+  },
+  "grupos": {
+   "Características extra": 22
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 22
+  },
+  "ejemplos": [
+   "Sí @A-400900",
+   "No @A-450000"
+  ]
+ },
+ "Presión de entrada mínima": {
+  "veces": 21,
+  "unidades": {
+   "bar": 21
+  },
+  "grupos": {
+   "Características técnicas": 21
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21
+  },
+  "ejemplos": [
+   "1,5 bar @A-904004",
+   "1,5 bar @A-904002",
+   "1,5 bar @A-904010",
+   "1,5 bar @A-904016"
+  ]
+ },
+ "Tratamiento": {
+  "veces": 21,
+  "unidades": {
+   "": 21
+  },
+  "grupos": {
+   "Características técnicas": 21
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21
+  },
+  "ejemplos": [
+   "Filtración @A-904004",
+   "Ósmosis inversa @A-904002",
+   "Ultrafiltración @A-904065",
+   "Decloración @A-900016"
+  ]
+ },
+ "Capacidad depósito frío": {
+  "veces": 21,
+  "unidades": {
+   "L": 21
+  },
+  "grupos": {
+   "Características técnicas": 21
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 21
+  },
+  "ejemplos": [
+   "3 L @A-904004",
+   "3 L @A-904002",
+   "2 L @A-904010",
+   "3 L @A-904016"
+  ]
+ },
+ "Unidades por caja": {
+  "veces": 20,
+  "unidades": {
+   "": 20
+  },
+  "grupos": {
+   "Características extra": 20
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4,
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2,
+   "Purificación residencial / Filtración y decloración": 11
+  },
+  "ejemplos": [
+   "1 @A-803023",
+   "50 @A-115001",
+   "6 @A-195100"
+  ]
+ },
+ "Salidas de agua": {
+  "veces": 19,
+  "unidades": {
+   "": 19
+  },
+  "grupos": {
+   "Características técnicas": 19
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 17,
+   "Dispensadores de agua / Columnas dispensadoras": 2
+  },
+  "ejemplos": [
+   "Fría, caliente y ambiente (2 simultáneas) @A-904004",
+   "Fría, ambiente y con gas @A-280166"
+  ]
+ },
+ "Capacidad depósito caliente": {
+  "veces": 18,
+  "unidades": {
+   "L": 18
+  },
+  "grupos": {
+   "Características técnicas": 18
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 18
+  },
+  "ejemplos": [
+   "2 L @A-904004",
+   "2 L @A-904002",
+   "1 L @A-904010",
+   "2 L @A-904016"
+  ]
+ },
+ "Capacidad depósito ambiente": {
+  "veces": 18,
+  "unidades": {
+   "L": 18
+  },
+  "grupos": {
+   "Características técnicas": 18
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 18
+  },
+  "ejemplos": [
+   "2,6 L @A-904004",
+   "2,6 L @A-904002",
+   "1,2 L @A-904010",
+   "2,6 L @A-904016"
+  ]
+ },
+ "Agua caliente": {
+  "veces": 17,
+  "unidades": {
+   "": 17
+  },
+  "grupos": {
+   "Características técnicas": 17
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 17
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Aquastop": {
+  "veces": 17,
+  "unidades": {
+   "": 17
+  },
+  "grupos": {
+   "Características extra": 17
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 17
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Membrana": {
+  "veces": 13,
+  "unidades": {
+   "": 6,
+   "GPD": 7
+  },
+  "grupos": {
+   "Características técnicas": 13
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 6,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2
+  },
+  "ejemplos": [
+   "150 GPD (hasta 550 L/día) @A-904020",
+   "150 GPD @A-900530",
+   "75 GPD @A-253106",
+   "75 GPD @A-253107"
+  ]
+ },
+ "Salinidad máxima (TDS)": {
+  "veces": 13,
+  "unidades": {
+   "mg/L": 6,
+   "mg/l": 7
+  },
+  "grupos": {
+   "Características técnicas": 13
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 2,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2
+  },
+  "ejemplos": [
+   "1500 mg/L @A-900530",
+   "1500 mg/L @A-900077",
+   "1500 mg/L @A-253120",
+   "1500 mg/L @A-253121"
+  ]
+ },
+ "Etapas": {
+  "veces": 13,
+  "unidades": {
+   "": 13
+  },
+  "grupos": {
+   "Características técnicas": 13
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2,
+   "Purificación residencial / Filtración y decloración": 4,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2
+  },
+  "ejemplos": [
+   "5 @A-253120",
+   "3 @A-190025",
+   "4 @A-253108"
+  ]
+ },
+ "Grifo incluido": {
+  "veces": 13,
+  "unidades": {
+   "": 13
+  },
+  "grupos": {
+   "Características extra": 13
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 6,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2
+  },
+  "ejemplos": [
+   "Sí @A-195100",
+   "No @A-195101",
+   "Grifo de 3 vías @A-190025",
+   "Grifo presurizado @A-190030"
+  ]
+ },
+ "Pantalla alfanumérica": {
+  "veces": 13,
+  "unidades": {
+   "": 13
+  },
+  "grupos": {
+   "Características extra": 13
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 13
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Pantalla retroiluminada": {
+  "veces": 13,
+  "unidades": {
+   "": 13
+  },
+  "grupos": {
+   "Características extra": 13
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 13
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Programación en varios idiomas": {
+  "veces": 13,
+  "unidades": {
+   "": 13
+  },
+  "grupos": {
+   "Características extra": 13
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 13
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Seguridad para niños en grifo de agua caliente": {
+  "veces": 12,
+  "unidades": {
+   "": 12
+  },
+  "grupos": {
+   "Características extra": 12
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 12
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Lámpara UV": {
+  "veces": 12,
+  "unidades": {
+   "": 12
+  },
+  "grupos": {
+   "Características extra": 12
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 12
+  },
+  "ejemplos": [
+   "No @A-904004",
+   "Sí (frontal) @A-904016"
+  ]
+ },
+ "Producción": {
+  "veces": 12,
+  "unidades": {
+   "L/día": 12
+  },
+  "grupos": {
+   "Características técnicas": 12
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 1,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2
+  },
+  "ejemplos": [
+   "hasta 550 L/día @A-900530",
+   "1000 L/día @A-253120",
+   "2000 L/día @A-253121",
+   "2000 L/día @A-271006"
+  ]
+ },
+ "Necesita electricidad": {
+  "veces": 12,
+  "unidades": {
+   "": 12
+  },
+  "grupos": {
+   "Características eléctricas": 12
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 9,
+   "Purificación residencial / Osmosis inversa presurizada": 3
+  },
+  "ejemplos": [
+   "No @A-100028",
+   "No (excepto modelos con bomba) @A-253106"
+  ]
+ },
+ "Pantalla numérica": {
+  "veces": 12,
+  "unidades": {
+   "": 12
+  },
+  "grupos": {
+   "Características extra": 12
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 12
+  },
+  "ejemplos": [
+   "Sí @A-400500"
+  ]
+ },
+ "Dígitos de pantalla": {
+  "veces": 12,
+  "unidades": {
+   "": 12
+  },
+  "grupos": {
+   "Características extra": 12
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 12
+  },
+  "ejemplos": [
+   "5 @A-400500"
+  ]
+ },
+ "Programación": {
+  "veces": 12,
+  "unidades": {
+   "": 12
+  },
+  "grupos": {
+   "Características extra": 12
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 12
+  },
+  "ejemplos": [
+   "En minutos @A-400500",
+   "En segundos @A-450000"
+  ]
+ },
+ "Depósito presurizado": {
+  "veces": 11,
+  "unidades": {
+   "": 11
+  },
+  "grupos": {
+   "Características técnicas": 11
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Purificación residencial / Osmosis inversa presurizada": 5,
+   "Purificación residencial / Osmosis inversa directa": 2
+  },
+  "ejemplos": [
+   "Sí @A-253120",
+   "No @A-271006",
+   "No (sin depósito) @A-253300"
+  ]
+ },
+ "Caudal de dosificación": {
+  "veces": 10,
+  "unidades": {
+   "L/h": 10
+  },
+  "grupos": {
+   "Características técnicas": 10
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 8,
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "3 L/h @D-000197",
+   "3 L/h @D-400000",
+   "2 L/h @C-200554",
+   "2 L/h @C-200574"
+  ]
+ },
+ "Contrapresión máxima": {
+  "veces": 10,
+  "unidades": {
+   "bar": 10
+  },
+  "grupos": {
+   "Características técnicas": 10
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 8,
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "5 bar @D-000197",
+   "5 bar @D-400000",
+   "11 bar @C-200554",
+   "11 bar @C-200574"
+  ]
+ },
+ "Capacidad del depósito": {
+  "veces": 9,
+  "unidades": {
+   "L": 4,
+   "G": 5
+  },
+  "grupos": {
+   "Características técnicas": 9
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4,
+   "Purificación residencial / Osmosis inversa presurizada": 5
+  },
+  "ejemplos": [
+   "30 L @A-253120",
+   "40 L @A-253121",
+   "50 L @A-271006",
+   "50 L @A-271008"
+  ]
+ },
+ "Presión máxima": {
+  "veces": 9,
+  "unidades": {
+   "bar": 9
+  },
+  "grupos": {
+   "Características técnicas": 9
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "6 bar @A-803023",
+   "6 bar @A-803024",
+   "6 bar @A-803025",
+   "6 bar @A-803004"
+  ]
+ },
+ "Temperatura agua fría": {
+  "veces": 8,
+  "unidades": {
+   "ºC": 8
+  },
+  "grupos": {
+   "Características técnicas": 8
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 4,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "mín. 4 ºC @A-900530",
+   "2–15 ºC @A-900065",
+   "2–15 ºC @A-900077",
+   "2–15 ºC @A-900016"
+  ]
+ },
+ "Modo de dosificación": {
+  "veces": 8,
+  "unidades": {
+   "": 8
+  },
+  "grupos": {
+   "Características técnicas": 8
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 8
+  },
+  "ejemplos": [
+   "Constante @D-000197",
+   "Proporcional a impulsos @C-200575",
+   "Proporcional a señal 0/4-20 mA @C-200569",
+   "Proporcional @C-200577"
+  ]
+ },
+ "Interruptor ON/OFF con LED de estado": {
+  "veces": 8,
+  "unidades": {
+   "": 8
+  },
+  "grupos": {
+   "Características extra": 8
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 8
+  },
+  "ejemplos": [
+   "Sí @D-000197"
+  ]
+ },
+ "Pilotos indicadores del estado del equipo": {
+  "veces": 8,
+  "unidades": {
+   "": 8
+  },
+  "grupos": {
+   "Características extra": 8
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 8
+  },
+  "ejemplos": [
+   "Sí @A-400500"
+  ]
+ },
+ "Clase de seguridad eléctrica": {
+  "veces": 7,
+  "unidades": {
+   "": 7
+  },
+  "grupos": {
+   "Características eléctricas": 7
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 3,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 4
+  },
+  "ejemplos": [
+   "Clase I @A-900065",
+   "Clase II (doble aislamiento) @A-253120"
+  ]
+ },
+ "Producción de agua fría": {
+  "veces": 7,
+  "unidades": {
+   "L/h": 7
+  },
+  "grupos": {
+   "Características técnicas": 7
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 3,
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "8 L/h @A-900065",
+   "8 L/h @A-900077",
+   "8 L/h @A-900016",
+   "80 L/h @A-280125"
+  ]
+ },
+ "Medio filtrante": {
+  "veces": 7,
+  "unidades": {
+   "": 7
+  },
+  "grupos": {
+   "Características técnicas": 7
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 1,
+   "Purificación residencial / Filtración y decloración": 2,
+   "Descalcificación residencial / Descalcificadores": 4
+  },
+  "ejemplos": [
+   "Cartucho de 5 micras + cartucho de carbón activo @A-197130",
+   "Carbón activo + KDF @A-115001",
+   "Resina HF + KDF (además de descalcificar, declora) @A-450000",
+   "Resina HF @A-450001"
+  ]
+ },
+ "Diámetro del depósito": {
+  "veces": 7,
+  "unidades": {
+   "mm": 7
+  },
+  "grupos": {
+   "Características físicas": 7
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2,
+   "Purificación residencial / Osmosis inversa presurizada": 5
+  },
+  "ejemplos": [
+   "390 mm @A-253120",
+   "395 mm @A-253121",
+   "250 mm @A-253106",
+   "250 mm @A-253107"
+  ]
+ },
+ "Reactancias": {
+  "veces": 7,
+  "unidades": {
+   "": 7
+  },
+  "grupos": {
+   "Características eléctricas": 7
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "Electrónicas @A-803023"
+  ]
+ },
+ "Vida de la lámpara": {
+  "veces": 7,
+  "unidades": {
+   "h": 7
+  },
+  "grupos": {
+   "Características técnicas": 7
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "8000 h @A-803023",
+   "8000 h @A-803024",
+   "8000 h @A-803025",
+   "8000 h @A-803004"
+  ]
+ },
+ "Dosis UV": {
+  "veces": 7,
+  "unidades": {
+   "mW·s/cm²": 7
+  },
+  "grupos": {
+   "Características técnicas": 7
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "25 (mínima) mW·s/cm² @A-803023",
+   "25 (mínima) mW·s/cm² @A-803024",
+   "25 (mínima) mW·s/cm² @A-803025",
+   "25 (mínima) mW·s/cm² @A-803004"
+  ]
+ },
+ "Caudal UV": {
+  "veces": 7,
+  "unidades": {
+   "m³/h": 7
+  },
+  "grupos": {
+   "Características técnicas": 7
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "0,5 m³/h @A-803023",
+   "1 m³/h @A-803024",
+   "2,5 m³/h @A-803025",
+   "2,5 m³/h @A-803004"
+  ]
+ },
+ "Lámpara": {
+  "veces": 7,
+  "unidades": {
+   "": 7
+  },
+  "grupos": {
+   "Características técnicas": 7
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "1 x 15 BP @A-803023",
+   "1 x 21 BP @A-803024",
+   "1 x 40 BP @A-803025"
+  ]
+ },
+ "Medida B": {
+  "veces": 7,
+  "unidades": {
+   "mm": 7
+  },
+  "grupos": {
+   "Características físicas": 7
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 2,
+   "Dosificación / Paneles cloradores": 2,
+   "Purificación residencial / Filtración y decloración": 3
+  },
+  "ejemplos": [
+   "62 mm @D-000197",
+   "62 mm @D-400000",
+   "192 mm @D-714061",
+   "192 mm @D-714063"
+  ]
+ },
+ "Acceso frontal al compartimento de filtración": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características extra": 6
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 6
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Válvula de dispensación mecánica antigoteo": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características extra": 6
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 6
+  },
+  "ejemplos": [
+   "Sí @A-904004"
+  ]
+ },
+ "Regulador de presión": {
+  "veces": 6,
+  "unidades": {
+   "": 3,
+   "bar": 3
+  },
+  "grupos": {
+   "Características extra": 3,
+   "Características técnicas": 3
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 3,
+   "Purificación residencial / Filtración y decloración": 3
+  },
+  "ejemplos": [
+   "Sí @A-900065",
+   "3,5 bar @A-190030",
+   "3,5 bar @A-190014",
+   "3,5 bar @A-190016"
+  ]
+ },
+ "Agua con gas": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características técnicas": 6
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 2
+  },
+  "ejemplos": [
+   "Sí @A-280125"
+  ]
+ },
+ "Conexión de entrada": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características técnicas": 6
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3
+  },
+  "ejemplos": [
+   "1” @A-197130",
+   "1/4” @A-253120",
+   "1” H @A-330000"
+  ]
+ },
+ "Conexión de salida": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características técnicas": 6
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3
+  },
+  "ejemplos": [
+   "1” @A-197130",
+   "1/4” @A-253120",
+   "½” M @A-330000",
+   "3/4” M @A-330001"
+  ]
+ },
+ "Diámetro": {
+  "veces": 6,
+  "unidades": {
+   "mm": 6
+  },
+  "grupos": {
+   "Características físicas": 6
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 1,
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "64 mm @A-803023",
+   "64 mm @A-803024",
+   "64 mm @A-803025",
+   "64 mm @A-803004"
+  ]
+ },
+ "Protección": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características técnicas": 6
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 6
+  },
+  "ejemplos": [
+   "IP65 @D-000197"
+  ]
+ },
+ "Junta": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características técnicas": 6
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 6
+  },
+  "ejemplos": [
+   "FPM (Vitón) @C-200554",
+   "EPDM (Dutral) @C-200574"
+  ]
+ },
+ "Conexión sonda de nivel": {
+  "veces": 6,
+  "unidades": {
+   "": 6
+  },
+  "grupos": {
+   "Características extra": 6
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 6
+  },
+  "ejemplos": [
+   "Sí @C-200554"
+  ]
+ },
+ "Teclado táctil": {
+  "veces": 5,
+  "unidades": {
+   "": 5
+  },
+  "grupos": {
+   "Características extra": 5
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 5
+  },
+  "ejemplos": [
+   "Sí @A-904061"
+  ]
+ },
+ "Dispensación eléctrica por pulsador o pedal": {
+  "veces": 5,
+  "unidades": {
+   "": 5
+  },
+  "grupos": {
+   "Características extra": 5
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 5
+  },
+  "ejemplos": [
+   "Sí @A-904061"
+  ]
+ },
+ "UV de cortina en la zona dispensadora": {
+  "veces": 5,
+  "unidades": {
+   "": 5
+  },
+  "grupos": {
+   "Características extra": 5
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 5
+  },
+  "ejemplos": [
+   "Sí @A-904061"
+  ]
+ },
+ "Regulación de temperatura fría y caliente desde el programador": {
+  "veces": 5,
+  "unidades": {
+   "": 5
+  },
+  "grupos": {
+   "Características extra": 5
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 5
+  },
+  "ejemplos": [
+   "Sí @A-904061"
+  ]
+ },
+ "Programas de ahorro de energía": {
+  "veces": 5,
+  "unidades": {
+   "": 5
+  },
+  "grupos": {
+   "Características extra": 5
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 5
+  },
+  "ejemplos": [
+   "3 @A-904061"
+  ]
+ },
+ "Tamaño del cartucho": {
+  "veces": 5,
+  "unidades": {
+   "": 5
+  },
+  "grupos": {
+   "Características técnicas": 5
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 5
+  },
+  "ejemplos": [
+   "9 ¾” @A-100028"
+  ]
+ },
+ "Sistema de refrigeración": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características técnicas": 4
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "Banco de hielo @A-280125",
+   "Fusión en aluminio @A-280150"
+  ]
+ },
+ "Termostato regulable": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "Sí @A-280125"
+  ]
+ },
+ "Bombona de CO2 incluida": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "No @A-280125"
+  ]
+ },
+ "Presión de entrada con bomba": {
+  "veces": 4,
+  "unidades": {
+   "bar": 4
+  },
+  "grupos": {
+   "Características técnicas": 4
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2,
+   "Purificación residencial / Osmosis inversa presurizada": 2
+  },
+  "ejemplos": [
+   "1–3 bar @A-253120",
+   "1–3 bar @A-253121",
+   "1–3 bar @A-253106",
+   "1–3 bar @A-253107"
+  ]
+ },
+ "Largo": {
+  "veces": 4,
+  "unidades": {
+   "mm": 4
+  },
+  "grupos": {
+   "Características físicas": 4
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 1
+  },
+  "ejemplos": [
+   "350 mm @A-803023",
+   "500 mm @A-803024",
+   "930 mm @A-803025",
+   "930 mm @A-803004"
+  ]
+ },
+ "Prefiltración necesaria": {
+  "veces": 4,
+  "unidades": {
+   "micras": 4
+  },
+  "grupos": {
+   "Características técnicas": 4
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección doméstica por ultravioleta": 3,
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 1
+  },
+  "ejemplos": [
+   "1 micras @A-803023",
+   "1 micras @A-803024",
+   "1 micras @A-803025",
+   "1 micras @A-803004"
+  ]
+ },
+ "Alarma acústica y relé de alarma": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "Sí @A-803004"
+  ]
+ },
+ "Contador horario": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "Sí @A-803004"
+  ]
+ },
+ "Sensor de radiación": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 4
+  },
+  "ejemplos": [
+   "Opcional (desde ET 5000) @A-803004",
+   "Opcional @A-330000"
+  ]
+ },
+ "Medida A": {
+  "veces": 4,
+  "unidades": {
+   "mm": 4
+  },
+  "grupos": {
+   "Características físicas": 4
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 2,
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "179 mm @D-000197",
+   "179 mm @D-400000",
+   "160 mm @D-714061",
+   "160 mm @D-714063"
+  ]
+ },
+ "Medida C": {
+  "veces": 4,
+  "unidades": {
+   "mm": 4
+  },
+  "grupos": {
+   "Características físicas": 4
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 2,
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "160 mm @D-000197",
+   "160 mm @D-400000",
+   "103 mm @D-714061",
+   "103 mm @D-714063"
+  ]
+ },
+ "Color": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características físicas": 4
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 2,
+   "Descalcificación residencial / Descalcificadores": 2
+  },
+  "ejemplos": [
+   "Blanco @A-115001",
+   "Cromado @A-115002",
+   "Gris @A-400720"
+  ]
+ },
+ "Composición": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características técnicas": 4
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 4
+  },
+  "ejemplos": [
+   "Sedimento + carbón con efecto bacteriostático + membrana de ultrafiltración @A-190025",
+   "Sedimento + carbón activo granular + carbón con KDF (efecto bacteriostático; elimina metales pesados, sulfuros, hierro y cloro) @A-190014",
+   "Sedimento + carbón activo con silicofosfatos (declorador y antiincrustante) + carbón activo granular @A-190016"
+  ]
+ },
+ "Llave de mantenimiento incluida": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 4
+  },
+  "ejemplos": [
+   "Sí @A-190025"
+  ]
+ },
+ "Kit de instalación incluido": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa presurizada": 3,
+   "Purificación residencial / Osmosis inversa directa": 1
+  },
+  "ejemplos": [
+   "Sí @A-253108"
+  ]
+ },
+ "Iconos indicadores del estado del equipo": {
+  "veces": 4,
+  "unidades": {
+   "": 4
+  },
+  "grupos": {
+   "Características extra": 4
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 4
+  },
+  "ejemplos": [
+   "Sí @A-450000"
+  ]
+ },
+ "Postfiltro remineralizador": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 1,
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2
+  },
+  "ejemplos": [
+   "Sí @A-900530"
+  ]
+ },
+ "Potencia de refrigeración": {
+  "veces": 3,
+  "unidades": {
+   "W": 3
+  },
+  "grupos": {
+   "Características eléctricas": 3
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 3
+  },
+  "ejemplos": [
+   "210 W @A-900065",
+   "210 W @A-900077",
+   "210 W @A-900016"
+  ]
+ },
+ "Surtidor y grifo": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 3
+  },
+  "ejemplos": [
+   "Sí @A-900065"
+  ]
+ },
+ "Control de dosis automática": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2,
+   "Dispensadores de agua / Columnas dispensadoras": 1
+  },
+  "ejemplos": [
+   "Opcional @A-280125"
+  ]
+ },
+ "Presión de entrada": {
+  "veces": 3,
+  "unidades": {
+   "bar": 3
+  },
+  "grupos": {
+   "Características técnicas": 3
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2,
+   "Purificación residencial / Osmosis inversa directa": 1
+  },
+  "ejemplos": [
+   "1–3 bar @A-271006",
+   "1–3 bar @A-271008",
+   "1–5 bar @A-253300"
+  ]
+ },
+ "Prefiltración incorporada": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características técnicas": 3
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3
+  },
+  "ejemplos": [
+   "1 y 5 micras o 5 y 20 micras, según modelo @A-330000"
+  ]
+ },
+ "Salida auxiliar para electroválvula de seguridad": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección industrial por ultravioleta": 3
+  },
+  "ejemplos": [
+   "Sí @A-330000"
+  ]
+ },
+ "Función": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características técnicas": 3
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 3
+  },
+  "ejemplos": [
+   "100 % decloración @A-100028",
+   "30 % decloración, 70 % descalcificación @A-100029",
+   "50 % decloración, 50 % descalcificación @A-100030"
+  ]
+ },
+ "Conexiones E/S": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características técnicas": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "¾” / 1” (según modelo) @A-400900"
+  ]
+ },
+ "Regeneración en tanque seco": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Avisador acústico/visual de falta de sal y estado de válvula": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "App multiidioma (iOS y Android)": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Efecto bacteriostático": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Garantía": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "10 años en depósito y botella, 3 años en válvula @A-400900"
+  ]
+ },
+ "Avisador de cambio de resina": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Corte del paso del agua por rotura de tubería": {
+  "veces": 3,
+  "unidades": {
+   "": 3
+  },
+  "grupos": {
+   "Características extra": 3
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 3
+  },
+  "ejemplos": [
+   "Sí @A-400900"
+  ]
+ },
+ "Capacidad banco de hielo": {
+  "veces": 2,
+  "unidades": {
+   "L": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 2
+  },
+  "ejemplos": [
+   "14 L @A-280125",
+   "4 L @A-280120"
+  ]
+ },
+ "Tirador externo (columna aparte)": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "Sí @A-280150"
+  ]
+ },
+ "Diseño compacto": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "Sí @A-280150"
+  ]
+ },
+ "Interior fácilmente accesible": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador externo": 2
+  },
+  "ejemplos": [
+   "Sí @A-280150"
+  ]
+ },
+ "Número de tiradores": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Columnas dispensadoras": 2
+  },
+  "ejemplos": [
+   "3 @A-280166"
+  ]
+ },
+ "Bombas": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2
+  },
+  "ejemplos": [
+   "2 x 400 GPD @A-271006"
+  ]
+ },
+ "Autoflushing": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2
+  },
+  "ejemplos": [
+   "Sí @A-271006"
+  ]
+ },
+ "Presostato de mínima": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2
+  },
+  "ejemplos": [
+   "Sí @A-271006"
+  ]
+ },
+ "Certificado UNE 149101": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 2
+  },
+  "ejemplos": [
+   "Sí @A-271006"
+  ]
+ },
+ "Niveles de ozono": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2
+  },
+  "ejemplos": [
+   "2 @A-252135"
+  ]
+ },
+ "Uso": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2
+  },
+  "ejemplos": [
+   "Solo con agua fría (según tabla) @A-252135"
+  ]
+ },
+ "Producción de ozono": {
+  "veces": 2,
+  "unidades": {
+   "mg/L": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2
+  },
+  "ejemplos": [
+   "0,5–1,0 mg/L @A-252135",
+   "0,4–1,2 mg/L @A-252132"
+  ]
+ },
+ "Ahorro energético": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 2
+  },
+  "ejemplos": [
+   "Sí @A-252135"
+  ]
+ },
+ "Producto a dosificar": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 2
+  },
+  "ejemplos": [
+   "Ácido @D-000197",
+   "Alcalino @D-400000"
+  ]
+ },
+ "Frecuencia de impulsos": {
+  "veces": 2,
+  "unidades": {
+   "imp/min": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 2
+  },
+  "ejemplos": [
+   "8–180 imp/min @C-200554",
+   "8–180 imp/min @C-200574"
+  ]
+ },
+ "Control": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Bombas dosificación": 2
+  },
+  "ejemplos": [
+   "pH @C-200577",
+   "Redox @C-200583"
+  ]
+ },
+ "Controlador": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "VMS con dos salidas relé para cloro, IP66 @D-714061"
+  ]
+ },
+ "Bomba dosificadora": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "ME3-mA proporcional, 2 L/h, 18 bar, IP65 @D-714061"
+  ]
+ },
+ "Filtro de partículas": {
+  "veces": 2,
+  "unidades": {
+   "µm": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "50 µm @D-714061",
+   "50 µm @D-714063"
+  ]
+ },
+ "Sonda": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "Amperométrica platino/cobre @D-714061",
+   "Amperométrica cobre CG-CL3 + sonda de pH @D-714063"
+  ]
+ },
+ "Parámetros": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "Cloro @D-714061",
+   "Cloro y pH @D-714063"
+  ]
+ },
+ "Sensor de flujo SF integrado en el soporte de la sonda": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "Sí @D-714061"
+  ]
+ },
+ "Clorador": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "Sí @D-714061"
+  ]
+ },
+ "Sonda de nivel": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Dosificación / Paneles cloradores": 2
+  },
+  "ejemplos": [
+   "Sí @D-714061"
+  ]
+ },
+ "Caudal": {
+  "veces": 2,
+  "unidades": {
+   "L/h": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 2
+  },
+  "ejemplos": [
+   "228 L/h @A-115001",
+   "228 L/h @A-115002"
+  ]
+ },
+ "Kit de conexión": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Purificación residencial / Filtración y decloración": 2
+  },
+  "ejemplos": [
+   "Sí @A-195100",
+   "No @A-195101"
+  ]
+ },
+ "Presión de entrada sin bomba": {
+  "veces": 2,
+  "unidades": {
+   "bar": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa presurizada": 2
+  },
+  "ejemplos": [
+   "2,5–6 bar @A-253106",
+   "2,5–6 bar @A-253107"
+  ]
+ },
+ "Regeneración proporcional (inteligente)": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características extra": 2
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 2
+  },
+  "ejemplos": [
+   "Sí @A-450000"
+  ]
+ },
+ "Consumo de Kalaphos Rem": {
+  "veces": 2,
+  "unidades": {
+   "": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "1,3 g por gramo de CO2 @A-850606"
+  ]
+ },
+ "Volumen de medio filtrante": {
+  "veces": 2,
+  "unidades": {
+   "L": 2
+  },
+  "grupos": {
+   "Características técnicas": 2
+  },
+  "capitulos": {
+   "Filtros especiales resinas / Remineralización": 2
+  },
+  "ejemplos": [
+   "1,50 L @A-850606",
+   "6,50 L @A-850607"
+  ]
+ },
+ "Temperatura agua caliente": {
+  "veces": 1,
+  "unidades": {
+   "ºC": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 1
+  },
+  "ejemplos": [
+   "máx. 87 ºC @A-900530"
+  ]
+ },
+ "Protector BIMETAL rearmable": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 1
+  },
+  "ejemplos": [
+   "Sí @A-900530"
+  ]
+ },
+ "Bloqueo anti-inundación": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Fuentes": 1
+  },
+  "ejemplos": [
+   "Sí @A-900530"
+  ]
+ },
+ "Bandeja regulable": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Generador frío/gas con tirador incorporado": 1
+  },
+  "ejemplos": [
+   "4 alturas @A-280125"
+  ]
+ },
+ "Botones táctiles": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Columnas dispensadoras": 1
+  },
+  "ejemplos": [
+   "Sí @A-280166"
+  ]
+ },
+ "Consume energía": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Columnas dispensadoras": 1
+  },
+  "ejemplos": [
+   "No @A-280167"
+  ]
+ },
+ "Control de dosis": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Columnas dispensadoras": 1
+  },
+  "ejemplos": [
+   "Manual @A-280167"
+  ]
+ },
+ "Grado de filtración (micras)": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 1
+  },
+  "ejemplos": [
+   "5 @A-197130"
+  ]
+ },
+ "Soporte y llave incluidos": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Dispensadores de agua / Tratamientos para dispensadores Horeca": 1
+  },
+  "ejemplos": [
+   "Sí @A-197130"
+  ]
+ },
+ "Prefiltro de carbón incluido": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Desinfección ultravioleta y ozono / Desinfección por ozono": 1
+  },
+  "ejemplos": [
+   "Sí @A-252135"
+  ]
+ },
+ "Alimentación del display": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características eléctricas": 1
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa presurizada": 1
+  },
+  "ejemplos": [
+   "3 pilas AA @A-253108"
+  ]
+ },
+ "Filtros con conexión a bayoneta": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa presurizada": 1
+  },
+  "ejemplos": [
+   "Sí @A-253108"
+  ]
+ },
+ "Recuperación": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa directa": 1
+  },
+  "ejemplos": [
+   "1:1 (en condiciones óptimas) @A-253401"
+  ]
+ },
+ "Avisador de mantenimiento": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa directa": 1
+  },
+  "ejemplos": [
+   "Sí @A-253401"
+  ]
+ },
+ "Anilla de seguridad de filtros": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Purificación residencial / Osmosis inversa directa": 1
+  },
+  "ejemplos": [
+   "Sí @A-253401"
+  ]
+ },
+ "Caja neutra": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400720"
+  ]
+ },
+ "Dureza máxima (recomendado)": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "50 ºHF - 500 mg/L @A-400860"
+  ]
+ },
+ "Caudal de servicio": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "1,2 m³/h con las dos botellas en servicio; 0,6 m³/h con una botella en regeneración @A-400860"
+  ]
+ },
+ "Caudal máximo de la válvula": {
+  "veces": 1,
+  "unidades": {
+   "m³/h": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "2,0 m³/h @A-400860"
+  ]
+ },
+ "Botellas de resina dentro del cabinet": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "2 @A-400860"
+  ]
+ },
+ "Teclado táctil multiidioma": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400860"
+  ]
+ },
+ "Regeneración con agua descalcificada": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400860"
+  ]
+ },
+ "Capacidad máxima (con 200 mg/l)": {
+  "veces": 1,
+  "unidades": {
+   "L": 1
+  },
+  "grupos": {
+   "Características técnicas": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "D1: 900 · D2: 800 L @A-400575"
+  ]
+ },
+ "Tanque de salmuera seco": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400575"
+  ]
+ },
+ "Detector de falta de sal": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400575"
+  ]
+ },
+ "Detector de fugas": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400575"
+  ]
+ },
+ "Detector de cambio de resina": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400575"
+  ]
+ },
+ "Ajuste automático de dureza de entrada": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Opcional @A-400575"
+  ]
+ },
+ "Instalación en suelo o pared": {
+  "veces": 1,
+  "unidades": {
+   "": 1
+  },
+  "grupos": {
+   "Características extra": 1
+  },
+  "capitulos": {
+   "Descalcificación residencial / Descalcificadores": 1
+  },
+  "ejemplos": [
+   "Sí @A-400575"
+  ]
+ }
+}
