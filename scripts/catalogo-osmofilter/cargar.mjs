@@ -13,6 +13,15 @@
 //                                api = Management API, solo SELECT (por defecto);
 //                                respaldo = supabase/datos/respaldo-catalogo-2026-11-25
 //     --sin-hash                 no calcula el sha1 de los PDF (más rápido; no deduplica)
+//     --lista=nuevos_residencial.json --carpeta=Residencial
+//                                modo LISTA: lee esa lista (en --origen) y las fichas de
+//                                <origen>/<carpeta>/<p.carpeta> en vez de productos.json y los
+//                                catálogos. Solo COMPLETA filas que ya existen en el maestro
+//                                (nunca crea ninguna), respeta «excluir» de
+//                                nuevos-residencial-mapa.json, toma nombre y rasgos de ese mapa
+//                                y no hace gamas, recambios ni enlaces (eso es de
+//                                cargar-nuevos-residencial.mjs). Pasos por defecto: atributos,
+//                                productos, valores, fotos, ventajas, documentos.
 //
 // Reglas (no se negocian):
 //   - Sin --aplicar no hay ni una escritura en base de datos ni en Storage.
@@ -32,7 +41,7 @@ import { fileURLToPath } from 'node:url';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, '..', '..');
-const ORIGEN_CARGA = 'osmofilter-2026-11-25';
+const ORIGEN_CARGA_POR_DEFECTO = 'osmofilter-2026-11-25';
 const BUCKET = 'catalog-global';
 const PROYECTO = 'pkgvzwunazzkstlfubnq';
 const LIMITE_SUBIDA_BYTES = 50 * 1024 * 1024; // límite por defecto de Supabase por fichero [sin verificar en este proyecto]
@@ -46,10 +55,18 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => {
 const APLICAR = args.aplicar === true;
 const ORIGEN = args.origen || 'D:/OSMONOVA/catalogo';
 const SOLO = args.solo ? new Set(String(args.solo).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)) : null;
-const PASOS_ACTIVOS = args.paso ? String(args.paso).split(',').map((s) => s.trim()) : PASOS;
+const LISTA = typeof args.lista === 'string' ? args.lista : null;
+const CARPETA = typeof args.carpeta === 'string' ? args.carpeta : null;
+if (!!LISTA !== !!CARPETA) salir('--lista y --carpeta van juntas');
+const PASOS_LISTA = ['atributos', 'productos', 'valores', 'fotos', 'ventajas', 'documentos'];
+const PASOS_ACTIVOS = args.paso ? String(args.paso).split(',').map((s) => s.trim()) : (LISTA ? PASOS_LISTA : PASOS);
 const ESTADO = args.estado || 'api';
 const SIN_HASH = args['sin-hash'] === true;
 for (const p of PASOS_ACTIVOS) if (!PASOS.includes(p)) salir(`Paso desconocido: ${p}`);
+if (LISTA) for (const p of PASOS_ACTIVOS) if (!PASOS_LISTA.includes(p)) salir(`En modo --lista no hay paso «${p}» (gamas, recambios y enlaces son de cargar-nuevos-residencial.mjs)`);
+if (LISTA && ESTADO === 'respaldo') salir('El modo --lista necesita el estado actual (--estado=api)');
+// En modo lista solo se usa para rellenar origen_carga si estuviera vacío (es el de cargar-nuevos-residencial.mjs)
+const ORIGEN_CARGA = LISTA ? 'osmofilter-residencial-2026-11-26' : ORIGEN_CARGA_POR_DEFECTO;
 
 function salir(msg) { console.error('ERROR: ' + msg); process.exit(1); }
 const log = (...a) => console.log(...a);
@@ -108,10 +125,18 @@ const refMaestro = (ref) => ALIAS[ref] || ref;
 
 // ---------------------------------------------------------------- origen (solo lectura)
 const CATALOGOS = ['General', 'Especialista', 'Venta Directa', 'Horeca', 'Fuentes'];
-const PRODUCTOS = leerJson(path.join(ORIGEN, 'productos.json')).productos;
-const RECAMBIOS_JSON = leerJson(path.join(ORIGEN, 'recambios_por_equipo.json')).equipos;
+const PRODUCTOS = leerJson(path.join(ORIGEN, LISTA || 'productos.json')).productos;
+const RECAMBIOS_JSON = LISTA ? {} : leerJson(path.join(ORIGEN, 'recambios_por_equipo.json')).equipos;
+// Modo lista: nombre y rasgos a mano, y refs que no se cargan nunca (Distribución y Retail)
+const MAPA_RES = LISTA ? leerJson(path.join(AQUI, 'nuevos-residencial-mapa.json')) : null;
+const EXCLUIR = new Set((MAPA_RES?.excluir || []).map(lower));
 
 function carpetaDe(p) {
+  if (LISTA) {
+    if (!p.carpeta) return null;
+    const d = path.join(ORIGEN, CARPETA, p.carpeta);
+    return fs.existsSync(path.join(d, 'ficha.json')) ? d : null;
+  }
   for (const c of [...(p.catalogos || []), ...CATALOGOS]) {
     const d = path.join(ORIGEN, c, p.carpeta);
     if (fs.existsSync(path.join(d, 'ficha.json'))) return d;
@@ -237,6 +262,22 @@ async function leerEstado() {
       const sel = cols.map((c) => c.replace(/^\?/, '')).filter((c) => estado.columnas[t]?.has(c));
       const r = await consultaApi(`select coalesce(json_agg(x), '[]'::json) as filas from (select ${sel.map((c) => `"${c}"`).join(', ')} from public.${t}) x`);
       estado[t] = r[0].filas;
+    }
+  }
+  // Modo lista: iconos y PDF que ya están en el bucket, para reutilizarlos sin volver a subirlos
+  if (LISTA) {
+    estado.enStorage = new Set();
+    if (APLICAR) {
+      const sb = await clienteServicio();
+      for (let desde = 0; ; desde += 1000) {
+        const { data, error } = await sb.storage.from(BUCKET).list('iconos/osmofilter', { limit: 1000, offset: desde });
+        if (error) salir('Listando iconos del bucket: ' + error.message);
+        for (const o of data) estado.enStorage.add(`iconos/osmofilter/${o.name}`);
+        if (data.length < 1000) break;
+      }
+    } else {
+      const r = await consultaApi(`select coalesce(json_agg(name), '[]'::json) as nombres from storage.objects where bucket_id = '${BUCKET}' and (name like 'iconos/osmofilter/%' or name like 'documentos/osmofilter/%')`);
+      for (const n of r[0].nombres) estado.enStorage.add(n);
     }
   }
   return estado;
@@ -385,7 +426,7 @@ function sha1(fichero) {
 async function construirPlan(estado) {
   const sharp = (await import('sharp')).default;
   const informe = {
-    fecha: new Date().toISOString(), modo: APLICAR ? 'aplicar' : 'seco', estado: estado.origen, solo: SOLO ? [...SOLO] : null, pasos: PASOS_ACTIVOS,
+    fecha: new Date().toISOString(), modo: APLICAR ? 'aplicar' : 'seco', lista: LISTA ? { lista: LISTA, carpeta: CARPETA } : null, estado: estado.origen, solo: SOLO ? [...SOLO] : null, pasos: PASOS_ACTIVOS,
     migracion_pendiente: [], productos: { crear: [], completar: [], sin_cambios: [], saltar: [] }, atributos: {},
     sin_emparejar: {}, no_convertidos: [], sin_fila: {}, valores_existentes_conservados: [], conflictos: [], avisos: [],
     fotos: {}, sin_foto: [], sin_caracteristicas: [], ventajas: {}, recambios: {}, enlaces: {}, documentos: {}, gamas: [],
@@ -423,8 +464,38 @@ async function construirPlan(estado) {
 
   // ---------- equipos
   const equipos = [];
+  if (LISTA) Object.assign(informe.productos, { excluidas: [], sin_fila_maestro: [], sin_datos: [], sin_descargar: [] });
   for (const p of PRODUCTOS) {
     if (!incluido(p.ref)) continue;
+    if (LISTA) {
+      // ---- modo lista: solo completa filas existentes con lo que traiga la ficha
+      const refM = refMaestro(p.ref);
+      if (EXCLUIR.has(lower(p.ref)) || EXCLUIR.has(lower(refM))) { informe.productos.excluidas.push(p.ref); continue; }
+      const dir = carpetaDe(p);
+      if (!dir) { informe.productos.sin_descargar.push(p.ref); continue; }
+      const existente = porRefBD.get(lower(refM)) || null;
+      if (!existente) { informe.productos.sin_fila_maestro.push(`${p.ref} (${p.nombre || p.descripcion})`); continue; }
+      const ficha = leerJson(path.join(dir, 'ficha.json'));
+      const nItems = (ficha.grupos_ft || []).reduce((a, g) => a + (g.items || []).length, 0);
+      const nArchivos = (p.archivos || []).filter((a) => a.startsWith('imagenes/') || a.startsWith('documentos/')).length;
+      if (!nItems && !(ficha.highlights || []).length && !nArchivos) {
+        const txtF = path.join(dir, 'datos-para-cargar.txt');
+        const txt = fs.existsSync(txtF) ? fs.readFileSync(txtF, 'utf8') : '';
+        if (/^\s*(VENTAJAS|CARACTER[IÍ]STICAS)\b/m.test(txt)) informe.avisos.push(`${p.ref}: datos-para-cargar.txt trae ventajas o características pero ficha.json no; no se carga nada`);
+        informe.productos.sin_datos.push(p.ref);
+        continue;
+      }
+      const cat = { categoria: existente.category_global_key, kind: existente.kind };
+      const catOsmo = categoriaDe(p);
+      if (catOsmo && (catOsmo.categoria !== cat.categoria || catOsmo.kind !== cat.kind)) informe.avisos.push(`${refM}: se queda en ${cat.categoria}/${cat.kind} (mapa-familias: ${catOsmo.categoria}/${catOsmo.kind}); los atributos se enlazan a ${cat.categoria}`);
+      const m = MAPA_RES.productos?.[p.ref] || {};
+      const nrm = (x) => sinTildes(String(x || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (p.nombre && existente.name && !nrm(p.nombre).includes(nrm(existente.name)) && !nrm(existente.name).includes(nrm(p.nombre))) informe.avisos.push(`${refM}: la ficha de Osmofilter lo llama «${p.nombre}» y en el maestro es «${existente.name}»; el nombre no se toca, pero revisa que la ficha sea de este producto`);
+      const nombre = existente.name || m.nombre || p.nombre;
+      const gv = { gama: { modelo: m.nombre || nombre, cabeza: p.ref }, variante: { ref: p.ref, nombre, rasgos: existente.rasgos_identificacion || m.rasgos || null } };
+      equipos.push({ p, dir, ficha, cat, gv, refM, existente });
+      continue;
+    }
     const dir = carpetaDe(p);
     const cat = categoriaDe(p);
     const gv = gamaDeRef.get(p.ref);
@@ -438,6 +509,17 @@ async function construirPlan(estado) {
     equiposEnMaestro.add(lower(refM));
   }
 
+  if (LISTA) {
+    // carpetas descargadas que no están en la lista (no se cargan; solo aviso)
+    const enLista = new Set(PRODUCTOS.map((p) => p.carpeta).filter(Boolean));
+    const dirBase = path.join(ORIGEN, CARPETA);
+    for (const d of fs.existsSync(dirBase) ? fs.readdirSync(dirBase) : []) {
+      if (enLista.has(d) || !fs.statSync(path.join(dirBase, d)).isDirectory()) continue;
+      const ref = d.split(' - ')[0].trim();
+      informe.avisos.push(EXCLUIR.has(lower(ref)) ? `${ref}: tiene carpeta en ${CARPETA}/ pero está en «excluir»; no se carga` : `${ref}: tiene carpeta en ${CARPETA}/ pero no está en ${LISTA}; no se carga`);
+      if (EXCLUIR.has(lower(ref))) informe.productos.excluidas.push(ref + ' (solo carpeta)');
+    }
+  }
   for (const e of equipos) {
     const { p, ficha, cat, gv, refM, existente } = e;
     const nombre = gv.variante.nombre || gv.gama.modelo;
@@ -537,6 +619,14 @@ async function construirPlan(estado) {
       long_description: e.descLarga !== e.descCorta ? e.descLarga : null,
       ...e.columnas,
     };
+    if (LISTA) {
+      // La carga residencial ya puso short_description con la descripción del ERP: si la ficha trae
+      // otra, va a long_description (vacía) para no repetir el mismo texto en las dos.
+      base.modelo = gv.gama.modelo;
+      base.catalogos_proveedor = [CARPETA];
+      const corta = existente?.short_description;
+      if (!vacio(corta)) base.long_description = [e.descCorta, e.descLarga].find((d) => !vacio(d) && d !== corta) || null;
+    }
     if (!existente) {
       const fila = { manufacturer_id: osmo.id, supplier_reference: refM, name: e.nombre, kind: cat.kind, category_global_key: cat.categoria, is_active: true, descatalogado, ...base };
       for (const k of Object.keys(fila)) if (fila[k] === null || fila[k] === undefined) delete fila[k];
@@ -559,8 +649,8 @@ async function construirPlan(estado) {
     }
   }
 
-  // ---------- paso gamas
-  for (const g of GAMAS.gamas) {
+  // ---------- paso gamas (en modo lista no: las gamas las hizo cargar-nuevos-residencial.mjs)
+  for (const g of LISTA ? [] : GAMAS.gamas) {
     const miembros = g.variantes.filter((v) => incluido(v.ref));
     const fila = { modelo: g.modelo, cabeza: refMaestro(g.cabeza), variantes: g.variantes.map((v) => `${refMaestro(v.ref)}${v.rasgos ? ' (' + v.rasgos + ')' : ''}`), revisar: g.revisar, nota: g.nota || null };
     informe.gamas.push(fila);
@@ -642,6 +732,7 @@ async function construirPlan(estado) {
 
   // ---------- paso ventajas
   let sinIcono = 0;
+  const iconosReutilizados = new Set();
   for (const e of equipos) {
     const id = idDe(e.refM);
     const hl = e.ficha.highlights || [];
@@ -655,16 +746,17 @@ async function construirPlan(estado) {
         const s = slug(base);
         const local = iconosLocales.find((a) => path.basename(a).startsWith(String(k + 1).padStart(2, '0') + ' '));
         icon_path = `iconos/osmofilter/${s}.webp`;
-        if (local && !plan.iconos.has(icon_path)) plan.iconos.set(icon_path, path.join(e.dir, local));
+        if (local && LISTA && estado.enStorage.has(icon_path)) iconosReutilizados.add(icon_path);
+        else if (local && !plan.iconos.has(icon_path)) plan.iconos.set(icon_path, path.join(e.dir, local));
         if (!local) { icon_path = null; sinIcono++; }
       } else sinIcono++;
       plan.ventajas.push({ ref: e.refM, fila: { titulo: h.texto_breve, descripcion: h.texto_largo || null, icon_path, display_order: k } });
     });
   }
-  informe.ventajas = { filas: plan.ventajas.length, productos: new Set(plan.ventajas.map((v) => v.ref)).size, iconos_distintos: plan.iconos.size, sin_icono: sinIcono, fichas_sin_ventajas: equipos.filter((e) => !(e.ficha.highlights || []).length).map((e) => e.p.ref) };
+  informe.ventajas = { filas: plan.ventajas.length, productos: new Set(plan.ventajas.map((v) => v.ref)).size, iconos_distintos: plan.iconos.size, iconos_reutilizados: iconosReutilizados.size, sin_icono: sinIcono, fichas_sin_ventajas: equipos.filter((e) => !(e.ficha.highlights || []).length).map((e) => e.p.ref) };
 
   // ---------- recambios (JSON + Excel)
-  const excel = leerExcel();
+  const excel = LISTA ? {} : leerExcel(); // modo lista: sin recambios ni enlaces
   const recambios = new Map(); // ref -> { ref, tipo, nombre, familia }
   const enlacesFuente = new Map(); // `${recambio}|${equipo}` -> origen
   for (const [equipo, lista] of Object.entries(RECAMBIOS_JSON)) {
@@ -728,7 +820,7 @@ async function construirPlan(estado) {
     plan.enlaces.push({ recambio: rec, equipo: eq, fila: { cantidad: null, display_order: n } });
   }
   const perdidosTotal = [...perdidos.values()].reduce((a, b) => a + b, 0);
-  informe.enlaces = { en_origen: enlacesTotal, crear: plan.enlaces.length, ya_existen: yaExisten, perdidos: perdidosTotal, fuera_de_solo: fueraDeSolo, perdidos_por_equipo: Object.fromEntries([...perdidos].sort((a, b) => b[1] - a[1])), equipos_descargados_sin_recambios: PRODUCTOS.filter((p) => !RECAMBIOS_JSON[p.ref]).map((p) => p.ref) };
+  informe.enlaces = { en_origen: enlacesTotal, crear: plan.enlaces.length, ya_existen: yaExisten, perdidos: perdidosTotal, fuera_de_solo: fueraDeSolo, perdidos_por_equipo: Object.fromEntries([...perdidos].sort((a, b) => b[1] - a[1])), equipos_descargados_sin_recambios: LISTA ? [] : PRODUCTOS.filter((p) => !RECAMBIOS_JSON[p.ref]).map((p) => p.ref) };
 
   // ---------- paso documentos
   const docsPorApartado = {};
@@ -760,7 +852,8 @@ async function construirPlan(estado) {
     }
   }
   const bytesSubir = [...plan.subidasDocs.values()].reduce((a, b) => a + b.bytes, 0);
-  informe.documentos = { filas: plan.documentos.length, ficheros_distintos: plan.subidasDocs.size, por_apartado: docsPorApartado, mb_sin_deduplicar: +(bytesDocsFilas / 1e6).toFixed(1), mb_a_subir: +(bytesSubir / 1e6).toFixed(1), deduplicado_por_sha1: !SIN_HASH, mayores_que_limite: grandes };
+  const docsYaEnStorage = LISTA ? [...plan.subidasDocs.keys()].filter((k) => estado.enStorage.has(k)).length : null;
+  informe.documentos = { filas: plan.documentos.length, ficheros_distintos: plan.subidasDocs.size, por_apartado: docsPorApartado, mb_sin_deduplicar: +(bytesDocsFilas / 1e6).toFixed(1), mb_a_subir: +(bytesSubir / 1e6).toFixed(1), deduplicado_por_sha1: !SIN_HASH, mayores_que_limite: grandes, ...(LISTA ? { ficheros_ya_en_storage: docsYaEnStorage } : {}) };
 
   // ---------- comprobación previa de todos los payloads
   for (const x of plan.atributosNuevos) comprobarPayload('product_attributes_global', x);
@@ -790,11 +883,12 @@ async function construirPlan(estado) {
     atributos_globales_reutilizados: informe.atributos.reutilizados,
     enlaces_atributo_categoria: plan.enlacesCategoria.length,
     valores_atributo: plan.valores.length,
-    gamas_con_variantes: GAMAS.gamas.filter((g) => g.variantes.length > 1).length,
+    gamas_con_variantes: LISTA ? 0 : GAMAS.gamas.filter((g) => g.variantes.length > 1).length,
     variantes_a_enlazar: plan.gamas.filter((g) => g.gama).length,
     fotos: plan.fotos.length,
     ventajas: plan.ventajas.length,
     iconos: plan.iconos.size,
+    ...(LISTA ? { iconos_reutilizados: informe.ventajas.iconos_reutilizados, refs_en_lista: PRODUCTOS.length, excluidas: informe.productos.excluidas.length, sin_fila_en_maestro: informe.productos.sin_fila_maestro.length, sin_datos_que_cargar: informe.productos.sin_datos.length, sin_descargar_aun: informe.productos.sin_descargar.length } : {}),
     recambios_crear: plan.recambiosNuevos.length,
     enlaces_recambio_crear: plan.enlaces.length,
     enlaces_recambio_perdidos: perdidosTotal,
@@ -905,7 +999,7 @@ async function aplicar(plan, estadoInicial) {
   }
 
   if (activo('ventajas')) {
-    await enParalelo([...plan.iconos], 4, async ([destino, local]) => subir(destino, fs.readFileSync(local), 'image/webp'));
+    await enParalelo([...plan.iconos], 4, async ([destino, local]) => subir(destino, fs.readFileSync(local), 'image/webp', !LISTA)); // modo lista: no pisa iconos ya subidos
     const porProducto = new Map();
     for (const v of plan.ventajas) { const id = idDe(v.ref); if (id) (porProducto.get(id) || porProducto.set(id, []).get(id)).push({ catalog_product_id: id, ...v.fila }); }
     let insertadas = 0;
@@ -959,6 +1053,7 @@ function informeMd(inf) {
   const lista = (arr, max = 400) => { if (!arr.length) p('- (ninguno)'); arr.slice(0, max).forEach((x) => p(`- ${x}`)); if (arr.length > max) p(`- … y ${arr.length - max} más`); };
   p(`# Informe de la carga de Osmofilter — ${inf.modo === 'seco' ? 'prueba en seco' : 'aplicada'}`);
   p();
+  if (inf.lista) { p(`Modo lista: \`${inf.lista.lista}\` con las fichas de \`${inf.lista.carpeta}/\`. Solo se completan filas que ya existen en el maestro; no se crea ninguna, ni se tocan gamas, recambios ni enlaces.`); p(); }
   p(`Fecha: ${inf.fecha} · Estado leído de: ${inf.estado} · Solo: ${inf.solo ? inf.solo.join(', ') : 'todo'} · Pasos: ${inf.pasos.join(', ')}`);
   p();
   p('Generado por `scripts/catalogo-osmofilter/cargar.mjs`. En seco no se ha escrito nada en la base de datos ni en Storage.');
@@ -972,7 +1067,8 @@ function informeMd(inf) {
   p();
   p('## 2. Atributos de Osmofilter sin emparejar'); p();
   const se = Object.entries(inf.sin_emparejar);
-  if (!se.length) p('Ninguno: los 100 atributos de la descarga tienen entrada en `mapa-atributos.json` (96) o van a columna (Ancho, Alto, Fondo y Peso).');
+  if (!se.length && inf.lista) p('Ninguno: todos los atributos de las fichas tienen entrada en `mapa-atributos.json` o van a columna (Ancho, Alto, Fondo y Peso).');
+  else if (!se.length) p('Ninguno: los 100 atributos de la descarga tienen entrada en `mapa-atributos.json` (96) o van a columna (Ancho, Alto, Fondo y Peso).');
   else se.forEach(([k, v]) => p(`- ${k} (${v.veces}): ${[...v.ejemplos].slice(0, 3).join(' · ')}`));
   p();
   p(`Atributos globales: ${inf.atributos.nuevos} nuevos, ${inf.atributos.reutilizados} reutilizados, ${inf.atributos.enlaces_categoria_nuevos} enlaces nuevos atributo–categoría.`);
@@ -994,8 +1090,10 @@ function informeMd(inf) {
   p(`Sin características (ni atributos ni medidas): ${inf.sin_caracteristicas.length}`); lista(inf.sin_caracteristicas); p();
   p(`Fotos a subir: ${inf.fotos.a_subir} (${inf.fotos.mb_originales} MB de originales, más miniaturas de 400 px). Por tipo: ${Object.entries(inf.fotos.por_tipo).map(([k, v]) => `${k} ${v}`).join(' · ')}. Mayores de 1.200 px que se reducen: ${inf.fotos.mayores_de_1200px}.`);
   p();
-  p(`Ventajas: ${inf.ventajas.filas} en ${inf.ventajas.productos} productos, ${inf.ventajas.iconos_distintos} iconos distintos, ${inf.ventajas.sin_icono} sin icono. Fichas sin ventajas: ${inf.ventajas.fichas_sin_ventajas.length}.`);
+  p(`Ventajas: ${inf.ventajas.filas} en ${inf.ventajas.productos} productos, ${inf.ventajas.iconos_distintos} iconos nuevos a subir${inf.lista ? `, ${inf.ventajas.iconos_reutilizados} iconos reutilizados (ya en Storage)` : ''}, ${inf.ventajas.sin_icono} sin icono. Fichas sin ventajas: ${inf.ventajas.fichas_sin_ventajas.length}.`);
   p();
+  if (inf.lista) { p('## 5. Recambios y enlaces'); p(); p('No aplica en modo lista (los hizo `cargar-nuevos-residencial.mjs`).'); p(); }
+  else {
   p('## 5. Recambios y enlaces'); p();
   p(`Recambios distintos en el origen: ${inf.recambios.distintos} (${inf.recambios.familias} familias). A crear: ${inf.recambios.crear} (${inf.recambios.consumibles} consumibles, ${inf.recambios.repuestos} repuestos). A completar: ${inf.recambios.completar}.`);
   const c = inf.recambios.cruce_excel;
@@ -1008,11 +1106,14 @@ function informeMd(inf) {
   p();
   p(`Equipos descargados sin ningún recambio en el origen (${inf.enlaces.equipos_descargados_sin_recambios.length}): ${inf.enlaces.equipos_descargados_sin_recambios.join(', ')}.`);
   p();
+  }
   p('## 6. Documentos'); p();
   p(`Filas: ${inf.documentos.filas}. Ficheros distintos a subir: ${inf.documentos.ficheros_distintos} (${inf.documentos.mb_a_subir} MB; sin deduplicar serían ${inf.documentos.mb_sin_deduplicar} MB; deduplicado por sha1: ${inf.documentos.deduplicado_por_sha1 ? 'sí' : 'no'}).`);
+  if (inf.lista) p(`De esos ficheros, ya estaban en Storage (se reutilizan, no se vuelven a subir): ${inf.documentos.ficheros_ya_en_storage}.`);
   p(`Por apartado: ${Object.entries(inf.documentos.por_apartado).map(([k, v]) => `${k} ${v}`).join(' · ')}.`);
   if (inf.documentos.mayores_que_limite.length) { p(); p('Mayores que el límite de subida de 50 MB (no se suben):'); lista(inf.documentos.mayores_que_limite); }
   p();
+  if (!inf.lista) {
   p('## 7. Gamas'); p();
   const conV = inf.gamas.filter((g) => g.variantes.length > 1);
   p(`${conV.length} gamas con variantes y ${inf.gamas.length - conV.length} productos sueltos. **Revisar** = dudosa, la tiene que mirar Mario.`);
@@ -1022,7 +1123,14 @@ function informeMd(inf) {
   p();
   p(`Sueltos: ${inf.gamas.filter((g) => g.variantes.length === 1).map((g) => `${g.modelo} (${g.cabeza})`).join(' · ')}.`);
   p();
+  }
   p('## 8. Productos'); p();
+  if (inf.lista) {
+    p(`Excluidas por \`nuevos-residencial-mapa.json\` (Distribución y Retail) (${inf.productos.excluidas.length}):`); lista(inf.productos.excluidas); p();
+    p(`**Sin fila en el maestro** (no se crean; pregunta a Mario) (${inf.productos.sin_fila_maestro.length}):`); lista(inf.productos.sin_fila_maestro); p();
+    p(`Con carpeta pero sin características, ventajas, fotos ni documentos: no se hace nada (${inf.productos.sin_datos.length}):`); lista(inf.productos.sin_datos); p();
+    p(`En la lista pero sin carpeta descargada todavía (${inf.productos.sin_descargar.length}):`); lista(inf.productos.sin_descargar); p();
+  }
   p(`Crear (${inf.productos.crear.length}):`); lista(inf.productos.crear.map((x) => `${x.ref} · ${x.nombre} · ${x.categoria}/${x.kind}${x.descatalogado ? ' · descatalogado' : ''}`)); p();
   p(`Completar (${inf.productos.completar.length}):`); lista(inf.productos.completar.map((x) => `${x.ref}${x.desde !== x.ref ? ` (descarga ${x.desde})` : ''}: ${x.campos.join(', ')}`)); p();
   if (inf.productos.saltar.length) { p('Saltados:'); lista(inf.productos.saltar.map((x) => `${x.ref}: ${x.motivo}`)); p(); }
@@ -1043,12 +1151,12 @@ async function main() {
 
   const dirInf = path.join(AQUI, 'informes');
   fs.mkdirSync(dirInf, { recursive: true });
-  const sello = informe.fecha.replace(/[:.]/g, '-');
+  const sello = informe.fecha.replace(/[:.]/g, '-') + (LISTA ? '-' + slug(CARPETA) + '-fichas' : '');
   const json = JSON.stringify(informe, (k, v) => (v instanceof Set ? [...v] : v), 2);
   fs.writeFileSync(path.join(dirInf, `${sello}-${informe.modo}.json`), json);
   const md = informeMd(informe);
   fs.writeFileSync(path.join(dirInf, `${sello}-${informe.modo}.md`), md);
-  if (!APLICAR && !SOLO && PASOS_ACTIVOS.length === PASOS.length) fs.writeFileSync(path.join(AQUI, 'informe-seco.md'), md);
+  if (!LISTA && !APLICAR && !SOLO && PASOS_ACTIVOS.length === PASOS.length) fs.writeFileSync(path.join(AQUI, 'informe-seco.md'), md);
   log(JSON.stringify(informe.recuentos, null, 2));
   log(`Informe: ${path.join(dirInf, `${sello}-${informe.modo}.md`)}`);
 }
