@@ -97,14 +97,42 @@ export function PanelConfigCaptacion({ estado }: { estado: EstadoCaptacion }) {
             <Fila etiqueta="Nombre visible" valor={c.nombre_visible ?? "—"} />
             <Fila etiqueta="Calidad" valor={<StatusPill {...CALIDAD[c.calidad]} />} />
             <Fila etiqueta="Límite de Meta" valor={`${c.limite_diario_meta} personas / 24 h`} />
+            <Fila
+              etiqueta="App del móvil"
+              valor={c.coexistencia ? "También en WhatsApp Business" : "No: solo desde aquí"}
+            />
+            {c.coexistencia ? (
+              <>
+                <Fila etiqueta="Contactos pedidos a Meta" valor={cuando(c.sync_contactos_at)} />
+                <Fila etiqueta="Historial pedido a Meta" valor={cuando(c.sync_historial_at)} />
+              </>
+            ) : null}
             <Fila etiqueta="Último aviso de Meta" valor={cuando(c.ultimo_webhook_at)} />
           </dl>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Conecta un número que <strong>no</strong> sea el principal de la empresa y que no esté
-            en la app de WhatsApp: pasa a funcionar solo desde aquí.
-          </p>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>Hay dos formas de conectar:</p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <strong className="text-foreground">Número que ya está en WhatsApp Business:</strong>{" "}
+                sigue funcionando en el móvil y además desde aquí. Lo que escribas en el móvil es
+                gratis; lo que salga desde aquí lo cobra Meta.
+              </li>
+              <li>
+                <strong className="text-foreground">Número nuevo:</strong> que no esté en ninguna
+                app de WhatsApp. Pasa a funcionar solo desde aquí.
+              </li>
+            </ul>
+          </div>
         )}
+
+        {c?.coexistencia && c.estado === "activa" ? (
+          <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+            Abre WhatsApp Business en el móvil al menos una vez cada dos semanas: si pasa unos 14
+            días sin usarse, Meta desconecta el número de aquí. En el móvil se desactivan las
+            difusiones nuevas, los mensajes temporales y «ver una vez».
+          </p>
+        ) : null}
 
         {c?.ultimo_error && c.estado !== "activa" ? (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{c.ultimo_error}</p>
@@ -113,12 +141,26 @@ export function PanelConfigCaptacion({ estado }: { estado: EstadoCaptacion }) {
         {esAdmin && !conectada ? (
           metaLista ? (
             <div className="space-y-2">
-              <BotonConectarWhatsapp
-                appId={meta.appId!}
-                configId={meta.configId!}
-                graphVersion={meta.graphVersion}
-                textoBoton={c?.estado === "pendiente" ? "Reintentar la conexión" : "Conectar WhatsApp"}
-              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <BotonConectarWhatsapp
+                  appId={meta.appId!}
+                  configId={meta.configId!}
+                  graphVersion={meta.graphVersion}
+                  coexistencia
+                  textoBoton="Conectar el número de WhatsApp Business"
+                />
+                <BotonConectarWhatsapp
+                  appId={meta.appId!}
+                  configId={meta.configId!}
+                  graphVersion={meta.graphVersion}
+                  variante="outline"
+                  textoBoton={c?.estado === "pendiente" ? "Reintentar con un número nuevo" : "Conectar un número nuevo"}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Con el número de WhatsApp Business, Meta te pedirá escanear un código QR con la app
+                del móvil (versión 2.24.17 o posterior).
+              </p>
               <p className="text-xs text-muted-foreground">
                 Se abre una ventana de Meta. En el móvil a veces no se abre bien: si pasa, hazlo
                 desde un ordenador.
@@ -152,7 +194,7 @@ export function PanelConfigCaptacion({ estado }: { estado: EstadoCaptacion }) {
       ) : null}
 
       {/* --- Zona de peligro --- */}
-      {esAdmin && c && c.estado !== "desconectada" ? <ZonaPeligro /> : null}
+      {esAdmin && c && c.estado !== "desconectada" ? <ZonaPeligro coexistencia={c.coexistencia} /> : null}
     </div>
   );
 }
@@ -380,13 +422,15 @@ function Plantillas({
   );
 }
 
-function ZonaPeligro() {
+function ZonaPeligro({ coexistencia }: { coexistencia: boolean }) {
   const [pending, start] = useTransition();
   return (
     <section className="space-y-3 rounded-xl border border-destructive/40 p-4 sm:p-5">
       <h2 className="text-base font-bold text-destructive">Desconectar WhatsApp</h2>
       <p className="text-sm text-muted-foreground">
-        Se apagan los envíos, se borra el acceso guardado y se da de baja el número de la API.
+        {coexistencia
+          ? "Se apagan los envíos y se borra el acceso guardado. El número sigue en la app del móvil; para soltarlo del todo de Meta, hay que desconectarlo también desde la app (Ajustes → Cuenta → Plataforma empresarial)."
+          : "Se apagan los envíos, se borra el acceso guardado y se da de baja el número de la API."}{" "}
         Las conversaciones se conservan.
       </p>
       <AlertDialog>
@@ -410,7 +454,7 @@ function ZonaPeligro() {
                 start(async () => {
                   const r = await desconectarWhatsappAction();
                   if (!r.ok) toast.error(r.error);
-                  else if (r.aviso) toast.warning(r.aviso);
+                  else if (r.aviso) toast.warning(r.aviso, { duration: 15_000 });
                   else toast.success("Número desconectado");
                 })
               }

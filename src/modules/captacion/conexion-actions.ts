@@ -12,8 +12,10 @@ import {
   desregistrarNumero,
   ErrorMeta,
   intercambiarCodigo,
+  leerEstadoCoexistencia,
   leerNumero,
   listarNumerosWaba,
+  pedirSincronizacionApp,
   registrarNumero,
   suscribirAppAWaba,
 } from "./meta";
@@ -55,7 +57,7 @@ export async function obtenerEstadoCaptacion(): Promise<EstadoCaptacion | null> 
     db
       .from("captacion_conexiones")
       .select(
-        "estado, waba_id, phone_number_id, numero_e164, nombre_visible, calidad, limite_diario_meta, margen_seguridad, negocio_verificado, envios_activos, tope_gasto_mensual_cents, retencion_dias, presentacion_empresa, temas_prohibidos, conectada_at, ultimo_webhook_at, ultimo_error",
+        "estado, waba_id, phone_number_id, numero_e164, nombre_visible, calidad, limite_diario_meta, margen_seguridad, negocio_verificado, envios_activos, tope_gasto_mensual_cents, retencion_dias, presentacion_empresa, temas_prohibidos, conectada_at, coexistencia, sync_contactos_at, sync_historial_at, ultimo_webhook_at, ultimo_error",
       )
       .eq("company_id", session.company_id)
       .maybeSingle(),
@@ -84,16 +86,27 @@ export async function obtenerEstadoCaptacion(): Promise<EstadoCaptacion | null> 
 // Conectar (Embedded Signup v4)
 // -----------------------------------------------------------------------------
 
+const idMeta = z.string().regex(/^\d{5,30}$/, "id de Meta no válido");
+
 const conectarSchema = z.object({
   code: z.string().trim().min(10).max(4000),
-  waba_id: z.string().regex(/^\d{5,30}$/, "waba_id no válido"),
-  phone_number_id: z.string().regex(/^\d{5,30}$/, "phone_number_id no válido"),
-  business_id: z.string().regex(/^\d{5,30}$/).nullable().optional(),
+  waba_id: idMeta,
+  // Con coexistencia Meta solo documenta waba_id en el evento: el número se
+  // saca de la WABA con el token.
+  phone_number_id: idMeta.nullable().optional(),
+  business_id: idMeta.nullable().optional(),
+  coexistencia: z.boolean().optional().default(false),
 });
 
 /**
  * Paso de servidor del Embedded Signup (plan §4.1). No se fía de los ids que
  * manda el navegador: los comprueba con el token recién obtenido.
+ *
+ * Coexistencia (número que sigue en la app de WhatsApp Business), según
+ * onboarding-business-app-users (comprobado el 2026-11-27):
+ *  · NO se llama a /register ni hay PIN: el número ya está registrado.
+ *  · Se piden contactos e historial con smb_app_data. Solo una vez cada uno
+ *    y dentro de las 24 h: si falla, se avisa y no se reintenta solo.
  */
 export async function conectarWhatsappAction(input: unknown): Promise<Resultado> {
   let companyId: string | null = null;
@@ -101,14 +114,20 @@ export async function conectarWhatsappAction(input: unknown): Promise<Resultado>
     const session = await sesionAdmin();
     companyId = session.company_id;
     const p = conectarSchema.parse(input);
+    if (!p.coexistencia && !p.phone_number_id) {
+      return { ok: false, error: "Meta no devolvió el número elegido. Repite el alta." };
+    }
     const db = admin();
 
     // 1) ¿Ese número ya está en otra empresa? (el índice único lo frenaría
     //    igual; así el mensaje es claro y no se gasta el code).
+    const filtro = p.phone_number_id
+      ? `phone_number_id.eq.${p.phone_number_id},waba_id.eq.${p.waba_id}`
+      : `waba_id.eq.${p.waba_id}`;
     const { data: otra } = await db
       .from("captacion_conexiones")
       .select("company_id")
-      .or(`phone_number_id.eq.${p.phone_number_id},waba_id.eq.${p.waba_id}`)
+      .or(filtro)
       .neq("company_id", companyId)
       .limit(1);
     if ((otra ?? []).length > 0) {
@@ -120,13 +139,27 @@ export async function conectarWhatsappAction(input: unknown): Promise<Resultado>
 
     // 3) El token tiene que ver esa WABA y ese número.
     const numeros = await listarNumerosWaba(token, p.waba_id);
-    if (!numeros.some((n) => n.id === p.phone_number_id)) {
-      return { ok: false, error: "El número elegido no pertenece a la cuenta de WhatsApp autorizada." };
+    let pnid = p.phone_number_id ?? null;
+    if (pnid) {
+      if (!numeros.some((n) => n.id === pnid)) {
+        return { ok: false, error: "El número elegido no pertenece a la cuenta de WhatsApp autorizada." };
+      }
+    } else if (numeros.length === 1 && numeros[0]) {
+      pnid = numeros[0].id;
+    } else {
+      return {
+        ok: false,
+        error:
+          numeros.length === 0
+            ? "La cuenta de WhatsApp autorizada no tiene ningún número."
+            : "La cuenta de WhatsApp autorizada tiene varios números y Meta no dijo cuál. Avisa a Vercomi.",
+      };
     }
-    const ficha = await leerNumero(token, p.phone_number_id);
+    const ficha = await leerNumero(token, pnid);
 
-    // 4) Fila de conexión (pendiente) y secretos cifrados.
-    const pin = generarPin(randomBytes);
+    // 4) Fila de conexión (pendiente) y secretos cifrados. Un alta nueva
+    //    deja a cero las sincronizaciones: Meta las admite otra vez.
+    const pin = p.coexistencia ? null : generarPin(randomBytes);
     const ahora = new Date().toISOString();
     const { error: eCon } = await db.from("captacion_conexiones").upsert(
       {
@@ -134,13 +167,18 @@ export async function conectarWhatsappAction(input: unknown): Promise<Resultado>
         estado: "pendiente",
         waba_id: p.waba_id,
         business_id: p.business_id ?? null,
-        phone_number_id: p.phone_number_id,
+        phone_number_id: pnid,
         numero_e164: aE164(ficha.display_phone_number),
         nombre_visible: ficha.verified_name ?? null,
         calidad: traducirCalidad(ficha.quality_rating),
         limite_diario_meta: traducirLimite(ficha.whatsapp_business_manager_messaging_limit) ?? 250,
         envios_activos: false,
         ia_activa: false,
+        coexistencia: p.coexistencia,
+        sync_contactos_at: null,
+        sync_contactos_request_id: null,
+        sync_historial_at: null,
+        sync_historial_request_id: null,
         conectada_por: session.user_id,
         ultimo_error: null,
       },
@@ -157,15 +195,29 @@ export async function conectarWhatsappAction(input: unknown): Promise<Resultado>
         company_id: companyId,
         token_cifrado: encryptSecret(token),
         token_rotado_at: ahora,
-        pin_registro_cifrado: encryptSecret(pin),
+        pin_registro_cifrado: pin ? encryptSecret(pin) : null,
       },
       { onConflict: "company_id" },
     );
     if (eSec) throw new Error(eSec.message);
 
-    // 5) Webhooks de esa WABA hacia la app de Vercomi. 6) Registro en la Cloud API.
+    // 5) Webhooks de esa WABA hacia la app de Vercomi.
     await suscribirAppAWaba(token, p.waba_id);
-    await registrarNumero(token, p.phone_number_id, pin);
+
+    // 6) Número solo API: registro en la Cloud API. Coexistencia: no se registra.
+    const avisos: string[] = [];
+    if (pin) {
+      await registrarNumero(token, pnid, pin);
+    } else {
+      try {
+        const est = await leerEstadoCoexistencia(token, pnid);
+        if (est.is_on_biz_app !== true) {
+          avisos.push("Meta no marca el número como «en la app de WhatsApp Business». Revísalo en el móvil.");
+        }
+      } catch (e) {
+        avisos.push(`No se pudo comprobar la coexistencia (${textoErrorMeta(e)}).`);
+      }
+    }
 
     // 7) Activa.
     const { error: eAct } = await db
@@ -174,16 +226,35 @@ export async function conectarWhatsappAction(input: unknown): Promise<Resultado>
       .eq("company_id", companyId);
     if (eAct) throw new Error(eAct.message);
 
-    // 8) Plantillas. Si falla, la conexión ya vale: se avisa y se puede repetir.
-    let aviso: string | undefined;
+    // 8) Coexistencia: contactos y luego historial (llegan por webhook).
+    if (p.coexistencia) {
+      const pasos = [
+        { tipo: "smb_app_state_sync", at: "sync_contactos_at", rid: "sync_contactos_request_id", nombre: "los contactos" },
+        { tipo: "history", at: "sync_historial_at", rid: "sync_historial_request_id", nombre: "el historial de chats" },
+      ] as const;
+      for (const paso of pasos) {
+        try {
+          const requestId = await pedirSincronizacionApp(token, pnid, paso.tipo);
+          const { error: eSync } = await db
+            .from("captacion_conexiones")
+            .update({ [paso.at]: new Date().toISOString(), [paso.rid]: requestId })
+            .eq("company_id", companyId);
+          if (eSync) avisos.push(`Meta aceptó ${paso.nombre}, pero no se pudo apuntar aquí (${eSync.message}).`);
+        } catch (e) {
+          avisos.push(`No se pudieron pedir ${paso.nombre} a Meta (${textoErrorMeta(e)}).`);
+        }
+      }
+    }
+
+    // 9) Plantillas. Si falla, la conexión ya vale: se avisa y se puede repetir.
     try {
       await sincronizarPlantillas(companyId);
     } catch (e) {
-      aviso = `Conectado, pero no se pudieron traer las plantillas: ${textoErrorMeta(e)}`;
+      avisos.push(`No se pudieron traer las plantillas: ${textoErrorMeta(e)}`);
     }
 
     revalidatePath(RUTA);
-    return { ok: true, aviso };
+    return { ok: true, aviso: avisos.length ? `Conectado, pero: ${avisos.join(" ")}` : undefined };
   } catch (e) {
     const error = textoErrorMeta(e);
     if (companyId) {
@@ -291,18 +362,27 @@ export async function desconectarWhatsappAction(): Promise<Resultado> {
     const db = admin();
     const { data: con } = await db
       .from("captacion_conexiones")
-      .select("phone_number_id")
+      .select("phone_number_id, coexistencia")
       .eq("company_id", session.company_id)
       .maybeSingle();
     if (!con) return { ok: false, error: "No hay nada conectado." };
 
     let aviso: string | undefined;
-    const pnid = (con as { phone_number_id: string | null }).phone_number_id;
-    try {
-      const token = await obtenerToken(session.company_id);
-      if (token && pnid) await desregistrarNumero(token, pnid);
-    } catch (e) {
-      aviso = `Desconectado aquí, pero Meta no confirmó la baja del número (${textoErrorMeta(e)}). Revísalo en el administrador de WhatsApp.`;
+    const { phone_number_id: pnid, coexistencia } = con as {
+      phone_number_id: string | null;
+      coexistencia: boolean;
+    };
+    if (coexistencia) {
+      // Meta no admite /deregister con coexistencia: la baja se hace en la app.
+      aviso =
+        "Desconectado aquí. Para soltarlo también en Meta, en el móvil: WhatsApp Business → Ajustes → Cuenta → Plataforma empresarial → Desconectar cuenta.";
+    } else {
+      try {
+        const token = await obtenerToken(session.company_id);
+        if (token && pnid) await desregistrarNumero(token, pnid);
+      } catch (e) {
+        aviso = `Desconectado aquí, pero Meta no confirmó la baja del número (${textoErrorMeta(e)}). Revísalo en el administrador de WhatsApp.`;
+      }
     }
 
     // Primero se apaga todo; después se borra el token.

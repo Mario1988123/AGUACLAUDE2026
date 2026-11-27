@@ -10,7 +10,8 @@ import { aplanarCarga, traducirEstadoPlantilla, type CargaMeta, type EventoPlano
  * en el momento lo que es barato y no manda nada a nadie:
  *  · message_template_status_update → estado de la plantilla
  *  · account_update con baja o restricción → apaga los envíos
- * Los mensajes y estados se quedan con procesado_at nulo: los recogerá la
+ * Los mensajes y estados (y, con coexistencia, smb_message_echoes, history y
+ * smb_app_state_sync) se quedan con procesado_at nulo: los recogerá la
  * bandeja en la fase 2.
  */
 
@@ -27,6 +28,16 @@ const BAJAS = new Set([
   "PARTNER_REMOVED",
   "PARTNER_APP_UNINSTALLED",
 ]);
+/** disconnection_info.reason de PARTNER_REMOVED (coexistencia, comprobado el 2026-11-27). */
+const MOTIVOS_BAJA: Record<string, string> = {
+  ACCOUNT_DISCONNECTED: "desconectado desde la app del móvil",
+  BUSINESS_DOWNGRADE: "la cuenta dejó de ser de WhatsApp Business",
+  CHANGE_NUMBER: "se cambió el número en la app",
+  COMPANION_INACTIVITY: "un dispositivo vinculado lleva ~30 días sin usarse",
+  PRIMARY_INACTIVITY: "el móvil lleva ~14 días sin abrir WhatsApp Business",
+  USER_RE_REGISTERED: "el número se volvió a registrar en la app",
+};
+
 /** Eventos que dejan la cuenta suspendida hasta que lo mire una persona. */
 const RESTRICCIONES = new Set(["ACCOUNT_RESTRICTION", "ACCOUNT_VIOLATION", "DISABLED_UPDATE"]);
 
@@ -154,9 +165,18 @@ async function procesarEnElMomento(companyId: string, e: EventoPlano): Promise<b
   if (e.campo === "account_update") {
     const evento = typeof v.event === "string" ? v.event.toUpperCase() : "";
     if (BAJAS.has(evento)) {
+      // Con coexistencia, PARTNER_REMOVED trae el motivo (p. ej. PRIMARY_INACTIVITY:
+      // el móvil lleva ~14 días sin abrir WhatsApp Business).
+      const info = (v.disconnection_info ?? {}) as Record<string, unknown>;
+      const motivo = typeof info.reason === "string" ? info.reason : null;
+      const texto = MOTIVOS_BAJA[motivo ?? ""] ?? (motivo ? `motivo ${motivo}` : null);
       const { error } = await db
         .from("captacion_conexiones")
-        .update({ estado: "desconectada", envios_activos: false, ultimo_error: `Meta: ${evento}` })
+        .update({
+          estado: "desconectada",
+          envios_activos: false,
+          ultimo_error: texto ? `Meta: ${evento} (${texto})` : `Meta: ${evento}`,
+        })
         .eq("company_id", companyId);
       if (error) throw new Error(error.message);
       return true;

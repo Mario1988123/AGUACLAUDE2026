@@ -14,6 +14,10 @@ export interface ConexionCaptacion {
   presentacion_empresa: string | null;
   temas_prohibidos: string | null;
   conectada_at: string | null;
+  /** El número sigue también en la app de WhatsApp Business. */
+  coexistencia: boolean;
+  sync_contactos_at: string | null;
+  sync_historial_at: string | null;
   ultimo_webhook_at: string | null;
   ultimo_error: string | null;
 }

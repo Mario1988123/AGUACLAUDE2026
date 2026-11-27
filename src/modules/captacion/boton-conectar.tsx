@@ -14,6 +14,13 @@ import { conectarWhatsappAction } from "./conexion-actions";
  *  · waba_id y phone_number_id en un evento `message` WA_EMBEDDED_SIGNUP
  * Cuando están las dos, se mandan al servidor, que comprueba los ids con el
  * token antes de guardar nada.
+ *
+ * Coexistencia (onboarding-business-app-users, comprobado el 2026-11-27): con
+ * featureType "whatsapp_business_app_onboarding" Meta deja conectar el número
+ * que ya está en la app de WhatsApp Business (se escanea un QR en el móvil).
+ * Al acabar manda FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING, documentado solo
+ * con waba_id: el servidor saca el número de la WABA. Decide el evento que
+ * llega, no el botón pulsado.
  */
 
 interface FBLoginResponse {
@@ -33,8 +40,13 @@ declare global {
 
 interface DatosSesion {
   waba_id: string;
-  phone_number_id: string;
+  phone_number_id: string | null;
   business_id: string | null;
+  coexistencia: boolean;
+}
+
+function texto(v: unknown): string | null {
+  return typeof v === "string" && v !== "" ? v : null;
 }
 
 const SDK_URL = "https://connect.facebook.net/en_US/sdk.js";
@@ -72,12 +84,17 @@ export function BotonConectarWhatsapp({
   appId,
   configId,
   graphVersion,
+  coexistencia = false,
   textoBoton = "Conectar WhatsApp",
+  variante = "default",
 }: {
   appId: string;
   configId: string;
   graphVersion: string;
+  /** true: abre el alta del número que ya está en la app de WhatsApp Business. */
+  coexistencia?: boolean;
   textoBoton?: string;
+  variante?: "default" | "outline";
 }) {
   const [abierto, setAbierto] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -93,8 +110,8 @@ export function BotonConectarWhatsapp({
       const r = await conectarWhatsappAction(datos);
       setAbierto(false);
       if (!r.ok) toast.error(r.error);
-      else if (r.aviso) toast.warning(r.aviso);
-      else toast.success("WhatsApp conectado");
+      else if (r.aviso) toast.warning(r.aviso, { duration: 15_000 });
+      else toast.success(datos.coexistencia ? "WhatsApp conectado. Sigue también en la app del móvil." : "WhatsApp conectado");
     });
   }, []);
 
@@ -114,13 +131,25 @@ export function BotonConectarWhatsapp({
       };
       if (d?.type !== "WA_EMBEDDED_SIGNUP") return;
       if (d.event === "FINISH" && d.data) {
-        const waba = d.data.waba_id;
-        const pnid = d.data.phone_number_id;
-        if (typeof waba === "string" && typeof pnid === "string") {
+        const waba = texto(d.data.waba_id);
+        const pnid = texto(d.data.phone_number_id);
+        if (waba && pnid) {
           sesion.current = {
             waba_id: waba,
             phone_number_id: pnid,
-            business_id: typeof d.data.business_id === "string" ? d.data.business_id : null,
+            business_id: texto(d.data.business_id),
+            coexistencia: false,
+          };
+          intentarEnviar();
+        }
+      } else if (d.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING" && d.data) {
+        const waba = texto(d.data.waba_id);
+        if (waba) {
+          sesion.current = {
+            waba_id: waba,
+            phone_number_id: texto(d.data.phone_number_id),
+            business_id: texto(d.data.business_id),
+            coexistencia: true,
           };
           intentarEnviar();
         }
@@ -131,9 +160,6 @@ export function BotonConectarWhatsapp({
         setAbierto(false);
         const msg = typeof d.data?.error_message === "string" ? d.data.error_message : "error desconocido";
         toast.error(`Meta devolvió un error: ${msg}`);
-      } else if (d.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
-        setAbierto(false);
-        toast.error("Ese número está en la app de WhatsApp Business. Aquí se conecta solo a la API.");
       }
     }
     window.addEventListener("message", alMensaje);
@@ -162,7 +188,9 @@ export function BotonConectarWhatsapp({
           config_id: configId,
           response_type: "code",
           override_default_response_type: true,
-          extras: { setup: {} },
+          extras: coexistencia
+            ? { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" }
+            : { setup: {} },
         },
       );
     } catch (e) {
@@ -173,7 +201,7 @@ export function BotonConectarWhatsapp({
 
   const ocupado = abierto || pending;
   return (
-    <Button onClick={lanzar} disabled={ocupado} className="h-12 w-full sm:w-auto">
+    <Button onClick={lanzar} disabled={ocupado} variant={variante} className="h-12 w-full sm:w-auto">
       {ocupado ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <MessageCircle className="mr-2 h-4 w-4" />}
       {pending ? "Conectando…" : abierto ? "Termina en la ventana de Meta…" : textoBoton}
     </Button>

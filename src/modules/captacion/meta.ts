@@ -139,7 +139,42 @@ export async function registrarNumero(token: string, phoneNumberId: string, pin:
 }
 
 /**
- * Da de baja el número de la Cloud API (desconexión). [NV] El endpoint
+ * Coexistencia (comprobado el 2026-11-27 en embedded-signup/custom-flows/
+ * onboarding-business-app-users). Con el número en la app de WhatsApp
+ * Business se espera is_on_biz_app = true y platform_type = "CLOUD_API".
+ */
+export async function leerEstadoCoexistencia(
+  token: string,
+  phoneNumberId: string,
+): Promise<{ is_on_biz_app?: boolean; platform_type?: string }> {
+  return llamar(encodeURIComponent(phoneNumberId), {
+    token,
+    query: { fields: "is_on_biz_app,platform_type" },
+  });
+}
+
+/**
+ * Pide a Meta los contactos («smb_app_state_sync») o el historial de chats
+ * («history») de la app. Llegan después por webhook. Cada uno se puede pedir
+ * UNA sola vez por alta y dentro de las 24 h; repetirlo exige desconectar y
+ * volver a pasar por el alta. Devuelve el request_id (útil para soporte).
+ */
+export async function pedirSincronizacionApp(
+  token: string,
+  phoneNumberId: string,
+  tipo: "smb_app_state_sync" | "history",
+): Promise<string | null> {
+  const r = await llamar<{ request_id?: string }>(`${encodeURIComponent(phoneNumberId)}/smb_app_data`, {
+    metodo: "POST",
+    token,
+    cuerpo: { messaging_product: "whatsapp", sync_type: tipo },
+  });
+  return r?.request_id ?? null;
+}
+
+/**
+ * Da de baja el número de la Cloud API (desconexión). No vale con
+ * coexistencia: Meta no admite /deregister en esos números. [NV] El endpoint
  * `/deregister` no estaba entre lo verificado el 2026-11-25: quien lo llama
  * trata el fallo como aviso, no como error.
  */
