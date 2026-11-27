@@ -20,7 +20,8 @@ import {
   suscribirAppAWaba,
 } from "./meta";
 import { aE164, generarPin, traducirCalidad, traducirLimite } from "./logica";
-import type { EstadoCaptacion } from "./tipos";
+import type { EstadoCaptacion, PlantillaCaptacion } from "./tipos";
+import { analizarPlantilla, plantillaSirveParaCaptacion, plantillaSirveParaDocumento } from "./envios-logica";
 
 type Resultado = { ok: true; aviso?: string } | { ok: false; error: string };
 
@@ -57,13 +58,13 @@ export async function obtenerEstadoCaptacion(): Promise<EstadoCaptacion | null> 
     db
       .from("captacion_conexiones")
       .select(
-        "estado, waba_id, phone_number_id, numero_e164, nombre_visible, calidad, limite_diario_meta, margen_seguridad, negocio_verificado, envios_activos, tope_gasto_mensual_cents, retencion_dias, presentacion_empresa, temas_prohibidos, conectada_at, coexistencia, sync_contactos_at, sync_historial_at, ultimo_webhook_at, ultimo_error",
+        "estado, waba_id, phone_number_id, numero_e164, nombre_visible, calidad, limite_diario_meta, margen_seguridad, negocio_verificado, envios_activos, tope_gasto_mensual_cents, retencion_dias, presentacion_empresa, temas_prohibidos, url_privacidad, propuesta_precios, conectada_at, coexistencia, sync_contactos_at, sync_historial_at, ultimo_webhook_at, ultimo_error",
       )
       .eq("company_id", session.company_id)
       .maybeSingle(),
     db
       .from("captacion_plantillas")
-      .select("id, nombre, idioma, categoria, estado, estado_meta, motivo_rechazo, uso, sincronizada_at")
+      .select("id, nombre, idioma, categoria, estado, estado_meta, motivo_rechazo, uso, sincronizada_at, componentes")
       .eq("company_id", session.company_id)
       .order("nombre"),
   ]);
@@ -78,7 +79,23 @@ export async function obtenerEstadoCaptacion(): Promise<EstadoCaptacion | null> 
     },
     enviosPlataforma: process.env.CAPTACION_ENVIOS_ACTIVOS === "1",
     conexion: (con as EstadoCaptacion["conexion"]) ?? null,
-    plantillas: (plantillas ?? []) as EstadoCaptacion["plantillas"],
+    plantillas: (
+      (plantillas ?? []) as Array<
+        Omit<PlantillaCaptacion, "cuerpo" | "sirveCaptacion" | "motivoNoSirve" | "sirveDocumento"> & { componentes: unknown }
+      >
+    ).map(({ componentes, ...p }) => {
+      const a = analizarPlantilla(componentes);
+      const sirve = plantillaSirveParaCaptacion(a);
+      const doc = plantillaSirveParaDocumento(a);
+      return {
+        ...p,
+        cuerpo: a.cuerpo,
+        sirveCaptacion: sirve.ok,
+        sirveDocumento: doc.ok,
+        // Una de documento no «falla» como captación: tiene otro uso.
+        motivoNoSirve: sirve.ok || doc.ok ? null : sirve.motivo,
+      };
+    }),
   };
 }
 
@@ -279,6 +296,14 @@ const ajustesSchema = z.object({
   retencion_dias: z.number().int().min(30).max(3650),
   presentacion_empresa: z.string().trim().max(4000).nullable(),
   temas_prohibidos: z.string().trim().max(4000).nullable(),
+  url_privacidad: z
+    .string()
+    .trim()
+    .max(500)
+    .url("La dirección de privacidad no es válida.")
+    .refine((v) => v.startsWith("https://"), "La dirección de privacidad tiene que empezar por https://")
+    .nullable(),
+  propuesta_precios: z.array(z.enum(["cash", "renting", "rental"])).max(3),
 });
 
 export type AjustesCaptacionInput = z.infer<typeof ajustesSchema>;

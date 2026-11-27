@@ -13,6 +13,10 @@ export interface ConexionCaptacion {
   retencion_dias: number;
   presentacion_empresa: string | null;
   temas_prohibidos: string | null;
+  /** Política de privacidad de la empresa (pie de /p/). Vacía: sin enlace. */
+  url_privacidad: string | null;
+  /** Precios que enseña la propuesta (cash, renting, rental). Vacío: ninguno. */
+  propuesta_precios: Array<"cash" | "renting" | "rental">;
   conectada_at: string | null;
   /** El número sigue también en la app de WhatsApp Business. */
   coexistencia: boolean;
@@ -32,6 +36,13 @@ export interface PlantillaCaptacion {
   motivo_rechazo: string | null;
   uso: "primer_contacto" | "recordatorio" | "documento" | null;
   sincronizada_at: string | null;
+  /** Texto del cuerpo, con {{1}} sin sustituir. */
+  cuerpo: string | null;
+  /** Tiene los botones Sí/No y como mucho el nombre del negocio como variable. */
+  sirveCaptacion: boolean;
+  motivoNoSirve: string | null;
+  /** Fase 8: lleva un documento en la cabecera y sirve para mandar la propuesta. */
+  sirveDocumento: boolean;
 }
 
 export interface EstadoCaptacion {

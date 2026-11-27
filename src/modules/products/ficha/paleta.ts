@@ -176,9 +176,11 @@ const BLANCO = "#ffffff";
 
 /**
  * Oscurece un color en pasos de 0,01 de L hasta llegar al contraste pedido
- * sobre papel. Devuelve el color y cuántos pasos hicieron falta.
+ * sobre `fondo` (blanco por defecto). Devuelve el color y cuántos pasos
+ * hicieron falta. Exportada para la propuesta de captación, que mide contra
+ * papeles teñidos (docs/DISENO_PROPUESTA_CAPTACION.md §4.1).
  */
-function oscurecerHasta(hex: string, minimo: number, fondo = BLANCO): { hex: string; pasos: number } {
+export function oscurecerHasta(hex: string, minimo: number, fondo = BLANCO): { hex: string; pasos: number } {
   const o = hexAOklch(hex);
   let actual = normalizarHex(hex)!;
   let pasos = 0;

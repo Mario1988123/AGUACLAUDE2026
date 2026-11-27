@@ -27,6 +27,8 @@ export const LEAD_ORIGIN = [
   // de medir si la IA aporta leads o solo ruido.
   "inbound_call",
   "ia_voz",
+  // Lo pone el módulo de captación por WhatsApp con el primer «Sí» (decisión 4).
+  "whatsapp",
   "other",
 ] as const;
 export const LEAD_POTENTIAL = ["A", "B", "C", "unknown"] as const;
@@ -52,6 +54,7 @@ export const ORIGIN_LABEL: Record<(typeof LEAD_ORIGIN)[number], string> = {
   social: "Redes sociales",
   inbound_call: "Llamada entrante (IA)",
   ia_voz: "Agente de voz IA",
+  whatsapp: "WhatsApp (captación)",
   other: "Otro",
 };
 

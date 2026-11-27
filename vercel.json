@@ -48,6 +48,10 @@
     {
       "path": "/api/cron/captacion-diario",
       "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/captacion-envios",
+      "schedule": "*/10 6-19 * * 1-6"
     }
   ]
 }

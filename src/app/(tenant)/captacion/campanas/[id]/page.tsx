@@ -2,8 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { assertCaptacionActiva } from "@/modules/captacion/guard";
+import { datosMando } from "@/modules/captacion/mando-servidor";
+import { PanelMando } from "@/modules/captacion/mando-ui";
 import { obtenerCampana } from "@/modules/captacion/campanas-actions";
-import { AccionesBusqueda, TarjetaProspecto } from "@/modules/captacion/campanas-ui";
+import { AccionesBusqueda, MandoEnvios, TarjetaProspecto } from "@/modules/captacion/campanas-ui";
+import { obtenerPropuestaCampana } from "@/modules/captacion/propuesta-actions";
+import { MandoPropuesta } from "@/modules/captacion/propuesta-mando-ui";
 import { describirZona } from "@/modules/captacion/busqueda-logica";
 import { StatusPill } from "@/shared/components/status-pill";
 import { cn } from "@/shared/lib/utils";
@@ -15,7 +19,15 @@ export const maxDuration = 60;
 const ETAPAS = [
   { clave: "nuevo", label: "Nuevos" },
   { clave: "revisar", label: "Revisar" },
+  { clave: "en_cola", label: "En cola" },
+  { clave: "contactado", label: "Contactados" },
+  { clave: "recordado", label: "Recordados" },
+  { clave: "interesado", label: "Dijeron sí" },
+  { clave: "conversando", label: "Escribiendo" },
+  { clave: "caliente", label: "Quieren llamada" },
+  { clave: "sin_respuesta", label: "Sin respuesta" },
   { clave: "descartado", label: "Descartados" },
+  { clave: "fallido", label: "Sin WhatsApp" },
 ] as const;
 
 const ESTADO_BUSQUEDA: Record<string, { label: string; tone: "info" | "processing" | "success" | "rejected" }> = {
@@ -32,13 +44,15 @@ export default async function CampanaPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ etapa?: string }>;
 }) {
-  await assertCaptacionActiva();
+  const session = await assertCaptacionActiva();
   const { id } = await params;
   const { etapa: e } = await searchParams;
   const etapa = ETAPAS.some((x) => x.clave === e) ? (e as string) : "nuevo";
-  const datos = await obtenerCampana(id, etapa);
+  const [datos, propuesta] = await Promise.all([obtenerCampana(id, etapa), obtenerPropuestaCampana(id)]);
   if (!datos) notFound();
   const { campana, busquedas, prospectos, recuento } = datos;
+  // obtenerCampana ya ha comprobado que es gestor y que la campaña es de su empresa.
+  const mando = await datosMando(session.company_id, campana.id);
   const hayPendientes = busquedas.some((b) => b.estado === "pendiente" || b.estado === "en_curso");
 
   return (
@@ -50,6 +64,12 @@ export default async function CampanaPage({
         <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{campana.nombre}</h1>
         <p className="text-sm text-muted-foreground">{campana.zonas.map(describirZona).join(", ")}</p>
       </div>
+
+      <MandoEnvios campanaId={campana.id} envios={datos.envios} nuevos={recuento.nuevo ?? 0} />
+
+      <PanelMando datos={mando} campanaId={campana.id} />
+
+      {propuesta ? <MandoPropuesta campanaId={campana.id} datos={propuesta} /> : null}
 
       <section className="space-y-4 rounded-xl border border-border p-4 sm:p-5">
         <h2 className="text-base font-bold">Búsqueda de negocios</h2>
@@ -86,7 +106,8 @@ export default async function CampanaPage({
 
       <section className="space-y-3">
         <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" aria-label="Etapas">
-          {ETAPAS.map((x) => (
+          {/* Las etapas vacías no ocupan sitio (salvo Nuevos, Revisar y la abierta). */}
+          {ETAPAS.filter((x) => x.clave === etapa || x.clave === "nuevo" || x.clave === "revisar" || (recuento[x.clave] ?? 0) > 0).map((x) => (
             <Link
               key={x.clave}
               href={`/captacion/campanas/${campana.id}?etapa=${x.clave}` as never}

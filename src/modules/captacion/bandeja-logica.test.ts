@@ -11,9 +11,23 @@ import {
   validarTextoSaliente,
   ventanaAbierta,
   waIdValido,
+  debeReabrirConversacion,
 } from "./bandeja-logica";
 
 const AHORA = new Date("2026-11-27T10:00:00Z");
+
+describe("fase 8: reabrir una conversación cerrada", () => {
+  it("se reabre si vuelve a escribir y no está bloqueado", () => {
+    expect(debeReabrirConversacion({ modo: "cerrada", bloqueado: false, cierraEsteMensaje: false })).toBe(true);
+  });
+  it("no se reabre si está bloqueado, si el mensaje es el que la cierra o si no está cerrada", () => {
+    expect(debeReabrirConversacion({ modo: "cerrada", bloqueado: true, cierraEsteMensaje: false })).toBe(false);
+    expect(debeReabrirConversacion({ modo: "cerrada", bloqueado: false, cierraEsteMensaje: true })).toBe(false);
+    expect(debeReabrirConversacion({ modo: "humano", bloqueado: false, cierraEsteMensaje: false })).toBe(false);
+    expect(debeReabrirConversacion({ modo: "ia", bloqueado: false, cierraEsteMensaje: false })).toBe(false);
+    expect(debeReabrirConversacion({ modo: null, bloqueado: false, cierraEsteMensaje: false })).toBe(false);
+  });
+});
 
 describe("extraerEntrantes", () => {
   it("texto con contacto (nombre de perfil, BSUID y teléfono)", () => {

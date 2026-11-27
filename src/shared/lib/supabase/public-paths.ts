@@ -43,6 +43,10 @@ export const PUBLIC_PATHS: readonly string[] = [
   "/portal/salir",
   // Política de privacidad: la exigen App Store y Google Play sin sesión.
   "/privacidad",
+  // Propuesta de captación por WhatsApp: /p/[codigo], /p/[codigo]/pdf y la
+  // imagen de vista previa /p/og/[empresa]. La credencial es el código (60
+  // bits) y la página comprueba caducidad y revocación antes de enseñar nada.
+  "/p/",
 ];
 
 /** ¿Se puede abrir esta ruta sin sesión? Comparación por prefijo. */

@@ -3,15 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ExternalLink, Loader2, Play, Search } from "lucide-react";
+import { ExternalLink, ListPlus, Loader2, Pause, Play, Search, Send } from "lucide-react";
+import { StatusPill } from "@/shared/components/status-pill";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import {
   buscarNegociosAction,
   crearCampanaAction,
+  encolarProspectosAction,
+  guardarRitmoCampanaAction,
   marcarProspectoAction,
   procesarAhoraAction,
+  type EnviosCampana,
   type ProspectoFila,
   type TipologiaFila,
 } from "./campanas-actions";
@@ -311,5 +315,154 @@ export function TarjetaProspecto({ p }: { p: ProspectoFila }) {
         </div>
       ) : null}
     </li>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Envíos de la campaña (fase 3)
+// -----------------------------------------------------------------------------
+
+const ESTADO_CAMPANA: Record<string, { label: string; tone: "success" | "onhold" | "neutral" | "info" }> = {
+  borrador: { label: "Sin lanzar", tone: "neutral" },
+  activa: { label: "Enviando", tone: "success" },
+  pausada: { label: "En pausa", tone: "onhold" },
+  terminada: { label: "Terminada", tone: "neutral" },
+};
+
+const DIAS = ["", "L", "M", "X", "J", "V", "S", "D"];
+
+export function MandoEnvios({
+  campanaId,
+  envios: e,
+  nuevos,
+}: {
+  campanaId: string;
+  envios: EnviosCampana;
+  nuevos: number;
+}) {
+  const router = useRouter();
+  const [encolando, startEncolar] = useTransition();
+  const [guardando, startGuardar] = useTransition();
+  const [tope, setTope] = useState(String(e.topeDiario));
+  const activa = e.estado === "activa";
+  const topeNum = Number.parseInt(tope, 10);
+  const topeValido = Number.isInteger(topeNum) && topeNum >= 1 && topeNum <= 200;
+
+  const avisos: string[] = [];
+  if (!e.plantillaPrimer) avisos.push("Falta una plantilla aprobada para el primer mensaje (en Configurar el número).");
+  if (!e.enviosEncendidos) avisos.push("Los mensajes en frío están apagados en la configuración del número.");
+  if (!e.enviosPlataforma) avisos.push("Vercomi aún no ha abierto los envíos en la plataforma.");
+
+  function guardar(estado: "activa" | "pausada") {
+    if (!topeValido) {
+      toast.error("El tope diario va de 1 a 200.");
+      return;
+    }
+    startGuardar(async () => {
+      const r = await guardarRitmoCampanaAction({ campanaId, estado, tope_diario: topeNum });
+      if (!r.ok) toast.error(r.error);
+      else toast.success(estado === "activa" ? "Campaña lanzada: saldrá poco a poco dentro del horario." : "Campaña en pausa");
+      router.refresh();
+    });
+  }
+
+  return (
+    <section className="space-y-4 rounded-xl border border-border p-4 sm:p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-bold">Envíos por WhatsApp</h2>
+        <StatusPill {...(ESTADO_CAMPANA[e.estado] ?? { label: e.estado, tone: "neutral" as const })} />
+      </div>
+
+      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+        <div className="rounded-lg bg-muted/50 p-3">
+          <dt className="text-xs text-muted-foreground">Últimas 24 h</dt>
+          <dd className="text-lg font-bold tabular-nums">
+            {e.enviados24h} <span className="text-sm font-normal text-muted-foreground">de {e.topeHoy}</span>
+          </dd>
+        </div>
+        <div className="rounded-lg bg-muted/50 p-3">
+          <dt className="text-xs text-muted-foreground">En cola</dt>
+          <dd className="text-lg font-bold tabular-nums">{e.enCola}</dd>
+        </div>
+        <div className="col-span-2 rounded-lg bg-muted/50 p-3">
+          <dt className="text-xs text-muted-foreground">Horario (hora de Madrid)</dt>
+          <dd className="font-medium tabular-nums">
+            {e.horario.dias.map((d) => DIAS[d]).join(" ")} · {e.horario.desde}–{e.horario.hasta}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="space-y-1 text-xs text-muted-foreground">
+        <p>Primer mensaje: {e.plantillaPrimer ?? "sin plantilla"}</p>
+        <p>Recordatorio: {e.plantillaRecordatorio ?? "sin plantilla (no se manda)"}</p>
+        {e.motivoPausa && !activa ? <p>Motivo de la pausa: {e.motivoPausa}</p> : null}
+      </div>
+
+      {avisos.length > 0 ? (
+        <ul className="space-y-1 rounded-lg bg-warning/15 px-3 py-2 text-xs font-medium">
+          {avisos.map((a) => (
+            <li key={a}>{a}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="tope">Tope de mensajes al día (máx. 200)</Label>
+        <Input
+          id="tope"
+          inputMode="numeric"
+          value={tope}
+          onChange={(ev) => setTope(ev.target.value.replace(/\D/g, ""))}
+          className="text-base sm:max-w-40"
+        />
+        <p className="text-xs text-muted-foreground">
+          Los primeros días sale menos (50, luego 100) para que Meta no marque el número. Nunca pasa
+          del límite de Meta menos el margen.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button
+          variant="outline"
+          className="h-12"
+          disabled={encolando || nuevos === 0}
+          onClick={() =>
+            startEncolar(async () => {
+              const r = await encolarProspectosAction(campanaId);
+              if (!r.ok) toast.error(r.error);
+              else if (r.encolados === 0 && r.bloqueados === 0) toast.info("No hay negocios nuevos que poner en cola.");
+              else
+                toast.success(
+                  `${r.encolados} en cola${r.bloqueados ? ` · ${r.bloqueados} descartados por estar bloqueados` : ""}`,
+                );
+              router.refresh();
+            })
+          }
+        >
+          {encolando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ListPlus className="mr-2 h-4 w-4" />}
+          Poner en cola los nuevos ({nuevos})
+        </Button>
+        {activa ? (
+          <Button variant="outline" className="h-12" disabled={guardando} onClick={() => guardar("pausada")}>
+            {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pause className="mr-2 h-4 w-4" />}
+            Pausar
+          </Button>
+        ) : (
+          <Button className="h-12" disabled={guardando || e.estado === "terminada"} onClick={() => guardar("activa")}>
+            {guardando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+            {e.lanzadaAt ? "Reanudar envíos" : "Lanzar envíos"}
+          </Button>
+        )}
+        {activa && String(e.topeDiario) !== tope ? (
+          <Button variant="ghost" className="h-12" disabled={guardando} onClick={() => guardar("activa")}>
+            Guardar tope
+          </Button>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Nada sale al pulsar: un proceso automático los manda cada 10 minutos dentro del horario y
+        vuelve a mirar la lista de bloqueo justo antes de cada uno.
+      </p>
+    </section>
   );
 }

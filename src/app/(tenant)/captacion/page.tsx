@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireModuleAccess } from "@/shared/lib/auth/module-guard";
-import { assertCaptacionActiva, puedeLeerConfig } from "@/modules/captacion/guard";
+import { assertCaptacionActiva, esEquipoCaptacion, puedeLeerConfig } from "@/modules/captacion/guard";
 import { obtenerEstadoCaptacion } from "@/modules/captacion/conexion-actions";
 import { listarConversaciones } from "@/modules/captacion/bandeja-actions";
+import { datosMando } from "@/modules/captacion/mando-servidor";
+import { PanelMando } from "@/modules/captacion/mando-ui";
 import { StatusPill } from "@/shared/components/status-pill";
 import { Button } from "@/shared/ui/button";
 
@@ -23,11 +25,15 @@ export default async function CaptacionPage() {
     "telemarketer",
   ]);
   const veConfig = puedeLeerConfig(session);
+  // Fase 8: bloqueos y FAQ del asistente, para quien puede verlos.
+  const veEquipo = esEquipoCaptacion(session);
   const estado = veConfig ? await obtenerEstadoCaptacion() : null;
   if (veConfig && !estado) redirect("/dashboard");
   const c = estado?.conexion ?? null;
   const bandeja = await listarConversaciones("todas");
   const sinLeer = (bandeja?.conversaciones ?? []).filter((x) => x.noLeidos > 0).length;
+  // Fase 7: embudo, gasto del mes y pausas, solo para quien gestiona.
+  const mando = veConfig ? await datosMando(session.company_id, null) : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -46,6 +52,25 @@ export default async function CaptacionPage() {
           <span className="text-sm text-muted-foreground">Al día</span>
         )}
       </Link>
+
+      {veEquipo ? (
+        <nav aria-label="Más de captación" className="grid gap-3 sm:grid-cols-2">
+          <Link
+            href={"/captacion/bloqueos" as never}
+            className="flex min-h-14 flex-col justify-center gap-0.5 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted sm:px-5"
+          >
+            <span className="font-medium">Bloqueos</span>
+            <span className="text-sm text-muted-foreground">A quién no se escribe</span>
+          </Link>
+          <Link
+            href={"/configuracion/captacion/faq" as never}
+            className="flex min-h-14 flex-col justify-center gap-0.5 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted sm:px-5"
+          >
+            <span className="font-medium">FAQ del asistente</span>
+            <span className="text-sm text-muted-foreground">Lo que sabe y cómo contesta</span>
+          </Link>
+        </nav>
+      ) : null}
 
       {veConfig ? (
         <section className="space-y-3 rounded-xl border border-border p-4 sm:p-5">
@@ -67,6 +92,8 @@ export default async function CaptacionPage() {
           </div>
         </section>
       ) : null}
+
+      {mando ? <PanelMando datos={mando} /> : null}
     </div>
   );
 }

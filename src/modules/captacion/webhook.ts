@@ -2,6 +2,9 @@ import "server-only";
 import { admin } from "./servidor";
 import { procesarContactosApp, procesarEcos, procesarHistorial, procesarMessages } from "./bandeja-servidor";
 import { aplanarCarga, traducirEstadoPlantilla, type CargaMeta, type EventoPlano } from "./logica";
+import { extraerEntrantes, extraerEstados } from "./bandeja-logica";
+import { aplicarEstadosEnvios } from "./envios-servidor";
+import { procesarRespuestas } from "./respuestas";
 
 /**
  * Entrada del webhook de WhatsApp (fase 1).
@@ -12,6 +15,7 @@ import { aplanarCarga, traducirEstadoPlantilla, type CargaMeta, type EventoPlano
  *  · message_template_status_update → estado de la plantilla
  *  · account_update con baja o restricción → apaga los envíos
  *  · messages, smb_message_echoes y smb_app_state_sync → bandeja (fase 2)
+ *  · messages también → estados de captacion_envios y respuestas Sí/No (fase 3)
  * El historial (history, coexistencia) puede ser grande: se deja pendiente y
  * la ruta lo procesa con after(); si eso muere, lo recoge
  * procesarEventosPendientes() desde el cron.
@@ -201,6 +205,9 @@ async function procesarEvento(
   switch (campo) {
     case "messages":
       await procesarMessages(companyId, v);
+      // Fase 3: estados de las plantillas de captación y respuestas Sí/No.
+      await aplicarEstadosEnvios(companyId, extraerEstados(v), v);
+      await procesarRespuestas(companyId, extraerEntrantes(v));
       return true;
     case "smb_message_echoes":
       await procesarEcos(companyId, v);

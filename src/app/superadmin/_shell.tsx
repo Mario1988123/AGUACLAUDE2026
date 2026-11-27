@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Menu, X, Building2, Package, LogOut } from "lucide-react";
+import { Menu, X, Building2, Package, LogOut, MessageCircle } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { CajonLateral } from "@/shared/components/cajon-lateral";
 import { SelectorCambiarA, type EmpresaOpcion } from "@/modules/superadmin/entrar-como-ui";
@@ -15,6 +15,7 @@ const ID_CAJON = "menu-superadmin";
 const ITEMS = [
   { href: "/superadmin", label: "Empresas", icon: Building2, exact: true },
   { href: "/superadmin/catalogo", label: "Catálogo maestro", icon: Package, exact: false },
+  { href: "/superadmin/captacion", label: "Salud de captación", icon: MessageCircle, exact: false },
 ] as const;
 
 interface Props {
@@ -180,7 +181,7 @@ function SidebarPanel({
           return (
             <Link
               key={it.href}
-              href={it.href}
+              href={it.href as never}
               onClick={onClose}
               title={compact ? it.label : undefined}
               aria-label={compact ? it.label : undefined}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
@@ -25,9 +25,9 @@ import {
   desconectarWhatsappAction,
   guardarAjustesCaptacionAction,
   refrescarNumeroAction,
-  sincronizarPlantillasAction,
 } from "./conexion-actions";
-import type { ConexionCaptacion, EstadoCaptacion, PlantillaCaptacion } from "./tipos";
+import { PlantillasCaptacion } from "./plantillas-ui";
+import type { ConexionCaptacion, EstadoCaptacion } from "./tipos";
 
 const ESTADO: Record<ConexionCaptacion["estado"], { label: string; tone: "success" | "onhold" | "rejected" | "neutral" }> = {
   activa: { label: "Conectado", tone: "success" },
@@ -41,14 +41,6 @@ const CALIDAD: Record<ConexionCaptacion["calidad"], { label: string; tone: "succ
   amarilla: { label: "Calidad media", tone: "onhold" },
   roja: { label: "Calidad baja", tone: "rejected" },
   desconocida: { label: "Calidad sin datos", tone: "neutral" },
-};
-
-const PLANTILLA: Record<PlantillaCaptacion["estado"], { label: string; tone: "success" | "onhold" | "rejected" | "neutral" | "info" }> = {
-  aprobada: { label: "Aprobada", tone: "success" },
-  pendiente: { label: "En revisión", tone: "info" },
-  rechazada: { label: "Rechazada", tone: "rejected" },
-  pausada: { label: "Pausada", tone: "onhold" },
-  desactivada: { label: "Desactivada", tone: "neutral" },
 };
 
 const fechaHora = new Intl.DateTimeFormat("es-ES", {
@@ -190,7 +182,7 @@ export function PanelConfigCaptacion({ estado }: { estado: EstadoCaptacion }) {
 
       {/* --- Plantillas --- */}
       {c && c.estado !== "desconectada" ? (
-        <Plantillas plantillas={estado.plantillas} esAdmin={esAdmin} wabaId={c.waba_id} />
+        <PlantillasCaptacion plantillas={estado.plantillas} esAdmin={esAdmin} wabaId={c.waba_id} conectada={conectada} />
       ) : null}
 
       {/* --- Zona de peligro --- */}
@@ -237,6 +229,8 @@ function FormAjustes({
     retencion_dias: String(c.retencion_dias),
     presentacion_empresa: c.presentacion_empresa ?? "",
     temas_prohibidos: c.temas_prohibidos ?? "",
+    url_privacidad: c.url_privacidad ?? "",
+    propuesta_precios: c.propuesta_precios ?? [],
   });
   const disabled = !esAdmin || pending;
 
@@ -249,6 +243,8 @@ function FormAjustes({
         retencion_dias: Number.parseInt(f.retencion_dias, 10) || 365,
         presentacion_empresa: blank(f.presentacion_empresa),
         temas_prohibidos: blank(f.temas_prohibidos),
+        url_privacidad: blank(f.url_privacidad),
+        propuesta_precios: f.propuesta_precios,
       });
       if (!r.ok) toast.error(r.error);
       else toast.success("Ajustes guardados");
@@ -338,6 +334,60 @@ function FormAjustes({
         />
       </div>
 
+      <div className="space-y-3 border-t border-border pt-5">
+        <h3 className="text-sm font-bold">Propuesta</h3>
+        <div className="space-y-1.5">
+          <Label htmlFor="privacidad">Política de privacidad de la empresa</Label>
+          <Input
+            id="privacidad"
+            type="url"
+            inputMode="url"
+            value={f.url_privacidad}
+            disabled={disabled}
+            onChange={(e) => setF({ ...f, url_privacidad: e.target.value })}
+            placeholder="https://"
+            className="text-base"
+          />
+          <p className="text-xs text-muted-foreground">
+            Sale como enlace «Privacidad» al pie de la propuesta. Vacía: el pie lleva vuestros datos fiscales y la
+            baja por WhatsApp, sin enlace.
+          </p>
+        </div>
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium">Precios en la propuesta</legend>
+          <p className="text-xs text-muted-foreground">
+            Sin marcar ninguno, la propuesta va sin precios y los da el comercial por teléfono. Se toma el precio de
+            empresa de cada equipo (base + IVA); si no lo tiene, el de particular.
+          </p>
+          {(
+            [
+              ["rental", "Alquiler (cuota al mes)"],
+              ["renting", "Renting (cuota al mes)"],
+              ["cash", "Compra (precio total)"],
+            ] as const
+          ).map(([clave, etiqueta]) => (
+            <div key={clave} className="flex min-h-11 items-center justify-between gap-4">
+              <Label htmlFor={`precio-${clave}`} className="font-normal">
+                {etiqueta}
+              </Label>
+              <Switch
+                id={`precio-${clave}`}
+                checked={f.propuesta_precios.includes(clave)}
+                disabled={disabled}
+                onCheckedChange={(v) =>
+                  setF({
+                    ...f,
+                    propuesta_precios: v
+                      ? [...f.propuesta_precios.filter((x) => x !== clave), clave]
+                      : f.propuesta_precios.filter((x) => x !== clave),
+                  })
+                }
+              />
+            </div>
+          ))}
+        </fieldset>
+      </div>
+
       {esAdmin ? (
         <Button onClick={guardar} disabled={pending} className="h-12 w-full sm:w-auto">
           {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -346,78 +396,6 @@ function FormAjustes({
       ) : (
         <p className="text-xs text-muted-foreground">Solo el administrador puede cambiar estos ajustes.</p>
       )}
-    </section>
-  );
-}
-
-function Plantillas({
-  plantillas,
-  esAdmin,
-  wabaId,
-}: {
-  plantillas: PlantillaCaptacion[];
-  esAdmin: boolean;
-  wabaId: string | null;
-}) {
-  const [pending, start] = useTransition();
-  return (
-    <section className="space-y-4 rounded-xl border border-border p-4 sm:p-5">
-      <div className="space-y-1">
-        <h2 className="text-base font-bold">Plantillas</h2>
-        <p className="text-sm text-muted-foreground">
-          Se crean en el administrador de WhatsApp y Meta las revisa. Aquí se ven con su estado.
-        </p>
-      </div>
-
-      {plantillas.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Todavía no hay ninguna.</p>
-      ) : (
-        <ul className="divide-y divide-border">
-          {plantillas.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{p.nombre}</div>
-                <div className="text-xs text-muted-foreground">
-                  {p.idioma} · {p.categoria === "marketing" ? "Marketing" : p.categoria === "utility" ? "Servicio" : "Autenticación"}
-                  {p.motivo_rechazo ? ` · ${p.motivo_rechazo}` : ""}
-                </div>
-              </div>
-              <StatusPill {...PLANTILLA[p.estado]} className="shrink-0" />
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="flex flex-col gap-2 sm:flex-row">
-        {esAdmin ? (
-          <Button
-            variant="outline"
-            disabled={pending}
-            onClick={() =>
-              start(async () => {
-                const r = await sincronizarPlantillasAction();
-                if (!r.ok) toast.error(r.error);
-                else toast.success(`Plantillas al día (${r.total ?? 0})`);
-              })
-            }
-          >
-            {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Traer plantillas de Meta
-          </Button>
-        ) : null}
-        {wabaId ? (
-          <Button variant="ghost" asChild>
-            <a
-              href={`https://business.facebook.com/wa/manage/message-templates/?waba_id=${encodeURIComponent(wabaId)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Crear plantillas en Meta
-              <ExternalLink className="ml-2 h-4 w-4" />
-            </a>
-          </Button>
-        ) : null}
-      </div>
     </section>
   );
 }

@@ -1,0 +1,796 @@
+/*
+ * Página privada de la propuesta (docs/DISENO_PROPUESTA_CAPTACION.md §4 y §5).
+ * Norte: «El Impreso con Membrete». Papel opaco, sin sombras, sin tarjetas.
+ * Los colores llegan como variables desde la paleta de la empresa
+ * (derivarPaletaPropuesta), ya medidos contra el papel que pisan.
+ * Radios: 0 (papel), 1 px (botón), 2 px (sello).
+ */
+
+.raiz {
+  color-scheme: only light;
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  background: var(--mesa);
+  color: var(--tinta);
+  font-family: var(--f-archivo), system-ui, sans-serif;
+  font-variation-settings: "wdth" 100;
+  font-weight: 430;
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* 16 px de mesa a los lados; abajo, el alto de la barra fija. */
+  padding: 16px 16px calc(96px + env(safe-area-inset-bottom));
+}
+
+.raiz *,
+.raiz *::before,
+.raiz *::after {
+  box-sizing: border-box;
+}
+
+/* Reinicio sin especificidad (:where), para que los márgenes de cada pieza ganen. */
+:where(.raiz) :where(p, h1, h2, h3, ol, ul, dl, dd) {
+  margin: 0;
+}
+
+/* Fibra del papel: ruido en multiply, fijo y sin eventos. */
+.fibra {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  opacity: 0.08;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.marco {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.columna {
+  min-width: 0;
+}
+
+.lateral {
+  display: none;
+}
+
+/* --- Hojas ---------------------------------------------------------------- */
+
+.hoja {
+  position: relative;
+  background: var(--hoja);
+  border: 1px solid var(--filete);
+  padding: 20px;
+}
+
+.hoja + .hoja {
+  margin-top: 12px;
+}
+
+/* «De la Hoja Debajo»: la profundidad es otra hoja desplazada, no una sombra. */
+.debajo::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  transform: translate(7px, 7px);
+  background: var(--hoja-debajo);
+  border: 1px solid var(--filete);
+}
+
+.debajo {
+  margin-bottom: 19px; /* 7 px de la hoja de debajo + 12 px de aire */
+}
+
+.debajo + .hoja {
+  margin-top: 0;
+}
+
+/* --- A · Membrete --------------------------------------------------------- */
+
+.membrete {
+  display: flex;
+  align-items: center;
+  min-height: 64px;
+  margin: -20px -20px 0;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--trazo);
+}
+
+.logo {
+  display: block;
+  /* El blanco del logo se funde con la hoja: nada de recuadro. */
+  mix-blend-mode: multiply;
+  max-width: 132px;
+  max-height: 40px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.nombreEmpresa {
+  font-size: 1.0625rem;
+  font-variation-settings: "wdth" 88;
+  font-weight: 640;
+  line-height: 1.2;
+}
+
+/* --- B · Casillas («De la Casilla»: las líneas las dibuja el hueco) -------- */
+
+.casillas {
+  display: grid;
+  grid-template-columns: 55fr 45fr;
+  gap: 1px;
+  margin-top: 16px;
+  background: var(--filete);
+  border: 1px solid var(--filete);
+}
+
+.casilla {
+  min-width: 0;
+  padding: 12px;
+  background: var(--hoja);
+}
+
+.ancha {
+  grid-column: 1 / -1;
+}
+
+.rotulo {
+  display: block;
+  color: var(--tinta-suave);
+  font-size: 0.75rem;
+  font-variation-settings: "wdth" 78;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+}
+
+.dato {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.rotulo + .dato + .rotulo {
+  margin-top: 10px;
+}
+
+.negocio {
+  margin-top: 4px;
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-size: 1.375rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+/* --- El sello («Del Sello con Fecha») ------------------------------------- */
+
+.casillaSello {
+  position: relative;
+  min-height: 92px;
+}
+
+.sello {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 132px;
+  height: 52px;
+  color: var(--trazo);
+  border: 2px solid var(--trazo);
+  border-radius: 2px;
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+  transform: rotate(-4deg);
+  filter: url(#sobreentintado);
+  opacity: 1;
+  transition:
+    opacity 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@starting-style {
+  .sello {
+    opacity: 0;
+    transform: scale(1.12) rotate(-4deg);
+  }
+}
+
+.sello::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.selloArriba {
+  font-size: 0.6875rem;
+}
+
+.selloAbajo {
+  font-size: 0.9375rem;
+}
+
+/* Retirada: el sello solo, sin casillas vacías alrededor. */
+.selloSuelto {
+  position: relative;
+  height: 76px;
+  margin-top: 20px;
+}
+
+.selloSuelto .sello {
+  right: auto;
+  bottom: auto;
+  top: 12px;
+  left: 4px;
+}
+
+.selloApagado {
+  color: var(--tinta);
+  border-color: var(--tinta);
+}
+
+/* --- C · Carta ------------------------------------------------------------ */
+
+.carta {
+  margin-top: 28px;
+  max-width: 62ch;
+}
+
+.carta p {
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+.carta p + p {
+  margin-top: 12px;
+}
+
+.firma {
+  font-family: var(--f-maquina), "Courier New", monospace;
+}
+
+/* --- D · Relación de equipos («De la Partida, no la Tarjeta») -------------- */
+
+.relacionCab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--filete);
+}
+
+.h2 {
+  font-size: 1.375rem;
+  font-variation-settings: "wdth" 84;
+  font-weight: 640;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.cuenta {
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-size: 0.9375rem;
+}
+
+.partidas {
+  list-style: none;
+  padding: 0;
+}
+
+.partida {
+  padding-top: 28px;
+}
+
+.partida + .partida {
+  margin-top: 28px;
+  border-top: 1px solid var(--filete);
+}
+
+.foto {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--velo);
+}
+
+.foto img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+.principal .foto {
+  height: 300px;
+  padding: 20px;
+}
+
+.principal .cuerpo {
+  margin-top: 20px;
+}
+
+.compacta .fila {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 16px;
+}
+
+.compacta .foto {
+  height: 138px;
+  padding: 8px;
+}
+
+.sinFoto .fila,
+.partida[data-sin-foto="1"] .fila {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.compacta .datos {
+  grid-column: 1 / -1;
+  margin-top: 0;
+}
+
+.tituloPartida {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.num {
+  flex: none;
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.nombrePrincipal {
+  font-size: 1.625rem;
+  font-variation-settings: "wdth" 84;
+  font-weight: 640;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.nombreCompacto {
+  font-size: 1.1875rem;
+  font-variation-settings: "wdth" 86;
+  font-weight: 620;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.lema {
+  margin-top: 6px;
+  color: var(--trazo);
+  font-size: 1rem;
+  font-weight: 540;
+  line-height: 1.35;
+}
+
+.desc {
+  margin-top: 8px;
+  max-width: 62ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* Casilla de datos: «rótulo | dato», el dato empieza a 112 px. */
+.datos {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 1px;
+  margin-top: 16px;
+  background: var(--filete);
+  border: 1px solid var(--filete);
+}
+
+.datos dt,
+.datos dd {
+  padding: 8px 10px;
+  background: var(--hoja);
+}
+
+.datos dt {
+  color: var(--tinta-suave);
+  font-size: 0.75rem;
+  font-variation-settings: "wdth" 78;
+  font-weight: 520;
+  letter-spacing: 0.01em;
+  line-height: 1.6;
+}
+
+.datos dd {
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.leyenda {
+  display: block;
+  margin-top: 2px;
+  color: var(--tinta-suave);
+  font-family: var(--f-archivo), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-variation-settings: "wdth" 78;
+}
+
+.nota {
+  margin-top: 28px;
+  max-width: 62ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+/* --- E · Qué incluye ------------------------------------------------------ */
+
+.incluye {
+  margin-top: 28px;
+}
+
+.incluye ul {
+  margin-top: 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.incluye li {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.incluye li + li {
+  margin-top: 4px;
+}
+
+/* --- F · Cupón de respuesta («Del Cupón Único») ---------------------------- */
+
+.corte {
+  height: 1px;
+  margin: 28px 0;
+  background-image: linear-gradient(to right, var(--tinta) 6px, transparent 6px);
+  background-size: 10px 1px;
+  background-repeat: repeat-x;
+}
+
+.cupon .texto {
+  margin-top: 8px;
+  max-width: 62ch;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.boton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 56px;
+  margin-top: 20px;
+  padding: 0 16px;
+  color: var(--sobre-campo);
+  background: var(--campo);
+  border: 1px solid var(--tinta);
+  border-radius: 1px;
+  font-family: var(--f-archivo), system-ui, sans-serif;
+  font-size: 1.0625rem;
+  font-variation-settings: "wdth" 92;
+  font-weight: 620;
+  line-height: 1;
+  text-align: center;
+  text-decoration: none;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 120ms ease-out;
+}
+
+.boton:active {
+  transform: scale(0.98);
+}
+
+.llamad {
+  margin-top: 16px;
+  font-size: 0.9375rem;
+}
+
+.tel {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  color: var(--tinta);
+  font-family: var(--f-maquina), "Courier New", monospace;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.descarga {
+  margin-top: 12px;
+}
+
+.enlace {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  color: var(--trazo);
+  font-size: 0.9375rem;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.descarga .dato {
+  margin-top: -6px;
+  color: var(--tinta-suave);
+  font-size: 0.8125rem;
+}
+
+.qr {
+  display: none;
+}
+
+/* --- G · Pie, sobre la mesa ----------------------------------------------- */
+
+.pie {
+  max-width: 600px;
+  margin: 28px auto 0;
+  padding: 0 4px;
+  color: var(--tinta-suave);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.pie p + p {
+  margin-top: 10px;
+}
+
+.pie strong {
+  font-weight: 620;
+}
+
+.pie a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  color: var(--tinta);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --- H · Barra fija ------------------------------------------------------- */
+
+.barra {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: var(--hoja);
+  border-top: 1px solid var(--tinta);
+  transform: translateY(0);
+  transition: transform 200ms ease-out;
+}
+
+.barra[data-oculta="1"] {
+  transform: translateY(100%);
+}
+
+.barra .boton {
+  max-width: 568px;
+  min-height: 52px;
+  margin: 0 auto;
+}
+
+/* Estados caducada / retirada: sin barra; el botón ya está en la primera pantalla. */
+.sinBarra {
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+}
+
+.aviso {
+  margin-top: 28px;
+  max-width: 62ch;
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+
+/* --- Foco, hover, contraste y movimiento ---------------------------------- */
+
+.raiz a:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .boton:hover {
+    background: var(--campo-hover);
+  }
+  .enlace:hover,
+  .tel:hover,
+  .pie a:hover {
+    text-decoration-thickness: 2px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .raiz {
+    --filete: var(--tinta-suave);
+    --hoja: #ffffff;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sello,
+  .boton,
+  .barra {
+    transition: none;
+  }
+  .boton:active {
+    transform: none;
+  }
+}
+
+/* --- 600–959 px ----------------------------------------------------------- */
+
+@media (min-width: 600px) {
+  .hoja {
+    padding: 28px;
+  }
+  .membrete {
+    margin: -28px -28px 0;
+    padding: 12px 28px;
+  }
+  .principal .fila {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 24px;
+  }
+  .principal.sinFoto .fila {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .principal .foto {
+    height: 280px;
+  }
+  .principal .cuerpo {
+    margin-top: 0;
+  }
+}
+
+/* --- ≥ 960 px: hojas a la izquierda y el cupón como hoja propia, pegada ---- */
+
+@media (min-width: 960px) {
+  .raiz {
+    padding: 32px 32px 40px;
+  }
+  .marco {
+    display: grid;
+    grid-template-columns: minmax(0, 720px) 320px;
+    gap: 32px;
+    justify-content: center;
+    align-items: start;
+    max-width: 1120px;
+  }
+  .lateral {
+    display: block;
+    position: sticky;
+    top: 32px;
+  }
+  .lateral .boton {
+    margin-top: 16px;
+  }
+  .qr {
+    display: block;
+    margin-top: 20px;
+  }
+  .qr svg {
+    display: block;
+    width: 96px;
+    height: 96px;
+  }
+  .cuponFinal,
+  .barra {
+    display: none;
+  }
+  .hoja {
+    padding: 40px;
+  }
+  .lateral .hoja {
+    padding: 28px;
+  }
+  .membrete {
+    margin: -40px -40px 0;
+    padding: 12px 40px;
+  }
+  .debajo::before {
+    transform: translate(9px, 9px);
+  }
+  .debajo {
+    margin-bottom: 21px;
+  }
+  .negocio {
+    font-size: 2rem;
+  }
+  .h2 {
+    font-size: 1.625rem;
+  }
+  .nombrePrincipal {
+    font-size: 1.875rem;
+  }
+  .nombreCompacto {
+    font-size: 1.25rem;
+  }
+  .principal .fila {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+  .principal .foto {
+    height: 300px;
+  }
+  /* Desviación del §5.2: con la casilla de datos en una tercera columna de
+     240 px, «1.190,00 € + IVA» partía en dos líneas. Va bajo el texto, en la
+     segunda columna. */
+  .compacta .fila {
+    grid-template-columns: 160px minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: start;
+  }
+  .compacta .fila {
+    grid-template-rows: auto 1fr;
+  }
+  .compacta .foto {
+    grid-row: span 2;
+  }
+  .compacta .datos {
+    grid-column: 2;
+    align-self: start;
+  }
+  .compacta.sinFoto .datos,
+  .partida[data-sin-foto="1"] .datos {
+    grid-column: 1;
+  }
+  .compacta .foto {
+    height: 180px;
+  }
+  .pie {
+    max-width: 1072px;
+    padding: 0;
+  }
+  .pie > * {
+    max-width: 720px;
+  }
+  .sinBarra .marco {
+    grid-template-columns: minmax(0, 600px);
+  }
+}

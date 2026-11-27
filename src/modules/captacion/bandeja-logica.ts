@@ -395,3 +395,18 @@ export function validarTextoSaliente(texto: string): { ok: true; texto: string }
 export function ventanaAbierta(ventanaHasta: string | null, ahora = new Date()): boolean {
   return ventanaHasta != null && new Date(ventanaHasta).getTime() > ahora.getTime();
 }
+
+/**
+ * Fase 8: una conversación `cerrada` se reabre (pasa a `humano`) si el
+ * contacto vuelve a escribir y NO está bloqueado (p. ej. el admin le quitó el
+ * bloqueo, o se cerró sin bloqueo). Nunca con el propio mensaje que la cierra
+ * (un «No» o una baja de campaña) ni si no se ha podido comprobar el bloqueo
+ * (quien llama pasa `bloqueado: true` en ese caso).
+ */
+export function debeReabrirConversacion(a: {
+  modo: string | null;
+  bloqueado: boolean;
+  cierraEsteMensaje: boolean;
+}): boolean {
+  return a.modo === "cerrada" && !a.bloqueado && !a.cierraEsteMensaje;
+}

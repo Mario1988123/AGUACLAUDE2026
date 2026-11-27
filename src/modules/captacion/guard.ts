@@ -74,6 +74,19 @@ export function esAdminCaptacion(session: SessionClaims): boolean {
 }
 
 /**
+ * Roles que ven la lista de bloqueo y leen la FAQ del asistente (fase 8, para
+ * la navegación de /captacion). Es la misma lista que usan
+ * bloqueos-actions.ts (ROLES_BLOQUEOS) y asistente-actions.ts (LECTORES),
+ * que son las que de verdad cortan el acceso.
+ */
+export const ROLES_EQUIPO_CAPTACION = [...ROLES_CONFIG_LECTURA, "sales_rep", "telemarketer"] as const;
+
+export function esEquipoCaptacion(session: SessionClaims): boolean {
+  if (session.is_superadmin) return true;
+  return session.roles.some((r) => (ROLES_EQUIPO_CAPTACION as readonly string[]).includes(r));
+}
+
+/**
  * Para páginas: exige sesión con empresa y el módulo activo de forma
  * explícita. Si no, al dashboard.
  */

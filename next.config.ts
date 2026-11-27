@@ -73,6 +73,18 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Propuesta de captación (docs/DISENO_PROPUESTA_CAPTACION.md §5.7): fuera
+      // de los buscadores (el PDF no puede llevar <meta>), sin referente hacia
+      // wa.me ni la política de privacidad, y sin caché compartida. Va después
+      // de la regla general: la última gana para la misma cabecera.
+      {
+        source: "/p/:path*",
+        headers: [
+          { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "private, no-store" },
+        ],
+      },
     ];
   },
 };

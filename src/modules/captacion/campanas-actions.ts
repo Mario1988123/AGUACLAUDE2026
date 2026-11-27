@@ -9,6 +9,9 @@ import { admin } from "./servidor";
 import { procesarColaBusquedas } from "./busqueda";
 import { placesConfigurado, topePlacesMensual } from "./places";
 import { contactablePorWhatsapp, filtroOsmValido, zonaValida, type Zona } from "./busqueda-logica";
+import { elegirPlantilla, encolarProspectos, type PlantillaFila } from "./envios-servidor";
+import { leerEscalado, leerHorario, topeCampanaHoy, type Horario } from "./envios-logica";
+import { diasEscalado, motivoPausaConexion } from "./mando-logica";
 
 /**
  * Campañas (versión mínima de la fase 6: a quién y dónde) y revisión de
@@ -64,6 +67,23 @@ export interface CampanaFila {
   created_at: string;
 }
 
+export interface EnviosCampana {
+  estado: string;
+  motivoPausa: string | null;
+  topeDiario: number;
+  topeHoy: number;
+  horario: Horario;
+  lanzadaAt: string | null;
+  enviados24h: number;
+  enCola: number;
+  /** Plantilla aprobada de primer mensaje (de la campaña o de la empresa). */
+  plantillaPrimer: string | null;
+  plantillaRecordatorio: string | null;
+  /** Conexión activa con los envíos encendidos (sin contar la llave de la plataforma). */
+  enviosEncendidos: boolean;
+  enviosPlataforma: boolean;
+}
+
 export interface TipologiaFila {
   clave: string;
   nombre: string;
@@ -88,6 +108,65 @@ export async function listarCampanas(): Promise<{ campanas: CampanaFila[]; tipol
     campanas: (campanas ?? []) as CampanaFila[],
     tipologias: (tipologias ?? []) as TipologiaFila[],
     recuento,
+  };
+}
+
+/** Etapas que enseña el mando de la campaña. */
+const ETAPAS_MANDO = [
+  "nuevo",
+  "revisar",
+  "en_cola",
+  "contactado",
+  "recordado",
+  "interesado",
+  "conversando",
+  "caliente",
+  "descartado",
+  "sin_respuesta",
+  "fallido",
+] as const;
+
+interface CampanaCompleta extends CampanaFila {
+  motivo_pausa: string | null;
+  tope_diario: number;
+  escalado: unknown;
+  lanzada_at: string | null;
+  reanudada_at: string | null;
+  pausa_automatica: boolean;
+  horario: unknown;
+  plantilla_primer_contacto_id: string | null;
+  plantilla_recordatorio_id: string | null;
+}
+
+async function resumenEnvios(companyId: string, c: CampanaCompleta): Promise<EnviosCampana> {
+  const db = admin();
+  const hace24h = new Date(Date.now() - 86_400_000).toISOString();
+  const [enviados, enCola, { data: plants }, { data: con }] = await Promise.all([
+    db.from("captacion_envios").select("id", { count: "exact", head: true })
+      .eq("company_id", companyId).eq("campana_id", c.id).gte("enviado_at", hace24h),
+    db.from("captacion_envios").select("id", { count: "exact", head: true })
+      .eq("company_id", companyId).eq("campana_id", c.id).eq("estado", "en_cola"),
+    db.from("captacion_plantillas").select("id, nombre, idioma, estado, uso, componentes")
+      .eq("company_id", companyId).eq("estado", "aprobada"),
+    db.from("captacion_conexiones").select("estado, envios_activos").eq("company_id", companyId).maybeSingle(),
+  ]);
+  const plantillas = (plants ?? []) as PlantillaFila[];
+  // Tras una pausa automática el escalado vuelve a empezar (fase 7).
+  const dias = diasEscalado(c.lanzada_at, c.reanudada_at ?? null, new Date());
+  const conexion = con as { estado: string; envios_activos: boolean } | null;
+  return {
+    estado: c.estado,
+    motivoPausa: c.motivo_pausa,
+    topeDiario: c.tope_diario,
+    topeHoy: topeCampanaHoy(leerEscalado(c.escalado), c.tope_diario, dias),
+    horario: leerHorario(c.horario),
+    lanzadaAt: c.lanzada_at,
+    enviados24h: (enviados as { count: number | null }).count ?? 0,
+    enCola: (enCola as { count: number | null }).count ?? 0,
+    plantillaPrimer: elegirPlantilla(plantillas, c.plantilla_primer_contacto_id, "primer_contacto")?.nombre ?? null,
+    plantillaRecordatorio: elegirPlantilla(plantillas, c.plantilla_recordatorio_id, "recordatorio")?.nombre ?? null,
+    enviosEncendidos: conexion?.estado === "activa" && conexion.envios_activos === true,
+    enviosPlataforma: process.env.CAPTACION_ENVIOS_ACTIVOS === "1",
   };
 }
 
@@ -125,6 +204,7 @@ export interface ProspectoFila {
 
 export async function obtenerCampana(id: string, etapa: string): Promise<{
   campana: CampanaFila;
+  envios: EnviosCampana;
   busquedas: BusquedaFila[];
   prospectos: ProspectoFila[];
   recuento: Record<string, number>;
@@ -136,11 +216,14 @@ export async function obtenerCampana(id: string, etapa: string): Promise<{
   const db = admin();
   const { data: campana } = await db
     .from("captacion_campanas")
-    .select("id, nombre, estado, tipologia_clave, zonas, created_at")
+    .select(
+      "id, nombre, estado, tipologia_clave, zonas, created_at, motivo_pausa, tope_diario, escalado, lanzada_at, reanudada_at, pausa_automatica, horario, plantilla_primer_contacto_id, plantilla_recordatorio_id",
+    )
     .eq("id", id)
     .eq("company_id", s.company_id)
     .maybeSingle();
   if (!campana) return null;
+  const envios = await resumenEnvios(s.company_id, campana as CampanaCompleta);
 
   const [{ data: busquedas }, { data: prospectos }, recuento, { data: usadas }] = await Promise.all([
     db.from("captacion_busquedas")
@@ -150,13 +233,14 @@ export async function obtenerCampana(id: string, etapa: string): Promise<{
       .select("id, nombre_negocio, municipio, direccion, telefono_e164, es_movil, telefono_fuente, telefono_url_fuente, prioridad, web, etapa, revisar_motivo, cliente_coincidente_id, lead_coincidente_id")
       .eq("campana_id", id).eq("company_id", s.company_id).eq("etapa", etapa)
       .order("prioridad", { ascending: false }).order("nombre_negocio").limit(200),
-    contarPorEtapa(s.company_id, id, ["nuevo", "revisar", "descartado"]),
+    contarPorEtapa(s.company_id, id, [...ETAPAS_MANDO]),
     db.rpc("captacion_llamadas_places_mes"),
   ]);
 
   return {
     places: { configurado: placesConfigurado(), usadas: (usadas as number | null) ?? 0, tope: topePlacesMensual() },
     campana: campana as CampanaFila,
+    envios,
     busquedas: ((busquedas ?? []) as Array<BusquedaFila & { cursor: { i: number; fichas: unknown[] } | null }>).map(
       ({ cursor, ...b }) => ({ ...b, progreso: cursor ? { i: cursor.i, total: cursor.fichas.length } : null }),
     ),
@@ -320,6 +404,103 @@ export async function marcarProspectoAction(input: unknown): Promise<Resultado> 
       .eq("company_id", s.company_id);
     if (error) throw new Error(error.message);
     if (fila.campana_id) revalidatePath(`/captacion/campanas/${fila.campana_id}`);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Envíos (fase 3)
+// -----------------------------------------------------------------------------
+
+/**
+ * Mete en la cola de envío los negocios «Nuevos» de la campaña. No envía
+ * nada: el cron los saca poco a poco, con el tope, el horario y la segunda
+ * comprobación de bloqueos (§4.3).
+ */
+export async function encolarProspectosAction(
+  campanaId: string,
+): Promise<Resultado<{ encolados: number; bloqueados: number }>> {
+  try {
+    const s = await sesionGestor();
+    z.string().uuid().parse(campanaId);
+    const db = admin();
+    const { data: camp } = await db
+      .from("captacion_campanas")
+      .select("id, estado")
+      .eq("id", campanaId)
+      .eq("company_id", s.company_id)
+      .maybeSingle();
+    if (!camp) return { ok: false, error: "Campaña no encontrada." };
+    if ((camp as { estado: string }).estado === "terminada") return { ok: false, error: "La campaña está terminada." };
+    const r = await encolarProspectos(s.company_id, campanaId, s.user_id);
+    revalidatePath(`/captacion/campanas/${campanaId}`);
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: toActionError(e) };
+  }
+}
+
+const ritmoSchema = z.object({
+  campanaId: z.string().uuid(),
+  estado: z.enum(["activa", "pausada"]),
+  tope_diario: z.number().int().min(1).max(200),
+});
+
+/**
+ * Lanza o pausa los envíos de la campaña y fija su tope diario (como mucho
+ * 200, decisión de Mario). Al lanzarla por primera vez se apunta lanzada_at:
+ * desde ahí cuenta el escalado.
+ */
+export async function guardarRitmoCampanaAction(input: unknown): Promise<Resultado> {
+  try {
+    const s = await sesionGestor();
+    const p = ritmoSchema.parse(input);
+    const db = admin();
+    const { data: camp } = await db
+      .from("captacion_campanas")
+      .select("id, estado, lanzada_at, pausa_automatica")
+      .eq("id", p.campanaId)
+      .eq("company_id", s.company_id)
+      .maybeSingle();
+    const c = camp as { estado: string; lanzada_at: string | null; pausa_automatica: boolean } | null;
+    if (!c) return { ok: false, error: "Campaña no encontrada." };
+    if (c.estado === "terminada") return { ok: false, error: "La campaña está terminada." };
+    const cambios: Record<string, unknown> = { estado: p.estado, tope_diario: p.tope_diario };
+    if (p.estado === "activa") {
+      if (c.estado !== "activa") {
+        // Con la conexión caída o la calidad baja, el cron la volvería a pausar.
+        const { data: con } = await db
+          .from("captacion_conexiones")
+          .select("estado, calidad")
+          .eq("company_id", s.company_id)
+          .maybeSingle();
+        const motivo = motivoPausaConexion(con as { estado: string; calidad: string } | null);
+        if (motivo) return { ok: false, error: `No se puede reanudar: ${motivo}` };
+      }
+      cambios.motivo_pausa = null;
+      if (!c.lanzada_at) cambios.lanzada_at = new Date().toISOString();
+      // Tras una pausa automática (fase 7): la muestra del cortacircuitos y el
+      // escalado cuentan desde ahora. Solo lo hace una persona: nunca se
+      // reanuda sola.
+      if (c.estado === "pausada" && c.pausa_automatica) {
+        cambios.reanudada_at = new Date().toISOString();
+        cambios.pausa_automatica = false;
+      }
+    } else if (c.estado !== "pausada") {
+      cambios.motivo_pausa = "Pausada a mano";
+      cambios.pausa_automatica = false;
+      cambios.pausada_at = new Date().toISOString();
+    }
+    const { error } = await db
+      .from("captacion_campanas")
+      .update(cambios)
+      .eq("id", p.campanaId)
+      .eq("company_id", s.company_id);
+    if (error) throw new Error(error.message);
+    revalidatePath(`/captacion/campanas/${p.campanaId}`);
+    revalidatePath("/captacion/campanas");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: toActionError(e) };

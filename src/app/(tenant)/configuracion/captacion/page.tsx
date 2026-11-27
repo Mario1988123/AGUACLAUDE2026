@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { assertCaptacionActiva, puedeLeerConfig } from "@/modules/captacion/guard";
 import { obtenerEstadoCaptacion } from "@/modules/captacion/conexion-actions";
 import { PanelConfigCaptacion } from "@/modules/captacion/panel-config";
+import { obtenerEstadoAsistente } from "@/modules/captacion/asistente-actions";
+import { PanelAsistente } from "@/modules/captacion/panel-asistente";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +13,7 @@ export default async function ConfigCaptacionPage() {
 
   const estado = await obtenerEstadoCaptacion();
   if (!estado) redirect("/dashboard");
+  const asistente = await obtenerEstadoAsistente();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -22,6 +25,7 @@ export default async function ConfigCaptacionPage() {
         </p>
       </div>
       <PanelConfigCaptacion estado={estado} />
+      {asistente ? <PanelAsistente estado={asistente} /> : null}
     </div>
   );
 }
