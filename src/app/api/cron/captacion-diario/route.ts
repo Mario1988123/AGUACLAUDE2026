@@ -2,14 +2,16 @@ import { type NextRequest, NextResponse } from "next/server";
 import { verifyCronAuth } from "@/shared/lib/auth/cron";
 import { startCronRun } from "@/shared/lib/cron/telemetry";
 import { procesarColaBusquedas } from "@/modules/captacion/busqueda";
+import { procesarEventosPendientes } from "@/modules/captacion/webhook";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Cron diario del módulo de captación (plan §5.2). De momento solo procesa
- * la cola de búsquedas de negocios (fase 6). Sincronizar plantillas y calidad,
+ * Cron diario del módulo de captación (plan §5.2). Recoge los avisos de Meta
+ * que se quedaron sin procesar (bandeja, fase 2) y procesa la cola de
+ * búsquedas de negocios (fase 6). Sincronizar plantillas y calidad,
  * caducidades, `sin_respuesta` y retención se añaden en sus fases.
  *
  * Solo toca empresas con el módulo activo de forma explícita: el guard
@@ -21,7 +23,13 @@ export async function GET(req: NextRequest) {
 
   const tracker = await startCronRun("captacion-diario");
   try {
-    const r = await procesarColaBusquedas({ presupuestoMs: 270_000 });
+    let pendientes = 0;
+    try {
+      pendientes = await procesarEventosPendientes(undefined, 200);
+    } catch (e) {
+      tracker.error("eventos-pendientes", e);
+    }
+    const r = await procesarColaBusquedas({ presupuestoMs: 240_000 });
     for (const e of r.errores.slice(0, 20)) tracker.error("busquedas", e);
     await tracker.finish({
       ok: true,
@@ -33,6 +41,7 @@ export async function GET(req: NextRequest) {
         descartados: r.descartados,
         duplicados: r.duplicados,
         errores: r.errores.length,
+        eventos_pendientes: pendientes,
       },
     });
     return NextResponse.json({ ok: true, ...r, errores: r.errores.length });

@@ -1,9 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { after, type NextRequest, NextResponse } from "next/server";
 import { verificarFirmaMeta, tokenVerificacionValido, type CargaMeta } from "@/modules/captacion/logica";
-import { registrarCarga } from "@/modules/captacion/webhook";
+import { procesarEventosPendientes, registrarCarga } from "@/modules/captacion/webhook";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// El historial de la app (coexistencia) se procesa con after() tras responder.
+export const maxDuration = 60;
 
 /**
  * Webhook único de la app de Meta de Vercomi para la Cloud API de WhatsApp
@@ -62,6 +64,16 @@ export async function POST(req: NextRequest) {
     const r = await registrarCarga(carga);
     if (r.sinEmpresa > 0) {
       console.warn("[captacion/webhook] eventos sin empresa", { sinEmpresa: r.sinEmpresa });
+    }
+    if (r.diferidos.length > 0) {
+      after(async () => {
+        try {
+          await procesarEventosPendientes(r.diferidos);
+        } catch (e) {
+          // Queda pendiente: lo recoge el cron captacion-diario.
+          console.error("[captacion/webhook] historial pendiente", e instanceof Error ? e.message : e);
+        }
+      });
     }
     return NextResponse.json({ ok: true });
   } catch (e) {

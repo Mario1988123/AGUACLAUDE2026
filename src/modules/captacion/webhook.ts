@@ -1,5 +1,6 @@
 import "server-only";
 import { admin } from "./servidor";
+import { procesarContactosApp, procesarEcos, procesarHistorial, procesarMessages } from "./bandeja-servidor";
 import { aplanarCarga, traducirEstadoPlantilla, type CargaMeta, type EventoPlano } from "./logica";
 
 /**
@@ -10,10 +11,14 @@ import { aplanarCarga, traducirEstadoPlantilla, type CargaMeta, type EventoPlano
  * en el momento lo que es barato y no manda nada a nadie:
  *  · message_template_status_update → estado de la plantilla
  *  · account_update con baja o restricción → apaga los envíos
- * Los mensajes y estados (y, con coexistencia, smb_message_echoes, history y
- * smb_app_state_sync) se quedan con procesado_at nulo: los recogerá la
- * bandeja en la fase 2.
+ *  · messages, smb_message_echoes y smb_app_state_sync → bandeja (fase 2)
+ * El historial (history, coexistencia) puede ser grande: se deja pendiente y
+ * la ruta lo procesa con after(); si eso muere, lo recoge
+ * procesarEventosPendientes() desde el cron.
  */
+
+/** Campos que no se procesan dentro de la respuesta a Meta. */
+const DIFERIDOS = new Set(["history"]);
 
 interface Conexion {
   company_id: string;
@@ -73,18 +78,21 @@ function idSeguro(v: string | null): string | null {
   return v && /^\d{1,30}$/.test(v) ? v : null;
 }
 
-export async function registrarCarga(carga: CargaMeta): Promise<{ guardados: number; sinEmpresa: number }> {
+export async function registrarCarga(
+  carga: CargaMeta,
+): Promise<{ guardados: number; sinEmpresa: number; diferidos: string[] }> {
   const eventos = aplanarCarga(carga).map((e) => ({
     ...e,
     phoneNumberId: idSeguro(e.phoneNumberId),
     wabaId: idSeguro(e.wabaId),
   }));
-  if (eventos.length === 0) return { guardados: 0, sinEmpresa: 0 };
+  if (eventos.length === 0) return { guardados: 0, sinEmpresa: 0, diferidos: [] };
 
   const conexiones = await resolverConexiones(eventos);
   const db = admin();
   let guardados = 0;
   let sinEmpresa = 0;
+  const diferidos: string[] = [];
   const empresasVistas = new Set<string>();
 
   for (const e of eventos) {
@@ -112,20 +120,8 @@ export async function registrarCarga(carga: CargaMeta): Promise<{ guardados: num
     guardados++;
 
     if (companyId) {
-      try {
-        const procesado = await procesarEnElMomento(companyId, e);
-        if (procesado) {
-          await db
-            .from("captacion_webhook_eventos")
-            .update({ procesado_at: new Date().toISOString(), intentos: 1 })
-            .eq("id", nuevo.id);
-        }
-      } catch (err) {
-        await db
-          .from("captacion_webhook_eventos")
-          .update({ error: err instanceof Error ? err.message.slice(0, 500) : "error", intentos: 1 })
-          .eq("id", nuevo.id);
-      }
+      if (DIFERIDOS.has(e.campo)) diferidos.push(nuevo.id);
+      else await procesarYMarcar(nuevo.id, companyId, e.campo, e.cuerpo, 0);
     }
   }
 
@@ -136,15 +132,88 @@ export async function registrarCarga(carga: CargaMeta): Promise<{ guardados: num
       .in("company_id", [...empresasVistas]);
   }
 
-  return { guardados, sinEmpresa };
+  return { guardados, sinEmpresa, diferidos };
+}
+
+async function procesarYMarcar(
+  id: string,
+  companyId: string,
+  campo: string,
+  cuerpo: Record<string, unknown>,
+  intentosPrevios: number,
+): Promise<void> {
+  const db = admin();
+  try {
+    const procesado = await procesarEvento(companyId, campo, cuerpo);
+    if (procesado) {
+      await db
+        .from("captacion_webhook_eventos")
+        .update({ procesado_at: new Date().toISOString(), error: null, intentos: intentosPrevios + 1 })
+        .eq("id", id);
+    }
+  } catch (err) {
+    await db
+      .from("captacion_webhook_eventos")
+      .update({ error: err instanceof Error ? err.message.slice(0, 500) : "error", intentos: intentosPrevios + 1 })
+      .eq("id", id);
+  }
+}
+
+const MAX_INTENTOS = 5;
+
+/**
+ * Procesa eventos que se quedaron pendientes: los diferidos (por id) o, sin
+ * ids, los que fallaron o no llegaron a procesarse (hasta 5 intentos).
+ */
+export async function procesarEventosPendientes(ids?: string[], limite = 50): Promise<number> {
+  const db = admin();
+  let q = db
+    .from("captacion_webhook_eventos")
+    .select("id, company_id, campo, cuerpo, intentos")
+    .is("procesado_at", null)
+    .not("company_id", "is", null)
+    .lt("intentos", MAX_INTENTOS)
+    .order("recibido_at")
+    .limit(limite);
+  if (ids && ids.length > 0) q = q.in("id", ids);
+  const { data, error } = await q;
+  if (error) throw new Error(`No se pudieron leer los eventos pendientes: ${error.message}`);
+  const filas = (data ?? []) as Array<{
+    id: string;
+    company_id: string;
+    campo: string;
+    cuerpo: Record<string, unknown>;
+    intentos: number;
+  }>;
+  for (const f of filas) await procesarYMarcar(f.id, f.company_id, f.campo, f.cuerpo, f.intentos);
+  return filas.length;
 }
 
 /** Devuelve true si el evento queda resuelto del todo. */
-async function procesarEnElMomento(companyId: string, e: EventoPlano): Promise<boolean> {
-  const v = (e.cuerpo.value ?? {}) as Record<string, unknown>;
+async function procesarEvento(
+  companyId: string,
+  campo: string,
+  cuerpo: Record<string, unknown>,
+): Promise<boolean> {
+  const v = (cuerpo.value ?? {}) as Record<string, unknown>;
   const db = admin();
 
-  if (e.campo === "message_template_status_update") {
+  switch (campo) {
+    case "messages":
+      await procesarMessages(companyId, v);
+      return true;
+    case "smb_message_echoes":
+      await procesarEcos(companyId, v);
+      return true;
+    case "smb_app_state_sync":
+      await procesarContactosApp(companyId, v);
+      return true;
+    case "history":
+      await procesarHistorial(companyId, v);
+      return true;
+  }
+
+  if (campo === "message_template_status_update") {
     const evento = typeof v.event === "string" ? v.event : null;
     const nombre = typeof v.message_template_name === "string" ? v.message_template_name : null;
     const idioma = typeof v.message_template_language === "string" ? v.message_template_language : null;
@@ -162,7 +231,7 @@ async function procesarEnElMomento(companyId: string, e: EventoPlano): Promise<b
     return true;
   }
 
-  if (e.campo === "account_update") {
+  if (campo === "account_update") {
     const evento = typeof v.event === "string" ? v.event.toUpperCase() : "";
     if (BAJAS.has(evento)) {
       // Con coexistencia, PARTNER_REMOVED trae el motivo (p. ej. PRIMARY_INACTIVITY:

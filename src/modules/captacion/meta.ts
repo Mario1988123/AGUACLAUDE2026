@@ -139,6 +139,39 @@ export async function registrarNumero(token: string, phoneNumberId: string, pin:
 }
 
 /**
+ * Texto libre dentro de la ventana de 24 h (fase 2, bandeja). Devuelve el
+ * wamid. Fuera de la ventana Meta responde con el error 131047.
+ *
+ * Comprobado el 2026-11-27 (messages/text-messages y business-scoped-user-ids):
+ * body hasta 4096 caracteres; si no hay teléfono (usuario con nombre de
+ * usuario) se envía al BSUID con `recipient` en lugar de `to` (admitido desde
+ * julio de 2026). Si van los dos, Meta usa `to`.
+ */
+export async function enviarTexto(
+  token: string,
+  phoneNumberId: string,
+  destino: { waId: string | null; bsuid: string | null },
+  cuerpo: string,
+): Promise<string> {
+  const a = destino.waId ? { to: destino.waId } : destino.bsuid ? { recipient: destino.bsuid } : null;
+  if (!a) throw new Error("El contacto no tiene teléfono ni identificador de WhatsApp.");
+  const r = await llamar<{ messages?: Array<{ id?: string }> }>(`${encodeURIComponent(phoneNumberId)}/messages`, {
+    metodo: "POST",
+    token,
+    cuerpo: {
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      ...a,
+      type: "text",
+      text: { body: cuerpo, preview_url: false },
+    },
+  });
+  const wamid = r?.messages?.[0]?.id;
+  if (!wamid) throw new Error("Meta no devolvió el identificador del mensaje.");
+  return wamid;
+}
+
+/**
  * Coexistencia (comprobado el 2026-11-27 en embedded-signup/custom-flows/
  * onboarding-business-app-users). Con el número en la app de WhatsApp
  * Business se espera is_on_biz_app = true y platform_type = "CLOUD_API".
